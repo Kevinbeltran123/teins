@@ -21,28 +21,7 @@ Si una tarea contradice un ADR aceptado, **no lo ignores ni lo edites**: detente
 
 ## Stack
 
-| Área | Elección | ADR |
-|---|---|---|
-| Estilo | Monolito modular, roles *web* y *worker* | 0001 |
-| Cliente | PWA; superficies `campo`, `oficina`, `portal` compiladas por separado | 0002 |
-| Sincronización | Subida por comandos idempotentes; bajada incremental con punto de control | 0003 |
-| Datos en dispositivo | IndexedDB con Dexie, detrás de un puerto | 0004 |
-| Base de datos | PostgreSQL (relacional + JSONB) | 0005 |
-| Formatos | Esquema de dominio versionado; respuestas en modelo híbrido | 0006 |
-| Archivos | Almacenamiento compatible con S3, direccionado por SHA-256 | 0007 |
-| Trazabilidad | Registro semántico con cadena de hashes por agregado | 0008 |
-| Identidad | Better Auth, sesiones en servidor, seguridad por fila en el portal | 0009 |
-| Lenguaje | TypeScript; Node LTS; Fastify; Zod; Drizzle; pnpm | 0010 |
-| Interfaz | React + Vite + Tailwind + shadcn/ui reestilizado | 0011 |
-| Trabajos | Graphile Worker (la cola es el outbox) | 0012 |
-| PDF | HTML + Chromium (Playwright) + pdf-lib, guardado al publicar | 0013 |
-| API | HTTP orientado a tareas, OpenAPI generado desde Zod | 0014 |
-| Actualización | Actualización en momento seguro; protocolo N-1 | 0015 |
-| Infraestructura | Contenedor propio + Postgres y S3 gestionados, cuentas de TEINS | 0016 |
-| Observabilidad | Registros estructurados, errores con privacidad, salud de dispositivos | 0017 |
-| Pruebas | Guiadas por riesgo; reglas de arquitectura ejecutables | 0018 |
-| Bocetos | Trazos vectoriales con perfect-freehand | 0019 |
-| Marca | Tokens por organización en variables CSS | 0020 |
+TypeScript, Node LTS, pnpm · Fastify, Zod, Drizzle, PostgreSQL, Graphile Worker · React, Vite, Tailwind, shadcn/ui · Dexie (IndexedDB) · Better Auth · S3 · Playwright + pdf-lib · perfect-freehand. El detalle y el porqué de cada elección están en el índice de `docs/adr/README.md`.
 
 ## Estructura y dependencias
 
