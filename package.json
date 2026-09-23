@@ -1,0 +1,9 @@
+{
+  "name": "teins",
+  "private": true,
+  "description": "Sistema de levantamientos técnicos de TEINS",
+  "packageManager": "pnpm@10",
+  "engines": {
+    "node": ">=24"
+  }
+}

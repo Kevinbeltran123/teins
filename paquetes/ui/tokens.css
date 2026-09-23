@@ -1,0 +1,75 @@
+/*
+  Tokens de diseño de TEINS (dirección Marquilla).
+  Fuente única de verdad: DESIGN.md explica cada valor; ADR-0020 explica los dos niveles.
+  Los componentes usan solo los tokens semánticos (--t-*), nunca los de marca ni valores fijos.
+*/
+
+:root {
+  /* Nivel 1: marca de la organización (se reemplaza por organización en tiempo de ejecución) */
+  --marca-superficie: #002B81;
+  --marca-acento: #FFC21A;
+  --marca-texto-secundario: #525152;
+
+  /* Nivel 2: semánticos, derivados de la marca */
+  --t-superficie: var(--marca-superficie);
+  --t-superficie-elevada: color-mix(in srgb, var(--marca-superficie), #FFFFFF 12%);
+  --t-superficie-pista: color-mix(in srgb, var(--marca-superficie), #FFFFFF 24%);
+  --t-sobre-superficie: #FFFFFF;
+  --t-sobre-superficie-tenue: color-mix(in srgb, var(--marca-superficie), #FFFFFF 70%);
+  --t-sobre-superficie-suave: color-mix(in srgb, var(--marca-superficie), #FFFFFF 85%);
+
+  --t-acento: var(--marca-acento);
+  --t-sobre-acento: #15171A;
+
+  --t-fondo-campo: #FFFFFF;
+  --t-fondo-oficina: #F3F1EC;
+  --t-panel: #FFFFFF;
+  --t-texto: #15171A;
+  --t-texto-secundario: var(--marca-texto-secundario);
+  --t-division: #DEDBD3;
+  --t-borde-control: #8A867E;
+  --t-borde-activo: var(--marca-superficie);
+  --t-foco: var(--marca-acento);
+
+  /* Estados del documento: fijos para toda organización */
+  --t-estado-enviado-fondo: #E3ECFA;      --t-estado-enviado-texto: #1C4E9E;
+  --t-estado-revision-fondo: #EEE6F7;     --t-estado-revision-texto: #5B2E91;
+  --t-estado-revisado-fondo: #DDF1EB;     --t-estado-revisado-texto: #0B5E50;
+  --t-estado-anulado-fondo: #F8E0E4;      --t-estado-anulado-texto: #8E1D33;
+  /* Borrador usa --t-superficie-pista; Publicado usa --t-superficie */
+
+  /* Sincronización (campo) */
+  --t-sync-ok: #0F6B5C;
+  --t-sync-pendiente: #7A4F00;
+  --t-sync-error: #A3223A;
+
+  /* Tipografía */
+  --t-fuente-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --t-fuente-texto: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
+  --t-fuente-mono: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+
+  /* Forma */
+  --t-radio-control: 6px;
+  --t-radio-panel: 8px;
+  --t-tactil-min: 44px;
+  --t-tactil-campo: 58px;
+
+  /* Marquilla: punta del extremo derecho según altura */
+  --t-marquilla-punta-sm: 6px;   /* 24px de alto */
+  --t-marquilla-punta-md: 8px;   /* 30px */
+  --t-marquilla-punta-lg: 12px;  /* 44px */
+
+  /* Movimiento */
+  --t-duracion-rapida: 120ms;
+  --t-duracion-estandar: 200ms;
+  --t-duracion-pantalla: 280ms;
+  --t-curva: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-duracion-rapida: 0ms;
+    --t-duracion-estandar: 0ms;
+    --t-duracion-pantalla: 0ms;
+  }
+}

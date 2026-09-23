@@ -1,0 +1,32 @@
+# Dependencias y compilados
+node_modules/
+dist/
+build/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Entorno y secretos (nunca se versionan)
+.env
+.env.*
+!.env.example
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Registros
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Datos del cliente: nunca en el repositorio (R5)
+datos-reales/
+*.dump
+*.sql.gz
+
+# Material de análisis local (transcripciones, formatos físicos)
+privado/
