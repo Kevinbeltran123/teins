@@ -61,3 +61,19 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 ## Pruebas
 
 `pnpm --filter @teins/servidor test` levanta PostgreSQL 18 y S3Mock con Testcontainers. Requiere Docker; con Colima se detecta solo.
+
+## Despliegue (ADR-0016)
+
+Una imagen para todo: `docker build -t teins .` desde la raíz. Incluye el servidor compilado (`pnpm --filter @teins/servidor compilar`), sus migraciones y las superficies `campo` y `oficina`.
+
+| Proceso | Comando | Réplicas |
+|---|---|---|
+| Migración, antes de cada versión | `node dist/cli/migrar.js` | Una vez, como paso de lanzamiento |
+| Rol web (por defecto) | `node --enable-source-maps dist/web.js` | Una o más; sin estado |
+| Rol worker | `node --enable-source-maps dist/worker.js` | Una o más |
+
+Variables de entorno: las de `.env.example` más `NODE_ENV=production`, `SUPERFICIE_CAMPO_HOST` y `SUPERFICIE_OFICINA_HOST` (por ejemplo `campo.<dominio>` y `oficina.<dominio>`), con `ORIGENES_CONFIABLES` en `https://` para esos mismos hosts. Las contraseñas y el secreto van en el gestor de secretos de la plataforma, nunca en el repositorio.
+
+Antes del primer despliegue en un entorno: crear el rol `teins_app` con `infra/roles.sql` y darle contraseña desde la consola del proveedor; en el almacenamiento, `S3_CONFIGURAR_CORS=true` y `node dist/cli/sembrar.js` solo en pruebas (nunca corre en producción).
+
+Salud: `GET /salud` verifica la base de datos. El rol web detrás de un proxy confía en sus encabezados solo con `NODE_ENV=production`.

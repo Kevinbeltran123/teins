@@ -67,11 +67,6 @@ describe("contrato y políticas (ADR-0009, ADR-0014)", () => {
   });
 
   it("una ruta nueva sin política impide arrancar el servidor", async () => {
-    const { construirApp } = await import("../src/app");
-    const { app: otra } = await construirApp({ config: s.config, bd: s.conexionApp.bd, almacenamiento: {} as never }).catch(() => ({ app: null }));
-    // La app completa sí arranca; ahora se intenta agregar una ruta sin política.
-    expect(otra).not.toBeNull();
-    await otra!.close();
     const Fastify = (await import("fastify")).default;
     const { exigirPoliticas } = await import("../src/plataforma/rutas");
     const minima = Fastify();

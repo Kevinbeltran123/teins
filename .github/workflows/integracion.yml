@@ -42,6 +42,19 @@ jobs:
       - name: Presupuesto de rendimiento de campo
         run: pnpm presupuesto
 
+  imagen:
+    name: Imagen de contenedor
+    needs: calidad
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen única (web y worker)
+        run: docker build -t teins:${{ github.sha }} .
+      - name: La imagen no lleva secretos y corre sin privilegios
+        run: |
+          docker run --rm --entrypoint sh teins:${{ github.sha }} -c 'test "$(whoami)" = node && test -z "$(find / -name .env -not -path "/proc/*" 2>/dev/null)"'
+
   secretos:
     name: Secretos fuera del repositorio
     runs-on: ubuntu-latest

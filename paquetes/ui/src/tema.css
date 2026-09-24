@@ -62,3 +62,8 @@
   25% { transform: translateX(-4px); }
   75% { transform: translateX(4px); }
 }
+
+/* Marquilla: rectángulo con punta a la derecha (DESIGN.md). En CSS y no en línea: la política de contenido no admite estilos en línea. */
+@utility marquilla {
+  clip-path: polygon(0 0, calc(100% - var(--t-marquilla-punta-md)) 0, 100% 50%, calc(100% - var(--t-marquilla-punta-md)) 100%, 0 100%);
+}

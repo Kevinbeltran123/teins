@@ -30,6 +30,14 @@ const Esquema = z.object({
   S3_CONFIGURAR_CORS: booleano.default(true),
   BYTES_MAXIMOS_ARCHIVO: z.coerce.number().int().positive().max(BYTES_MAXIMOS_ARCHIVO).default(BYTES_MAXIMOS_ARCHIVO),
 
+  /**
+   * Superficies servidas por el rol web, cada una en su host con /api en el mismo origen (ADR-0016).
+   * En desarrollo no se usan: Vite sirve las superficies y reenvía /api.
+   */
+  SUPERFICIE_CAMPO_HOST: z.string().min(1).optional(),
+  SUPERFICIE_OFICINA_HOST: z.string().min(1).optional(),
+  SUPERFICIES_DIR: z.string().min(1).default("superficies"),
+
   AUTH_SECRETO: z.string().min(32, "AUTH_SECRETO debe tener al menos 32 caracteres"),
   /** Orígenes de las superficies (campo, oficina); Better Auth rechaza los demás. */
   ORIGENES_CONFIABLES: listaDeUrls,

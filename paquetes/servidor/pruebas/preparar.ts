@@ -44,7 +44,7 @@ export default async function preparar(proyecto: TestProject) {
   await admin.query(readFileSync(new URL("../infra/roles.sql", import.meta.url), "utf8"));
   await admin.query("ALTER ROLE teins_app PASSWORD 'app'");
   await admin.end();
-  await migrar(urlPropietario);
+  await migrar(urlPropietario, new URL("../migraciones", import.meta.url).pathname);
 
   const urlApp = new URL(urlPropietario);
   urlApp.username = "teins_app";

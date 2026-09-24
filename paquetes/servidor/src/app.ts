@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { LogController, type FastifyInstance } from "fastify";
+import helmet from "@fastify/helmet";
 import { sql } from "drizzle-orm";
 import { TIPO_PROBLEMA } from "@teins/protocolo";
 import { documentoOpenApi } from "@teins/protocolo/openapi";
@@ -8,6 +9,7 @@ import type { Almacenamiento } from "./plataforma/almacenamiento";
 import type { BaseDeDatos } from "./plataforma/base-de-datos";
 import { ErrorProblema, problema } from "./plataforma/errores";
 import { exigirPoliticas, registrarRutaPublica } from "./plataforma/rutas";
+import { servirSuperficies, type Superficie } from "./plataforma/superficies";
 import { crearIdentidad } from "./modulos/identidad";
 import { crearArchivos } from "./modulos/archivos";
 import { crearFormatos } from "./modulos/formatos";
@@ -57,6 +59,32 @@ export async function construirApp({ config, bd, almacenamiento }: Dependencias)
 
   const rutas = new Set<string>();
   exigirPoliticas(app, rutas);
+
+  // Encabezados de seguridad. La CSP solo abre el almacenamiento de archivos, donde campo sube
+  // y oficina lee fotos con URL firmada (ADR-0007); su origen sale del proveedor configurado.
+  const almacen = new URL((await almacenamiento.firmarDescarga("origen")).url).origin;
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", "blob:", "data:", almacen],
+        connectSrc: ["'self'", almacen],
+        fontSrc: ["'self'"],
+        manifestSrc: ["'self'"],
+        workerSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    // Las fotos llegan de otro origen (almacenamiento): no se exige CORP a los recursos incrustados.
+    crossOriginEmbedderPolicy: false,
+    strictTransportSecurity: config.NODE_ENV === "production" ? { maxAge: 31_536_000, includeSubDomains: true } : false,
+  });
 
   // Defensa contra falsificación de solicitudes entre sitios, además de la cookie SameSite:
   // un navegador siempre envía Origin en solicitudes que modifican; si no es una superficie propia, se rechaza.
@@ -117,6 +145,12 @@ export async function construirApp({ config, bd, almacenamiento }: Dependencias)
   identidad.registrarRutas(app);
   archivos.registrarRutas(app);
   levantamientos.registrarRutas(app);
+
+  const superficies: Superficie[] = [
+    ...(config.SUPERFICIE_CAMPO_HOST ? [{ host: config.SUPERFICIE_CAMPO_HOST, carpeta: `${config.SUPERFICIES_DIR}/campo` }] : []),
+    ...(config.SUPERFICIE_OFICINA_HOST ? [{ host: config.SUPERFICIE_OFICINA_HOST, carpeta: `${config.SUPERFICIES_DIR}/oficina` }] : []),
+  ];
+  if (superficies.length > 0) await servirSuperficies(app, superficies);
 
   await app.ready();
   return { app, rutas };

@@ -27,6 +27,8 @@ const corredor = await run({
   pgPool: cola.pool,
   taskList: definirTareas({ archivos }),
   concurrency: 4,
+  // Las tareas periódicas (ADR-0012, regla 5) se declaran aquí cuando existan; nunca en un archivo suelto.
+  crontab: "",
   noHandleSignals: true,
   logger,
 });
