@@ -1,0 +1,36 @@
+{
+  "name": "@teins/servidor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:web": "tsx watch --env-file=.env src/web.ts",
+    "dev:worker": "tsx watch --env-file=.env src/worker.ts",
+    "migrar": "tsx --env-file=.env src/cli/migrar.ts",
+    "crear-usuario": "tsx --env-file=.env src/cli/crear-usuario.ts",
+    "sembrar": "tsx --env-file=.env src/cli/sembrar.ts",
+    "generar-migracion": "drizzle-kit generate",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1140.0",
+    "@aws-sdk/s3-request-presigner": "^3.1140.0",
+    "@teins/dominio": "workspace:*",
+    "@teins/protocolo": "workspace:*",
+    "better-auth": "^1.7.6",
+    "drizzle-orm": "^0.45.3",
+    "fastify": "^5.12.5",
+    "file-type": "^22.1.1",
+    "graphile-worker": "^0.18.0",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.1.0",
+    "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "testcontainers": "^12.1.0",
+    "tsx": "^4.23.15"
+  }
+}
