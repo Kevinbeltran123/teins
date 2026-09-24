@@ -16,6 +16,7 @@ Sistema de levantamientos técnicos para TEINS: los técnicos capturan informaci
 4. `docs/adr/README.md` y el ADR del área que vas a tocar.
 5. Para interfaz: `DESIGN.md`, `paquetes/ui/tokens.css` y `docs/diseno/pendientes.md`.
 6. `docs/proceso/forma-de-trabajo.md`: cómo se construye (cortes verticales, contrato primero).
+7. `docs/proceso/herramientas-de-agentes.md`: qué skills, plugins y MCP usar, y cuándo. Solo para la tarea que los necesita.
 
 Si una tarea contradice un ADR aceptado, **no lo ignores ni lo edites**: detente, explica el conflicto y propone un ADR nuevo que lo reemplace (plantilla en `docs/adr/0000-plantilla.md`).
 
