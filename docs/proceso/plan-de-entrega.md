@@ -15,6 +15,12 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
+## Próximo paso
+
+**Cerrar el corte 1:** desplegar el entorno de pruebas y hacer la prueba en iPhone (criterio 4 del corte 1). La propuesta de proveedores está en "Entorno de pruebas" dentro del corte 1 y espera la aprobación de Kevin, que crea las cuentas. Después: corte 2 (bajada).
+
+Pendientes pequeños que no bloquean: completar la fila de resultados del corte 0 (modelo de iPhone, versión de iOS, persistente, fotos íntegras) y repetir esa prueba en Android.
+
 **Preguntas a TEINS antes del corte 3:** P7 y P8 (formatos y campos obligatorios reales), P9 (errores frecuentes). **Antes del corte 4:** P22, P23 y P26 (informe). **Antes del piloto:** P40 a P43.
 
 ---
@@ -143,6 +149,23 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 | 2. Pasan las pruebas de los cuatro niveles y las reglas de arquitectura en integración continua | Cumplido en local; el flujo de GitHub Actions corre al subir la rama |
 | 3. Pantallas solo con componentes de `ui` y estados vacío, cargando, error y sin conexión | Cumplido |
 | 4. Probado en un iPhone real: captura sin conexión, recuperar señal, enviar con fotos y verlo en oficina | Pendiente: requiere el entorno de pruebas desplegado |
+
+### Entorno de pruebas (propuesta, pendiente de aprobación)
+
+Datos ficticios, cuentas de Kevin, región en Estados Unidos (Ley 1581). Verificado contra la lista de ADR-0016 el 2026-09-24:
+
+| Pieza | Propuesta | Costo estimado | Por qué |
+|---|---|---|---|
+| Rol web, rol worker y PostgreSQL | Railway, plan Hobby, región US East (Virginia) | USD 5 a 8 al mes: el plan cuesta USD 5 e incluye USD 5 de uso; web, worker y base en reposo usan poco | Corre la misma imagen para ambos roles; PostgreSQL en la misma red privada con conexión directa (LISTEN/NOTIFY para la cola) y sin apagarse |
+| Archivos | Cloudflare R2 | USD 0: 10 GB, 1 millón de escrituras y 10 millones de lecturas gratis al mes; sin cargo por salida | Compatible con S3, URL firmadas, CORS |
+| Superficies | Dos servicios web con la misma imagen (uno por host), o un dominio propio con subdominios `campo.` y `oficina.` | Unos USD 1 a 2 más con dos servicios | ADR-0016 exige un host por superficie; no se confirmó en la documentación de Railway cuántos dominios admite un servicio |
+
+**Descartados al verificar:**
+
+- **Neon, plan gratuito:** apaga la base a los 5 minutos sin actividad y no se puede desactivar en ese plan; al apagarse termina las conexiones LISTEN de la cola, y el sondeo del worker agotaría las 100 horas de cómputo del mes.
+- **Cloudflare R2 para exigir la huella en la subida:** R2 no admite `x-amz-checksum-sha256` en PutObject (solo `Content-MD5`, que el navegador no calcula). ADR-0007 lo contempla: exigir la huella en la carga es opcional "si el proveedor lo permite"; la garantía es la verificación del worker (firma interna, tamaño y huella; lo inválido se rechaza y se elimina). Con R2 hace falta una opción de configuración para no firmar esa cabecera. Si se prefiere exigirla también en la carga, la alternativa es Amazon S3 en `us-east-1`, con costo de centavos al mes a este volumen.
+
+**Pasos al aprobar:** crear las cuentas (Kevin); opción de configuración para la huella en la subida, con su prueba; crear el rol `teins_app`; configurar variables y secretos en la plataforma; migrar, sembrar y desplegar; repetir la prueba de extremo a extremo contra el entorno; prueba en iPhone.
 
 ### Decisiones tomadas al construirlo
 

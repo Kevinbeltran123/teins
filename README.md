@@ -11,9 +11,9 @@ Sistema para capturar levantamientos técnicos en campo (con o sin conexión), r
 | Impulsores de arquitectura | Listo |
 | Modelo de dominio | Listo |
 | Decisiones de arquitectura (ADR 0001 a 0020) | Aceptadas |
-| Dirección visual (Marquilla) | Definida; faltan pantallas y estados |
-| Plan de entrega | Cortes 0 a 5 definidos |
-| Código | Corte 0 terminado; corte 1 (envío a oficina) en cierre |
+| Dirección visual (Marquilla, estructura Placa, una sola familia de letra) | Definida en `DESIGN.md` y aplicada en campo y oficina; faltan las pantallas de los cortes siguientes |
+| Plan de entrega | Cortes 0 a 5 definidos; estado y próximo paso en [`docs/proceso/plan-de-entrega.md`](docs/proceso/plan-de-entrega.md) |
+| Código | Corte 0 terminado; corte 1 (envío a oficina) construido y verificado; falta entorno de pruebas e iPhone |
 
 ## Mapa del repositorio
 

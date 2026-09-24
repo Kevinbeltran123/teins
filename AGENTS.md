@@ -6,10 +6,11 @@ Instrucciones para cualquier agente de programación que trabaje en este reposit
 
 Sistema de levantamientos técnicos para TEINS: los técnicos capturan información en campo (con o sin conexión) desde una PWA, oficina la revisa y corrige con trazabilidad, y el cliente descarga el informe PDF desde un portal. Monolito modular en TypeScript sobre PostgreSQL.
 
-**Estado:** documentación y estructura listas. El código empieza con el primer recorrido completo del plan de entrega.
+**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-24: corte 0 terminado; corte 1 construido y verificado, pendiente del entorno de pruebas y de la prueba en iPhone.
 
 ## Antes de tocar cualquier cosa, lee en este orden
 
+0. `docs/proceso/plan-de-entrega.md`: dónde va el proyecto y cuál es el próximo paso. Empieza siempre aquí.
 1. `docs/producto/contexto.md`: qué problema se resuelve.
 2. `docs/arquitectura/01-impulsores.md`: restricciones (R-n) y escenarios de calidad (QA-n). Toda decisión se justifica contra ellos.
 3. `docs/arquitectura/02-modelo-dominio.md`: lenguaje común, agregados, estados, reglas del negocio.
@@ -20,9 +21,26 @@ Sistema de levantamientos técnicos para TEINS: los técnicos capturan informaci
 
 Si una tarea contradice un ADR aceptado, **no lo ignores ni lo edites**: detente, explica el conflicto y propone un ADR nuevo que lo reemplace (plantilla en `docs/adr/0000-plantilla.md`).
 
+## Retomar el trabajo en una sesión nueva
+
+1. Lee el plan de entrega: el corte en curso, su tabla "Terminado cuando", sus "Decisiones tomadas al construirlo" y la sección "Próximo paso".
+2. Revisa la rama y los commits: `git log --oneline -15`. El trabajo del corte 1 vive en la rama `corte-0` (aún sin fusionar ni subir).
+3. Levanta el entorno local y corre la verificación completa (sección "Comandos"). Si algo no pasa en verde, eso es lo primero.
+4. No repitas decisiones ya tomadas: están en los ADR y en "Decisiones tomadas al construirlo". Si una no convence, propón un ADR nuevo.
+
+## Al cerrar un corte (o una fase de trabajo)
+
+Una tarea no está cerrada hasta que la documentación dice lo mismo que el código:
+
+- `docs/proceso/plan-de-entrega.md`: estado en el mapa, tabla "Terminado cuando" con evidencia, decisiones tomadas, lo que quedó fuera y en qué corte se resuelve, y el próximo paso.
+- `README.md`: tabla de estado.
+- `README.md` de cada paquete tocado: qué contiene y cómo se usa.
+- Sección "Comandos" de este archivo si cambió cómo se corre o se verifica.
+- Si una decisión cambia un ADR aceptado: ADR nuevo, nunca editar el anterior.
+
 ## Stack
 
-TypeScript, Node LTS, pnpm · Fastify, Zod, Drizzle, PostgreSQL, Graphile Worker · React, Vite, Tailwind, shadcn/ui · Dexie (IndexedDB) · Better Auth · S3 · Playwright + pdf-lib · perfect-freehand. El detalle y el porqué de cada elección están en el índice de `docs/adr/README.md`.
+TypeScript 6, Node 24, pnpm · Fastify, Zod, Drizzle, PostgreSQL, Graphile Worker · React, Vite, Tailwind, shadcn/ui · Dexie (IndexedDB) · Better Auth · S3 · Playwright + pdf-lib · perfect-freehand. El detalle y el porqué de cada elección están en el índice de `docs/adr/README.md`.
 
 ## Estructura y dependencias
 
@@ -35,6 +53,8 @@ paquetes/
   oficina/     Aplicación en línea.
   portal/      Portal del cliente. Nunca importa oficina ni campo.
   ui/          Componentes y tokens compartidos.
+e2e/           Pruebas de extremo a extremo (Playwright, Chromium y WebKit).
+scripts/       Verificaciones de la integración continua (licencias, presupuesto).
 ```
 
 Dentro de `servidor`, un módulo **nunca** lee tablas de otro ni importa sus partes internas: usa su interfaz pública o eventos.
