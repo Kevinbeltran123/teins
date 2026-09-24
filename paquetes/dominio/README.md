@@ -6,4 +6,4 @@ TypeScript puro: reglas del levantamiento, máquina de estados, meta-esquema de 
 
 **ADR relevantes:** 0001, 0006, 0018
 
-Sin código todavía.
+Corte 0 en curso (`docs/proceso/plan-de-entrega.md`).

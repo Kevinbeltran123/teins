@@ -12,8 +12,8 @@ Sistema para capturar levantamientos técnicos en campo (con o sin conexión), r
 | Modelo de dominio | Listo |
 | Decisiones de arquitectura (ADR 0001 a 0020) | Aceptadas |
 | Dirección visual (Marquilla) | Definida; faltan pantallas y estados |
-| Plan de entrega | Pendiente |
-| Código | No iniciado |
+| Plan de entrega | Borrador: solo el corte 0 |
+| Código | Corte 0: captura sin conexión |
 
 ## Mapa del repositorio
 

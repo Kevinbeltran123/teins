@@ -6,4 +6,4 @@ Componentes compartidos (base shadcn/ui reestilizada) y tokens de diseño.
 
 **ADR relevantes:** 0011, 0020
 
-Sin código todavía.
+Corte 0 en curso (`docs/proceso/plan-de-entrega.md`).

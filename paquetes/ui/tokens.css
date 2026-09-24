@@ -48,6 +48,15 @@
   --t-fuente-texto: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
   --t-fuente-mono: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
 
+  /* Escala en campo (DESIGN.md) */
+  --t-texto-campo: 17px;
+  --t-texto-ayuda: 15px;
+  --t-titulo: 44px;
+  --t-cifra-focal: 76px;
+
+  /* Validación */
+  --t-error: #A3223A;
+
   /* Forma */
   --t-radio-control: 6px;
   --t-radio-panel: 8px;

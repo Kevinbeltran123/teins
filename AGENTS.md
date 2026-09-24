@@ -80,4 +80,9 @@ Un corte vertical está terminado cuando:
 
 ## Comandos
 
-Se definirán con el primer recorrido completo. Hasta entonces no hay código que ejecutar.
+Node 24 (`.nvmrc`) y pnpm por corepack (`corepack enable`).
+
+- `pnpm install`
+- `pnpm typecheck` · `pnpm test`: todos los paquetes.
+- `pnpm dev:campo`: PWA de campo en desarrollo (en la red local, para abrirla desde un celular).
+- `pnpm --filter @teins/campo build` y `preview`: versión compilada con service worker.
