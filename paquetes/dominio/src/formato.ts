@@ -1,15 +1,15 @@
-// Subconjunto del meta-esquema de ADR-0006 para el corte 0: una sección, tres tipos de campo.
+// Subconjunto del meta-esquema de ADR-0006: tipos texto, medida y foto.
 
 interface CampoBase {
   clave: string;
   etiqueta: string;
-  obligatorio?: boolean;
+  obligatorio?: boolean | undefined;
 }
 
 export type DefinicionCampo =
   | (CampoBase & { tipo: "texto" })
   | (CampoBase & { tipo: "medida"; unidades: readonly string[] })
-  | (CampoBase & { tipo: "foto"; min?: number });
+  | (CampoBase & { tipo: "foto"; min?: number | undefined });
 
 export interface DefinicionSeccion {
   clave: string;

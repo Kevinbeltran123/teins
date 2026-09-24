@@ -1,0 +1,17 @@
+{
+  "name": "@teins/protocolo",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@teins/dominio": "workspace:*",
+    "zod": "^4.6.5",
+    "zod-openapi": "^6.0.2"
+  }
+}

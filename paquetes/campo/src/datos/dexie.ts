@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Levantamiento, Valor } from "@teins/dominio";
+import { agregarFoto, responder, type Levantamiento } from "@teins/dominio";
 import type { ArchivoLocal, RepositorioLevantamientos } from "./repositorio";
 
 type BaseCampo = Dexie & {
@@ -21,12 +21,10 @@ export function abrirBase(nombre = "teins-campo"): BaseCampo {
 }
 
 export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
-  async function modificar(id: string, ahora: Date, cambio: (l: Levantamiento) => void) {
+  async function modificar(id: string, cambio: (l: Levantamiento) => Levantamiento) {
     const levantamiento = await db.levantamientos.get(id);
     if (!levantamiento) throw new Error(`Levantamiento ${id} no existe en el dispositivo`);
-    cambio(levantamiento);
-    levantamiento.actualizadoEn = ahora.toISOString();
-    await db.levantamientos.put(levantamiento);
+    await db.levantamientos.put(cambio(levantamiento));
   }
 
   return {
@@ -38,11 +36,7 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
 
     guardarRespuesta(id, seccion, campo, valor, ahora) {
       return db.transaction("rw", db.levantamientos, () =>
-        modificar(id, ahora, (l) => {
-          const respuestas = (l.respuestas[seccion] ??= {});
-          if (valor === undefined) delete respuestas[campo];
-          else respuestas[campo] = valor;
-        }),
+        modificar(id, (l) => responder(l, seccion, campo, valor, ahora)),
       );
     },
 
@@ -50,12 +44,7 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
       return db.transaction("rw", db.levantamientos, db.archivos, async () => {
         // Direccionado por contenido: la misma foto dos veces es un solo archivo.
         await db.archivos.put(archivo);
-        await modificar(id, ahora, (l) => {
-          const respuestas = (l.respuestas[seccion] ??= {});
-          const actuales = respuestas[campo];
-          const fotos = Array.isArray(actuales) ? actuales : [];
-          if (!fotos.includes(archivo.id)) respuestas[campo] = [...fotos, archivo.id];
-        });
+        await modificar(id, (l) => agregarFoto(l, seccion, campo, archivo.id, ahora));
       });
     },
 
