@@ -30,7 +30,10 @@ export type {
   Operacion,
   Operaciones,
   Parametros,
+  ParametrosEntrada,
   Respuesta,
   RespuestaServidor,
 } from "./operaciones";
 export { documentoOpenApi } from "./openapi";
+export { crearClienteApi, ErrorApi, ErrorDeRed } from "./cliente";
+export type { ClienteApi, EntradaCliente } from "./cliente";

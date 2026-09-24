@@ -202,6 +202,7 @@ type Entrada<T> = T extends z.ZodType ? z.input<T> : undefined;
 export type Cuerpo<N extends NombreOperacion> = Salida<Operaciones[N] extends { cuerpo: infer C } ? C : undefined>;
 export type CuerpoEntrada<N extends NombreOperacion> = Entrada<Operaciones[N] extends { cuerpo: infer C } ? C : undefined>;
 export type Parametros<N extends NombreOperacion> = Salida<Operaciones[N] extends { parametros: infer P } ? P : undefined>;
+export type ParametrosEntrada<N extends NombreOperacion> = Entrada<Operaciones[N] extends { parametros: infer P } ? P : undefined>;
 export type Consulta<N extends NombreOperacion> = Salida<Operaciones[N] extends { consulta: infer Q } ? Q : undefined>;
 export type ConsultaEntrada<N extends NombreOperacion> = Entrada<Operaciones[N] extends { consulta: infer Q } ? Q : undefined>;
 export type Respuesta<N extends NombreOperacion> = z.output<Operaciones[N]["respuesta"]>;

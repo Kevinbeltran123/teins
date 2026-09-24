@@ -1,3 +1,4 @@
 import { abrirBase, repositorioDexie } from "./dexie";
 
-export const repositorio = repositorioDexie(abrirBase());
+export const db = abrirBase();
+export const repositorio = repositorioDexie(db);

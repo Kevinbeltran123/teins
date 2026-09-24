@@ -1,4 +1,4 @@
-import type { ArchivoLocal } from "../datos/repositorio";
+import type { ArchivoNuevo } from "../datos/repositorio";
 
 const LADO_MAXIMO = 1600;
 const CALIDAD_JPEG = 0.8;
@@ -7,7 +7,7 @@ const CALIDAD_JPEG = 0.8;
  * Recodifica la foto en el dispositivo (ADR-0007): aplica la orientación, limita el tamaño
  * y elimina todos los metadatos, incluida la ubicación (QA-23). El identificador es la huella SHA-256.
  */
-export async function procesarFoto(original: File, ahora: Date): Promise<ArchivoLocal> {
+export async function procesarFoto(original: File, ahora: Date): Promise<ArchivoNuevo> {
   const url = URL.createObjectURL(original);
   try {
     const imagen = new Image();

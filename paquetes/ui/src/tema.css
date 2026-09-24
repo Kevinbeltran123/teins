@@ -27,6 +27,8 @@
   --color-sync-pendiente: var(--t-sync-pendiente);
   --color-sync-error: var(--t-sync-error);
   --color-error: var(--t-error);
+  --color-estado-enviado-fondo: var(--t-estado-enviado-fondo);
+  --color-estado-enviado-texto: var(--t-estado-enviado-texto);
 
   --font-texto: var(--t-fuente-texto);
 

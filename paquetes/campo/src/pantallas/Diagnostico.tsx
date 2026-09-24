@@ -14,7 +14,7 @@ interface Verificacion {
 
 async function verificarFotos(): Promise<Verificacion> {
   const referenciadas = new Set(
-    (await repositorio.listar()).flatMap((l) =>
+    (await repositorio.todos()).flatMap((l) =>
       Object.values(l.respuestas).flatMap((s) => Object.values(s).flatMap((v) => (Array.isArray(v) ? v : []))),
     ),
   );

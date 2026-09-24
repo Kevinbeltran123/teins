@@ -1,22 +1,39 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { crearMedida, type DefinicionCampo, type Levantamiento, type ValorMedida } from "@teins/dominio";
-import { Aviso, Boton, CampoFotos, CampoMedida, CampoTexto, Marquilla } from "@teins/ui";
-import { repositorio } from "../datos/instancia";
+import {
+  crearMedida,
+  esNoObtenido,
+  type CodigoErrorValidacion,
+  type DefinicionCampo,
+  type Valor,
+  type ValorMedida,
+  type VersionFormato,
+} from "@teins/dominio";
+import { Aviso, Boton, CampoFotos, CampoMedida, CampoTexto, MarcaNoObtenido, Marquilla, ValorLeido } from "@teins/ui";
+import { db, repositorio } from "../datos/instancia";
+import type { EnvioLocal, LevantamientoLocal } from "../datos/modelo";
 import { procesarFoto } from "../fotos/procesar";
 import { horaExacta } from "../formato";
-import { formatoDemo, NOMBRE_FORMATO_DEMO } from "../formato-demo";
+import { formatoDe, NOMBRE_FORMATO } from "../formatos";
+import { claseDeTono, estadoDeEnvio, mensajeDeValidacion } from "../mensajes";
+import { useConexion } from "../dispositivo/useConexion";
+import { sincronizarEnSegundoPlano } from "../sincronizacion/instancia";
+
+type Errores = ReadonlyMap<string, CodigoErrorValidacion>;
+const claveDeError = (seccion: string, campo: string) => `${seccion}.${campo}`;
 
 export function Captura({ id, volver }: { id: string; volver: () => void }) {
   // `null` distingue "no existe" de `undefined` (cargando).
   const levantamiento = useLiveQuery(async () => (await repositorio.obtener(id)) ?? null, [id]);
+  const envio = useLiveQuery(async () => (await db.envios.get(id)) ?? null, [id]);
   // Los campos leen los valores una sola vez; después solo escriben (ver CampoTexto).
-  const [inicial, setInicial] = useState<Levantamiento>();
+  const [inicial, setInicial] = useState<LevantamientoLocal>();
   useEffect(() => {
     if (levantamiento && !inicial) setInicial(levantamiento);
   }, [levantamiento, inicial]);
 
-  const seccion = formatoDemo.secciones[0]!;
+  const formato = levantamiento ? formatoDe(levantamiento) : undefined;
+  const seccion = formato?.secciones[0];
 
   return (
     <div className="min-h-dvh bg-fondo-campo">
@@ -29,14 +46,14 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
           Volver a levantamientos
         </button>
         <div className="mt-2 flex items-center gap-3">
-          <Marquilla tono="sobre-superficie">Borrador</Marquilla>
-          <span className="text-ayuda text-sobre-superficie-suave">{NOMBRE_FORMATO_DEMO}</span>
+          <Marquilla tono="sobre-superficie">{levantamiento?.estado === "enviado" ? "Enviado" : "Borrador"}</Marquilla>
+          <span className="text-ayuda text-sobre-superficie-suave">{NOMBRE_FORMATO}</span>
         </div>
-        <h1 className="mt-2 text-titulo leading-tight font-extrabold tracking-tight">{seccion.titulo}</h1>
+        <h1 className="mt-2 text-titulo leading-tight font-extrabold tracking-tight">{seccion?.titulo ?? "Levantamiento"}</h1>
       </header>
 
       <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-6">
-        {levantamiento === undefined || (levantamiento && !inicial) ? (
+        {levantamiento === undefined || envio === undefined || (levantamiento && !inicial) ? (
           <div aria-busy="true" aria-label="Cargando levantamiento" className="flex flex-col gap-6">
             <div className="h-[180px] animate-pulse rounded-panel bg-panel" />
             <div className="h-[140px] animate-pulse rounded-panel bg-panel" />
@@ -46,19 +63,12 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
             <Aviso tono="error">Este levantamiento no está en este teléfono.</Aviso>
             <Boton onClick={volver}>Volver a levantamientos</Boton>
           </>
+        ) : !formato ? (
+          <Aviso tono="error">Este levantamiento usa un formato que esta versión de la app no conoce. Actualiza la app; el levantamiento se conserva.</Aviso>
+        ) : levantamiento.estado === "enviado" ? (
+          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} />
         ) : (
-          <>
-            {agrupar(seccion.campos).map((grupo) => (
-              <div key={grupo[0]!.clave} className="flex flex-col gap-6 rounded-panel bg-panel p-4">
-                {grupo.map((campo) => (
-                  <Campo key={campo.clave} id={id} seccion={seccion.clave} campo={campo} inicial={inicial} actual={levantamiento} />
-                ))}
-              </div>
-            ))}
-            <p className="text-ayuda text-texto-secundario" aria-live="polite">
-              Guardado en este teléfono a las {horaExacta(levantamiento.actualizadoEn)}
-            </p>
-          </>
+          <Borrador id={id} formato={formato} inicial={inicial} actual={levantamiento} />
         )}
       </main>
     </div>
@@ -76,76 +86,194 @@ function agrupar(campos: readonly DefinicionCampo[]): DefinicionCampo[][] {
   return grupos;
 }
 
+function Borrador({ id, formato, inicial, actual }: { id: string; formato: VersionFormato; inicial: LevantamientoLocal; actual: LevantamientoLocal }) {
+  const [errores, setErrores] = useState<Errores | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const resumen = useRef<HTMLDivElement>(null);
+
+  async function enviar() {
+    setEnviando(true);
+    try {
+      const resultado = await repositorio.enviar(id, formato, new Date());
+      if (resultado.ok) {
+        sincronizarEnSegundoPlano();
+        return;
+      }
+      if (resultado.motivo === "respuestas_invalidas") {
+        setErrores(new Map(resultado.errores.map((e) => [claveDeError(e.seccion, e.campo ?? ""), e.codigo])));
+        setConfirmando(false);
+        requestAnimationFrame(() => resumen.current?.focus());
+      }
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  // Al corregir, el error de ese campo se va: la validación completa se repite al enviar.
+  const alGuardar = (seccion: string, campo: string) => {
+    if (errores?.has(claveDeError(seccion, campo))) {
+      const siguiente = new Map(errores);
+      siguiente.delete(claveDeError(seccion, campo));
+      setErrores(siguiente);
+    }
+  };
+
+  return (
+    <>
+      {errores && errores.size > 0 && (
+        <div ref={resumen} tabIndex={-1} className="focus:outline-none">
+          <Aviso tono="error">
+            {errores.size === 1 ? "Falta 1 dato por completar." : `Faltan ${errores.size} datos por completar.`} Revisa los campos marcados.
+          </Aviso>
+        </div>
+      )}
+      {formato.secciones.map((seccion) =>
+        agrupar(seccion.campos).map((grupo) => (
+          <div key={`${seccion.clave}.${grupo[0]!.clave}`} className="flex flex-col gap-6 rounded-panel bg-panel p-4">
+            {grupo.map((campo) => (
+              <Campo
+                key={campo.clave}
+                id={id}
+                seccion={seccion.clave}
+                campo={campo}
+                inicial={inicial.respuestas[seccion.clave]?.[campo.clave]}
+                actual={actual.respuestas[seccion.clave]?.[campo.clave]}
+                error={errores?.get(claveDeError(seccion.clave, campo.clave))}
+                alGuardar={() => alGuardar(seccion.clave, campo.clave)}
+              />
+            ))}
+          </div>
+        )),
+      )}
+      <p className="text-ayuda text-texto-secundario" aria-live="polite">
+        Guardado en este teléfono a las {horaExacta(actual.actualizadoEn)}
+      </p>
+      {confirmando ? (
+        <Aviso>
+          <p>Después de enviar ya no podrás editar este levantamiento. Oficina lo revisará.</p>
+          <div className="mt-3 flex flex-col gap-2">
+            <Boton variante="principal" onClick={enviar} disabled={enviando}>
+              {enviando ? "Enviando…" : "Confirmar envío"}
+            </Boton>
+            <Boton onClick={() => setConfirmando(false)}>Seguir editando</Boton>
+          </div>
+        </Aviso>
+      ) : (
+        <Boton variante="principal" onClick={() => setConfirmando(true)}>
+          Enviar a oficina
+        </Boton>
+      )}
+    </>
+  );
+}
+
 interface PropsCampo {
   id: string;
   seccion: string;
   campo: DefinicionCampo;
-  inicial: Levantamiento;
-  actual: Levantamiento;
+  inicial: Valor | undefined;
+  actual: Valor | undefined;
+  error: CodigoErrorValidacion | undefined;
+  alGuardar: () => void;
 }
 
-function Campo({ id, seccion, campo, inicial, actual }: PropsCampo) {
-  const valorInicial = inicial.respuestas[seccion]?.[campo.clave];
-  const guardar = (valor: Parameters<typeof repositorio.guardarRespuesta>[3]) =>
-    repositorio.guardarRespuesta(id, seccion, campo.clave, valor, new Date());
+function Campo({ id, seccion, campo, inicial, actual, error, alGuardar }: PropsCampo) {
+  const guardar = (valor: Valor | undefined) => {
+    alGuardar();
+    return repositorio.guardarRespuesta(id, seccion, campo.clave, valor, new Date());
+  };
+  const noObtenido = esNoObtenido(actual);
+  const mensaje = error ? mensajeDeValidacion[error] : undefined;
+  const errorDeMotivo = error === "motivo_requerido" ? mensaje : undefined;
+  const errorDelCampo = error === "motivo_requerido" ? undefined : mensaje;
 
-  switch (campo.tipo) {
-    case "texto":
-      return (
-        <CampoTexto
-          etiqueta={campo.etiqueta}
-          valorInicial={typeof valorInicial === "string" ? valorInicial : ""}
-          onCambio={(texto) => void guardar(texto === "" ? undefined : texto)}
-        />
-      );
-    case "medida": {
-      const medida = valorInicial as ValorMedida | undefined;
-      return (
-        <CampoMedida
-          etiqueta={campo.etiqueta}
-          unidades={campo.unidades}
-          valorInicial={medida?.valor.replace(".", ",") ?? ""}
-          unidadInicial={medida?.unidad}
-          onCambio={(texto, unidad) => {
-            if (texto.trim() === "") {
-              void guardar(undefined);
-              return true;
-            }
-            const valor = crearMedida(texto, unidad, campo.unidades);
-            if (valor) void guardar(valor);
-            return valor !== null;
-          }}
-        />
-      );
+  const control = (() => {
+    switch (campo.tipo) {
+      case "texto":
+        return (
+          <CampoTexto
+            etiqueta={campo.etiqueta}
+            obligatorio={campo.obligatorio}
+            error={noObtenido ? undefined : errorDelCampo}
+            deshabilitado={noObtenido}
+            valorInicial={typeof inicial === "string" ? inicial : ""}
+            onCambio={(texto) => void guardar(texto === "" ? undefined : texto)}
+          />
+        );
+      case "medida": {
+        const medida = inicial && !esNoObtenido(inicial) && typeof inicial === "object" && "valor" in inicial ? (inicial as ValorMedida) : undefined;
+        return (
+          <CampoMedida
+            etiqueta={campo.etiqueta}
+            obligatorio={campo.obligatorio}
+            error={noObtenido ? undefined : errorDelCampo}
+            deshabilitado={noObtenido}
+            unidades={campo.unidades}
+            valorInicial={medida?.valor.replace(".", ",") ?? ""}
+            unidadInicial={medida?.unidad}
+            onCambio={(texto, unidad) => {
+              if (texto.trim() === "") {
+                void guardar(undefined);
+                return true;
+              }
+              const valor = crearMedida(texto, unidad, campo.unidades);
+              if (valor) void guardar(valor);
+              return valor !== null;
+            }}
+          />
+        );
+      }
+      case "foto":
+        return <Fotos id={id} seccion={seccion} campo={campo} ids={noObtenido ? [] : actual} error={noObtenido ? undefined : errorDelCampo} alGuardar={alGuardar} />;
     }
-    case "foto":
-      return <Fotos id={id} seccion={seccion} campo={campo} ids={actual.respuestas[seccion]?.[campo.clave]} />;
-  }
+  })();
+
+  if (!campo.obligatorio) return control;
+  return (
+    <div className="flex flex-col gap-2">
+      {control}
+      <MarcaNoObtenido
+        dato={campo.etiqueta}
+        marcado={noObtenido}
+        motivoInicial={esNoObtenido(inicial) ? inicial.motivo : ""}
+        error={errorDeMotivo}
+        // Marcar reemplaza el dato; desmarcar lo deja vacío para capturarlo (regla 3).
+        onCambio={(marcado, motivo) => void guardar(marcado ? { noObtenido: true, motivo } : undefined)}
+      />
+    </div>
+  );
 }
 
-function Fotos({ id, seccion, campo, ids }: { id: string; seccion: string; campo: DefinicionCampo; ids: unknown }) {
-  const lista = Array.isArray(ids) ? (ids as string[]) : [];
-  const archivos = useLiveQuery(() => repositorio.obtenerArchivos(lista), [lista.join()]);
+function useUrlsDeFotos(ids: readonly string[]) {
+  const archivos = useLiveQuery(() => repositorio.obtenerArchivos(ids), [ids.join()]);
   const [fotos, setFotos] = useState<{ id: string; url: string }[]>([]);
-  const [procesando, setProcesando] = useState(false);
-  const [error, setError] = useState(false);
-
   useEffect(() => {
     const nuevas = (archivos ?? []).map((a) => ({ id: a.id, url: URL.createObjectURL(new Blob([a.datos], { type: a.tipo })) }));
     setFotos(nuevas);
     return () => nuevas.forEach((f) => URL.revokeObjectURL(f.url));
   }, [archivos]);
+  return fotos;
+}
+
+function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: string; seccion: string; campo: DefinicionCampo; ids: unknown; error: string | undefined; alGuardar: () => void }) {
+  const fotos = useUrlsDeFotos(Array.isArray(ids) ? (ids as string[]) : []);
+  const [procesando, setProcesando] = useState(false);
+  const [fallo, setFallo] = useState(false);
 
   async function agregar(originales: File[]) {
     setProcesando(true);
-    setError(false);
+    setFallo(false);
     try {
       for (const original of originales) {
         const archivo = await procesarFoto(original, new Date());
         await repositorio.agregarFoto(id, seccion, campo.clave, archivo, new Date());
+        alGuardar();
       }
+      // Las fotos suben por adelantado cuando hay señal (ADR-0003).
+      sincronizarEnSegundoPlano();
     } catch {
-      setError(true);
+      setFallo(true);
     } finally {
       setProcesando(false);
     }
@@ -153,8 +281,62 @@ function Fotos({ id, seccion, campo, ids }: { id: string; seccion: string; campo
 
   return (
     <div className="flex flex-col gap-3">
-      <CampoFotos etiqueta={campo.etiqueta} fotos={fotos} procesando={procesando} onAgregar={agregar} />
-      {error && <Aviso tono="error">No se pudo guardar la foto. Tómala de nuevo.</Aviso>}
+      <CampoFotos etiqueta={campo.etiqueta} obligatorio={campo.obligatorio} error={error} fotos={fotos} procesando={procesando} onAgregar={agregar} />
+      {fallo && <Aviso tono="error">No se pudo guardar la foto. Tómala de nuevo.</Aviso>}
     </div>
   );
+}
+
+function textoDeValor(campo: DefinicionCampo, valor: Valor | undefined): string {
+  if (valor === undefined) return "Sin dato";
+  if (esNoObtenido(valor)) return `No se pudo obtener: ${valor.motivo}`;
+  if (campo.tipo === "medida" && typeof valor === "object" && "valor" in valor) return `${valor.valor.replace(".", ",")} ${valor.unidad}`;
+  return typeof valor === "string" ? valor : "";
+}
+
+function Enviado({ levantamiento, formato, envio }: { levantamiento: LevantamientoLocal; formato: VersionFormato; envio: EnvioLocal | null }) {
+  const enLinea = useConexion();
+  const estado = envio ? estadoDeEnvio(envio, enLinea) : null;
+  return (
+    <>
+      {estado && (
+        <div className="flex flex-col gap-3 rounded-panel bg-panel p-4">
+          <p className={`text-campo font-bold ${claseDeTono[estado.tono]}`} aria-live="polite">
+            {estado.texto}
+          </p>
+          {envio?.estado === "error" && (
+            <Boton
+              onClick={async () => {
+                await repositorio.reintentarEnvio(levantamiento.id);
+                sincronizarEnSegundoPlano();
+              }}
+            >
+              Reintentar envío
+            </Boton>
+          )}
+        </div>
+      )}
+      {formato.secciones.map((seccion) =>
+        agrupar(seccion.campos).map((grupo) => (
+          <div key={`${seccion.clave}.${grupo[0]!.clave}`} className="flex flex-col gap-5 rounded-panel bg-panel p-4">
+            {grupo.map((campo) => {
+              const valor = levantamiento.respuestas[seccion.clave]?.[campo.clave];
+              return campo.tipo === "foto" && !esNoObtenido(valor) ? (
+                <FotosLeidas key={campo.clave} etiqueta={campo.etiqueta} ids={Array.isArray(valor) ? (valor as string[]) : []} />
+              ) : (
+                <ValorLeido key={campo.clave} etiqueta={campo.etiqueta}>
+                  {textoDeValor(campo, valor)}
+                </ValorLeido>
+              );
+            })}
+          </div>
+        )),
+      )}
+    </>
+  );
+}
+
+function FotosLeidas({ etiqueta, ids }: { etiqueta: string; ids: readonly string[] }) {
+  const fotos = useUrlsDeFotos(ids);
+  return <CampoFotos etiqueta={etiqueta} fotos={fotos} procesando={false} onAgregar={() => undefined} soloLectura />;
 }

@@ -1,23 +1,34 @@
-import type { Levantamiento, Valor } from "@teins/dominio";
+import type { Levantamiento, ResultadoEnvio, Valor, VersionFormato } from "@teins/dominio";
+import type { ArchivoLocal, LevantamientoLocal } from "./modelo";
 
-/** Archivo guardado en el dispositivo. El identificador es su huella SHA-256 (ADR-0007). */
-export interface ArchivoLocal {
-  id: string;
-  /** ArrayBuffer y no Blob: es lo más estable en IndexedDB de Safari; lo valida la prueba del corte 0. */
-  datos: ArrayBuffer;
-  tipo: string;
-  creadoEn: string;
-}
+export type { ArchivoLocal, LevantamientoLocal } from "./modelo";
+
+/** Archivo recién capturado: aún no se sube. */
+export type ArchivoNuevo = Omit<ArchivoLocal, "subida" | "ultimoErrorDeSubida">;
 
 /** Puerto de ADR-0004: la lógica de captura no conoce Dexie. */
 export interface RepositorioLevantamientos {
-  crear(levantamiento: Levantamiento): Promise<void>;
-  obtener(id: string): Promise<Levantamiento | undefined>;
-  listar(): Promise<Levantamiento[]>;
+  crear(levantamiento: Levantamiento, tecnicoId: string): Promise<void>;
+  obtener(id: string): Promise<LevantamientoLocal | undefined>;
+  /** Levantamientos de un técnico, del más reciente al más antiguo. */
+  listar(tecnicoId: string): Promise<LevantamientoLocal[]>;
+  /** Cuántos levantamientos del teléfono son de otras personas: se conservan, no se muestran. */
+  contarDeOtros(tecnicoId: string): Promise<number>;
+  /** Los levantamientos del corte 0 no tenían responsable: pasan a quien inicia sesión primero. */
+  asignarSinResponsable(tecnicoId: string): Promise<void>;
   /** `undefined` borra la respuesta. */
   guardarRespuesta(id: string, seccion: string, campo: string, valor: Valor | undefined, ahora: Date): Promise<void>;
   /** Guarda el archivo y su referencia en la misma transacción: nunca queda una foto sin referencia. */
-  agregarFoto(id: string, seccion: string, campo: string, archivo: ArchivoLocal, ahora: Date): Promise<void>;
+  agregarFoto(id: string, seccion: string, campo: string, archivo: ArchivoNuevo, ahora: Date): Promise<void>;
   obtenerArchivos(ids: readonly string[]): Promise<ArchivoLocal[]>;
   todosLosArchivos(): Promise<ArchivoLocal[]>;
+  /** Todos los levantamientos del teléfono, de cualquier responsable: solo para el diagnóstico. */
+  todos(): Promise<LevantamientoLocal[]>;
+  /**
+   * Borrador → Enviado y comando al outbox, en una transacción: si la app se cierra en medio,
+   * o queda todo o no queda nada (ADR-0018, nivel 3: cierre entre guardar y encolar).
+   */
+  enviar(id: string, formato: VersionFormato, ahora: Date): Promise<ResultadoEnvio>;
+  /** Un envío con error permanente vuelve a la cola cuando el técnico lo pide. */
+  reintentarEnvio(id: string): Promise<void>;
 }
