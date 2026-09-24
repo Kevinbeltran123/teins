@@ -14,7 +14,7 @@ interface Props {
 }
 
 export const claseControl =
-  "min-h-tactil-campo w-full rounded-control border-[1.5px] border-borde-control bg-panel px-3 text-campo text-texto focus:border-2 focus:border-borde-activo focus:shadow-[0_0_0_4px_var(--t-foco)] focus:outline-none disabled:bg-fondo-campo disabled:text-texto-secundario";
+  "min-h-tactil w-full rounded-control border-[1.5px] border-borde-control bg-panel px-3 text-cuerpo text-texto focus:border-2 focus:border-borde-activo focus:shadow-[0_0_0_4px_var(--t-foco)] focus:outline-none disabled:bg-fondo disabled:text-texto-secundario";
 
 export const claseConError = "animate-[sacudida_var(--t-duracion-estandar)_var(--t-curva)] border-2 border-error";
 

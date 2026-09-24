@@ -45,14 +45,14 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   }
 
   return (
-    <div className="min-h-dvh bg-fondo-campo">
+    <div className="min-h-dvh bg-fondo">
       <header className="mx-3 mt-3 rounded-panel bg-superficie px-4 pt-5 pb-4 text-sobre-superficie">
         <div className="flex items-baseline justify-between gap-3">
           <p className="text-ayuda text-sobre-superficie-suave">Datos de prueba, no reales</p>
           <button
             type="button"
             onClick={() => void cerrarSesion()}
-            className="min-h-tactil-campo rounded-control px-2 text-ayuda font-bold text-sobre-superficie-suave underline focus-visible:outline-3 focus-visible:outline-acento"
+            className="min-h-tactil rounded-control px-2 text-ayuda font-bold text-sobre-superficie-suave underline focus-visible:outline-3 focus-visible:outline-acento"
           >
             Cerrar sesión
           </button>
@@ -104,7 +104,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
               <div className="h-[76px] animate-pulse rounded-panel bg-panel" />
             </div>
           ) : levantamientos.length === 0 ? (
-            <p className="text-campo text-texto-secundario">Todavía no hay levantamientos. Toca “Nuevo levantamiento” para empezar uno.</p>
+            <p className="text-cuerpo text-texto-secundario">Todavía no hay levantamientos. Toca “Nuevo levantamiento” para empezar uno.</p>
           ) : (
             <ul className="flex flex-col gap-2">
               {levantamientos.map((l) => (
@@ -136,7 +136,7 @@ function Fila({ levantamiento: l, envio, enLinea, abrir }: { levantamiento: Leva
       className="flex w-full items-center justify-between gap-3 rounded-panel border-[1.5px] border-division bg-panel px-4 py-3 text-left focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie"
     >
       <span className="flex min-w-0 flex-col">
-        <span className="text-campo font-bold">{NOMBRE_FORMATO}</span>
+        <span className="text-cuerpo font-bold">{NOMBRE_FORMATO}</span>
         <span className="text-ayuda text-texto-secundario">
           {fechaHora(l.creadoEn)} · {fotos(contarFotos(l))}
         </span>

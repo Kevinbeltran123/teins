@@ -9,11 +9,11 @@ export function EtiquetaCampo({ children, obligatorio, htmlFor, id }: { children
     </>
   );
   return htmlFor ? (
-    <label htmlFor={htmlFor} id={id} className="text-campo font-bold">
+    <label htmlFor={htmlFor} id={id} className="text-cuerpo font-bold">
       {contenido}
     </label>
   ) : (
-    <span id={id} className="text-campo font-bold">
+    <span id={id} className="text-cuerpo font-bold">
       {contenido}
     </span>
   );

@@ -21,8 +21,7 @@
   --t-acento: var(--marca-acento);
   --t-sobre-acento: #15171A;
 
-  --t-fondo-campo: #F3F1EC;
-  --t-fondo-oficina: #F3F1EC;
+  --t-fondo: #F3F1EC;
   --t-panel: #FFFFFF;
   --t-texto: #15171A;
   --t-texto-secundario: var(--marca-texto-secundario);
@@ -47,8 +46,8 @@
   /* Una sola familia en toda la interfaz (DESIGN.md) */
   --t-fuente-texto: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
 
-  /* Escala en campo (DESIGN.md) */
-  --t-texto-campo: 17px;
+  /* Escala de campo (DESIGN.md), la predeterminada. Oficina la redefine abajo. */
+  --t-texto-cuerpo: 17px;
   --t-texto-ayuda: 15px;
   --t-subtitulo: 21px;
   --t-titulo: 34px;
@@ -61,7 +60,7 @@
   --t-radio-control: 6px;
   --t-radio-panel: 8px;
   --t-tactil-min: 44px;
-  --t-tactil-campo: 58px;
+  --t-tactil: 58px;
 
   /* Marquilla: punta del extremo derecho según altura */
   --t-marquilla-punta-sm: 6px;   /* 24px de alto */
@@ -73,6 +72,18 @@
   --t-duracion-estandar: 200ms;
   --t-duracion-pantalla: 280ms;
   --t-curva: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+  Escala de oficina (DESIGN.md): escritorio, texto 14 y zonas táctiles de 44.
+  Los componentes no cambian: usan los mismos tokens y la superficie los redefine.
+*/
+[data-superficie="oficina"] {
+  --t-texto-cuerpo: 14px;
+  --t-texto-ayuda: 13px;
+  --t-subtitulo: 18px;
+  --t-cifra-focal: 104px;
+  --t-tactil: 44px;
 }
 
 @media (prefers-reduced-motion: reduce) {

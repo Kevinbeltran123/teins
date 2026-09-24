@@ -37,7 +37,7 @@ export function crearLevantamientos({ bd, formatos, archivos, identidad }: Depen
       registrarOperacion(app, "listarLevantamientos", {
         politica: politicas.oficina,
         manejar: async ({ consulta, actor }) => {
-          const { filas, siguienteCursor } = await enOrganizacion(bd, actor.organizacionId, (tx) =>
+          const { filas, siguienteCursor, total } = await enOrganizacion(bd, actor.organizacionId, (tx) =>
             paginaDeEnviados(tx, consulta.cursor, consulta.limite),
           );
           const nombres = await identidad.nombres(actor.organizacionId, [...new Set(filas.map((f) => f.tecnicoId))]);
@@ -52,6 +52,7 @@ export function crearLevantamientos({ bd, formatos, archivos, identidad }: Depen
               fotos: f.cantidadFotos,
             })),
             siguienteCursor,
+            total,
           };
         },
       });

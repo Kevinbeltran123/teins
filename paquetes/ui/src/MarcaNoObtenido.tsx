@@ -20,7 +20,7 @@ export function MarcaNoObtenido({ dato, marcado: guardado, motivoInicial, onCamb
   useEffect(() => setMarcado(guardado), [guardado]);
   return (
     <div className="flex flex-col gap-2">
-      <label className="flex min-h-tactil-campo cursor-pointer items-center gap-3 text-campo has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-superficie">
+      <label className="flex min-h-tactil cursor-pointer items-center gap-3 text-cuerpo has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-superficie">
         <input
           type="checkbox"
           checked={marcado}
@@ -35,7 +35,7 @@ export function MarcaNoObtenido({ dato, marcado: guardado, motivoInicial, onCamb
       </label>
       {marcado && (
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={id} className="text-campo font-bold">
+          <label htmlFor={id} className="text-cuerpo font-bold">
             Motivo
           </label>
           <input

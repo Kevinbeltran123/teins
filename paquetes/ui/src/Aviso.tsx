@@ -11,7 +11,7 @@ export function Aviso({ tono = "info", children }: { tono?: keyof typeof tonos; 
   return (
     <div
       role={tono === "error" ? "alert" : "status"}
-      className={`rounded-panel border-2 bg-panel px-4 py-3 text-campo ${tonos[tono]}`}
+      className={`rounded-panel border-2 bg-panel px-4 py-3 text-cuerpo ${tonos[tono]}`}
     >
       {children}
     </div>

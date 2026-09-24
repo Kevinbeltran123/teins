@@ -15,3 +15,4 @@ export { DECIMAL_CANONICO, fotosReferenciadas, HUELLA_SHA256, LIMITES, validarRe
 export type { ResultadoEnvio } from "./estados";
 export { enviarLevantamiento } from "./estados";
 export { validarDefinicionFormato } from "./meta-esquema";
+export { describirValor } from "./describir";

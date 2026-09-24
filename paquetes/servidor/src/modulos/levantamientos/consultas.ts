@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, or } from "drizzle-orm";
+import { and, asc, count, eq, gt, or } from "drizzle-orm";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
 import { levantamientos } from "./esquema";
@@ -41,10 +41,11 @@ export async function paginaDeEnviados(tx: TxOrganizacion, cursor: string | unde
     // El que más lleva esperando primero (DESIGN.md, punto focal de oficina).
     .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id))
     .limit(limite + 1);
+  const [{ total } = { total: 0 }] = await tx.select({ total: count() }).from(levantamientos).where(eq(levantamientos.estado, "enviado"));
   const hayMas = filas.length > limite;
   const pagina = hayMas ? filas.slice(0, limite) : filas;
   const ultimo = pagina.at(-1);
-  return { filas: pagina, siguienteCursor: hayMas && ultimo ? escribirCursor(ultimo.recibidoEn, ultimo.id) : null };
+  return { filas: pagina, total, siguienteCursor: hayMas && ultimo ? escribirCursor(ultimo.recibidoEn, ultimo.id) : null };
 }
 
 export async function detalle(tx: TxOrganizacion, id: string) {

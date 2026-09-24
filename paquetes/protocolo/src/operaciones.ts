@@ -99,7 +99,7 @@ const ResumenLevantamiento = z.object({
 });
 
 export const PaginaLevantamientos = z
-  .object({ elementos: z.array(ResumenLevantamiento), siguienteCursor: z.string().nullable() })
+  .object({ elementos: z.array(ResumenLevantamiento), siguienteCursor: z.string().nullable(), total: z.int().min(0) })
   .meta({ id: "PaginaLevantamientos" });
 
 export const DetalleLevantamiento = ResumenLevantamiento.extend({

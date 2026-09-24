@@ -309,6 +309,7 @@ describe("envío de levantamientos (ADR-0003, ADR-0005)", () => {
       cursor = pagina.siguienteCursor;
     } while (cursor);
     expect(vistos).toEqual(ids);
+    expect((await app.inject({ method: "GET", url: "/api/levantamientos?limite=2", headers: { cookie: oficina.cookie } })).json().total).toBe(5);
     expect((await app.inject({ method: "GET", url: "/api/levantamientos?cursor=basura", headers: { cookie: oficina.cookie } })).statusCode).toBe(400);
   });
 });

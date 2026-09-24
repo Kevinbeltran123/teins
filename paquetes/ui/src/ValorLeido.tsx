@@ -5,7 +5,7 @@ export function ValorLeido({ etiqueta, children }: { etiqueta: string; children:
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-ayuda text-texto-secundario">{etiqueta}</span>
-      <span className="text-campo font-bold break-words">{children}</span>
+      <span className="text-cuerpo font-bold break-words">{children}</span>
     </div>
   );
 }

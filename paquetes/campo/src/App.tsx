@@ -40,7 +40,7 @@ export function App() {
   useEffect(() => (conSesion ? programarSincronizacion() : undefined), [conSesion]);
 
   let pantalla: ReactNode;
-  if (usuario === undefined) pantalla = <div className="min-h-dvh bg-fondo-campo" aria-busy="true" />;
+  if (usuario === undefined) pantalla = <div className="min-h-dvh bg-fondo" aria-busy="true" />;
   // La primera instalación requiere iniciar sesión (ADR-0015, sección 5).
   else if (usuario === null) pantalla = <IniciarSesion />;
   else if (pidiendoSesion) pantalla = <IniciarSesion alCancelar={() => setPidiendoSesion(false)} />;

@@ -49,7 +49,7 @@ export function Diagnostico() {
       <h2 id="titulo-diagnostico" className="text-subtitulo font-extrabold">
         Diagnóstico del almacenamiento
       </h2>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-campo">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-cuerpo">
         <dt className="text-texto-secundario">Persistente</dt>
         <dd className="font-bold">{estado === undefined ? "…" : estado.persistente ? "Sí" : "No"}</dd>
         <dt className="text-texto-secundario">Espacio usado</dt>

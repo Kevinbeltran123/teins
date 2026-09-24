@@ -35,7 +35,7 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
   }
 
   return (
-    <div className="min-h-dvh bg-fondo-campo">
+    <div className="min-h-dvh bg-fondo">
       <header className="mx-3 mt-3 rounded-panel bg-superficie px-4 pt-5 pb-5 text-sobre-superficie">
         <p className="text-ayuda text-sobre-superficie-suave">TEINS Campo</p>
         <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">Iniciar sesión</h1>

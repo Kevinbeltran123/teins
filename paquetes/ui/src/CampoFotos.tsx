@@ -37,7 +37,7 @@ export function CampoFotos({ etiqueta, fotos, procesando, onAgregar, obligatorio
       )}
       {!soloLectura && (
         <label
-          className={`inline-flex min-h-tactil-campo cursor-pointer items-center justify-center rounded-control border-[1.5px] bg-panel px-5 text-campo font-bold has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-superficie has-disabled:opacity-60 ${error ? "border-2 border-error" : "border-borde-control"}`}
+          className={`inline-flex min-h-tactil cursor-pointer items-center justify-center rounded-control border-[1.5px] bg-panel px-5 text-cuerpo font-bold has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-superficie has-disabled:opacity-60 ${error ? "border-2 border-error" : "border-borde-control"}`}
         >
           <input
             type="file"

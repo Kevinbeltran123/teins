@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   crearMedida,
+  describirValor,
   esNoObtenido,
   type CodigoErrorValidacion,
   type DefinicionCampo,
@@ -36,12 +37,12 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   const seccion = formato?.secciones[0];
 
   return (
-    <div className="min-h-dvh bg-fondo-campo">
+    <div className="min-h-dvh bg-fondo">
       <header className="mx-3 mt-3 rounded-panel bg-superficie px-4 pt-2 pb-5 text-sobre-superficie">
         <button
           type="button"
           onClick={volver}
-          className="-ml-2 min-h-tactil-campo rounded-control px-2 text-campo font-bold text-sobre-superficie-suave focus-visible:outline-3 focus-visible:outline-acento"
+          className="-ml-2 min-h-tactil rounded-control px-2 text-cuerpo font-bold text-sobre-superficie-suave focus-visible:outline-3 focus-visible:outline-acento"
         >
           Volver a levantamientos
         </button>
@@ -287,13 +288,6 @@ function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: string; secc
   );
 }
 
-function textoDeValor(campo: DefinicionCampo, valor: Valor | undefined): string {
-  if (valor === undefined) return "Sin dato";
-  if (esNoObtenido(valor)) return `No se pudo obtener: ${valor.motivo}`;
-  if (campo.tipo === "medida" && typeof valor === "object" && "valor" in valor) return `${valor.valor.replace(".", ",")} ${valor.unidad}`;
-  return typeof valor === "string" ? valor : "";
-}
-
 function Enviado({ levantamiento, formato, envio }: { levantamiento: LevantamientoLocal; formato: VersionFormato; envio: EnvioLocal | null }) {
   const enLinea = useConexion();
   const estado = envio ? estadoDeEnvio(envio, enLinea) : null;
@@ -301,7 +295,7 @@ function Enviado({ levantamiento, formato, envio }: { levantamiento: Levantamien
     <>
       {estado && (
         <div className="flex flex-col gap-3 rounded-panel bg-panel p-4">
-          <p className={`text-campo font-bold ${claseDeTono[estado.tono]}`} aria-live="polite">
+          <p className={`text-cuerpo font-bold ${claseDeTono[estado.tono]}`} aria-live="polite">
             {estado.texto}
           </p>
           {envio?.estado === "error" && (
@@ -325,7 +319,7 @@ function Enviado({ levantamiento, formato, envio }: { levantamiento: Levantamien
                 <FotosLeidas key={campo.clave} etiqueta={campo.etiqueta} ids={Array.isArray(valor) ? (valor as string[]) : []} />
               ) : (
                 <ValorLeido key={campo.clave} etiqueta={campo.etiqueta}>
-                  {textoDeValor(campo, valor)}
+                  {describirValor(campo, valor)}
                 </ValorLeido>
               );
             })}

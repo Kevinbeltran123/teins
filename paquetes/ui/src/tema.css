@@ -15,7 +15,7 @@
   --color-sobre-superficie-suave: var(--t-sobre-superficie-suave);
   --color-acento: var(--t-acento);
   --color-sobre-acento: var(--t-sobre-acento);
-  --color-fondo-campo: var(--t-fondo-campo);
+  --color-fondo: var(--t-fondo);
   --color-panel: var(--t-panel);
   --color-texto: var(--t-texto);
   --color-texto-secundario: var(--t-texto-secundario);
@@ -32,7 +32,7 @@
 
   --font-texto: var(--t-fuente-texto);
 
-  --text-campo: var(--t-texto-campo);
+  --text-cuerpo: var(--t-texto-cuerpo);
   --text-ayuda: var(--t-texto-ayuda);
   --text-subtitulo: var(--t-subtitulo);
   --text-titulo: var(--t-titulo);
@@ -41,7 +41,7 @@
   --radius-control: var(--t-radio-control);
   --radius-panel: var(--t-radio-panel);
 
-  --spacing-tactil-campo: var(--t-tactil-campo);
+  --spacing-tactil: var(--t-tactil);
 
   --ease-t: var(--t-curva);
   --default-transition-duration: var(--t-duracion-rapida);
