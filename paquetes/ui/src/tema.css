@@ -3,11 +3,7 @@
   "tailwindcss" y después este archivo; las clases solo existen para tokens.
 */
 @import "../tokens.css";
-@import "@fontsource/barlow-condensed/latin-600.css";
-@import "@fontsource/barlow-condensed/latin-700.css";
-@import "@fontsource/barlow-condensed/latin-800.css";
 @import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
-@import "@fontsource-variable/atkinson-hyperlegible-mono/wght.css";
 
 @theme inline {
   --color-*: initial;
@@ -32,12 +28,11 @@
   --color-sync-error: var(--t-sync-error);
   --color-error: var(--t-error);
 
-  --font-display: var(--t-fuente-display);
   --font-texto: var(--t-fuente-texto);
-  --font-mono: var(--t-fuente-mono);
 
   --text-campo: var(--t-texto-campo);
   --text-ayuda: var(--t-texto-ayuda);
+  --text-subtitulo: var(--t-subtitulo);
   --text-titulo: var(--t-titulo);
   --text-cifra-focal: var(--t-cifra-focal);
 

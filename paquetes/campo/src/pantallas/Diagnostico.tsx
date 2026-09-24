@@ -45,8 +45,8 @@ export function Diagnostico() {
   }
 
   return (
-    <section aria-labelledby="titulo-diagnostico" className="flex flex-col gap-3 border-t border-division pt-6">
-      <h2 id="titulo-diagnostico" className="font-display text-2xl font-bold">
+    <section aria-labelledby="titulo-diagnostico" className="flex flex-col gap-3 rounded-panel bg-panel p-4">
+      <h2 id="titulo-diagnostico" className="text-subtitulo font-extrabold">
         Diagnóstico del almacenamiento
       </h2>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-campo">

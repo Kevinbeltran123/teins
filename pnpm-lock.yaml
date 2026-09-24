@@ -74,13 +74,7 @@ importers:
 
   paquetes/ui:
     dependencies:
-      '@fontsource-variable/atkinson-hyperlegible-mono':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@fontsource-variable/atkinson-hyperlegible-next':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/barlow-condensed':
         specifier: ^5.3.0
         version: 5.3.0
       react:
@@ -600,14 +594,8 @@ packages:
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
 
-  '@fontsource-variable/atkinson-hyperlegible-mono@5.3.0':
-    resolution: {integrity: sha512-0IbthhO18EEpLe69h+cmrsxCkl4yk80gMk+fAN3+9M5zQvoR1JlkzoJRR6U9/UXLYpVBGEXu+Md2LO8TIp30dw==}
-
   '@fontsource-variable/atkinson-hyperlegible-next@5.3.0':
     resolution: {integrity: sha512-UnLzNUy1RWoLDfydAatP4NaRm99X/WbQEph7q/PymJnCFIOOwKOx3pBmp5ys8trO0dM+CKGuJgeZP9fAR4mQpA==}
-
-  '@fontsource/barlow-condensed@5.3.0':
-    resolution: {integrity: sha512-RA7MmIx0v3eQ6Gcf74qLVLOwLB0GpPOzx+eU9iG/AmCnSJGcIWYeU8y6CEMGZ210MGwGg5CZhzLkkvyZdTTk1g==}
 
   '@isaacs/cliui@9.0.0':
     resolution: {integrity: sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==}
@@ -3086,11 +3074,7 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
-  '@fontsource-variable/atkinson-hyperlegible-mono@5.3.0': {}
-
   '@fontsource-variable/atkinson-hyperlegible-next@5.3.0': {}
-
-  '@fontsource/barlow-condensed@5.3.0': {}
 
   '@isaacs/cliui@9.0.0': {}
 

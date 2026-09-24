@@ -34,9 +34,9 @@ export function Inicio({ abrir, actualizacion }: Props) {
 
   return (
     <div className="min-h-dvh bg-fondo-campo">
-      <header className="bg-superficie px-4 pt-8 pb-5 text-sobre-superficie">
+      <header className="mx-3 mt-3 rounded-panel bg-superficie px-4 pt-5 pb-4 text-sobre-superficie">
         <p className="text-ayuda text-sobre-superficie-suave">Datos de prueba, no reales</p>
-        <h1 className="font-display text-titulo leading-none font-bold">Levantamientos</h1>
+        <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">Levantamientos</h1>
         <Boton variante="principal" className="mt-5 w-full" onClick={nuevo}>
           Nuevo levantamiento
         </Boton>
@@ -62,13 +62,13 @@ export function Inicio({ abrir, actualizacion }: Props) {
         </div>
 
         <section aria-labelledby="titulo-lista" className="flex flex-col gap-3">
-          <h2 id="titulo-lista" className="font-display text-2xl font-bold">
+          <h2 id="titulo-lista" className="text-subtitulo font-extrabold">
             En este teléfono
           </h2>
           {levantamientos === undefined ? (
             <div aria-busy="true" aria-label="Cargando levantamientos" className="flex flex-col gap-2">
-              <div className="h-[76px] animate-pulse rounded-panel bg-division" />
-              <div className="h-[76px] animate-pulse rounded-panel bg-division" />
+              <div className="h-[76px] animate-pulse rounded-panel bg-panel" />
+              <div className="h-[76px] animate-pulse rounded-panel bg-panel" />
             </div>
           ) : levantamientos.length === 0 ? (
             <p className="text-campo text-texto-secundario">

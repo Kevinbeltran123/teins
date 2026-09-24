@@ -14,7 +14,7 @@ export function Boton({ variante = "secundaria", className = "", type = "button"
   return (
     <button
       type={type}
-      className={`inline-flex min-h-tactil-campo items-center justify-center gap-2 rounded-control px-5 text-campo transition-transform active:scale-[0.98] disabled:opacity-60 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie ${variantes[variante]} ${className}`}
+      className={`inline-flex min-h-tactil-campo items-center justify-center gap-2 rounded-control px-5 text-campo transition-transform active:scale-[0.98] disabled:opacity-60 focus-visible:shadow-[0_0_0_3px_var(--t-panel)] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-superficie ${variantes[variante]} ${className}`}
       {...props}
     />
   );

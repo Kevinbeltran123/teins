@@ -21,7 +21,7 @@
   --t-acento: var(--marca-acento);
   --t-sobre-acento: #15171A;
 
-  --t-fondo-campo: #FFFFFF;
+  --t-fondo-campo: #F3F1EC;
   --t-fondo-oficina: #F3F1EC;
   --t-panel: #FFFFFF;
   --t-texto: #15171A;
@@ -44,14 +44,14 @@
   --t-sync-error: #A3223A;
 
   /* Tipografía */
-  --t-fuente-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  /* Una sola familia en toda la interfaz (DESIGN.md) */
   --t-fuente-texto: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
-  --t-fuente-mono: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
 
   /* Escala en campo (DESIGN.md) */
   --t-texto-campo: 17px;
   --t-texto-ayuda: 15px;
-  --t-titulo: 44px;
+  --t-subtitulo: 21px;
+  --t-titulo: 34px;
   --t-cifra-focal: 76px;
 
   /* Validación */

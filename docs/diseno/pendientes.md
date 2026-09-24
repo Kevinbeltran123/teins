@@ -41,7 +41,7 @@ Si alguno es falso, cambian tamaños y densidades, no el estilo.
 |---|---|
 | Base de componentes | shadcn/ui (Base UI), copiada a `paquetes/ui` y reestilizada |
 | Iconos | Lucide |
-| Fuentes | Barlow Condensed, Atkinson Hyperlegible Next y Mono, autoalojadas con Fontsource |
+| Fuentes | Atkinson Hyperlegible Next, única familia, autoalojada con Fontsource |
 | Tablas de oficina | TanStack Table + TanStack Virtual |
 | Formularios | React Hook Form + esquemas Zod de `protocolo` |
 | Notificaciones breves | Sonner |

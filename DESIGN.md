@@ -22,18 +22,20 @@ La punta escala con el tamaño: 6 px en etiquetas de 24 px de alto, 8 px en 30 p
 
 **Prueba de identidad:** si se cambian el logo y el nombre, la interfaz debe seguir siendo reconocible por la marquilla, la superficie azul y el acento amarillo.
 
+**Estructura (dirección "Placa"):** fondo cemento; el encabezado de cada pantalla es un bloque azul con esquinas redondeadas, separado de los bordes; los campos se agrupan en paneles blancos, como la placa de datos de un equipo. Los campos de datos consecutivos van en un mismo panel; cada campo de fotos o bocetos va en el suyo.
+
 ## Color
 
 Paleta tomada del logo de TEINS, más un acento de acción.
 
 | Token | Valor | Uso | Proporción |
 |---|---|---|---|
-| Superficie de marca | `#002B81` | Franjas superiores, barra lateral, controles seleccionados, bordes de campos activos | 60 |
-| Blanco | `#FFFFFF` | Fondo de campo y paneles | 30 |
+| Superficie de marca | `#002B81` | Bloque de encabezado, barra lateral, controles seleccionados, bordes de campos activos | 60 |
+| Blanco | `#FFFFFF` | Paneles y controles | 30 |
 | Acento señal | `#FFC21A` | **Solo** acción principal, foco y el dato focal de cada pantalla | 10 |
 | Texto | `#15171A` | Texto principal sobre claro | |
 | Texto secundario | `#525152` | Gris del logo | |
-| Cemento | `#F3F1EC` | Fondo de oficina | |
+| Cemento | `#F3F1EC` | Fondo de campo y de oficina | |
 | División | `#DEDBD3` | Líneas y bordes pasivos | |
 
 Tonos derivados de la superficie (mezcla con blanco): elevada 12 % `#1F4490`, pista 24 % `#3D5E9F`, texto tenue 70 % `#B2BFD9`, texto suave 85 % `#D9DFEC`.
@@ -68,16 +70,12 @@ Cada estado lleva siempre su **texto**; el color nunca es la única señal.
 
 ## Tipografía
 
-| Familia | Uso | Razón |
-|---|---|---|
-| Barlow Condensed (600 a 800) | Títulos, horas, cifras grandes | Heredada de la señalización vial: se lee de lejos y cabe en poco ancho |
-| Atkinson Hyperlegible Next (400 a 700) | Todo el texto de uso | Diseñada para máxima legibilidad, necesaria bajo el sol |
-| Atkinson Hyperlegible Mono (400 a 600) | Códigos, unidades, marquillas | Distingue 0/O y 1/I/l |
+**Una sola familia en toda la interfaz: Atkinson Hyperlegible Next** (variable, 400 a 800). Nunca dos familias en la misma pantalla. Está diseñada para máxima legibilidad, necesaria bajo el sol, y distingue 0/O y 1/I/l, así que sirve también para códigos y unidades. La jerarquía sale del tamaño y el grosor: títulos en 800, etiquetas en 700, texto en 400.
 
-Las tres se **alojan localmente** (subconjunto latino, fuentes variables) para funcionar sin conexión. Cifras siempre con `font-variant-numeric: tabular-nums`.
+Se aloja localmente (subconjunto latino) para funcionar sin conexión. Cifras siempre con `font-variant-numeric: tabular-nums`.
 
-**Escala en campo:** texto 17 · etiqueta 17 negrita · ayuda 15 · título de pantalla 44 · cifra focal 76.
-**Escala en oficina:** texto 14 · tabla 14 · título 44 · cifra focal 104.
+**Escala en campo:** texto 17 · etiqueta 17 negrita · ayuda 15 · subtítulo 21 · título de pantalla 34 · cifra focal 76.
+**Escala en oficina:** texto 14 · tabla 14 · título 34 · cifra focal 104.
 
 ## Forma y espacio
 
@@ -91,7 +89,7 @@ Las tres se **alojan localmente** (subconjunto latino, fuentes variables) para f
 
 | Pantalla | Punto focal |
 |---|---|
-| Campo · Mis visitas | La siguiente visita, en la franja azul, con hora grande y la acción "Continuar levantamiento" |
+| Campo · Mis visitas | La siguiente visita, en el bloque azul, con hora grande y la acción "Continuar levantamiento" |
 | Campo · Captura | El nombre del área y el campo activo con halo amarillo |
 | Oficina · Tablero | El panel "Esperando revisión" con el levantamiento que más lleva esperando y "Tomar para revisar" |
 

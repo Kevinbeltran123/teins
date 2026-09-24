@@ -35,7 +35,7 @@ export function CampoMedida({ etiqueta, unidades, valorInicial, unidadInicial, o
           autoComplete="off"
           aria-invalid={!valido}
           aria-describedby={valido ? undefined : `${id}-error`}
-          className={`${claseControl} min-w-0 flex-1 font-mono ${valido ? "" : "animate-[sacudida_var(--t-duracion-estandar)_var(--t-curva)] border-error"}`}
+          className={`${claseControl} min-w-0 flex-1 ${valido ? "" : "animate-[sacudida_var(--t-duracion-estandar)_var(--t-curva)] border-error"}`}
           value={texto}
           onChange={(e) => cambiar(e.target.value, unidad)}
         />
@@ -43,7 +43,7 @@ export function CampoMedida({ etiqueta, unidades, valorInicial, unidadInicial, o
           {unidades.map((u) => (
             <label
               key={u}
-              className="relative flex min-h-tactil-campo min-w-tactil-campo cursor-pointer items-center justify-center rounded-control border-[1.5px] border-borde-control px-2 font-mono text-campo has-checked:border-superficie has-checked:bg-superficie has-checked:text-sobre-superficie has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-superficie"
+              className="relative flex min-h-tactil-campo min-w-tactil-campo cursor-pointer items-center justify-center rounded-control border-[1.5px] border-borde-control px-2 text-campo font-bold has-checked:border-superficie has-checked:bg-superficie has-checked:text-sobre-superficie has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-superficie"
             >
               <input
                 type="radio"

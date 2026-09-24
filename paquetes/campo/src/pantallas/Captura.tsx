@@ -20,7 +20,7 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
 
   return (
     <div className="min-h-dvh bg-fondo-campo">
-      <header className="bg-superficie px-4 pt-4 pb-5 text-sobre-superficie">
+      <header className="mx-3 mt-3 rounded-panel bg-superficie px-4 pt-2 pb-5 text-sobre-superficie">
         <button
           type="button"
           onClick={volver}
@@ -29,17 +29,17 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
           Volver a levantamientos
         </button>
         <div className="mt-2 flex items-center gap-3">
-          <Marquilla tono="borrador">Borrador</Marquilla>
+          <Marquilla tono="sobre-superficie">Borrador</Marquilla>
           <span className="text-ayuda text-sobre-superficie-suave">{NOMBRE_FORMATO_DEMO}</span>
         </div>
-        <h1 className="mt-2 font-display text-titulo leading-none font-bold">{seccion.titulo}</h1>
+        <h1 className="mt-2 text-titulo leading-tight font-extrabold tracking-tight">{seccion.titulo}</h1>
       </header>
 
       <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-6">
         {levantamiento === undefined || (levantamiento && !inicial) ? (
           <div aria-busy="true" aria-label="Cargando levantamiento" className="flex flex-col gap-6">
-            <div className="h-[88px] animate-pulse rounded-panel bg-division" />
-            <div className="h-[88px] animate-pulse rounded-panel bg-division" />
+            <div className="h-[180px] animate-pulse rounded-panel bg-panel" />
+            <div className="h-[140px] animate-pulse rounded-panel bg-panel" />
           </div>
         ) : levantamiento === null || !inicial ? (
           <>
@@ -48,8 +48,12 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
           </>
         ) : (
           <>
-            {seccion.campos.map((campo) => (
-              <Campo key={campo.clave} id={id} seccion={seccion.clave} campo={campo} inicial={inicial} actual={levantamiento} />
+            {agrupar(seccion.campos).map((grupo) => (
+              <div key={grupo[0]!.clave} className="flex flex-col gap-6 rounded-panel bg-panel p-4">
+                {grupo.map((campo) => (
+                  <Campo key={campo.clave} id={id} seccion={seccion.clave} campo={campo} inicial={inicial} actual={levantamiento} />
+                ))}
+              </div>
             ))}
             <p className="text-ayuda text-texto-secundario" aria-live="polite">
               Guardado en este teléfono a las {horaExacta(levantamiento.actualizadoEn)}
@@ -59,6 +63,17 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
       </main>
     </div>
   );
+}
+
+/** Panel por grupo (DESIGN.md, Placa): campos de datos seguidos juntos; cada campo de fotos aparte. */
+function agrupar(campos: readonly DefinicionCampo[]): DefinicionCampo[][] {
+  const grupos: DefinicionCampo[][] = [];
+  for (const campo of campos) {
+    const ultimo = grupos.at(-1);
+    if (campo.tipo !== "foto" && ultimo && ultimo[0]!.tipo !== "foto") ultimo.push(campo);
+    else grupos.push([campo]);
+  }
+  return grupos;
 }
 
 interface PropsCampo {
