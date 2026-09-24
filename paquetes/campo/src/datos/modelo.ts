@@ -54,7 +54,13 @@ export interface UsuarioLocal {
   rol: "tecnico" | "oficina";
 }
 
-export interface Ajuste {
-  clave: "usuario";
-  valor: UsuarioLocal;
+/**
+ * Resultado real del último contacto con el servidor. navigator.onLine no basta: dice "en línea"
+ * con una red sin internet, un portal cautivo o una señal que no alcanza.
+ */
+export interface EstadoRed {
+  alcanzable: boolean;
+  desde: string;
 }
+
+export type Ajuste = { clave: "usuario"; valor: UsuarioLocal } | { clave: "red"; valor: EstadoRed };

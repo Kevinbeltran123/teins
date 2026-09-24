@@ -1,6 +1,4 @@
-import { useLiveQuery } from "dexie-react-hooks";
 import { db, repositorio } from "../datos/instancia";
-import type { UsuarioLocal } from "../datos/modelo";
 import { almacen, cliente, sincronizarEnSegundoPlano } from "../sincronizacion/instancia";
 
 /** Un usuario de oficina no captura en campo (tabla de permisos del modelo de dominio). */
@@ -9,11 +7,6 @@ export class RolNoPermitido extends Error {
     super("Este usuario no es de técnico");
     this.name = "RolNoPermitido";
   }
-}
-
-/** Usuario con sesión en el teléfono: `undefined` mientras carga, `null` sin sesión. */
-export function useUsuario(): UsuarioLocal | null | undefined {
-  return useLiveQuery(async () => (await db.ajustes.get("usuario"))?.valor ?? null);
 }
 
 /**

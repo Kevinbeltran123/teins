@@ -4,6 +4,10 @@ dist/
 build/
 .turbo/
 coverage/
+
+# Resultados de pruebas de extremo a extremo
+test-results/
+playwright-report/
 *.tsbuildinfo
 
 # Entorno y secretos (nunca se versionan)

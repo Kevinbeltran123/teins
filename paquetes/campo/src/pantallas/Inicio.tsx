@@ -5,11 +5,10 @@ import { Aviso, Boton, Marquilla } from "@teins/ui";
 import { db, repositorio } from "../datos/instancia";
 import type { EnvioLocal, LevantamientoLocal, UsuarioLocal } from "../datos/modelo";
 import { estaInstalada } from "../dispositivo/almacenamiento";
-import { useConexion } from "../dispositivo/useConexion";
+import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/useConexion";
 import { fechaHora } from "../formato";
 import { formatoVigente, NOMBRE_FORMATO } from "../formatos";
 import { claseDeTono, estadoDeEnvio } from "../mensajes";
-import { cerrarSesion } from "../sesion/sesion";
 import { Diagnostico } from "./Diagnostico";
 
 interface Props {
@@ -31,7 +30,8 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   const levantamientos = useLiveQuery(() => repositorio.listar(usuario.id), [usuario.id]);
   const envios = useLiveQuery(async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
   const deOtros = useLiveQuery(() => repositorio.contarDeOtros(usuario.id), [usuario.id]);
-  const enLinea = useConexion();
+  const enLinea = useConexionDelNavegador();
+  const alcanzable = useServidorAlcanzable();
 
   const lista = [...(envios?.values() ?? [])];
   const porEnviar = lista.filter((e) => e.estado !== "recibido").length;
@@ -51,7 +51,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
           <p className="text-ayuda text-sobre-superficie-suave">Datos de prueba, no reales</p>
           <button
             type="button"
-            onClick={() => void cerrarSesion()}
+            onClick={() => void import("../sesion/sesion").then((m) => m.cerrarSesion())}
             className="min-h-tactil rounded-control px-2 text-ayuda font-bold text-sobre-superficie-suave underline focus-visible:outline-3 focus-visible:outline-acento"
           >
             Cerrar sesión
@@ -69,7 +69,9 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
 
       <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-6">
         <div className="flex flex-col gap-3 empty:hidden">
-          {!enLinea && <Aviso>Sin conexión. Todo lo que captures se guarda en este teléfono y se envía al recuperar señal.</Aviso>}
+          {(!enLinea || (!alcanzable && porEnviar > 0)) && (
+            <Aviso>Sin conexión. Todo lo que captures se guarda en este teléfono y se envía al recuperar señal.</Aviso>
+          )}
           {esperanSesion && (
             <Aviso tono="alerta">
               <p>Tu sesión venció. Lo pendiente se enviará cuando inicies sesión de nuevo.</p>
@@ -109,7 +111,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
             <ul className="flex flex-col gap-2">
               {levantamientos.map((l) => (
                 <li key={l.id}>
-                  <Fila levantamiento={l} envio={envios.get(l.id)} enLinea={enLinea} abrir={abrir} />
+                  <Fila levantamiento={l} envio={envios.get(l.id)} enLinea={alcanzable} abrir={abrir} />
                 </li>
               ))}
             </ul>

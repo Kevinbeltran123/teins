@@ -17,8 +17,8 @@ import { procesarFoto } from "../fotos/procesar";
 import { horaExacta } from "../formato";
 import { formatoDe, NOMBRE_FORMATO } from "../formatos";
 import { claseDeTono, estadoDeEnvio, mensajeDeValidacion } from "../mensajes";
-import { useConexion } from "../dispositivo/useConexion";
-import { sincronizarEnSegundoPlano } from "../sincronizacion/instancia";
+import { useServidorAlcanzable } from "../dispositivo/useConexion";
+import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 
 type Errores = ReadonlyMap<string, CodigoErrorValidacion>;
 const claveDeError = (seccion: string, campo: string) => `${seccion}.${campo}`;
@@ -273,7 +273,9 @@ function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: string; secc
       }
       // Las fotos suben por adelantado cuando hay señal (ADR-0003).
       sincronizarEnSegundoPlano();
-    } catch {
+    } catch (error) {
+      // El técnico ve un mensaje simple; soporte necesita la causa (ADR-0017).
+      console.error("No se pudo guardar la foto", error);
       setFallo(true);
     } finally {
       setProcesando(false);
@@ -289,7 +291,7 @@ function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: string; secc
 }
 
 function Enviado({ levantamiento, formato, envio }: { levantamiento: LevantamientoLocal; formato: VersionFormato; envio: EnvioLocal | null }) {
-  const enLinea = useConexion();
+  const enLinea = useServidorAlcanzable();
   const estado = envio ? estadoDeEnvio(envio, enLinea) : null;
   return (
     <>

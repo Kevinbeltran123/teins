@@ -57,7 +57,8 @@ const SubidaAutorizada = z
 
 // Sincronización (ADR-0003)
 
-export const llaveDeEnvio = (idLevantamiento: string) => `enviar:${idLevantamiento}`;
+import { llaveDeEnvio } from "./llaves";
+export { llaveDeEnvio };
 
 export const EnviarLevantamiento = z
   .object({

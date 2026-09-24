@@ -7,7 +7,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Corte | Entregable demostrable | Riesgo que cierra | Estado |
 |---|---|---|---|
 | 0 | Captura sin conexión con fotos, instalada en iPhone | Durabilidad de la PWA en Safari (QA-1, ADR-0002) | Terminado |
-| 1 | El técnico inicia sesión, envía el levantamiento y oficina lo ve en su bandeja | Entrega completa, sin duplicados y con archivos verificados (QA-2), idempotencia, aislamiento por organización | En curso |
+| 1 | El técnico inicia sesión, envía el levantamiento y oficina lo ve en su bandeja | Entrega completa, sin duplicados y con archivos verificados (QA-2), idempotencia, aislamiento por organización | En cierre: faltan iPhone y entorno de pruebas |
 | 2 | Bajada: formatos como datos, visitas asignadas, estado de mis levantamientos, permiso de trabajo local, revocación con borrado | Punto de control seguro (ADR-0005), revocación sin conexión (QA-5), formatos sin publicar la app (QA-11) | Pendiente |
 | 3 | Revisión: tomar, corregir con trazabilidad por campo, comentar al técnico, marcar revisado | Concurrencia en oficina (QA-25), trazabilidad (QA-8) | Pendiente |
 | 4 | Informe: composición mínima, publicación inmutable y PDF | Versiones inmutables (QA-9), PDF reproducible en segundo plano (QA-17) | Pendiente |
@@ -83,13 +83,14 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 **Recepción del envío (ADR-0003, ADR-0005, ADR-0008, ADR-0012)**
 
-- `POST /api/sync/comandos` con `EnviarLevantamiento`, en una sola transacción: política, versión del protocolo, validación completa con el mismo validador de `dominio`, presencia y verificación de todos los archivos, guardado del agregado (columnas relacionales más documento JSONB), auditoría de creación y envío con cadena de hashes, y el evento `LevantamientoEnviado` encolado en la misma transacción.
+- `POST /api/sync/comandos` con `EnviarLevantamiento`, en una sola transacción: política, versión del protocolo, validación completa con el mismo validador de `dominio`, presencia y verificación de todos los archivos, guardado del agregado (columnas relacionales más documento JSONB) y auditoría de creación y envío con cadena de hashes. `LevantamientoEnviado` todavía no encola trabajos: su única reacción hoy es la bandeja, que es una consulta; el primer consumidor asíncrono (métricas del piloto) lo encolará con el puerto de la cola ya probado.
 - Idempotencia completa: llave única derivada del levantamiento y resultado guardado; un reintento, incluso días después, recibe la misma respuesta.
 - Si falta un archivo, la respuesta dice cuáles y el dispositivo los sube antes de reintentar.
 
 **Dominio**
 
 - Validador de respuestas contra la versión de formato: obligatorios (regla 3) y unidades (regla 5). El mismo código valida en el dispositivo y en el servidor.
+- Marca "no se pudo obtener" con motivo para datos obligatorios (regla 3): sin ella, un técnico que no pudo medir no podría enviar.
 - Transición borrador → enviado.
 
 **Campo (ADR-0003, ADR-0004, ADR-0015)**
@@ -136,7 +137,20 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 ### Terminado cuando
 
-1. El recorrido extremo a extremo pasa en Chromium y WebKit.
-2. Pasan todas las pruebas de los cuatro niveles descritos y las reglas de arquitectura en integración continua.
-3. Las pantallas nuevas usan solo componentes de `ui` y tienen estados vacío, cargando, error y sin conexión.
-4. Se probó en un iPhone real: captura sin conexión, recuperar señal, enviar con fotos y verlo en oficina.
+| Criterio | Estado |
+|---|---|
+| 1. El recorrido extremo a extremo pasa en Chromium y WebKit | Cumplido en local |
+| 2. Pasan las pruebas de los cuatro niveles y las reglas de arquitectura en integración continua | Cumplido en local; el flujo de GitHub Actions corre al subir la rama |
+| 3. Pantallas solo con componentes de `ui` y estados vacío, cargando, error y sin conexión | Cumplido |
+| 4. Probado en un iPhone real: captura sin conexión, recuperar señal, enviar con fotos y verlo en oficina | Pendiente: requiere el entorno de pruebas desplegado |
+
+### Decisiones tomadas al construirlo
+
+- **Almacenamiento S3 local: S3Mock (Apache-2.0).** MinIO se descartó por AGPL (regla 12). S3Mock rechaza un contenido distinto a la huella firmada, igual que un proveedor real; no admite configurar CORS (ya permite todo), por eso `S3_CONFIGURAR_CORS=false` en local.
+- **TypeScript 6.** TypeScript 7 aún no publica la API de compilador que usan las reglas de arquitectura; con él, dependency-cruiser no analizaba ningún archivo. Se revisa cuando la publique.
+- **Formatos de prueba v1 y v2.** v2 agrega obligatorios; los borradores del corte 0 terminan con v1 (ADR-0006, regla 3).
+- **Responsable local del levantamiento.** Un teléfono compartido solo envía y sube fotos con la sesión de quien creó cada levantamiento (regla 1). Los borradores del corte 0 pasan a quien inicia sesión primero.
+- **Conexión real, no solo `navigator.onLine`.** El motor registra si el servidor respondió; la interfaz dice "sin conexión" aunque el navegador diga lo contrario (red sin internet, portal cautivo).
+- **Presupuesto de campo: 120 KB de JavaScript inicial comprimido,** medido en 108 KB. El código de red se carga después del primer dibujo; el service worker lo guarda para usarlo sin señal. Falta confirmarlo con una medición en un celular de gama media (ADR-0011).
+- **WebKit de Playwright** bloquea las URL `blob:` sin red (Safari real no); en WebKit la prueba corta la red después de la foto. La captura completa sin red la cubren Chromium y el iPhone real.
+- **Tokens neutros por superficie.** Oficina redefine tamaños con `data-superficie`, sin duplicar componentes.

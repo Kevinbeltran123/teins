@@ -20,6 +20,13 @@ export function crearAuth(bd: BaseDeDatos, config: Config, alCrearSesion: (sesio
     appName: "TEINS",
     secret: config.AUTH_SECRETO,
     basePath: "/api/auth",
+    // Cada superficie tiene su propio origen con /api (ADR-0016): la URL base sale del host de la solicitud,
+    // limitada a los hosts de las superficies conocidas.
+    baseURL: {
+      allowedHosts: config.ORIGENES_CONFIABLES.map((o) => new URL(o).host),
+      protocol: config.NODE_ENV === "production" ? "https" : "http",
+      fallback: config.ORIGENES_CONFIABLES[0]!,
+    },
     trustedOrigins: config.ORIGENES_CONFIABLES,
     database: drizzleAdapter(bd, {
       provider: "pg",
@@ -46,6 +53,8 @@ export function crearAuth(bd: BaseDeDatos, config: Config, alCrearSesion: (sesio
     advanced: {
       cookiePrefix: "teins",
       useSecureCookies: config.NODE_ENV === "production",
+      // Detrás del proxy de la plataforma, igual que trustProxy de Fastify.
+      trustedProxyHeaders: config.NODE_ENV === "production",
       database: { generateId: () => randomUUID() },
     },
     plugins: [username({ minUsernameLength: 3, maxUsernameLength: 30 })],

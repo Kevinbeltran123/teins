@@ -39,7 +39,26 @@ interface Dependencias {
 
 class SinConexion extends Error {}
 
-export function crearMotor({ almacen, transporte, usuarioActual, reloj = Date.now, aleatorio = Math.random, bloquear }: Dependencias): Motor {
+export function crearMotor({ almacen, transporte: base, usuarioActual, reloj = Date.now, aleatorio = Math.random, bloquear }: Dependencias): Motor {
+  // Cualquier respuesta del servidor, incluso un error del contrato, prueba que hay conexión.
+  const conRed = <A extends unknown[], R>(llamada: (...a: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      try {
+        const r = await llamada(...args);
+        await almacen.registrarRed(true);
+        return r;
+      } catch (error) {
+        await almacen.registrarRed(!(error instanceof ErrorDeRed));
+        throw error;
+      }
+    };
+  const transporte: Transporte = {
+    autorizarSubida: conRed(base.autorizarSubida),
+    subir: conRed(base.subir),
+    confirmarSubida: conRed(base.confirmarSubida),
+    enviarComando: conRed(base.enviarComando),
+  };
+
   async function subirFotos(tecnicoId: string) {
     for (const archivo of await almacen.archivosPorSubir(tecnicoId)) {
       try {

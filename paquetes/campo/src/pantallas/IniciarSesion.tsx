@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
 import { Aviso, Boton, CampoTexto } from "@teins/ui";
-import { useConexion } from "../dispositivo/useConexion";
+import { useConexionDelNavegador } from "../dispositivo/useConexion";
 import { iniciarSesion, RolNoPermitido } from "../sesion/sesion";
 
 function mensajeDeError(error: unknown): string {
@@ -14,7 +14,7 @@ function mensajeDeError(error: unknown): string {
 
 /** `alCancelar` existe cuando la sesión venció: se puede volver a capturar sin iniciar sesión. */
 export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
-  const enLinea = useConexion();
+  const enLinea = useConexionDelNavegador();
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [estado, setEstado] = useState<{ tipo: "listo" } | { tipo: "enviando" } | { tipo: "error"; mensaje: string }>({ tipo: "listo" });

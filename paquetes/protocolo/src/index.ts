@@ -34,6 +34,5 @@ export type {
   Respuesta,
   RespuestaServidor,
 } from "./operaciones";
-export { documentoOpenApi } from "./openapi";
 export { crearClienteApi, ErrorApi, ErrorDeRed } from "./cliente";
 export type { ClienteApi, EntradaCliente } from "./cliente";

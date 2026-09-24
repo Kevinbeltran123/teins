@@ -1,5 +1,5 @@
 import { agregarFoto, enviarLevantamiento, responder, type Levantamiento } from "@teins/dominio";
-import { llaveDeEnvio } from "@teins/protocolo";
+import { llaveDeEnvio } from "@teins/protocolo/llaves";
 import type { BaseCampo } from "./base";
 import type { RepositorioLevantamientos } from "./repositorio";
 

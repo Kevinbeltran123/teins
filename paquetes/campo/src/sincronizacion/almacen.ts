@@ -15,6 +15,8 @@ export interface AlmacenSincronizacion {
   actualizarEnvio(levantamientoId: string, cambios: Partial<EnvioLocal>): Promise<void>;
   /** Un envío que quedó "enviando" porque la app se cerró en medio vuelve a pendiente. */
   recuperarInterrumpidos(): Promise<void>;
+  /** Registra si el servidor respondió, para mostrar "sin conexión" aunque el navegador diga lo contrario. */
+  registrarRed(alcanzable: boolean): Promise<void>;
   /** Tras iniciar sesión o actualizar la app, lo que esperaba por eso vuelve a la cola. */
   reanudar(desde: EnvioLocal["estado"]): Promise<void>;
 }
@@ -49,6 +51,11 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
     },
     async recuperarInterrumpidos() {
       await db.envios.where("estado").equals("enviando").modify({ estado: "pendiente" });
+    },
+    async registrarRed(alcanzable) {
+      const actual = await db.ajustes.get("red");
+      if (actual?.clave === "red" && actual.valor.alcanzable === alcanzable) return;
+      await db.ajustes.put({ clave: "red", valor: { alcanzable, desde: new Date().toISOString() } });
     },
     async reanudar(desde) {
       await db.envios.where("estado").equals(desde).modify({ estado: "pendiente", proximoIntentoEn: 0 });

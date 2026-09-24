@@ -1,7 +1,7 @@
 {
   "name": "teins",
   "private": true,
-  "description": "Sistema de levantamientos técnicos de TEINS",
+  "description": "Sistema de levantamientos t\u00e9cnicos de TEINS",
   "packageManager": "pnpm@10.34.5",
   "engines": {
     "node": ">=24"
@@ -9,11 +9,20 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "dev:campo": "pnpm --filter @teins/campo dev"
+    "dev:campo": "pnpm --filter @teins/campo dev",
+    "arquitectura": "depcruise paquetes --config .dependency-cruiser.cjs --output-type err",
+    "licencias": "node scripts/verificar-licencias.mjs",
+    "presupuesto": "node scripts/presupuesto-campo.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
-    "typescript": "^7.0.2",
+    "dependency-cruiser": "^18.4.0",
+    "typescript": "^6.0.3",
     "vitest": "^5.0.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "@esbuild-kit/core-utils>esbuild": "^0.25.0"
+    }
   }
 }

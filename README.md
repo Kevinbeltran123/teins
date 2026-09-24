@@ -12,8 +12,8 @@ Sistema para capturar levantamientos técnicos en campo (con o sin conexión), r
 | Modelo de dominio | Listo |
 | Decisiones de arquitectura (ADR 0001 a 0020) | Aceptadas |
 | Dirección visual (Marquilla) | Definida; faltan pantallas y estados |
-| Plan de entrega | Borrador: solo el corte 0 |
-| Código | Corte 0: captura sin conexión |
+| Plan de entrega | Cortes 0 a 5 definidos |
+| Código | Corte 0 terminado; corte 1 (envío a oficina) en cierre |
 
 ## Mapa del repositorio
 
@@ -30,7 +30,7 @@ Sistema para capturar levantamientos técnicos en campo (con o sin conexión), r
 
 ## Stack
 
-TypeScript de extremo a extremo · PWA con React y Vite · Fastify · PostgreSQL · IndexedDB con Dexie · Graphile Worker · almacenamiento compatible con S3. Detalle y justificación en [`docs/adr/`](docs/adr/README.md).
+TypeScript de extremo a extremo · PWA con React y Vite · Fastify · PostgreSQL · IndexedDB con Dexie · Graphile Worker · almacenamiento compatible con S3. Cómo correrlo y verificarlo: sección "Comandos" de [`AGENTS.md`](AGENTS.md). Detalle y justificación en [`docs/adr/`](docs/adr/README.md).
 
 ## Propiedad
 

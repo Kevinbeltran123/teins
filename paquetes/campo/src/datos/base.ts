@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Ajuste, ArchivoLocal, EnvioLocal, LevantamientoLocal } from "./modelo";
+import type { Ajuste, ArchivoLocal, EnvioLocal, LevantamientoLocal, UsuarioLocal } from "./modelo";
 
 export type BaseCampo = Dexie & {
   levantamientos: EntityTable<LevantamientoLocal, "id">;
@@ -7,6 +7,12 @@ export type BaseCampo = Dexie & {
   envios: EntityTable<EnvioLocal, "levantamientoId">;
   ajustes: EntityTable<Ajuste, "clave">;
 };
+
+/** Usuario con sesión en el teléfono, o null. */
+export async function leerUsuario(db: BaseCampo): Promise<UsuarioLocal | null> {
+  const ajuste = await db.ajustes.get("usuario");
+  return ajuste?.clave === "usuario" ? ajuste.valor : null;
+}
 
 /**
  * Esquema local versionado (ADR-0004). Regla absoluta: una versión nueva nunca borra la base;

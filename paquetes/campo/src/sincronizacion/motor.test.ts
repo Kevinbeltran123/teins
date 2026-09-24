@@ -67,6 +67,17 @@ describe("motor de sincronización", () => {
     expect((await db.archivos.toArray()).every((a) => a.subida === "subida")).toBe(true);
   });
 
+  it("registra si el servidor es alcanzable según el resultado real de cada intento", async () => {
+    const { db, reloj } = await dispositivo();
+    const s = servidorFalso();
+    s.programar("autorizarSubida", "red_antes");
+    const motor = crearMotor({ almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora });
+    await motor.sincronizar();
+    expect((await db.ajustes.get("red"))?.valor).toMatchObject({ alcanzable: false });
+    await motor.sincronizar();
+    expect((await db.ajustes.get("red"))?.valor).toMatchObject({ alcanzable: true });
+  });
+
   it("si la red se corta a mitad de una subida, retoma sin volver a subir lo confirmado", async () => {
     const { db, reloj } = await dispositivo(1, 3);
     const s = servidorFalso();

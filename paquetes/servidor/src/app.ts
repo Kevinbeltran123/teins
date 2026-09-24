@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { LogController, type FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
-import { documentoOpenApi, TIPO_PROBLEMA } from "@teins/protocolo";
+import { TIPO_PROBLEMA } from "@teins/protocolo";
+import { documentoOpenApi } from "@teins/protocolo/openapi";
 import type { Config } from "./config";
 import type { Almacenamiento } from "./plataforma/almacenamiento";
 import type { BaseDeDatos } from "./plataforma/base-de-datos";
@@ -36,7 +37,11 @@ export async function construirApp({ config, bd, almacenamiento }: Dependencias)
       const recibida = solicitud.headers[CABECERA_CORRELACION];
       return typeof recibida === "string" && CORRELACION_VALIDA.test(recibida) ? recibida : randomUUID();
     },
-    requestIdLogLabel: "correlacion",
+    logController: new LogController({
+      requestIdLogLabel: "correlacion",
+      // Las verificaciones de disponibilidad llegan cada pocos segundos: no llenan los registros.
+      disableRequestLogging: (solicitud) => solicitud.url === "/salud",
+    }),
     bodyLimit: 2 * 1024 * 1024,
     trustProxy: config.NODE_ENV === "production",
   });

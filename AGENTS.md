@@ -80,9 +80,20 @@ Un corte vertical está terminado cuando:
 
 ## Comandos
 
-Node 24 (`.nvmrc`) y pnpm por corepack (`corepack enable`).
+Node 24 (`.nvmrc`), pnpm por corepack (`corepack enable`) y Docker con Compose.
 
-- `pnpm install`
-- `pnpm typecheck` · `pnpm test`: todos los paquetes.
-- `pnpm dev:campo`: PWA de campo en desarrollo (en la red local, para abrirla desde un celular).
-- `pnpm --filter @teins/campo build` y `preview`: versión compilada con service worker.
+Entorno local (detalle en `paquetes/servidor/README.md`):
+
+- `docker compose up -d --wait`: PostgreSQL y S3 locales.
+- `pnpm --filter @teins/servidor migrar` · `sembrar` · `dev:web` · `dev:worker`.
+- `pnpm dev:campo` (5173) y `pnpm --filter @teins/oficina dev` (5174); ambas reenvían `/api` al servidor.
+
+Verificación, en el orden de la integración continua (ADR-0018):
+
+- `pnpm typecheck`
+- `pnpm arquitectura`: fronteras entre paquetes y módulos (`.dependency-cruiser.cjs`).
+- `pnpm licencias`: sin AGPL ni licencias sin revisar (`scripts/verificar-licencias.mjs`).
+- `pnpm audit --prod --audit-level high`
+- `pnpm test`: dominio, contrato, campo y servidor (este último levanta PostgreSQL y S3 con Testcontainers).
+- `pnpm presupuesto`: JavaScript inicial de campo (compile campo antes).
+- `pnpm --filter @teins/e2e test`: extremo a extremo en Chromium y WebKit (requiere `docker compose up`).

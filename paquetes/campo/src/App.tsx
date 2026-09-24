@@ -1,11 +1,13 @@
-import { Component, useEffect, useState, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { Aviso } from "@teins/ui";
 import { Captura } from "./pantallas/Captura";
-import { IniciarSesion } from "./pantallas/IniciarSesion";
 import { Inicio } from "./pantallas/Inicio";
-import { useUsuario } from "./sesion/sesion";
-import { programarSincronizacion } from "./sincronizacion/instancia";
+import { useUsuario } from "./sesion/usuario";
+import { programarSincronizacion } from "./sincronizacion/disparar";
+
+// Solo hace falta la primera vez o cuando la sesión vence: se carga aparte.
+const IniciarSesion = lazy(() => import("./pantallas/IniciarSesion").then((m) => ({ default: m.IniciarSesion })));
 
 class ErrorDeLectura extends Component<{ children: ReactNode }, { fallo: boolean }> {
   override state = { fallo: false };
@@ -56,5 +58,9 @@ export function App() {
       />
     );
 
-  return <ErrorDeLectura>{pantalla}</ErrorDeLectura>;
+  return (
+    <ErrorDeLectura>
+      <Suspense fallback={<div className="min-h-dvh bg-fondo" aria-busy="true" />}>{pantalla}</Suspense>
+    </ErrorDeLectura>
+  );
 }

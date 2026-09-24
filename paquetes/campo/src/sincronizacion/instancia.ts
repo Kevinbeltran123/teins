@@ -1,4 +1,5 @@
 import { crearClienteApi } from "@teins/protocolo";
+import { leerUsuario } from "../datos/base";
 import { db } from "../datos/instancia";
 import { almacenDexie } from "./almacen";
 import { bloqueoEntrePestanas, crearMotor } from "./motor";
@@ -11,7 +12,7 @@ const bloquear = bloqueoEntrePestanas();
 export const motor = crearMotor({
   almacen,
   transporte: transporteHttp(cliente),
-  usuarioActual: async () => (await db.ajustes.get("usuario"))?.valor.id ?? null,
+  usuarioActual: async () => (await leerUsuario(db))?.id ?? null,
   ...(bloquear ? { bloquear } : {}),
 });
 
