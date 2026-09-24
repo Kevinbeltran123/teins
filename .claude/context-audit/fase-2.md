@@ -18,9 +18,22 @@ Hooks en `~/.claude/settings.json`: salen los 8 de flujo de GSD (`check-update`,
 
 Memory files: ~15.2k → ~7.7k caracteres. Con la proporción medida en la línea base (6k tokens), ≈ 3k tokens menos.
 
-## Pendiente de medir
+## Resultado medido
 
-Sesión nueva, `/context` como primer mensaje; anotar Memory files y total. Comprobar que la barra de estado sigue funcionando.
+`/context` en sesión nueva (claude-opus-5-5[1m]): 30.9k / 1m (3%)
+
+| Categoría | Línea base | Fase 1 | Fase 2 |
+|---|---|---|---|
+| System prompt | 3.3k | 2.4k | 2.4k |
+| System tools | 11.7k | 13.6k | 13.6k |
+| MCP tools | 632 | 620 | 638 |
+| Custom agents | 3.1k | 314 | 314 |
+| Memory files | 6.0k | 6k | 3.1k |
+| Skills | 9.9k | 9.9k | 9.9k |
+| Messages | 977 | 977 | 977 |
+| **Total** | **35.6k** | **33.8k** | **30.9k** |
+
+Fase 2: −2.9k, como se estimó. Acumulado desde la línea base: −4.7k (−13 %). Lo que queda reducible es Skills (9.9k), casi todo de plugins; se decidió no tocarlo.
 
 ## Pendiente (manual)
 
