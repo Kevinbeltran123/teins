@@ -10,7 +10,7 @@ import {
   type NombreOperacion,
   type Operacion,
   type Parametros,
-  type Respuesta,
+  type RespuestaServidor,
 } from "@teins/protocolo";
 import type { Actor } from "./actor";
 import { problema } from "./errores";
@@ -34,7 +34,7 @@ export interface Entrada<N extends NombreOperacion> {
   correlacion: string;
 }
 
-export type Manejador<N extends NombreOperacion> = (entrada: Entrada<N>) => Promise<Respuesta<N>>;
+export type Manejador<N extends NombreOperacion> = (entrada: Entrada<N>) => Promise<RespuestaServidor<N>>;
 
 /** `/api/archivos/{huella}` → `/api/archivos/:huella` */
 const rutaFastify = (ruta: string) => ruta.replace(/\{(\w+)\}/g, ":$1");

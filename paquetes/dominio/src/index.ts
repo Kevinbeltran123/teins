@@ -14,3 +14,4 @@ export type { CodigoErrorValidacion, ErrorValidacion } from "./validacion";
 export { DECIMAL_CANONICO, fotosReferenciadas, HUELLA_SHA256, LIMITES, validarRespuestas } from "./validacion";
 export type { ResultadoEnvio } from "./estados";
 export { enviarLevantamiento } from "./estados";
+export { validarDefinicionFormato } from "./meta-esquema";

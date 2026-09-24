@@ -1,0 +1,1 @@
+ALTER TABLE "levantamientos"."levantamientos" ADD COLUMN "cantidad_fotos" integer DEFAULT 0 NOT NULL;

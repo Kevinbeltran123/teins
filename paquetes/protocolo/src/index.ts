@@ -31,5 +31,6 @@ export type {
   Operaciones,
   Parametros,
   Respuesta,
+  RespuestaServidor,
 } from "./operaciones";
 export { documentoOpenApi } from "./openapi";

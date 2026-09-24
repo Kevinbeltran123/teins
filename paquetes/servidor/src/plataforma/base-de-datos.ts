@@ -18,8 +18,14 @@ export interface Conexion {
   cerrar(): Promise<void>;
 }
 
-export function conectar(url: string, maximo: number): Conexion {
+/**
+ * Pool con manejo de errores en el pool y en cada conexión: una conexión que el servidor
+ * de base de datos corta mientras está inactiva no debe tumbar el proceso.
+ */
+export function conectar(url: string, maximo: number, alFallar: (error: Error) => void = (e) => console.error("Error de conexión", e)): Conexion {
   const pool = new pg.Pool({ connectionString: url, max: maximo, idleTimeoutMillis: 30_000 });
+  pool.on("error", alFallar);
+  pool.on("connect", (cliente) => cliente.on("error", alFallar));
   return { bd: drizzle(pool), pool, cerrar: () => pool.end() };
 }
 

@@ -66,7 +66,7 @@ export const EnviarLevantamiento = z
     llave: z.string().regex(/^enviar:[0-9a-f-]{36}$/),
     levantamiento: z.object({
       id: Uuid,
-      formato: z.string().max(64),
+      formato: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
       versionFormato: z.int().positive(),
       respuestas: Respuestas,
       creadoEn: Fecha,
@@ -205,6 +205,8 @@ export type Parametros<N extends NombreOperacion> = Salida<Operaciones[N] extend
 export type Consulta<N extends NombreOperacion> = Salida<Operaciones[N] extends { consulta: infer Q } ? Q : undefined>;
 export type ConsultaEntrada<N extends NombreOperacion> = Entrada<Operaciones[N] extends { consulta: infer Q } ? Q : undefined>;
 export type Respuesta<N extends NombreOperacion> = z.output<Operaciones[N]["respuesta"]>;
+/** Lo que produce el manejador del servidor antes de validarse con el esquema de respuesta. */
+export type RespuestaServidor<N extends NombreOperacion> = z.input<Operaciones[N]["respuesta"]>;
 
 /** Tamaño máximo de un archivo de campo: una foto recodificada pesa unos cientos de KB (ADR-0007). */
 export const BYTES_MAXIMOS_ARCHIVO = 10 * 1024 * 1024;

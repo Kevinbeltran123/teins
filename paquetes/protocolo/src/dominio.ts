@@ -14,14 +14,16 @@ export const Valor = z
   .union([
     z.string().max(LIMITES.texto),
     z.object({ valor: z.string().regex(DECIMAL_CANONICO).max(40), unidad: z.string().min(1).max(20) }).strict(),
-    z.array(Huella).max(LIMITES.fotosPorCampo),
+    z.array(Huella).max(LIMITES.fotosPorCampo).readonly(),
     z.object({ noObtenido: z.literal(true), motivo: z.string().max(LIMITES.motivo) }).strict(),
   ])
   .meta({ id: "Valor" });
 
 const ClaveEsquema = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);
+/** Identificador de formato: admite guiones (`prueba-ups`); las claves de sección y campo no. */
+const IdFormato = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 
-export const Respuestas = z.record(ClaveEsquema, z.record(ClaveEsquema, Valor)).meta({ id: "Respuestas" });
+export const Respuestas = z.record(ClaveEsquema, z.record(ClaveEsquema, Valor).readonly()).readonly().meta({ id: "Respuestas" });
 
 const CampoBase = { clave: ClaveEsquema, etiqueta: z.string().min(1).max(200), obligatorio: z.boolean().optional() };
 export const DefinicionCampo = z.discriminatedUnion("tipo", [
@@ -32,7 +34,7 @@ export const DefinicionCampo = z.discriminatedUnion("tipo", [
 
 export const VersionFormato = z
   .object({
-    formato: ClaveEsquema,
+    formato: IdFormato,
     version: z.int().positive(),
     secciones: z
       .array(z.object({ clave: ClaveEsquema, titulo: z.string().min(1).max(200), campos: z.array(DefinicionCampo).readonly() }))

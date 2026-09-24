@@ -19,6 +19,8 @@ export const levantamientos = esquemaLevantamientos.table(
     versionFormato: integer("version_formato").notNull(),
     estado: text("estado").notNull(),
     respuestas: jsonb("respuestas").$type<Respuestas>().notNull(),
+    /** Derivado de las respuestas al recibirlo: la bandeja lo muestra sin leer el documento. */
+    cantidadFotos: integer("cantidad_fotos").notNull().default(0),
     /** Concurrencia optimista para la revisión (ADR-0005, QA-25). */
     version: integer("version").notNull().default(1),
     creadoEnDispositivo: marcaDeTiempo("creado_en_dispositivo").notNull(),

@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, NotFound, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, NotFound, PutBucketCorsCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Readable } from "node:stream";
 import type { Config } from "../config";
@@ -16,6 +16,8 @@ export interface Almacenamiento {
   existe(clave: string): Promise<boolean>;
   leer(clave: string): Promise<Readable>;
   eliminar(clave: string): Promise<void>;
+  /** Permite que las superficies suban directo desde el navegador. Se aplica al preparar un entorno. */
+  permitirOrigenes(origenes: readonly string[]): Promise<void>;
 }
 
 const SEGUNDOS_SUBIDA = 15 * 60;
@@ -67,6 +69,23 @@ export function almacenamientoS3(config: Config): Almacenamiento {
     },
     async eliminar(clave) {
       await s3.send(new DeleteObjectCommand({ Bucket, Key: clave }));
+    },
+    async permitirOrigenes(origenes) {
+      await s3.send(
+        new PutBucketCorsCommand({
+          Bucket,
+          CORSConfiguration: {
+            CORSRules: [
+              {
+                AllowedOrigins: [...origenes],
+                AllowedMethods: ["PUT", "GET"],
+                AllowedHeaders: ["content-type", "x-amz-checksum-sha256"],
+                MaxAgeSeconds: 3600,
+              },
+            ],
+          },
+        }),
+      );
     },
   };
 }

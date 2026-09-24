@@ -26,12 +26,16 @@ const Esquema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
   S3_FORZAR_RUTA: booleano.default(false),
+  /** Configura CORS del bucket al sembrar. S3Mock no lo admite (ya permite todo); un proveedor real sí lo exige. */
+  S3_CONFIGURAR_CORS: booleano.default(true),
   BYTES_MAXIMOS_ARCHIVO: z.coerce.number().int().positive().max(BYTES_MAXIMOS_ARCHIVO).default(BYTES_MAXIMOS_ARCHIVO),
 
   AUTH_SECRETO: z.string().min(32, "AUTH_SECRETO debe tener al menos 32 caracteres"),
   /** Orígenes de las superficies (campo, oficina); Better Auth rechaza los demás. */
   ORIGENES_CONFIABLES: listaDeUrls,
   DURACION_SESION_DIAS: z.coerce.number().int().min(1).max(90).default(30),
+  /** Intentos de inicio de sesión por minuto y dirección (QA-7). */
+  INICIOS_DE_SESION_POR_MINUTO: z.coerce.number().int().min(1).max(10_000).default(5),
 });
 
 export type Config = z.infer<typeof Esquema>;

@@ -12,7 +12,9 @@ const carpeta = fileURLToPath(new URL("../../migraciones", import.meta.url));
  */
 export async function migrar(urlPropietario: string): Promise<void> {
   const pool = new pg.Pool({ connectionString: urlPropietario, max: 1 });
-  pool.on("error", (error) => console.error("Error en la conexión de migraciones", error));
+  const alFallar = (error: Error) => console.error("Error en la conexión de migraciones", error);
+  pool.on("error", alFallar);
+  pool.on("connect", (cliente) => cliente.on("error", alFallar));
   try {
     await runMigrations({ pgPool: pool });
     await migrate(drizzle(pool), { migrationsFolder: carpeta });
