@@ -2,6 +2,7 @@ import { run, Logger } from "graphile-worker";
 import pino from "pino";
 import { leerConfig } from "./config";
 import { crearArchivos } from "./modulos/archivos";
+import { crearGeneradorPdf } from "./modulos/informes";
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
 import { definirTareas } from "./tareas";
@@ -16,7 +17,9 @@ const alFallar = (error: Error) => registro.error({ err: error }, "Error de cone
 const negocio = conectar(config.DATABASE_URL, config.POOL_MAXIMO, alFallar);
 const cola = conectar(config.DATABASE_URL_PROPIETARIO, 4, alFallar);
 
-const archivos = crearArchivos({ bd: negocio.bd, almacenamiento: almacenamientoS3(config), config });
+const almacenamiento = almacenamientoS3(config);
+const archivos = crearArchivos({ bd: negocio.bd, almacenamiento, config });
+const informes = crearGeneradorPdf({ bd: negocio.bd, almacenamiento, config });
 
 const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
   const metodo = nivel === "error" ? "error" : nivel === "warning" ? "warn" : nivel === "debug" ? "debug" : "info";
@@ -25,7 +28,7 @@ const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
 
 const corredor = await run({
   pgPool: cola.pool,
-  taskList: definirTareas({ archivos }),
+  taskList: definirTareas({ archivos, informes }),
   concurrency: 4,
   // Las tareas periódicas (ADR-0012, regla 5) se declaran aquí cuando existan; nunca en un archivo suelto.
   crontab: "",

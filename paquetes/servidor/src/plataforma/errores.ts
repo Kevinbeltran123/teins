@@ -12,6 +12,7 @@ const TITULOS: Record<CodigoProblema, string> = {
   tomado_por_otro: "Otra persona tiene la revisión",
   estado_invalido: "La acción no aplica en el estado actual",
   no_tomado: "Solo quien tomó la revisión puede hacerlo",
+  informe_invalido: "El informe no cumple sus reglas",
   archivos_faltantes: "Faltan archivos por subir",
   archivos_en_verificacion: "Hay archivos en verificación",
   archivo_demasiado_grande: "El archivo supera el tamaño permitido",

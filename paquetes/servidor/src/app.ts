@@ -17,6 +17,7 @@ import { crearLevantamientos } from "./modulos/levantamientos";
 import { clientesYSitios } from "./modulos/clientes";
 import { crearSincronizacion } from "./modulos/sincronizacion";
 import { crearVisitas } from "./modulos/visitas";
+import { crearInformes } from "./modulos/informes";
 
 export interface Dependencias {
   config: Config;
@@ -128,6 +129,7 @@ export async function construirApp({ config, bd, almacenamiento }: Dependencias)
   const visitas = crearVisitas(clientesYSitios);
   const levantamientos = crearLevantamientos({ bd, formatos, archivos, visitas, identidad });
   const sincronizacion = crearSincronizacion({ bd, formatos, visitas, levantamientos, identidad });
+  const informes = crearInformes({ bd, almacenamiento, config, archivos, levantamientos, visitas, identidad, formatos });
 
   registrarRutaPublica(app, {
     method: "GET",
@@ -151,6 +153,7 @@ export async function construirApp({ config, bd, almacenamiento }: Dependencias)
   archivos.registrarRutas(app);
   levantamientos.registrarRutas(app);
   sincronizacion.registrarRutas(app);
+  informes.registrarRutas(app);
 
   const superficies: Superficie[] = [
     ...(config.SUPERFICIE_CAMPO_HOST ? [{ host: config.SUPERFICIE_CAMPO_HOST, carpeta: `${config.SUPERFICIES_DIR}/campo` }] : []),

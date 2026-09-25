@@ -84,3 +84,23 @@ export async function estadosDe(tx: TxOrganizacion, ids: readonly string[], tecn
   const porLevantamiento = Map.groupBy(await comentariosDe(tx, filas.map((f) => f.id)), (c) => c.levantamientoId);
   return filas.map((f) => ({ ...f, estado: f.estado as EstadoRevision, comentarios: porLevantamiento.get(f.id) ?? [] }));
 }
+
+/** Levantamientos de una visita, para componer su informe (regla 9). */
+export async function deVisita(tx: TxOrganizacion, visitaId: string) {
+  const filas = await tx
+    .select({
+      id: levantamientos.id,
+      visitaId: levantamientos.visitaId,
+      estado: levantamientos.estado,
+      formato: levantamientos.formato,
+      versionFormato: levantamientos.versionFormato,
+      tecnicoId: levantamientos.tecnicoId,
+      revisorId: levantamientos.revisorId,
+      recibidoEn: levantamientos.recibidoEn,
+      respuestas: levantamientos.respuestas,
+    })
+    .from(levantamientos)
+    .where(eq(levantamientos.visitaId, visitaId))
+    .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id));
+  return filas.map((f) => ({ ...f, estado: f.estado as EstadoRevision }));
+}

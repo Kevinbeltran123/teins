@@ -24,6 +24,7 @@ export interface Archivos {
 /** El objeto vive en `organizacion/huella`: nunca se sobrescribe ni se comparte entre organizaciones. */
 const clave = (organizacionId: string, huella: string) => `${organizacionId}/${huella}`;
 const BYTES_PARA_DETECTAR_TIPO = 4100;
+const TIPO_POR_ROL = { tecnico: "image/jpeg", oficina: "application/pdf" } as const;
 
 /** Interfaz pública del módulo de archivos (ADR-0007). */
 export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos; almacenamiento: Almacenamiento; config: Config }): Archivos {
@@ -89,9 +90,11 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
 
     registrarRutas(app) {
       registrarOperacion(app, "autorizarSubida", {
-        politica: politicas.tecnico,
+        politica: politicas.autenticado,
         manejar: async ({ cuerpo, actor }) => {
           if (cuerpo.bytes > config.BYTES_MAXIMOS_ARCHIVO) throw problema("archivo_demasiado_grande");
+          // Campo sube fotos; oficina, planos en PDF (corte 4). Ninguno sube el tipo del otro.
+          if (cuerpo.tipo !== TIPO_POR_ROL[actor.rol]) throw problema("tipo_de_archivo_no_permitido");
           const existente = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const [fila] = await tx.select().from(archivos).where(eq(archivos.huella, cuerpo.huella));
             if (fila && (fila.estado === "subido" || fila.estado === "verificado")) return fila.estado;
@@ -125,7 +128,7 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
       });
 
       registrarOperacion(app, "confirmarSubida", {
-        politica: politicas.tecnico,
+        politica: politicas.autenticado,
         manejar: async ({ parametros: { huella }, actor }) => {
           const fila = await leerFila(actor.organizacionId, huella);
           if (!fila) throw problema("no_encontrado", "Pida autorización antes de subir el archivo");

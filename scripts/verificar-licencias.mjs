@@ -22,6 +22,8 @@ const PERMITIDAS = new Set([
   "MPL-2.0",
   // Licencia de la PSF, permisiva (argparse, vía graphile-worker → cosmiconfig → js-yaml).
   "Python-2.0",
+  // Licencia zlib, permisiva (pako, vía pdf-lib: compresión del PDF del informe).
+  "Zlib",
 ]);
 
 const salida = execFileSync("pnpm", ["licenses", "list", "--prod", "--json"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
@@ -29,9 +31,9 @@ const porLicencia = JSON.parse(salida);
 
 const problemas = [];
 for (const [licencia, paquetes] of Object.entries(porLicencia)) {
-  // Expresiones SPDX con OR: basta que una alternativa sea permitida.
+  // Expresiones SPDX: con OR basta una alternativa permitida; con AND, cada parte debe serlo.
   const alternativas = licencia.replace(/[()]/g, "").split(/\s+OR\s+/);
-  if (alternativas.some((a) => PERMITIDAS.has(a.trim()))) continue;
+  if (alternativas.some((a) => a.split(/\s+AND\s+/).every((parte) => PERMITIDAS.has(parte.trim())))) continue;
   for (const p of paquetes) problemas.push(`${p.name}@${p.versions.join(",")}: ${licencia}`);
 }
 

@@ -39,6 +39,12 @@ const Esquema = z.object({
   S3_EXIGIR_HUELLA: booleano.default(true),
 
   /**
+   * Chromium para el PDF (ADR-0013). En la imagen es el de Alpine, con su versión fijada por la imagen;
+   * en desarrollo y pruebas, sin valor, se usa el que instala Playwright.
+   */
+  CHROMIUM_RUTA: z.string().min(1).optional(),
+
+  /**
    * Superficies servidas por el rol web, cada una en su host con /api en el mismo origen (ADR-0016).
    * En desarrollo no se usan: Vite sirve las superficies y reenvía /api.
    */

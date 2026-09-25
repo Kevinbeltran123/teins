@@ -16,8 +16,9 @@ export type TipoEvento =
   | "revision_reasignada"
   | "campo_corregido"
   | "levantamiento_revisado"
-  | "comentario_agregado";
-export type TipoAgregado = "levantamiento" | "organizacion" | "visita" | "usuario";
+  | "comentario_agregado"
+  | "informe_publicado";
+export type TipoAgregado = "levantamiento" | "organizacion" | "visita" | "usuario" | "informe";
 
 export interface EntradaAuditoria {
   organizacionId: string;

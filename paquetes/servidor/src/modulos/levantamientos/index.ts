@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { EstadoRevision } from "@teins/dominio";
+import type { EstadoRevision, Respuestas } from "@teins/dominio";
 import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { enOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
@@ -13,7 +13,7 @@ import type { Identidad } from "../identidad";
 import type { Visitas } from "../visitas";
 import { recibirEnvio, type DependenciasEnvio } from "./aplicacion/recibir-envio";
 import { comentar, corregirCampos, marcar, tomar, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
-import { comentariosDe, detalle, estadosDe, paginaPorEstado } from "./consultas";
+import { comentariosDe, detalle, deVisita, estadosDe, paginaPorEstado } from "./consultas";
 import { repositorioDrizzle, repositorioRevision } from "./repositorio";
 
 export interface ComentarioParaElTecnico {
@@ -32,7 +32,21 @@ export interface EstadoParaElTecnico {
   comentarios: ComentarioParaElTecnico[];
 }
 
+export interface LevantamientoDeVisita {
+  id: string;
+  visitaId: string | null;
+  estado: EstadoRevision;
+  formato: string;
+  versionFormato: number;
+  tecnicoId: string;
+  revisorId: string | null;
+  recibidoEn: Date;
+  respuestas: Respuestas;
+}
+
 export interface Levantamientos {
+  /** Levantamientos de una visita con sus respuestas, para componer y congelar su informe. */
+  deVisita(tx: TxOrganizacion, visitaId: string): Promise<LevantamientoDeVisita[]>;
   /** Estado de negocio y comentarios de los levantamientos propios del técnico, para la bajada. */
   estados(tx: TxOrganizacion, ids: readonly string[], tecnicoId: string): Promise<EstadoParaElTecnico[]>;
   registrarRutas(app: FastifyInstance): void;
@@ -65,6 +79,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
 
   return {
     estados: estadosDe,
+    deVisita,
 
     registrarRutas(app) {
       registrarOperacion(app, "enviarComando", {
@@ -126,7 +141,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             creadoEnDispositivo: fila.creadoEnDispositivo.toISOString(),
             enviadoEnDispositivo: fila.enviadoEnDispositivo.toISOString(),
             visita: visita
-              ? { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, motivo: visita.motivo, programadaPara: visita.programadaPara }
+              ? { id: visita.id, cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, motivo: visita.motivo, programadaPara: visita.programadaPara }
               : null,
             comentarios: comentarios.map((c) => ({
               id: c.id,

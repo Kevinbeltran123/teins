@@ -4,6 +4,7 @@ import type { TxOrganizacion } from "./base-de-datos";
 /** Trabajos conocidos y sus datos. Agregar uno aquí obliga a registrar su manejador en el worker. */
 export interface Trabajos {
   "archivos.verificar": { organizacionId: string; huella: string };
+  "informes.generarPdf": { organizacionId: string; versionId: string };
 }
 export type NombreTrabajo = keyof Trabajos;
 

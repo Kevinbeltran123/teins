@@ -10,7 +10,7 @@ import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion, registrarOperacionDeDispositivo, registrarRutaPublica } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
 import { crearAuth, type Auth } from "./auth";
-import { dispositivos, sesiones, usuarios } from "./esquema";
+import { dispositivos, organizaciones, sesiones, usuarios } from "./esquema";
 
 const USUARIO_VALIDO = /^[a-z0-9._-]{3,30}$/;
 
@@ -36,6 +36,7 @@ export interface Identidad {
   desactivarUsuario(usuario: string, contexto: { autorId: string; correlacion: string }): Promise<"desactivado" | "ya_estaba">;
   /** Identificadores de técnicos activos por nombre de usuario; falla si alguno no lo es. */
   tecnicos(organizacionId: string, nombresDeUsuario: readonly string[]): Promise<string[]>;
+  nombreDeOrganizacion(organizacionId: string): Promise<string>;
   /** Vencimiento del permiso de trabajo sin conexión que se entrega en cada contacto (ADR-0009, parte 2). */
   permisoLocalHasta(ahora?: Date): string;
   registrarRutas(app: FastifyInstance): void;
@@ -157,6 +158,11 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         ]);
       });
       return "desactivado";
+    },
+
+    async nombreDeOrganizacion(organizacionId) {
+      const [fila] = await bd.select({ nombre: organizaciones.nombre }).from(organizaciones).where(eq(organizaciones.id, organizacionId));
+      return fila?.nombre ?? "[ORGANIZACIÓN]";
     },
 
     async tecnicos(organizacionId, nombresDeUsuario) {

@@ -51,6 +51,7 @@ import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { crearArchivos } from "../src/modulos/archivos";
 import { crearFormatos } from "../src/modulos/formatos";
 import { crearIdentidad } from "../src/modulos/identidad";
+import { crearGeneradorPdf } from "../src/modulos/informes";
 import { definirTareas } from "../src/tareas";
 
 const requerir = createRequire(import.meta.url);
@@ -92,7 +93,8 @@ export async function servidorDePrueba() {
   }
 
   /** Ejecuta los trabajos pendientes de la cola, como lo haría el worker. */
-  const procesarCola = () => runOnce({ pgPool: propietario.pool, taskList: definirTareas({ archivos }) });
+  const informes = crearGeneradorPdf({ bd: conexionApp.bd, almacenamiento, config });
+  const procesarCola = () => runOnce({ pgPool: propietario.pool, taskList: definirTareas({ archivos, informes }) });
 
   return { app, rutas, config, propietario, conexionApp, identidad, nuevaOrganizacionConUsuarios, procesarCola };
 }

@@ -23,6 +23,8 @@ src/
     visitas/         Visitas programadas y técnicos asignados.
     levantamientos/  Recepción idempotente del envío (núcleo hexagonal) y bandeja de oficina.
     sincronizacion/  Bajada: compone los cambios del técnico con las interfaces de los demás módulos.
+    informes/        Informe por visita, versiones publicadas inmutables y su PDF (plantilla HTML,
+                     Chromium y pdf-lib en el worker, ADR-0013).
   app.ts        Composición del rol web.
   web.ts        Punto de entrada del rol web.
   worker.ts     Punto de entrada del rol worker.
@@ -70,6 +72,8 @@ Administración, mientras llegan las pantallas (uso en el encabezado de cada arc
 | `publicar-formato` | Publica una versión de formato desde un JSON; llega a los teléfonos en la siguiente bajada |
 
 El permiso de trabajo sin conexión dura `DIAS_PERMISO_LOCAL` días (7 por defecto) desde el último contacto.
+
+PDF del informe: el worker usa Chromium. En la imagen es el de Alpine (`CHROMIUM_RUTA=/usr/bin/chromium`); en desarrollo, sin esa variable, el que instala Playwright (`pnpm --filter @teins/e2e exec playwright install chromium` si falta).
 
 Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/servidor generar-migracion --name <nombre>`. Los permisos de una tabla nueva van en una migración propia (`--custom`).
 

@@ -15,6 +15,8 @@ export interface Almacenamiento {
   firmarDescarga(clave: string): Promise<{ url: string; expiraEn: Date }>;
   existe(clave: string): Promise<boolean>;
   leer(clave: string): Promise<Readable>;
+  /** Objetos que genera el servidor (el PDF de una versión). La clave es la huella: nunca se sobrescribe otro contenido. */
+  guardar(clave: string, datos: Uint8Array, tipo: string): Promise<void>;
   eliminar(clave: string): Promise<void>;
   /** Permite que las superficies suban directo desde el navegador. Se aplica al preparar un entorno. */
   permitirOrigenes(origenes: readonly string[]): Promise<void>;
@@ -75,6 +77,9 @@ export function almacenamientoS3(config: Config): Almacenamiento {
     async leer(clave) {
       const respuesta = await s3.send(new GetObjectCommand({ Bucket, Key: clave }));
       return respuesta.Body as Readable;
+    },
+    async guardar(clave, datos, tipo) {
+      await s3.send(new PutObjectCommand({ Bucket, Key: clave, Body: datos, ContentType: tipo, ContentLength: datos.byteLength }));
     },
     async eliminar(clave) {
       await s3.send(new DeleteObjectCommand({ Bucket, Key: clave }));
