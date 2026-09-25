@@ -1,4 +1,4 @@
-import { date, integer, pgSchema, text, uuid } from "drizzle-orm/pg-core";
+import { date, index, integer, pgSchema, text, uuid } from "drizzle-orm/pg-core";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 export const esquemaVisitas = pgSchema("visitas");
@@ -19,6 +19,10 @@ export const visitas = esquemaVisitas.table(
     tecnicos: text("tecnicos").array().notNull(),
     creadaEn: marcaDeTiempo("creada_en").notNull().defaultNow(),
     version: integer("version").notNull().default(1),
+    /** Cancelada: el único estado explícito de la visita (modelo de dominio, sección 5). */
+    canceladaEn: marcaDeTiempo("cancelada_en"),
+    canceladaPor: text("cancelada_por"),
+    motivoCancelacion: text("motivo_cancelacion"),
   },
-  () => [aislamientoPorOrganizacion("visitas")],
+  (t) => [index("visitas_programada_idx").on(t.organizacionId, t.programadaPara), aislamientoPorOrganizacion("visitas")],
 ).enableRLS();

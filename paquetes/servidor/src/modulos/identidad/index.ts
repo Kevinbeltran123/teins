@@ -36,6 +36,8 @@ export interface Identidad {
    * dispositivos reciben la orden de borrar sus datos en el siguiente contacto. Su autoría se conserva.
    */
   desactivarUsuario(usuario: string, contexto: { autorId: string; correlacion: string }): Promise<"desactivado" | "ya_estaba">;
+  /** Técnicos activos de la organización, por nombre: a quienes se les puede asignar una visita. */
+  tecnicosActivos(organizacionId: string): Promise<{ id: string; nombre: string; usuario: string }[]>;
   /** Identificadores de técnicos activos por nombre de usuario; falla si alguno no lo es. */
   tecnicos(organizacionId: string, nombresDeUsuario: readonly string[]): Promise<string[]>;
   nombreDeOrganizacion(organizacionId: string): Promise<string>;
@@ -271,6 +273,15 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
       return fila?.nombre ?? "[ORGANIZACIÓN]";
     },
 
+    async tecnicosActivos(organizacionId) {
+      const filas = await bd
+        .select({ id: usuarios.id, nombre: usuarios.name, usuario: usuarios.username })
+        .from(usuarios)
+        .where(and(eq(usuarios.organizacionId, organizacionId), eq(usuarios.rol, "tecnico"), isNull(usuarios.desactivadoEn)))
+        .orderBy(asc(usuarios.name));
+      return filas.map((f) => ({ ...f, usuario: f.usuario ?? "" }));
+    },
+
     async tecnicos(organizacionId, nombresDeUsuario) {
       const buscados = [...new Set(nombresDeUsuario.map((u) => u.trim().toLowerCase()))];
       const filas = await bd
@@ -319,6 +330,11 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
             permisoLocalHasta: permisoLocalHasta(),
           };
         },
+      });
+
+      registrarOperacion(app, "listarTecnicos", {
+        politica: politicas.oficina,
+        manejar: async ({ actor }) => ({ tecnicos: await this.tecnicosActivos(actor.organizacionId) }),
       });
 
       // Administración (iteración 6). La organización sale siempre de la sesión de quien administra.

@@ -92,6 +92,13 @@
       "when": 1790360106803,
       "tag": "0012_permisos_administracion",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790364241860,
+      "tag": "0013_visitas_canceladas",
+      "breakpoints": true
     }
   ]
 }

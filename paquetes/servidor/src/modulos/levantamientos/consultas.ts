@@ -104,3 +104,29 @@ export async function deVisita(tx: TxOrganizacion, visitaId: string) {
     .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id));
   return filas.map((f) => ({ ...f, estado: f.estado as EstadoRevision }));
 }
+
+export interface ConteoDeVisita {
+  enviados: number;
+  enRevision: number;
+  revisados: number;
+}
+
+/** Cuántos levantamientos tiene cada visita en cada estado: el avance de la visita se deduce de esto. */
+export async function conteosPorVisita(tx: TxOrganizacion, visitaIds: readonly string[]): Promise<Map<string, ConteoDeVisita>> {
+  const resultado = new Map<string, ConteoDeVisita>();
+  if (visitaIds.length === 0) return resultado;
+  const filas = await tx
+    .select({ visitaId: levantamientos.visitaId, estado: levantamientos.estado, n: count() })
+    .from(levantamientos)
+    .where(inArray(levantamientos.visitaId, [...visitaIds]))
+    .groupBy(levantamientos.visitaId, levantamientos.estado);
+  for (const f of filas) {
+    if (!f.visitaId) continue;
+    const c = resultado.get(f.visitaId) ?? { enviados: 0, enRevision: 0, revisados: 0 };
+    if (f.estado === "enviado") c.enviados += f.n;
+    else if (f.estado === "en_revision") c.enRevision += f.n;
+    else if (f.estado === "revisado") c.revisados += f.n;
+    resultado.set(f.visitaId, c);
+  }
+  return resultado;
+}

@@ -64,7 +64,7 @@ pnpm --filter @teins/servidor dev:web     # http://localhost:3000
 pnpm --filter @teins/servidor dev:worker
 ```
 
-Comandos de administración (uso en el encabezado de cada archivo de `src/cli/`). Desde la iteración 6, usuarios, accesos de clientes y retiro de versiones también se hacen en oficina, sección "Administración"; los comandos quedan para la primera persona administradora y para lo que aún no tiene pantalla:
+Comandos de administración (uso en el encabezado de cada archivo de `src/cli/`). Todo esto también se hace en oficina: usuarios, accesos de clientes y retiro de versiones en "Administración" (iteración 6); clientes, sitios y visitas en "Clientes" y "Visitas" (iteración 7). Los comandos quedan para la primera persona administradora, la publicación de formatos y la operación por consola:
 
 | Comando | Qué hace |
 |---|---|

@@ -116,7 +116,7 @@ describe("visitas asignadas", () => {
     expect((await bajar(ajena.tecnico.cookie, puntoAjeno)).json().cambios).toEqual([]);
 
     await enOrganizacion(s.conexionApp.bd, organizacionId, (tx) => visitas.reasignar(tx, { organizacionId, ...contexto, visitaId, tecnicos: [otro.id] }));
-    expect((await bajar(tecnico.cookie, bajada.puntoDeControl)).json().cambios).toEqual([{ tipo: "fuera_de_alcance", entidad: "visita", id: visitaId }]);
+    expect((await bajar(tecnico.cookie, bajada.puntoDeControl)).json().cambios).toEqual([{ tipo: "fuera_de_alcance", entidad: "visita", id: visitaId, motivo: "reasignada" }]);
     expect(tipos(await bajar(otro.cookie, puntoOtro))).toEqual(["visita"]);
     expect(await enOrganizacion(s.conexionApp.bd, organizacionId, (tx) => verificarCadena(tx, organizacionId, "visita", visitaId))).toEqual({ integra: true, eslabones: 2 });
   });

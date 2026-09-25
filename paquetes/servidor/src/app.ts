@@ -14,7 +14,7 @@ import { crearIdentidad } from "./modulos/identidad";
 import { crearArchivos } from "./modulos/archivos";
 import { crearFormatos } from "./modulos/formatos";
 import { crearLevantamientos } from "./modulos/levantamientos";
-import { clientesYSitios } from "./modulos/clientes";
+import { clientesYSitios, registrarRutasDeClientes } from "./modulos/clientes";
 import { crearSincronizacion } from "./modulos/sincronizacion";
 import { crearVisitas } from "./modulos/visitas";
 import { crearInformes } from "./modulos/informes";
@@ -157,6 +157,8 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   levantamientos.registrarRutas(app);
   sincronizacion.registrarRutas(app);
   informes.registrarRutas(app);
+  registrarRutasDeClientes(app, bd);
+  visitas.registrarRutas(app, { bd, identidad, conteos: levantamientos.conteosPorVisita });
   crearAccesosDeClientes(bd).registrarRutas(app, config);
   if (bdPortal) crearPortal({ bdPortal, almacenamiento, config }).registrarRutas(app);
 

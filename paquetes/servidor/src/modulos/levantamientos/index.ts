@@ -13,7 +13,7 @@ import type { Identidad } from "../identidad";
 import type { Visitas } from "../visitas";
 import { recibirEnvio, type DependenciasEnvio } from "./aplicacion/recibir-envio";
 import { comentar, corregirCampos, marcar, tomar, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
-import { comentariosDe, detalle, deVisita, estadosDe, paginaPorEstado } from "./consultas";
+import { comentariosDe, conteosPorVisita, detalle, deVisita, estadosDe, paginaPorEstado, type ConteoDeVisita } from "./consultas";
 import { repositorioDrizzle, repositorioRevision } from "./repositorio";
 
 export interface ComentarioParaElTecnico {
@@ -49,6 +49,8 @@ export interface Levantamientos {
   deVisita(tx: TxOrganizacion, visitaId: string): Promise<LevantamientoDeVisita[]>;
   /** Estado de negocio y comentarios de los levantamientos propios del técnico, para la bajada. */
   estados(tx: TxOrganizacion, ids: readonly string[], tecnicoId: string): Promise<EstadoParaElTecnico[]>;
+  /** Levantamientos por estado de cada visita: su avance (modelo de dominio, sección 5). */
+  conteosPorVisita(tx: TxOrganizacion, visitaIds: readonly string[]): Promise<Map<string, ConteoDeVisita>>;
   registrarRutas(app: FastifyInstance): void;
 }
 
@@ -80,6 +82,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
   return {
     estados: estadosDe,
     deVisita,
+    conteosPorVisita,
 
     registrarRutas(app) {
       registrarOperacion(app, "enviarComando", {

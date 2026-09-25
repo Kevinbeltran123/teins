@@ -12,7 +12,7 @@ import type { Visitas } from "../visitas";
 interface Dependencias {
   bd: BaseDeDatos;
   formatos: Pick<Formatos, "obtener">;
-  visitas: Pick<Visitas, "asignadas">;
+  visitas: Pick<Visitas, "asignadas" | "canceladas">;
   levantamientos: Pick<Levantamientos, "estados">;
   identidad: Pick<Identidad, "permisoLocalHasta" | "nombres">;
 }
@@ -53,12 +53,16 @@ export async function armarBajada(tx: TxOrganizacion, deps: Omit<Dependencias, "
   }
 
   const visitasCambiadas = de("visita");
+  const visitasQueSalen = de("visita", "fuera_de_alcance");
   const asignadas = await deps.visitas.asignadas(tx, visitasCambiadas, usuarioId);
+  // El teléfono le dice al técnico por qué sale la visita (iteración 7).
+  const canceladas = await deps.visitas.canceladas(tx, [...visitasCambiadas, ...visitasQueSalen]);
+  const sale = (id: string): Cambio => ({ tipo: "fuera_de_alcance", entidad: "visita", id, motivo: canceladas.has(id) ? "cancelada" : "reasignada" });
   for (const id of visitasCambiadas) {
     const visita = asignadas.get(id);
-    cambios.push(visita ? { tipo: "visita", visita } : { tipo: "fuera_de_alcance", entidad: "visita", id });
+    cambios.push(visita ? { tipo: "visita", visita } : sale(id));
   }
-  for (const id of de("visita", "fuera_de_alcance")) cambios.push({ tipo: "fuera_de_alcance", entidad: "visita", id });
+  for (const id of visitasQueSalen) cambios.push(sale(id));
 
   const estados = await deps.levantamientos.estados(tx, de("levantamiento"), usuarioId);
   if (app < APP_CON_REVISION) {
