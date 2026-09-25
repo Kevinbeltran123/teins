@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ErrorApi } from "@teins/protocolo";
 import { Aviso, Boton, Marquilla } from "@teins/ui";
 import { cliente, consultas } from "../api";
+import { olvidarSesion } from "../sesion";
+
+const sesionVencida = (error: unknown) => error instanceof ErrorApi && error.codigo === "no_autenticado";
 
 const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
 const fecha = (iso: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long" }).format(new Date(iso));
@@ -11,6 +15,11 @@ export function Informes({ cliente: nombre }: { cliente: string }) {
   const consultasCliente = useQueryClient();
   const [descargando, setDescargando] = useState<string | null>(null);
   const [errorDescarga, setErrorDescarga] = useState(false);
+  // La sesión se cerró mientras la pantalla estaba abierta: se vuelve a pedir la clave, con el aviso.
+  const volverAlIngreso = () => consultasCliente.invalidateQueries({ queryKey: consultas.sesion().queryKey });
+  useEffect(() => {
+    if (sesionVencida(informes.error)) void volverAlIngreso();
+  }, [informes.error]);
 
   async function descargar(id: string) {
     setDescargando(id);
@@ -18,14 +27,17 @@ export function Informes({ cliente: nombre }: { cliente: string }) {
     try {
       const { url } = await cliente.llamar("pdfDelPortal", { parametros: { id } });
       window.location.assign(url);
-    } catch {
-      setErrorDescarga(true);
+    } catch (error) {
+      if (sesionVencida(error)) void volverAlIngreso();
+      else setErrorDescarga(true);
     } finally {
       setDescargando(null);
     }
   }
 
   async function salir() {
+    // Salir es decisión de la persona: no se le avisa después que su sesión se cerró.
+    olvidarSesion();
     await cliente.llamar("salirDelPortal").catch(() => undefined);
     await consultasCliente.resetQueries();
   }

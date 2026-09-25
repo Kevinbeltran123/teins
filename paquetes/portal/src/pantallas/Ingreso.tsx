@@ -20,7 +20,7 @@ const accesoDelQr = () => {
   return IDENTIFICADOR_ACCESO.test(valor) ? valor : "";
 };
 
-export function Ingreso() {
+export function Ingreso({ sesionCerrada = false }: { sesionCerrada?: boolean }) {
   const consultasCliente = useQueryClient();
   const [delQr] = useState(accesoDelQr);
   const [identificador, setIdentificador] = useState(delQr);
@@ -50,6 +50,9 @@ export function Ingreso() {
         <p className="mt-2 text-cuerpo text-sobre-superficie-suave">Ingrese con la clave que le entregó TEINS para ver y descargar sus informes.</p>
       </header>
       <main className="mx-auto flex max-w-md flex-col gap-4 px-4 py-6">
+        {sesionCerrada && (
+          <Aviso tono="alerta">Su sesión se cerró: pasaron 30 minutos sin usarla o TEINS le entregó una clave nueva. Ingrese de nuevo con la clave vigente.</Aviso>
+        )}
         <form onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel bg-panel p-5">
           {delQr ? (
             <p className="text-ayuda text-texto-secundario">Código de acceso tomado del QR.</p>

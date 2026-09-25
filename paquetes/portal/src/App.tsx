@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ErrorApi } from "@teins/protocolo";
 import { Aviso, Boton } from "@teins/ui";
@@ -5,14 +6,18 @@ import { consultas } from "./api";
 import { useConexion } from "./conexion";
 import { Ingreso } from "./pantallas/Ingreso";
 import { Informes } from "./pantallas/Informes";
+import { habiaSesion, marcarSesionAbierta } from "./sesion";
 
 export function App() {
   const sesion = useQuery(consultas.sesion());
   const enLinea = useConexion();
+  useEffect(() => {
+    if (sesion.data) marcarSesionAbierta();
+  }, [sesion.data]);
 
   let pantalla;
   if (sesion.isPending) pantalla = <div className="min-h-dvh bg-fondo" aria-busy="true" />;
-  else if (sesion.isError && sesion.error instanceof ErrorApi && sesion.error.codigo === "no_autenticado") pantalla = <Ingreso />;
+  else if (sesion.isError && sesion.error instanceof ErrorApi && sesion.error.codigo === "no_autenticado") pantalla = <Ingreso sesionCerrada={habiaSesion()} />;
   else if (sesion.isError)
     pantalla = (
       <main className="mx-auto max-w-md px-4 py-8">
