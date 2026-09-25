@@ -19,3 +19,5 @@ export { enviarLevantamiento } from "./estados";
 export { validarDefinicionFormato } from "./meta-esquema";
 export { versionesVigentes } from "./vigencia";
 export { describirValor } from "./describir";
+export type { BorradorInforme, ContenidoVersion, ErrorInforme, LevantamientoParaInforme, Plano } from "./informe";
+export { LIMITES_INFORME, validarBorrador, validarParaPublicar } from "./informe";
