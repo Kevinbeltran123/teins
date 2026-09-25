@@ -14,6 +14,18 @@ Cómo se monta, se respalda y se recupera un entorno de TEINS en Railway (ADR-00
 | `infra/respaldos/simulacro.sh` | Computador de quien lo corre | Restaura el último volcado en un PostgreSQL desechable y verifica cadenas y archivos |
 | `pnpm --filter @teins/servidor verificar-integridad` | Servidor | Verifica todas las cadenas de la auditoría de una base |
 
+Direcciones de producción (dominios gratuitos de Railway, con HTTPS):
+
+| Superficie | Dirección |
+|---|---|
+| Campo | https://campo-production-21f0.up.railway.app |
+| Oficina | https://oficina-production-9584.up.railway.app |
+| Portal | https://portal-production-2d8f.up.railway.app |
+
+Primera persona administradora: usuario `administracion`, contraseña en `privado/teins-produccion.txt` (computador de Kevin; git lo ignora). Al abrir "Administración" pide activar el segundo factor.
+
+Producción no tiene formatos publicados todavía: se publican los de TEINS con `publicar-formato` cuando respondan P7 y P8. Los de prueba (`prueba-ups`) no se publican allí.
+
 Proyectos en Railway:
 
 | Proyecto | Para qué | Región |
@@ -55,12 +67,25 @@ El mismo archivo sirve a los dos proyectos: `ctx.projectName` decide el nombre d
 
 | Nivel | Qué | Retención | Protege contra |
 |---|---|---|---|
-| 1 | Recuperación a un punto en el tiempo (WAL continuo) y copias del volumen de Postgres | Unas 4 semanas; copias diaria (6 días), semanal (1 mes) y mensual (3 meses) | Errores humanos, una migración mala |
+| 1 | Recuperación a un punto en el tiempo (WAL continuo) y, con el plan de TEINS, copias programadas del volumen de Postgres | Unas 4 semanas; copias diaria (6 días), semanal (1 mes) y mensual (3 meses) | Errores humanos, una migración mala |
 | 2 | Volcado lógico diario y copia de los archivos en `teins-respaldos` | Volcados: 35 días. Archivos: siempre | Borrar el proyecto de producción |
 | 3 | Archivos direccionados por contenido, nunca se sobrescriben (ADR-0007) | Siempre | Restaurar una base que referencia archivos |
 | 4 | Simulacro de restauración | Mensual y antes de cada transferencia | Descubrir tarde que las copias no sirven |
 
+Con el plan Hobby de Kevin, Railway rechaza programar las copias del volumen ("You do not have access to this resource"); la recuperación a un punto en el tiempo sí queda activa. `montar.sh` lo avisa y sigue; con el plan de TEINS se programan con `railway postgres pitr schedule set --service Postgres --daily --weekly --monthly`.
+
+El archivo de la recuperación a un punto en el tiempo es un almacenamiento, `Postgres-PITR`, que crea Railway al activarla. Está declarado en `.railway/railway.ts` para que ningún `apply` lo borre; solo el primer `apply` de un proyecto nuevo lo omite (`TEINS_SIN_PITR=1`), porque todavía no existe.
+
 Pendiente para cumplir del todo el nivel 2: el destino está en otro proyecto de Railway, así que no sobrevive a perder la cuenta. Con una cuenta de otro proveedor compatible con S3 (por ejemplo Cloudflare R2 o Backblaze B2), basta cambiar en el servicio `respaldos` las variables `DESTINO_BUCKET` y `RCLONE_CONFIG_DESTINO_*`.
+
+### Correr un respaldo ahora
+
+El servicio `respaldos` corre solo a las 07:00 UTC; desplegarlo no lo ejecuta. Para lanzarlo ya (antes de un simulacro o de una migración delicada), con el proyecto enlazado:
+
+```sh
+infra/respaldos/ahora.sh
+railway logs --service respaldos   # "respaldo …: listo" al terminar
+```
 
 ### Recuperar
 
@@ -87,6 +112,8 @@ Si algo falla, termina con error. Cada simulacro se anota en la tabla de abajo.
 
 | Fecha | Entorno | Volcado | Restauración | Cadenas | Archivos | Resultado |
 |---|---|---|---|---|---|---|
+| 2026-09-25 | Producción (Railway) | 0,0 h | 1 s | 2 íntegras, 0 rotas | 0 referenciados, 0 faltantes | Correcto; base recién montada (organización y primera persona administradora) |
+| 2026-09-25 | Pruebas (Railway) | 0,0 h | 0 s | 75 íntegras (184 eslabones), 0 rotas | 23 referenciados, 0 faltantes | Correcto, contra la copia real en `teins-respaldos` |
 | 2026-09-25 | Local (Docker) | 0,0 h | 0 s | 435 íntegras, 0 rotas | 144 referenciados, 4 faltantes | Correcto: los 4 faltantes son las fotos que S3Mock perdió el 2026-09-24, antes de guardar en su volumen; tampoco están en el origen. El simulacro los detectó |
 
 ## Transferir a TEINS

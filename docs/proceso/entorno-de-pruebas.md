@@ -10,6 +10,10 @@ Entorno montado el 2026-09-25 desde la CLI de Railway (ADR-0016). Solo datos fic
 | Rol worker | `worker` | Sin dominio |
 | PostgreSQL 18 | `Postgres` | Red privada, sin acceso público |
 | Almacenamiento compatible con S3 | bucket `teins-pruebas` | Privado, región `iad` |
+| Respaldo diario (07:00 UTC) | `respaldos` | Volcado y archivos a `teins-respaldos` / `respaldos-pruebas` (ver `produccion.md`) |
+| Recuperación a un punto en el tiempo | bucket `Postgres-PITR` | Activa desde el 2026-09-25 |
+
+La configuración vive en `.railway/railway.ts` (iteración 8): cambiarla es editar ese archivo y aplicarlo (`railway config plan` / `apply`), no tocar el panel de Railway.
 
 Proyecto `teins-pruebas`, entorno `production`, plan Hobby. Alerta de gasto: USD 10 al mes (límite suave del espacio de trabajo).
 

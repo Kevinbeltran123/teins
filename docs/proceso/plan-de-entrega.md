@@ -14,6 +14,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | 5 | Portal: acceso con QR y clave, descarga del informe vigente | Cero accesos cruzados entre clientes (QA-4, QA-7) | Terminado y desplegado en el entorno de pruebas |
 | Iteración 6 | Administración con segundo factor: usuarios, teléfonos, accesos de clientes, retiro de versiones | Cuenta de mayor impacto protegida (ADR-0009), operar el piloto sin comandos | Terminada y desplegada en el entorno de pruebas |
 | Iteración 7 | Gestión de visitas y clientes desde oficina | Operar el piloto sin comandos; cambios de agenda que llegan solos a los teléfonos | Terminada y desplegada en el entorno de pruebas; el aviso de visita cancelada en campo espera la prueba en iPhone |
+| Iteración 8 | Producción provisional (transferible), respaldos diarios y simulacro | Copias probadas y entorno recreable antes del piloto (QA-10, QA-18) | Terminada; producción sin datos reales hasta transferirla a TEINS (ADR-0021) |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -24,9 +25,11 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 1. **Prueba en iPhone** de los cortes 1 a 5 (aplazada por Kevin), con la guía de [`entorno-de-pruebas.md`](entorno-de-pruebas.md), más abrir el portal desde el QR en el celular.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
 
+**Iteración 8 terminada el 2026-09-25:** producción provisional montada en `teins-produccion` con dominios gratuitos, recreable desde el repositorio, con respaldo diario y simulacro verificado; sin datos reales hasta transferirla a TEINS (ADR-0021, [`produccion.md`](produccion.md)). La rama está en GitHub (pull request #1, en borrador) con la integración continua en verde.
+
 **Iteraciones 6 (administración) y 7 (visitas y clientes) terminadas el 2026-09-25** y desplegadas. Con ellas, TEINS opera el piloto desde las pantallas: solo la primera persona administradora y la publicación de formatos siguen por comando. En el entorno de pruebas, `oficina.prueba` tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
 
-Siguiente, por riesgo (recomendación, a decidir con Kevin): **entorno de producción con su simulacro de restauración** (ADR-0016), porque sin él no hay piloto con datos reales; o, si TEINS ya respondió P7 y P8, **secciones repetibles** para capturar sus formatos reales. Después: bocetos (ADR-0019), cantidades con catálogo, passkeys y cifrado local.
+Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8) y el formato del informe (P22, P23, P26). Mientras llegan, **secciones repetibles** y **bocetos** (ADR-0019), porque sus formatos casi seguro los necesitan; y la prueba en iPhone, que sigue aplazada. Después: cantidades con catálogo, passkeys y cifrado local.
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
 
@@ -596,7 +599,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteración 8 · Producción provisional, copias y simulacro
 
-**Estado:** en construcción desde el 2026-09-25. Kevin pidió subir la rama y montar producción con un dominio gratuito mientras TEINS no tiene dominio ni cuenta; eligió un proyecto aparte y transferible, sin datos reales hasta la transferencia (ADR-0021), y abrir un pull request en borrador para que corra la integración continua.
+**Estado:** terminada el 2026-09-25; producción provisional montada y respaldada, sin datos reales (ADR-0021). Kevin pidió subir la rama y montar producción con un dominio gratuito mientras TEINS no tiene dominio ni cuenta; eligió un proyecto aparte y transferible, sin datos reales hasta la transferencia (ADR-0021), y abrir un pull request en borrador para que corra la integración continua.
 
 **Para qué:** que producción exista, se pueda recrear desde el repositorio y tenga copias probadas antes del piloto, de modo que el día que TEINS tenga cuenta solo haya que transferirla (ADR-0016, QA-10, QA-18). Procedimiento completo en [`produccion.md`](produccion.md).
 
@@ -621,10 +624,10 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 | Criterio | Estado |
 |---|---|
 | 1. La rama está en GitHub y la integración continua pasa completa | Cumplido el 2026-09-25: pull request #1, los cinco trabajos en verde (tipos y reglas, secretos, servidor con PostgreSQL y S3, imagen, extremo a extremo) |
-| 2. `railway config plan` sobre pruebas no muestra diferencias después de aplicar | Pendiente de la aprobación de Kevin para aplicar |
-| 3. Producción montada con `montar.sh`, con dominios gratuitos, y el extremo a extremo en verde contra ella | Pendiente de la aprobación de Kevin |
-| 4. El servicio `respaldos` corre en pruebas y en producción y deja el volcado y los archivos en `teins-respaldos` | Probado en local; pendiente en Railway |
-| 5. Simulacro correcto contra la copia real de cada entorno, anotado en `produccion.md` | Probado en local (detectó 4 fotos que ya faltaban en el origen); pendiente en Railway |
+| 2. `railway config plan` no muestra diferencias después de aplicar | Cumplido el 2026-09-25 en pruebas y en producción ("already up to date") |
+| 3. Producción montada con `montar.sh`, con dominios gratuitos, y verificada | Cumplido el 2026-09-25: las tres superficies responden, la primera persona administradora entra y administrar le exige el segundo factor. Se verificó con una prueba de humo, no con el extremo a extremo: este crea usuarios, clientes y visitas ficticios, y producción debe quedar limpia |
+| 4. El servicio `respaldos` corre en pruebas y en producción y deja el volcado y los archivos en `teins-respaldos` | Cumplido el 2026-09-25 en los dos entornos (volcado con su SHA-256 y archivos copiados) |
+| 5. Simulacro correcto contra la copia real de cada entorno, anotado en `produccion.md` | Cumplido el 2026-09-25: pruebas (75 cadenas y 23 archivos) y producción (2 cadenas); en local detectó 4 fotos que ya faltaban en el origen |
 
 ### Decisiones tomadas al construirlo
 
@@ -634,4 +637,10 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Respaldo con `pg_dump` y `rclone`** (MIT) en una imagen propia sobre `postgres:18-alpine`: el volcado se lee con `pg_restore --list` antes de subirlo y viaja con su SHA-256; los archivos se copian con `--immutable` (nunca se reemplaza ni se borra nada en el destino). Retención de volcados: 35 días.
 - **Destino en otro proyecto y otra región** (`teins-respaldos`, US West) mientras no haya cuenta de otro proveedor: sobrevive a que se borre producción, no a perder la cuenta (lo dice ADR-0021).
 - **Simulacro verificable:** restaura en un PostgreSQL desechable con los roles de `infra/roles.sql`, verifica todas las cadenas de la auditoría con el código del servidor y compara los archivos referenciados con los copiados. Corre en el computador de quien lo lanza con `railway run`, que le pasa las credenciales sin mostrarlas. Usa una carpeta temporal bajo `~/.cache`, porque Colima y Docker Desktop no siempre comparten `/tmp` con los contenedores.
+- **Contraseñas de los roles:** la primera corrida de `montar.sh` en pruebas dejó vacías las contraseñas de `teins_app` y `teins_portal`: el contenedor de Postgres no veía las variables, porque se agregaron después de que arrancó (un contenedor solo ve las que tenía al desplegarse). Las conexiones abiertas siguieron funcionando y el único despliegue que falló (campo) no reemplazó al anterior; se corrigió desde el contenedor del portal, tomando cada contraseña de su conexión ya resuelta. Desde entonces `montar.sh` redespliega Postgres si no ve las contraseñas y nunca aplica una vacía.
+- **Región de la base:** el `apply` inicial creó el Postgres de producción en `us-west2` (la región por defecto del espacio de trabajo), lejos de los servicios en `us-east4`. El plan lo detectó y se movió con la base casi vacía y respaldada; los datos se verificaron después (ingreso y cadenas íntegras). `respaldos` sigue en `us-west2`: Railway no aplica la región declarada a un servicio programado; el volcado cruza de región una vez al día.
+- **Archivo de la recuperación a un punto en el tiempo:** Railway elige su región al activarla (`iad` en pruebas, `sjc` en producción) y no se puede cambiar; el archivo la declara por proyecto.
+- **Organización de producción:** producción nunca se siembra, así que la crea el comando nuevo `crear-organizacion` (mismo identificador que en pruebas, nombre "TEINS").
+- **Copias programadas del volumen:** con el plan Hobby, Railway no deja programarlas; queda la recuperación a un punto en el tiempo, y `montar.sh` lo avisa sin detenerse.
+- **Correr un respaldo ya:** `infra/respaldos/ahora.sh` (la API de Railway ejecuta el servicio programado sin esperar a su hora).
 - **Integración continua:** el trabajo del servidor instala el Chromium de `playwright-core` (sin él no se generaban los PDF), y gitleaks recibió permiso para leer el pull request.
