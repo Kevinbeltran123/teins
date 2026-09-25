@@ -3,6 +3,7 @@ import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/re
 import { ErrorApi } from "@teins/protocolo";
 import { Aviso, Boton } from "@teins/ui";
 import { consultas } from "./api";
+import { Administracion } from "./pantallas/Administracion";
 import { Bandeja } from "./pantallas/Bandeja";
 import { Detalle } from "./pantallas/Detalle";
 import { InformeDeVisita } from "./pantallas/Informe";
@@ -31,7 +32,7 @@ function Raiz() {
     return <IniciarSesion aviso="Este usuario es de técnico: la bandeja es solo para oficina. Inicie sesión con un usuario de oficina." />;
   }
   return (
-    <Marco nombre={sesion.data.usuario.nombre}>
+    <Marco nombre={sesion.data.usuario.nombre} administrador={sesion.data.usuario.administrador}>
       <Outlet />
     </Marco>
   );
@@ -58,7 +59,16 @@ const informe = createRoute({
   },
 });
 
-export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, listaDeInformes, informe]) });
+const administracion = createRoute({
+  getParentRoute: () => raiz,
+  path: "administracion",
+  component: function RutaAdministracion() {
+    const sesion = useQuery(consultas.sesion());
+    return sesion.data ? <Administracion sesion={sesion.data} /> : null;
+  },
+});
+
+export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, listaDeInformes, informe, administracion]) });
 
 declare module "@tanstack/react-router" {
   interface Register {

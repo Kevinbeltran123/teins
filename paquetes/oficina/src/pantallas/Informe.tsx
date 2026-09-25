@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import { Aviso, Boton, CampoTexto, CampoTextoLargo, Casilla, claseBoton, Marquilla, SelectorDeArchivo } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { aFechaHora } from "../formato";
+import { mensajeDeAdministracion } from "../administracion";
 import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
 
 type Informe = Respuesta<"obtenerInforme">;
@@ -16,6 +17,9 @@ interface Borrador {
 }
 
 const ESTADO_LEVANTAMIENTO = { enviado: "Enviado: falta revisarlo", en_revision: "En revisión", revisado: "Revisado" } as const;
+/** La que ve el cliente: la más reciente sin retirar (regla 10). */
+const vigenteDe = (informe: Informe) => informe.versiones.find((v) => v.retirada === null);
+
 const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
 
 function mover<T>(lista: T[], i: number, paso: -1 | 1): T[] {
@@ -66,7 +70,7 @@ export function InformeDeVisita({ id }: { id: string }) {
     <>
       {volver}
       <Composicion key={consulta.data.version} informe={consulta.data} recargar={() => void consulta.refetch()} />
-      <Versiones informe={consulta.data} />
+      <Versiones informe={consulta.data} recargar={() => void consulta.refetch()} />
     </>
   );
 }
@@ -123,7 +127,11 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
     <>
       <section aria-labelledby="titulo-informe" className="flex flex-col gap-3 rounded-panel bg-panel p-6">
         <div className="flex flex-wrap items-center gap-3">
-          {informe.versiones[0] ? <Marquilla tono="superficie">{`Versión ${informe.versiones[0].numero} vigente`}</Marquilla> : <Marquilla tono="borrador">Sin publicar</Marquilla>}
+          {vigenteDe(informe) ? (
+            <Marquilla tono="superficie">{`Versión ${vigenteDe(informe)!.numero} vigente`}</Marquilla>
+          ) : (
+            <Marquilla tono="borrador">{informe.versiones.length > 0 ? "Retirado del portal" : "Sin publicar"}</Marquilla>
+          )}
           <span className="text-ayuda text-texto-secundario">{informe.visita.motivo}</span>
         </div>
         <h1 id="titulo-informe" className="text-titulo leading-tight font-extrabold tracking-tight">
@@ -255,10 +263,12 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   );
 }
 
-function Versiones({ informe }: { informe: Informe }) {
+function Versiones({ informe, recargar }: { informe: Informe; recargar: () => void }) {
   const [descargando, setDescargando] = useState<number | null>(null);
   const [errorDescarga, setErrorDescarga] = useState(false);
   useEffect(() => setErrorDescarga(false), [informe.versiones.length]);
+  const administrador = useQuery(consultas.sesion()).data?.usuario.administrador ?? false;
+  const vigente = vigenteDe(informe)?.numero;
 
   async function descargar(numero: number) {
     setDescargando(numero);
@@ -284,10 +294,16 @@ function Versiones({ informe }: { informe: Informe }) {
         <ul className="flex flex-col divide-y divide-division">
           {informe.versiones.map((v, i) => (
             <li key={v.numero} className="flex flex-wrap items-center justify-between gap-3 py-2">
-              <p className="text-cuerpo">
-                <strong>Versión {v.numero}</strong>
-                {i === 0 && " (vigente)"} · publicada el {aFechaHora(v.publicadaEn)} por {v.publicadaPor.nombre}
-              </p>
+              <div className="text-cuerpo">
+                <p>
+                  <strong>Versión {v.numero}</strong>
+                  {v.numero === vigente && " (vigente)"} · publicada el {aFechaHora(v.publicadaEn)} por {v.publicadaPor.nombre}
+                </p>
+                {v.retirada && (
+                  <p className="text-ayuda text-texto-secundario">{`Retirada del portal el ${aFechaHora(v.retirada.en)} por ${v.retirada.por.nombre}: ${v.retirada.motivo}`}</p>
+                )}
+                {administrador && !v.retirada && <RetirarVersion informeId={informe.id} numero={v.numero} alRetirar={recargar} />}
+              </div>
               {v.pdf === "listo" ? (
                 <Boton disabled={descargando === v.numero} onClick={() => void descargar(v.numero)}>
                   {descargando === v.numero ? "Preparando…" : `Descargar PDF de la versión ${v.numero}`}
@@ -305,5 +321,53 @@ function Versiones({ informe }: { informe: Informe }) {
       )}
       {errorDescarga && <Aviso tono="error">No se pudo preparar la descarga. Intente de nuevo.</Aviso>}
     </section>
+  );
+}
+
+/** Solo quien administra: el cliente deja de ver la versión; se conserva y queda registrado. */
+function RetirarVersion({ informeId, numero, alRetirar }: { informeId: string; numero: number; alRetirar: () => void }) {
+  const consultasCliente = useQueryClient();
+  const [abierto, setAbierto] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  async function retirar() {
+    if (motivo.trim() === "") return setError("Escriba por qué se retira: queda en el registro.");
+    setOcupado(true);
+    setError(null);
+    try {
+      await cliente.llamar("retirarVersion", { parametros: { id: informeId, numero }, cuerpo: { motivo } });
+      await consultasCliente.invalidateQueries({ queryKey: ["informes"] });
+      alRetirar();
+    } catch (e) {
+      setError(mensajeDeAdministracion(e));
+      setOcupado(false);
+    }
+  }
+
+  if (!abierto) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className="min-h-tactil text-ayuda font-bold text-superficie underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie"
+      >
+        {`Retirar la versión ${numero} del portal`}
+      </button>
+    );
+  }
+  return (
+    <div className="mt-2 flex max-w-xl flex-col gap-3">
+      <p className="text-ayuda">El cliente deja de verla: si hay una versión anterior sin retirar, verá esa. No se puede deshacer; para volver a entregar, publique una versión nueva.</p>
+      <CampoTextoLargo etiqueta={`Motivo del retiro de la versión ${numero}`} valor={motivo} onCambio={setMotivo} maximo={500} />
+      {error && <Aviso tono="error">{error}</Aviso>}
+      <div className="flex flex-wrap gap-2">
+        <Boton variante="principal" disabled={ocupado} onClick={() => void retirar()}>
+          {ocupado ? "Retirando…" : `Sí, retirar la versión ${numero}`}
+        </Boton>
+        <Boton onClick={() => setAbierto(false)}>Cancelar</Boton>
+      </div>
+    </div>
   );
 }

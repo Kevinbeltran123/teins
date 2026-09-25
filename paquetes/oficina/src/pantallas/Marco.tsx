@@ -6,7 +6,7 @@ import { cliente } from "../api";
 import { useConexion } from "../conexion";
 
 /** Encabezado y contenedor comunes (DESIGN.md, estructura Placa). */
-export function Marco({ nombre, children }: { nombre: string; children: ReactNode }) {
+export function Marco({ nombre, administrador, children }: { nombre: string; administrador: boolean; children: ReactNode }) {
   const consultasCliente = useQueryClient();
   const enLinea = useConexion();
 
@@ -25,6 +25,7 @@ export function Marco({ nombre, children }: { nombre: string; children: ReactNod
             {[
               { a: "/", texto: "Levantamientos" },
               { a: "/informes", texto: "Informes" },
+              ...(administrador ? [{ a: "/administracion", texto: "Administración" }] : []),
             ].map((e) => (
               <Link
                 key={e.a}

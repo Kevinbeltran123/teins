@@ -11,11 +11,23 @@ function mensajeDeError(error: unknown): string {
   return "No se pudo iniciar sesión. Intente de nuevo.";
 }
 
+function mensajeDeCodigo(error: unknown): { mensaje: string; volver: boolean } {
+  if (error instanceof ErrorDeRed) return { mensaje: "No hay conexión con el servidor. Revise su conexión e intente de nuevo.", volver: false };
+  if (error instanceof ErrorApi && error.codigo === "no_autenticado") return { mensaje: "El código no es correcto o ya venció. Revise que la hora del celular esté al día.", volver: false };
+  if (error instanceof ErrorApi && error.codigo === "demasiadas_solicitudes") return { mensaje: "Demasiados códigos equivocados. Espere 15 minutos e inicie sesión de nuevo.", volver: true };
+  // El desafío se invalida tras cinco códigos equivocados: hay que empezar otra vez con la contraseña.
+  return { mensaje: "Demasiados intentos con este ingreso. Inicie sesión de nuevo.", volver: true };
+}
+
+type Estado = { tipo: "listo" } | { tipo: "enviando" } | { tipo: "error"; mensaje: string };
+
 export function IniciarSesion({ aviso }: { aviso?: string }) {
   const consultasCliente = useQueryClient();
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
-  const [estado, setEstado] = useState<{ tipo: "listo" } | { tipo: "enviando" } | { tipo: "error"; mensaje: string }>({ tipo: "listo" });
+  const [codigo, setCodigo] = useState("");
+  const [pideCodigo, setPideCodigo] = useState(false);
+  const [estado, setEstado] = useState<Estado>({ tipo: "listo" });
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -25,29 +37,75 @@ export function IniciarSesion({ aviso }: { aviso?: string }) {
     }
     setEstado({ tipo: "enviando" });
     try {
-      await cliente.iniciarSesion(usuario, contrasena);
+      const { pideCodigo } = await cliente.iniciarSesion(usuario, contrasena);
+      if (pideCodigo) {
+        setPideCodigo(true);
+        setEstado({ tipo: "listo" });
+        return;
+      }
       await consultasCliente.invalidateQueries({ queryKey: consultas.sesion().queryKey });
     } catch (error) {
       setEstado({ tipo: "error", mensaje: mensajeDeError(error) });
     }
   }
 
+  async function verificar(evento: FormEvent) {
+    evento.preventDefault();
+    if (codigo.trim() === "") {
+      setEstado({ tipo: "error", mensaje: "Escriba el código de su app autenticadora." });
+      return;
+    }
+    setEstado({ tipo: "enviando" });
+    try {
+      await cliente.verificarSegundoFactor(codigo);
+      await consultasCliente.invalidateQueries({ queryKey: consultas.sesion().queryKey });
+    } catch (error) {
+      const { mensaje, volver } = mensajeDeCodigo(error);
+      if (volver) {
+        setPideCodigo(false);
+        setContrasena("");
+      }
+      setEstado({ tipo: "error", mensaje });
+    }
+  }
+
+  function volverAEmpezar() {
+    setPideCodigo(false);
+    setContrasena("");
+    setCodigo("");
+    setEstado({ tipo: "listo" });
+  }
+
   return (
     <div className="min-h-dvh bg-fondo">
       <header className="mx-3 mt-3 rounded-panel bg-superficie px-6 py-5 text-sobre-superficie">
         <p className="text-ayuda text-sobre-superficie-suave">TEINS Oficina</p>
-        <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">Iniciar sesión</h1>
+        <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">{pideCodigo ? "Código de verificación" : "Iniciar sesión"}</h1>
       </header>
       <main className="mx-auto flex max-w-md flex-col gap-4 px-4 py-8">
         {aviso && <Aviso tono="alerta">{aviso}</Aviso>}
-        <form onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel bg-panel p-6">
-          <CampoTexto etiqueta="Usuario" nombre="usuario" autoComplete="username" valorInicial="" onCambio={setUsuario} />
-          <CampoTexto etiqueta="Contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setContrasena} />
-          {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
-          <Boton type="submit" variante="principal" disabled={estado.tipo === "enviando"}>
-            {estado.tipo === "enviando" ? "Iniciando sesión…" : "Iniciar sesión"}
-          </Boton>
-        </form>
+        {pideCodigo ? (
+          <form key="codigo" onSubmit={verificar} noValidate className="flex flex-col gap-5 rounded-panel bg-panel p-6">
+            <p className="text-cuerpo">Abra su app autenticadora y escriba los 6 dígitos de TEINS. Si no tiene el celular, use uno de sus códigos de respaldo.</p>
+            <CampoTexto etiqueta="Código" nombre="codigo" autoComplete="one-time-code" modoEntrada="numeric" valorInicial="" onCambio={setCodigo} />
+            {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
+            <Boton type="submit" variante="principal" disabled={estado.tipo === "enviando"}>
+              {estado.tipo === "enviando" ? "Verificando…" : "Verificar código"}
+            </Boton>
+            <Boton type="button" onClick={volverAEmpezar}>
+              Volver a la contraseña
+            </Boton>
+          </form>
+        ) : (
+          <form key="contrasena" onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel bg-panel p-6">
+            <CampoTexto etiqueta="Usuario" nombre="usuario" autoComplete="username" valorInicial={usuario} onCambio={setUsuario} />
+            <CampoTexto etiqueta="Contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setContrasena} />
+            {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
+            <Boton type="submit" variante="principal" disabled={estado.tipo === "enviando"}>
+              {estado.tipo === "enviando" ? "Iniciando sesión…" : "Iniciar sesión"}
+            </Boton>
+          </form>
+        )}
       </main>
     </div>
   );
