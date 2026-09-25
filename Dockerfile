@@ -17,9 +17,13 @@ RUN pnpm --filter @teins/servidor deploy --prod --legacy /app \
  && cp -r paquetes/oficina/dist /app/superficies/oficina
 
 FROM node:24-alpine AS ejecucion
+# Chromium para el PDF del informe (ADR-0013): el de Alpine, con su versión fijada por la imagen base.
+# La plantilla incrusta su propia fuente, así que no hacen falta fuentes del sistema.
+RUN apk add --no-cache chromium
 ENV NODE_ENV=production \
     SUPERFICIES_DIR=/app/superficies \
-    PUERTO=3000
+    PUERTO=3000 \
+    CHROMIUM_RUTA=/usr/bin/chromium
 WORKDIR /app
 COPY --from=compilacion --chown=node:node /app /app
 # Sin privilegios: el proceso no puede modificar su propio código.
