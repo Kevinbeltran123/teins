@@ -12,6 +12,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | 3 | Revisión: tomar, corregir con trazabilidad por campo, comentar al técnico, marcar revisado | Concurrencia en oficina (QA-25), trazabilidad (QA-8) | Terminado y desplegado en el entorno de pruebas; lo que toca de campo espera la prueba en iPhone |
 | 4 | Informe: composición mínima, publicación inmutable y PDF | Versiones inmutables (QA-9), PDF reproducible en segundo plano (QA-17) | Terminado y desplegado en el entorno de pruebas, con supuestos de P22, P23 y P26 |
 | 5 | Portal: acceso con QR y clave, descarga del informe vigente | Cero accesos cruzados entre clientes (QA-4, QA-7) | Terminado y desplegado en el entorno de pruebas |
+| Iteración 6 | Administración con segundo factor: usuarios, teléfonos, accesos de clientes, retiro de versiones | Cuenta de mayor impacto protegida (ADR-0009), operar el piloto sin comandos | Terminada y desplegada en el entorno de pruebas |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -22,7 +23,9 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 1. **Prueba en iPhone** de los cortes 1 a 5 (aplazada por Kevin), con la guía de [`entorno-de-pruebas.md`](entorno-de-pruebas.md), más abrir el portal desde el QR en el celular.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
 
-Siguiente iteración, por riesgo (recomendación, a decidir con Kevin): **administración** (rol administrador con segundo factor: usuarios, accesos de cliente con su QR, dispositivos y su salud, retiro de versiones), porque hoy todo eso se hace por comando y es lo primero que TEINS necesitará para operar el piloto. Después: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo, passkeys, cifrado local y el entorno de producción con su simulacro de restauración (ADR-0016).
+**Iteración 6, administración, terminada el 2026-09-25** y desplegada; en el entorno de pruebas `oficina.prueba` ya tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
+
+Siguiente iteración, por riesgo (recomendación, a decidir con Kevin): **gestión de visitas y clientes** desde oficina (crear clientes y sitios, programar y reasignar visitas), porque es lo único que TEINS todavía haría por comando para operar el piloto. Después: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo, passkeys, cifrado local y el entorno de producción con su simulacro de restauración (ADR-0016).
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
 
@@ -488,3 +491,52 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Comandos:** `crear-acceso-cliente` y `regenerar-acceso-cliente` muestran una sola vez el identificador, la clave y la URL, e imprimen el QR en la terminal (sirve por `railway ssh`); con `--qr` lo guardan como SVG. Dependencia nueva: `qrcode` (MIT).
 - **Portal mínimo:** React, TanStack Query y `ui`, sin enrutador ni service worker; 111 KB de JavaScript comprimido, casi todo el validador del contrato. Escala de tokens de campo, porque el cliente llega desde el celular con el QR.
 - **Pruebas en paralelo y cola compartida:** `procesarCola` de las pruebas repite hasta que no quede trabajo listo ni en curso; el PDF, lento y de a uno, hizo visible una carrera entre archivos de prueba.
+
+---
+
+## Iteración 6 · Administración
+
+**Estado:** terminada y desplegada el 2026-09-25 (Kevin pidió avanzar con la siguiente iteración; administración era la recomendada).
+
+**Para qué:** que TEINS opere el piloto sin comandos: una persona administradora, con segundo factor obligatorio (ADR-0009), gestiona usuarios, ve la salud de los teléfonos (ADR-0017), entrega los accesos de sus clientes con su QR y retira una versión del portal si hace falta.
+
+### Alcance
+
+- **Administrador = persona de oficina con la marca `administrador`.** El modelo de dominio dice que los roles son un conjunto asignable; en TEINS quien administra también revisa, así que no necesita dos cuentas. La primera persona administradora se marca por comando.
+- **Segundo factor obligatorio (ADR-0009):** TOTP con el plugin de Better Auth (app autenticadora y códigos de respaldo). Sin segundo factor activo, ninguna acción de administración responde; la pantalla guía la activación. El ingreso pide el código después de la contraseña.
+- **Usuarios:** lista, crear (técnico u oficina, con contraseña temporal que se muestra una vez), restablecer contraseña, desactivar (revocación del corte 2), marcar o quitar administrador.
+- **Dispositivos (ADR-0017, parte 3):** panel con la salud de cada teléfono (versión de la app, pendientes y el más antiguo, espacio, persistente, último error, último contacto, orden de borrado) y alerta de pendientes viejos.
+- **Accesos de clientes:** lista de clientes con su acceso; crear o regenerar muestra una vez código, clave y QR.
+- **Retirar una versión del portal** (modelo de dominio, estado "versión retirada"): con motivo, queda en la auditoría; el cliente pasa a ver la anterior vigente.
+
+### Fuera de la iteración 6
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Crear y programar clientes, sitios y visitas desde oficina | Iteración de gestión de visitas y clientes (la siguiente recomendada) |
+| Editar formatos y catálogo | Cuando TEINS lo pida (P10) |
+| Passkeys | Iteración de passkeys |
+| Rol supervisor | Cuando TEINS defina qué hace |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Una persona administradora sin segundo factor no puede administrar; lo activa y desde entonces el ingreso le pide el código | Cumplido en integración (`pruebas/administracion.test.ts`) y extremo a extremo por la interfaz (`e2e/pruebas/administracion.spec.ts`) |
+| 2. Extremo a extremo: la administradora crea un técnico, ve su teléfono en el panel tras la primera sincronización, crea el acceso de un cliente con QR y retira una versión del portal | Cumplido en Chromium y WebKit en local y en Chromium contra el entorno (`administracion.spec.ts`; el retiro, al final de `portal.spec.ts`) |
+| 3. Oficina sin marca de administrador y técnicos no acceden a nada de administración | Cumplido en integración (403 `sin_permiso`; un técnico tampoco puede activar el segundo factor) |
+| 4. Cada acción queda en la auditoría | Cumplido en integración: creación, restablecimiento, desactivación, marca, activación del segundo factor y retiro con su motivo |
+| 5. Desplegado en el entorno de pruebas con el extremo a extremo en verde contra él | Cumplido el 2026-09-25 (migraciones 0011 y 0012 aplicadas por `campo`) |
+
+### Decisiones tomadas al construirlo
+
+- **Marca, no rol nuevo:** columna `administrador` en `identidad.usuarios`, solo con efecto para oficina (un técnico marcado por error no administra). La política `administrador` exige rol oficina, la marca y el segundo factor activo; sin segundo factor responde `segundo_factor_requerido` (403) y la pantalla guía la activación. Nadie se quita la marca a sí mismo ni se desactiva a sí mismo: así la organización no se queda sin quien administre. La primera persona administradora se marca con `marcar-administrador`.
+- **Segundo factor con el plugin `twoFactor` de Better Auth:** TOTP (SHA-1, 6 dígitos, 30 s, emisor "TEINS") y 10 códigos de respaldo, cifrados con `AUTH_SECRETO` en `identidad.segundos_factores`. El factor no cuenta hasta confirmarlo con un código. Con el factor activo, la contraseña sola no crea sesión: responde `twoFactorRedirect` con una cookie de desafío de 10 minutos y la sesión nace al verificar. Cinco códigos equivocados invalidan el desafío; diez seguidos bloquean la cuenta 15 minutos. Las rutas `/two-factor/*` tienen el mismo límite por origen que el ingreso (`INICIOS_DE_SESION_POR_MINUTO`). Sin "recordar este dispositivo".
+- **Solo oficina activa el segundo factor:** campo no sabe pedir el código, así que un técnico que lo activara quedaría por fuera; el servidor lo rechaza (403).
+- **Un solo campo para el código** en el ingreso: seis dígitos van a la app autenticadora; cualquier otra cosa se prueba como código de respaldo.
+- **Contraseñas temporales** de 16 caracteres (96 bits) generadas en el servidor y mostradas una sola vez; restablecer cierra las sesiones del usuario. El nombre de usuario es único en todo el sistema (con él se inicia sesión).
+- **Retirar una versión** escribe solo tres columnas nuevas (`retirada_en`, `retirada_por`, `motivo_retiro`) con permiso de columna; la copia congelada sigue sin permiso de escritura (probado). La barrera del portal en la base exige además `retirada_en is null`, así que el cliente pasa a ver la versión anterior sin retirar, o nada. Retirar es definitivo: para volver a entregar se publica una versión nueva (regla 10). En oficina, "vigente" es la más reciente sin retirar.
+- **Accesos de clientes desde oficina** con el mismo código del comando (`crearAccesosDeClientes`) y la URL de `PORTAL_URL`; el QR lo dibuja oficina en el navegador (`qrcode`, cargado solo al necesitarlo) y se puede descargar como SVG.
+- **Panel de teléfonos:** alerta cuando el pendiente más antiguo lleva más de un día sin subir y cuando el almacenamiento no es persistente; se relee cada minuto.
+- **Auditoría:** `usuario_creado`, `contrasena_restablecida`, `usuario_desactivado`, `administrador_cambiado`, `segundo_factor_activado` y `segundo_factor_desactivado` en la cadena de cada usuario; `version_retirada` con su motivo en la del informe; accesos como en el corte 5.
+- **Oficina se prueba en escritorio:** en el viewport de celular el encabezado de oficina desborda (oficina se usa en monitor, `docs/diseno/pendientes.md`); las pruebas de oficina usan 1366 × 900.

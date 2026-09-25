@@ -40,7 +40,7 @@ Variables, iguales en los tres servicios (las credenciales son referencias, nunc
 - **`worker`:** arranque con `node --enable-source-maps dist/worker.js`.
 - **Los tres:** reinicio si fallan (hasta 5 veces) y sin suspensión.
 
-Credenciales de `tecnico.prueba` y `oficina.prueba`: en `privado/entorno-de-pruebas.txt` en el computador de Kevin (la carpeta la ignora git y no se sube).
+Credenciales de `tecnico.prueba` y `oficina.prueba`: en `privado/entorno-de-pruebas.txt` en el computador de Kevin (la carpeta la ignora git y no se sube). `oficina.prueba` tiene la marca de administrador: la primera vez que abre "Administración" activa su segundo factor con una app autenticadora, y desde entonces el ingreso a oficina le pide el código.
 
 ## Operación
 
@@ -57,6 +57,7 @@ railway ssh -s campo -- node dist/cli/crear-visita.js --organizacion 00000000-00
 railway ssh -s campo -- node dist/cli/desactivar-usuario.js --usuario ana.prueba
 railway ssh -s campo -- node dist/cli/restablecer-contrasena.js --usuario tecnico.prueba
 railway ssh -s campo -- node dist/cli/crear-acceso-cliente.js --organizacion 00000000-0000-4000-8000-000000000001 --cliente <uuid>
+railway ssh -s campo -- node dist/cli/marcar-administrador.js --usuario oficina.prueba
 
 # Registros
 railway logs --service campo --deployment
