@@ -591,3 +591,47 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Motivo:** en oficina, las tres opciones del lenguaje común (mantenimiento, cotización, modificación); el contrato lo sigue aceptando como texto, por las visitas que ya existían.
 - **Componentes nuevos en `ui`:** `CampoSeleccion` (lista nativa, para clientes y sitios) y fecha en `CampoTexto`.
 - **Auditoría:** `cliente_creado` y `sitio_agregado` en la cadena del cliente; `visita_reprogramada` (antes y después) y `visita_cancelada` (con su motivo) en la de la visita, junto a las que ya existían.
+
+---
+
+## Iteración 8 · Producción provisional, copias y simulacro
+
+**Estado:** en construcción desde el 2026-09-25. Kevin pidió subir la rama y montar producción con un dominio gratuito mientras TEINS no tiene dominio ni cuenta; eligió un proyecto aparte y transferible, sin datos reales hasta la transferencia (ADR-0021), y abrir un pull request en borrador para que corra la integración continua.
+
+**Para qué:** que producción exista, se pueda recrear desde el repositorio y tenga copias probadas antes del piloto, de modo que el día que TEINS tenga cuenta solo haya que transferirla (ADR-0016, QA-10, QA-18). Procedimiento completo en [`produccion.md`](produccion.md).
+
+### Alcance
+
+- Rama `corte-0` en GitHub con la integración continua en verde (pull request #1, en borrador).
+- `.railway/railway.ts`: infraestructura como código de Railway, la misma para pruebas y producción, sin secretos.
+- `infra/railway/montar.sh`: monta un entorno desde cero (secretos generados sin mostrarse, roles, dominios gratuitos, despliegue, copias y primera persona administradora).
+- Copias en los cuatro niveles de ADR-0016: recuperación a un punto en el tiempo y copias del volumen (Railway); servicio `respaldos` con volcado diario y copia de archivos a otro proyecto y otra región; simulacro con verificación de cadenas y archivos (`infra/respaldos/simulacro.sh`, `verificar-integridad`).
+
+### Fuera de la iteración 8
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Destino de los respaldos en otro proveedor (nivel 2 completo) | Cuando Kevin o TEINS abran una cuenta compatible con S3; solo cambian variables |
+| Dominio propio | Cuando TEINS lo tenga; se agrega junto al de Railway |
+| Datos reales | Después de transferir a TEINS o con su autorización escrita (ADR-0021) |
+| Despliegue automático desde GitHub | Al fusionar a `master` (ADR-0016: pruebas automático, producción con aprobación) |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. La rama está en GitHub y la integración continua pasa completa | Cumplido el 2026-09-25: pull request #1, los cinco trabajos en verde (tipos y reglas, secretos, servidor con PostgreSQL y S3, imagen, extremo a extremo) |
+| 2. `railway config plan` sobre pruebas no muestra diferencias después de aplicar | Pendiente de la aprobación de Kevin para aplicar |
+| 3. Producción montada con `montar.sh`, con dominios gratuitos, y el extremo a extremo en verde contra ella | Pendiente de la aprobación de Kevin |
+| 4. El servicio `respaldos` corre en pruebas y en producción y deja el volcado y los archivos en `teins-respaldos` | Probado en local; pendiente en Railway |
+| 5. Simulacro correcto contra la copia real de cada entorno, anotado en `produccion.md` | Probado en local (detectó 4 fotos que ya faltaban en el origen); pendiente en Railway |
+
+### Decisiones tomadas al construirlo
+
+- **Infraestructura como código de Railway** (`.railway/railway.ts`, paquete `railway`, MIT) y no `railway.json`: el formato anterior deja de leerse el 2026-12-01. Las conexiones se arman con referencias (`${{Postgres.PGHOST}}`, `${{teins-pruebas.ENDPOINT}}`, `${{portal.RAILWAY_PUBLIC_DOMAIN}}`); los secretos quedan como `preserve()`. El plan contra pruebas mostró que el archivo reproduce el proyecto: solo cambian los dominios escritos a mano por referencias equivalentes y salen cuatro variables de host que cada servicio no usaba.
+- **Un solo archivo para los dos proyectos:** `ctx.projectName` elige el almacenamiento y quita `ENTORNO_DE_PRUEBAS` en producción, así que `sembrar` nunca corre allí.
+- **Secretos por la entrada estándar:** `montar.sh` los genera con `openssl` y los fija con `railway variable set --stdin`; las contraseñas de los roles se aplican dentro del contenedor de Postgres. Nada queda en la terminal ni en el repositorio.
+- **Respaldo con `pg_dump` y `rclone`** (MIT) en una imagen propia sobre `postgres:18-alpine`: el volcado se lee con `pg_restore --list` antes de subirlo y viaja con su SHA-256; los archivos se copian con `--immutable` (nunca se reemplaza ni se borra nada en el destino). Retención de volcados: 35 días.
+- **Destino en otro proyecto y otra región** (`teins-respaldos`, US West) mientras no haya cuenta de otro proveedor: sobrevive a que se borre producción, no a perder la cuenta (lo dice ADR-0021).
+- **Simulacro verificable:** restaura en un PostgreSQL desechable con los roles de `infra/roles.sql`, verifica todas las cadenas de la auditoría con el código del servidor y compara los archivos referenciados con los copiados. Corre en el computador de quien lo lanza con `railway run`, que le pasa las credenciales sin mostrarlas. Usa una carpeta temporal bajo `~/.cache`, porque Colima y Docker Desktop no siempre comparten `/tmp` con los contenedores.
+- **Integración continua:** el trabajo del servidor instala el Chromium de `playwright-core` (sin él no se generaban los PDF), y gitleaks recibió permiso para leer el pull request.

@@ -1,0 +1,99 @@
+# Producción: montaje, copias y simulacro
+
+Cómo se monta, se respalda y se recupera un entorno de TEINS en Railway (ADR-0016, ADR-0021). Vale igual para `teins-pruebas` y `teins-produccion`: los dos salen del mismo archivo.
+
+**Mientras producción viva en la cuenta de Kevin, no se cargan datos reales** (ADR-0021): solo la primera persona administradora y datos de verificación, hasta transferir el proyecto al espacio de trabajo de TEINS o tener su autorización escrita.
+
+## Qué es cada pieza
+
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| `.railway/railway.ts` | Repositorio | Servicios, base, almacenamiento y variables del entorno, sin secretos. Se revisa con `railway config plan` y se aplica con `railway config apply` sobre el proyecto enlazado |
+| `infra/railway/montar.sh` | Repositorio | Lo que el archivo no declara: secretos (generados, nunca mostrados), roles de la base, dominios, despliegue, copias y la primera persona administradora |
+| `infra/respaldos/` | Servicio `respaldos` de cada entorno | Una vez al día (07:00 UTC, 02:00 en Colombia): volcado de la base y copia de los archivos al proyecto `teins-respaldos` |
+| `infra/respaldos/simulacro.sh` | Computador de quien lo corre | Restaura el último volcado en un PostgreSQL desechable y verifica cadenas y archivos |
+| `pnpm --filter @teins/servidor verificar-integridad` | Servidor | Verifica todas las cadenas de la auditoría de una base |
+
+Proyectos en Railway:
+
+| Proyecto | Para qué | Región |
+|---|---|---|
+| `teins-pruebas` | Pruebas y demostraciones, datos ficticios | US East |
+| `teins-produccion` | Producción (provisional, ADR-0021) | US East |
+| `teins-respaldos` | Destino de las copias diarias: `respaldos-pruebas` y `respaldos-produccion` | US West: otra región |
+
+## Montar un entorno desde cero
+
+Desde la raíz del repositorio, con la CLI de Railway iniciada (`railway login`), Docker y `pnpm install`:
+
+```sh
+infra/railway/montar.sh teins-produccion
+```
+
+Hace, en orden y sin repetir lo que ya existe:
+
+1. Crea el proyecto `teins-respaldos` y su almacenamiento para este entorno, en otra región.
+2. Crea el proyecto y aplica `.railway/railway.ts`: Postgres, almacenamiento, `campo`, `oficina`, `portal`, `worker` y `respaldos`.
+3. Genera los secretos: `AUTH_SECRETO` (el mismo en los cuatro servicios), las contraseñas de `teins_app` y `teins_portal` (en el servicio Postgres) y las credenciales del destino de los respaldos.
+4. Crea los roles de la base con `infra/roles.sql` y les pone sus contraseñas, dentro del contenedor de Postgres.
+5. Genera un dominio gratuito de Railway por superficie (`*.up.railway.app`).
+6. Despliega: `campo` primero (migra la base antes de arrancar), después `oficina`, `portal`, `worker` y `respaldos`.
+7. Activa la recuperación a un punto en el tiempo y las copias diarias, semanales y mensuales del volumen de Postgres.
+8. Crea la primera persona administradora (`administracion`); su contraseña queda en `privado/<proyecto>.txt`. Al entrar a "Administración" en oficina, activa su segundo factor.
+
+## Cambiar la infraestructura
+
+```sh
+railway link --project teins-produccion
+railway config plan          # siempre primero: muestra qué cambia; los secretos salen como «hidden»
+railway config apply         # pide confirmación; lo destructivo va marcado
+```
+
+El mismo archivo sirve a los dos proyectos: `ctx.projectName` decide el nombre del almacenamiento y quita `ENTORNO_DE_PRUEBAS` en producción. Un recurso que se borra del archivo se borra de Railway al aplicar: revise el plan.
+
+## Copias (ADR-0016)
+
+| Nivel | Qué | Retención | Protege contra |
+|---|---|---|---|
+| 1 | Recuperación a un punto en el tiempo (WAL continuo) y copias del volumen de Postgres | Unas 4 semanas; copias diaria (6 días), semanal (1 mes) y mensual (3 meses) | Errores humanos, una migración mala |
+| 2 | Volcado lógico diario y copia de los archivos en `teins-respaldos` | Volcados: 35 días. Archivos: siempre | Borrar el proyecto de producción |
+| 3 | Archivos direccionados por contenido, nunca se sobrescriben (ADR-0007) | Siempre | Restaurar una base que referencia archivos |
+| 4 | Simulacro de restauración | Mensual y antes de cada transferencia | Descubrir tarde que las copias no sirven |
+
+Pendiente para cumplir del todo el nivel 2: el destino está en otro proyecto de Railway, así que no sobrevive a perder la cuenta. Con una cuenta de otro proveedor compatible con S3 (por ejemplo Cloudflare R2 o Backblaze B2), basta cambiar en el servicio `respaldos` las variables `DESTINO_BUCKET` y `RCLONE_CONFIG_DESTINO_*`.
+
+### Recuperar
+
+- **Una migración o un error borró datos hace poco:** en el servicio Postgres, pestaña Backups, "Restore to this moment" (o `railway postgres pitr restore --service Postgres --at <fecha ISO>`). Crea un Postgres nuevo al lado; se verifica con `verificar-integridad` y se cambian las conexiones.
+- **Se necesita el estado de ayer entero:** copia del volumen, desde la misma pestaña.
+- **Se perdió el proyecto:** se monta uno nuevo con `montar.sh`, se restaura el último volcado de `teins-respaldos` con `pg_restore` y se copian los archivos de vuelta (`rclone copy`), con el mismo procedimiento que el simulacro.
+
+## Simulacro
+
+```sh
+railway link --project teins-produccion
+railway run --service respaldos infra/respaldos/simulacro.sh
+```
+
+`railway run` le pasa al script las credenciales del destino sin mostrarlas. El script trae el último volcado, comprueba su huella, lo restaura en un PostgreSQL desechable y verifica:
+
+1. que restaura sin errores, y cuánto tarda (el tiempo de recuperación);
+2. la antigüedad del volcado (el punto de recuperación);
+3. las filas por tabla;
+4. todas las cadenas de la auditoría (`verificar-integridad`);
+5. que cada archivo que la base referencia (fotos y planos verificados, PDF generados) está en la copia.
+
+Si algo falla, termina con error. Cada simulacro se anota en la tabla de abajo.
+
+| Fecha | Entorno | Volcado | Restauración | Cadenas | Archivos | Resultado |
+|---|---|---|---|---|---|---|
+| 2026-09-25 | Local (Docker) | 0,0 h | 0 s | 435 íntegras, 0 rotas | 144 referenciados, 4 faltantes | Correcto: los 4 faltantes son las fotos que S3Mock perdió el 2026-09-24, antes de guardar en su volumen; tampoco están en el origen. El simulacro los detectó |
+
+## Transferir a TEINS
+
+Cuando TEINS tenga su espacio de trabajo en Railway (plan Hobby o Pro):
+
+1. Simulacro completo en producción, anotado arriba.
+2. Transferir `teins-produccion` y `teins-respaldos` (Settings → Transfer Project).
+3. En la cuenta de TEINS: alerta de gasto, personas con acceso, y cambiar las credenciales del almacenamiento y los secretos (`AUTH_SECRETO` cierra todas las sesiones).
+4. Registrar la transferencia en ADR-0021 ("Cuándo revisarla") y en el plan de entrega. Desde ese momento se pueden cargar datos reales.

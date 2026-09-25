@@ -107,6 +107,7 @@ Entorno local (detalle en `paquetes/servidor/README.md`):
 - `docker compose up -d --wait`: PostgreSQL y S3 locales.
 - `pnpm --filter @teins/servidor migrar` · `sembrar` · `dev:web` · `dev:worker`.
 - Administración por comando: `crear-usuario`, `desactivar-usuario`, `marcar-administrador`, `crear-cliente`, `crear-visita`, `reasignar-visita`, `publicar-formato`, `crear-acceso-cliente` (tabla en `paquetes/servidor/README.md`). Usuarios, accesos de clientes y retiro de versiones también tienen pantalla en oficina (iteración 6), para quien tiene la marca de administrador y el segundo factor activo; clientes, sitios y visitas, para toda persona de oficina (iteración 7).
+- Railway (detalle en `docs/proceso/produccion.md`): `railway config plan` / `apply` sobre `.railway/railway.ts`; `infra/railway/montar.sh <proyecto>` monta un entorno desde cero; `railway run --service respaldos infra/respaldos/simulacro.sh` hace el simulacro de restauración; `pnpm --filter @teins/servidor verificar-integridad` verifica las cadenas de una base.
 - `pnpm dev:campo` (5173), `pnpm --filter @teins/oficina dev` (5174) y `pnpm --filter @teins/portal dev` (5175); reenvían `/api` al servidor.
 
 Verificación, en el orden de la integración continua (ADR-0018):
