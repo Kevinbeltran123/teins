@@ -29,6 +29,10 @@
   --color-error: var(--t-error);
   --color-estado-enviado-fondo: var(--t-estado-enviado-fondo);
   --color-estado-enviado-texto: var(--t-estado-enviado-texto);
+  --color-estado-revision-fondo: var(--t-estado-revision-fondo);
+  --color-estado-revision-texto: var(--t-estado-revision-texto);
+  --color-estado-revisado-fondo: var(--t-estado-revisado-fondo);
+  --color-estado-revisado-texto: var(--t-estado-revisado-texto);
 
   --font-texto: var(--t-fuente-texto);
 

@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 const tonos = {
   borrador: "bg-superficie-pista text-sobre-superficie",
   enviado: "bg-estado-enviado-fondo text-estado-enviado-texto",
+  revision: "bg-estado-revision-fondo text-estado-revision-texto",
+  revisado: "bg-estado-revisado-fondo text-estado-revisado-texto",
   superficie: "bg-superficie text-sobre-superficie",
   /** Sobre el bloque azul del encabezado. */
   "sobre-superficie": "bg-panel text-superficie",
