@@ -71,6 +71,15 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   await c.getByLabel("Clave").fill(claveCliente);
   await c.getByRole("button", { name: "Ver mis informes" }).click();
   await expect(c.getByRole("heading", { name: `Informes de ${cliente}` })).toBeVisible();
+
+  // Regenerar cierra la sesión abierta del cliente, y el portal le dice por qué.
+  await page.getByRole("button", { name: "Ya la entregué" }).click();
+  await page.getByRole("button", { name: `Regenerar el acceso de ${cliente}` }).click();
+  await page.getByRole("button", { name: `Sí, regenerar el acceso de ${cliente}` }).click();
+  await expect(page.getByRole("img", { name: `Código QR del acceso de ${cliente}` })).toBeVisible();
+  await c.reload();
+  await expect(c.getByText("Su sesión se cerró", { exact: false })).toBeVisible();
+  await expect(c.getByLabel("Clave")).toBeVisible();
   await celular.close();
   await escritorio.close();
 });

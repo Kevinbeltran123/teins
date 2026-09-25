@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { nuevaVisita, nuevoUsuario, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { fotoDePrueba, iniciarSesion } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
 
 /** Una persona de oficina en su propio navegador de escritorio. */
 async function oficina(browser: Browser, usuario: Usuario): Promise<Page> {
@@ -15,7 +15,7 @@ async function oficina(browser: Browser, usuario: Usuario): Promise<Page> {
 
 async function abrirLevantamientoDe(pagina: Page, tecnico: Usuario, pestana: string) {
   await pagina.getByRole("tab", { name: pestana }).click();
-  await pagina.getByRole("row").filter({ hasText: tecnico.nombre }).getByRole("link").click();
+  await (await filaDeLaBandeja(pagina, tecnico.nombre)).getByRole("link").click();
   await expect(pagina.getByRole("heading", { name: `Levantamiento de ${tecnico.nombre}` })).toBeVisible();
 }
 

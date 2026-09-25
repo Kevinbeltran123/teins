@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { nuevaVisita, nuevoUsuario, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { fotoDePrueba, iniciarSesion, pdfDePrueba } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, pdfDePrueba } from "./ayudas";
 
 async function enviarDesdeCampo(page: Page, tecnico: Usuario, cliente: string) {
   await page.goto(`${CAMPO}/`);
@@ -35,7 +35,7 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
 
   // Revisión mínima: tomar y marcar revisado.
   const o = await oficina(browser, revisora);
-  await o.getByRole("row").filter({ hasText: tecnico.nombre }).getByRole("link").click();
+  await (await filaDeLaBandeja(o, tecnico.nombre)).getByRole("link").click();
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();

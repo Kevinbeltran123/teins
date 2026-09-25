@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { CAMPO, OFICINA } from "../destino";
-import { fotoDePrueba, iniciarSesion } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
 
 const usuarios = () =>
   JSON.parse(readFileSync("test-results/usuarios.json", "utf8")) as Record<"tecnico" | "oficina", { usuario: string; nombre: string; contrasena: string }> & {
@@ -61,7 +61,7 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   await bandeja.goto(`${OFICINA}/`);
   await iniciarSesion(bandeja, oficina);
   await expect(bandeja.getByRole("heading", { name: "Esperando revisión" })).toBeVisible();
-  const fila = bandeja.getByRole("row").filter({ hasText: tecnico.nombre }).last();
+  const fila = (await filaDeLaBandeja(bandeja, tecnico.nombre)).last();
   await fila.getByRole("link").click();
 
   await expect(bandeja.getByRole("heading", { name: `Levantamiento de ${tecnico.nombre}` })).toBeVisible();

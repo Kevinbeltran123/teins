@@ -51,7 +51,13 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await expect(siguiente.getByText(cliente)).toBeVisible();
   await expect(siguiente.getByText("Mañana")).toBeVisible();
 
-  // Cancelada: sale del teléfono y queda en "Canceladas" con su motivo.
+  // El técnico ya empezó algo en esa visita.
+  await siguiente.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await t.getByRole("textbox", { name: "Descripción del sitio" }).fill("Empezado antes de cancelar (E2E)");
+  await expect(t.getByText("Guardado en este teléfono", { exact: false })).toBeVisible();
+  await t.getByRole("button", { name: "Volver a mis visitas" }).click();
+
+  // Cancelada: queda en "Canceladas" con su motivo; en el teléfono solo sigue lo empezado, con el aviso (regla 17).
   await fila.getByRole("button", { name: `Cancelar la visita de ${cliente}` }).click();
   await o.getByLabel("Motivo de la cancelación").fill("El cliente la aplazó (E2E)");
   await o.getByRole("button", { name: "Sí, cancelar la visita" }).click();
@@ -59,8 +65,10 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await o.getByRole("tab", { name: "Canceladas" }).click();
   await expect(fila.getByText("El cliente la aplazó (E2E)", { exact: false })).toBeVisible();
   await t.reload();
-  await expect(t.getByText("Sin visitas asignadas")).toBeVisible();
-  await expect(t.getByText(cliente)).toHaveCount(0);
+  await expect(siguiente.getByText(cliente)).toBeVisible();
+  await expect(siguiente.getByText("Oficina canceló esta visita.", { exact: false })).toBeVisible();
+  await expect(siguiente.getByRole("button", { name: "Continuar levantamiento" })).toBeVisible();
+  await expect(t.getByRole("button", { name: "Iniciar levantamiento" })).toHaveCount(0);
 
   await telefono.close();
   await escritorio.close();

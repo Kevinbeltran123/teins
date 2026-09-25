@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { deflateSync } from "node:zlib";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { codigoTotp } from "../totp";
 
 /**
@@ -39,6 +39,25 @@ export async function iniciarSesion(page: Page, u: { usuario: string; contrasena
   await page.getByLabel("Usuario").fill(u.usuario);
   await page.getByLabel("Contraseña").fill(u.contrasena);
   await page.getByRole("button", { name: "Iniciar sesión" }).click();
+}
+
+/**
+ * La fila del técnico en la pestaña abierta de la bandeja. La bandeja va del más antiguo al más reciente,
+ * 50 por página: en un entorno con levantamientos de corridas anteriores, el recién enviado puede estar
+ * más abajo, así que se carga más hasta encontrarlo.
+ */
+export async function filaDeLaBandeja(pagina: Page, nombre: string): Promise<Locator> {
+  const fila = pagina.getByRole("row").filter({ hasText: nombre });
+  const mas = pagina.getByRole("button", { name: "Cargar más" });
+  for (let i = 0; i < 20; i++) {
+    // Espera a que la página cargue: o aparece la fila, o el botón para cargar más, o la lista termina.
+    await fila.or(mas).or(pagina.getByRole("row").last()).first().waitFor();
+    if (await fila.count()) return fila;
+    if (!(await mas.isVisible())) break;
+    await mas.click();
+    await pagina.getByRole("button", { name: "Cargando…" }).waitFor({ state: "detached" });
+  }
+  return fila;
 }
 
 /**

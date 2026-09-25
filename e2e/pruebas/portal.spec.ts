@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoAcceso, nuevoAdministrador, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { activarSegundoFactor, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { activarSegundoFactor, filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
 
 test("el recorrido completo: campo envía, oficina revisa y publica, y el cliente descarga su informe con el QR y la clave (QA-4)", async ({ page, browser }) => {
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
@@ -26,7 +26,7 @@ test("el recorrido completo: campo envía, oficina revisa y publica, y el client
   const o = await escritorio.newPage();
   await o.goto(`${OFICINA}/`);
   await iniciarSesion(o, revisora);
-  await o.getByRole("row").filter({ hasText: tecnico.nombre }).getByRole("link").click();
+  await (await filaDeLaBandeja(o, tecnico.nombre)).getByRole("link").click();
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
