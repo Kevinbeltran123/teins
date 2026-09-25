@@ -10,16 +10,18 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | 1 | El técnico inicia sesión, envía el levantamiento y oficina lo ve en su bandeja | Entrega completa, sin duplicados y con archivos verificados (QA-2), idempotencia, aislamiento por organización | Terminado y desplegado en el entorno de pruebas; falta la prueba en iPhone (criterio 4) |
 | 2 | Bajada: formatos como datos, visitas asignadas, estado de mis levantamientos, permiso de trabajo local, revocación con borrado | Punto de control seguro (ADR-0005), revocación sin conexión (QA-5), formatos sin publicar la app (QA-11) | Construido y desplegado en el entorno de pruebas; falta la prueba en iPhone (criterio 9) |
 | 3 | Revisión: tomar, corregir con trazabilidad por campo, comentar al técnico, marcar revisado | Concurrencia en oficina (QA-25), trazabilidad (QA-8) | Terminado y desplegado en el entorno de pruebas; lo que toca de campo espera la prueba en iPhone |
-| 4 | Informe: composición mínima, publicación inmutable y PDF | Versiones inmutables (QA-9), PDF reproducible en segundo plano (QA-17) | Pendiente |
+| 4 | Informe: composición mínima, publicación inmutable y PDF | Versiones inmutables (QA-9), PDF reproducible en segundo plano (QA-17) | Terminado y desplegado en el entorno de pruebas, con supuestos de P22, P23 y P26 |
 | 5 | Portal: acceso con QR y clave, descarga del informe vigente | Cero accesos cruzados entre clientes (QA-4, QA-7) | Pendiente |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
 
-**Empezar el corte 4 (informe): composición mínima, publicación inmutable y PDF.** Antes de programar: leer ADR-0013 (PDF), ADR-0008 (publicación y retiro en la cadena) y ADR-0020 (marca por organización), escribir su sección y decidir si incluye adjuntar planos de oficina (recomendación: sí). Preguntas a TEINS antes del corte 4: P22, P23, P26 y el formato en que salen sus planos (PDF, imagen o DWG).
+**Empezar el corte 5 (portal del cliente): acceso con QR y clave, descarga del informe vigente.** Antes de programar: leer ADR-0009 (partes 3 y 4: rol de base de datos del portal con seguridad por fila y acceso de cliente), ADR-0016 (host propio del portal) y QA-4 y QA-7, y escribir su sección. Con el corte 5 queda completo el recorrido delgado.
 
-La prueba en iPhone de los cortes 1 a 3 sigue aplazada por decisión de Kevin (2026-09-25); el entorno de pruebas está desplegado y la guía está en [`entorno-de-pruebas.md`](entorno-de-pruebas.md).
+Pendiente de TEINS para ajustar el informe (corte 4, construido con supuestos): P22, P23, P26 y el formato de sus planos.
+
+La prueba en iPhone de los cortes 1 a 4 sigue aplazada por decisión de Kevin (2026-09-25); el entorno de pruebas está desplegado y la guía está en [`entorno-de-pruebas.md`](entorno-de-pruebas.md).
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
 
@@ -364,3 +366,68 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **`ui` crece:** `Pestanas` (patrón WAI-ARIA), `CampoTextoLargo` (acepta `ref`) y los tonos de marquilla "revision" y "revisado", que ya existían en los tokens.
 - **Extremo a extremo remoto con reintentos:** `railway ssh` falla de vez en cuando; los comandos de administración de la prueba se repiten hasta tres veces (uno ya aplicado falla al repetirse, no duplica).
 - **Una sola acción amarilla:** en la revisión es "Tomar para revisar" o "Marcar revisado"; "Guardar corrección" es secundaria. Los botones nombran el dato ("Corregir potencia nominal", "Comentar potencia nominal").
+
+---
+
+## Corte 4 · Informe
+
+**Estado:** construido y desplegado en el entorno de pruebas el 2026-09-25, con supuestos (Kevin pidió avanzar sin esperar a TEINS). Confirmado por Kevin: lo que recibe el cliente es un PDF.
+
+**Para qué:** que oficina componga el informe de una visita con sus levantamientos revisados, lo publique como una versión que nunca cambia (QA-9) y que el PDF se genere en segundo plano y quede guardado tal como se entregó (QA-17, ADR-0013).
+
+### Supuestos mientras TEINS responde
+
+| Pregunta | Supuesto | Si la respuesta es distinta |
+|---|---|---|
+| P26: ¿informe por visita o varias? | Uno por visita, con sus levantamientos revisados (regla 9) | La regla pasa a "mismo cliente"; el modelo no cambia |
+| P23: secciones, logo, firmas, datos legales | Portada (organización, cliente, sitio, visita, versión), introducción, un capítulo por levantamiento con sus datos y fotos, conclusiones y planos anexos. Logo, firma y datos legales como marcadores `[LOGO]`, `[FIRMA]`, `[DATOS LEGALES]` | Cambia la plantilla HTML, no el modelo |
+| P22: informes de ejemplo | Plantilla propia con la dirección de `DESIGN.md` | Se ajusta la plantilla |
+| Formato de los planos | PDF, anexado como páginas del mismo documento (ADR-0013) | Imágenes: se incrustan como una página cada una; DWG: TEINS exporta a PDF |
+
+### Alcance
+
+**Dominio:** informe (visita, levantamientos incluidos en orden, introducción, conclusiones, planos en orden, versión optimista); solo incluye levantamientos revisados de la misma visita (regla 9); publicar crea la versión n+1 con una copia congelada (regla 10).
+
+**Protocolo:** listar informes, abrir el informe de una visita (lo crea si no existe), guardar el borrador, publicar y descargar el PDF de una versión. Los planos suben como PDF por el mismo camino que las fotos (ADR-0007), solo desde oficina.
+
+**Servidor:** módulo `informes`. La versión publicada guarda la copia congelada; la aplicación no puede modificarla (solo puede escribir las columnas del PDF). Publicar encola `informes.generarPdf` en la misma transacción (ADR-0012), en la cola `pdf` de a uno. El trabajo arma el HTML desde la copia congelada (fotos incrustadas, fuente incrustada), lo imprime con Chromium, anexa los planos con pdf-lib, guarda el PDF por su huella y lo registra en la versión. Nunca se regenera un PDF listo. Publicación en la cadena de auditoría del informe.
+
+**Oficina:** lista de informes; desde un levantamiento revisado con visita, "Abrir el informe de esta visita"; composición (textos, levantamientos incluidos y su orden, planos); publicar con confirmación; versiones con su estado ("Generando PDF", "Descargar PDF", "No se pudo generar").
+
+**Imagen:** Chromium dentro de la imagen de despliegue, con su versión fijada por la de Alpine.
+
+### Fuera del corte 4
+
+| Qué | Dónde se resuelve |
+|---|---|
+| El cliente descarga el PDF | Corte 5 (portal) |
+| Retirar una versión publicada | Cuando exista el rol administrador |
+| Marca por organización en la plantilla (ADR-0020) | Iteración de administración; hoy usa los valores de TEINS |
+| Miniaturas en resolución de impresión | Cuando el tamaño del PDF lo pida; hoy van las fotos recodificadas |
+| Tablas de cantidades y bocetos en el PDF | Con sus iteraciones |
+| Planos como imagen | Si TEINS no los tiene en PDF |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Extremo a extremo: oficina compone el informe de una visita con un levantamiento revisado y un plano, lo publica y descarga el PDF | Cumplido en Chromium y WebKit, en local y contra el entorno (`e2e/pruebas/informe.spec.ts`) |
+| 2. Publicar otra versión deja la anterior intacta y descargable (QA-9); la base no deja modificar una versión publicada | Cumplido en integración (permiso por columna) y en el extremo a extremo |
+| 3. El PDF se genera en segundo plano, tiene los datos, las fotos y las páginas del plano, y no se vuelve a generar (QA-17) | Cumplido en integración con Chromium real (título, páginas del plano, huella estable) y en el worker de Railway |
+| 4. Solo entran levantamientos revisados de la misma visita (regla 9) | Cumplido en dominio e integración |
+| 5. Pantallas solo con componentes de `ui` y sus estados; reglas de arquitectura en verde | Cumplido |
+| 6. Desplegado en el entorno de pruebas con el extremo a extremo en verde contra él | Cumplido el 2026-09-25, con la regresión de envío y revisión |
+
+### Decisiones tomadas al construirlo
+
+- **Falla del corte 2 encontrada aquí y corregida:** campo nunca mandaba `visitaId` en el envío, así que ningún levantamiento llegaba con su visita. Las pruebas del servidor armaban el comando a mano y las de campo no miraban su contenido. Ahora hay una prueba del comando en campo y el extremo a extremo del envío comprueba que oficina ve la visita. Los levantamientos ya recibidos sin visita siguen así: no se puede saber a qué visita pertenecían.
+- **Uno por visita, abierto desde oficina:** "Abrir el informe de esta visita" crea el borrador si no existe (restricción única por organización y visita) y devuelve el mismo si ya existe.
+- **Publicar reserva la versión del borrador:** el mismo `UPDATE … WHERE version = ?` del corte 3 evita que dos personas publiquen dos veces desde el mismo borrador. Lo que se publica es lo guardado; la pantalla guarda antes si hay cambios.
+- **Copia congelada completa:** la versión guarda la definición del formato, las respuestas, los nombres de quien capturó y revisó, la visita, los textos y los planos. El PDF se arma solo desde ella.
+- **Inmutabilidad en la base:** `informes.versiones` solo admite `INSERT` y `UPDATE` de las columnas del PDF (permiso por columna). Probado: modificar el contenido da "permission denied".
+- **PDF en la cola `pdf`, de a uno, con 5 intentos:** al agotarlos queda "No se pudo generar el PDF" a la vista; un PDF listo nunca se vuelve a generar. La cola ahora le dice al manejador si es su último intento.
+- **Plantilla:** HTML sin JavaScript ni red (Chromium con JavaScript apagado, sin conexión y con toda solicitud bloqueada), fuente Atkinson Hyperlegible Next y fotos incrustadas, tamaño carta, fechas en hora de Colombia fija. Marcadores `[LOGO]`, `[FIRMA]`, `[DATOS LEGALES]` y `[FOTO]` para lo que falta. Valores de marca de TEINS fijos hasta la configuración por organización (ADR-0020).
+- **Planos:** solo PDF y solo desde oficina (campo solo sube JPEG), por el mismo camino de las fotos; el worker verifica que sea PDF. Se anexan con pdf-lib; la numeración "Página X de Y" del pie cuenta las páginas del informe, no las de los planos.
+- **PDF guardado por su huella** junto a las fotos (`organizacion/sha256`), sin fila en `archivos.archivos`: la versión registra la huella.
+- **Chromium en la imagen:** `apk add chromium` en Alpine, `CHROMIUM_RUTA=/usr/bin/chromium`. Probado dentro del contenedor (Chromium 152). La imagen pasa a 1,6 GB. En desarrollo y pruebas se usa el Chromium de Playwright 1.62.1, la misma versión del extremo a extremo.
+- **`ui` crece:** `Casilla` y `SelectorDeArchivo`.

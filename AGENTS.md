@@ -6,7 +6,7 @@ Instrucciones para cualquier agente de programación que trabaje en este reposit
 
 Sistema de levantamientos técnicos para TEINS: los técnicos capturan información en campo (con o sin conexión) desde una PWA, oficina la revisa y corrige con trazabilidad, y el cliente descarga el informe PDF desde un portal. Monolito modular en TypeScript sobre PostgreSQL.
 
-**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-25: cortes 1, 2 y 3 (revisión en oficina) construidos y desplegados en el entorno de pruebas de Railway (`docs/proceso/entorno-de-pruebas.md`). La prueba en iPhone de los cortes 1 y 2 está aplazada por decisión de Kevin. Siguiente: corte 4 (informe).
+**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-25: cortes 1 a 4 (captura, envío, bajada, revisión e informe con PDF) construidos y desplegados en el entorno de pruebas de Railway (`docs/proceso/entorno-de-pruebas.md`). La prueba en iPhone está aplazada por decisión de Kevin. Siguiente: corte 5 (portal del cliente).
 
 ## Antes de tocar cualquier cosa, lee en este orden
 
@@ -24,7 +24,7 @@ Si una tarea contradice un ADR aceptado, **no lo ignores ni lo edites**: detente
 ## Retomar el trabajo en una sesión nueva
 
 1. Lee el plan de entrega: el corte en curso, su tabla "Terminado cuando", sus "Decisiones tomadas al construirlo" y la sección "Próximo paso".
-2. Revisa la rama y los commits: `git log --oneline -15`. El trabajo de los cortes 0 a 3 vive en la rama `corte-0` (aún sin fusionar ni subir; desde el corte 2, sin commits).
+2. Revisa la rama y los commits: `git log --oneline -15`. El trabajo de los cortes 0 a 4 vive en la rama `corte-0`, con commits por área, aún sin fusionar ni subir.
 3. Levanta el entorno local y corre la verificación completa (sección "Comandos"). Si algo no pasa en verde, eso es lo primero.
 4. No repitas decisiones ya tomadas: están en los ADR y en "Decisiones tomadas al construirlo". Si una no convence, propón un ADR nuevo.
 
