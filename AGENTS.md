@@ -6,7 +6,7 @@ Instrucciones para cualquier agente de programación que trabaje en este reposit
 
 Sistema de levantamientos técnicos para TEINS: los técnicos capturan información en campo (con o sin conexión) desde una PWA, oficina la revisa y corrige con trazabilidad, y el cliente descarga el informe PDF desde un portal. Monolito modular en TypeScript sobre PostgreSQL.
 
-**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-25: recorrido delgado completo (cortes 0 a 5: captura, envío, bajada, revisión, informe con PDF y portal del cliente), más la iteración 6 (administración con segundo factor), desplegado en el entorno de pruebas de Railway (`docs/proceso/entorno-de-pruebas.md`). Pendientes: prueba en iPhone (aplazada por Kevin) y respuestas de TEINS para ajustar el informe. Siguiente recomendada: gestión de visitas y clientes.
+**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-25: recorrido delgado completo (cortes 0 a 5: captura, envío, bajada, revisión, informe con PDF y portal del cliente), más las iteraciones 6 (administración con segundo factor) y 7 (visitas y clientes desde oficina), desplegado en el entorno de pruebas de Railway (`docs/proceso/entorno-de-pruebas.md`). Pendientes: prueba en iPhone (aplazada por Kevin) y respuestas de TEINS para ajustar el informe. Siguiente recomendada: entorno de producción con simulacro de restauración (ADR-0016), o secciones repetibles si TEINS ya respondió P7 y P8.
 
 ## Antes de tocar cualquier cosa, lee en este orden
 
@@ -24,7 +24,7 @@ Si una tarea contradice un ADR aceptado, **no lo ignores ni lo edites**: detente
 ## Retomar el trabajo en una sesión nueva
 
 1. Lee el plan de entrega: el corte en curso, su tabla "Terminado cuando", sus "Decisiones tomadas al construirlo" y la sección "Próximo paso".
-2. Revisa la rama y los commits: `git log --oneline -15`. El trabajo de los cortes 0 a 5 y la iteración 6 vive en la rama `corte-0`, con commits por área, aún sin fusionar ni subir.
+2. Revisa la rama y los commits: `git log --oneline -15`. El trabajo de los cortes 0 a 5 y las iteraciones 6 y 7 vive en la rama `corte-0`, con commits por área, aún sin fusionar ni subir.
 3. Levanta el entorno local y corre la verificación completa (sección "Comandos"). Si algo no pasa en verde, eso es lo primero.
 4. No repitas decisiones ya tomadas: están en los ADR y en "Decisiones tomadas al construirlo". Si una no convence, propón un ADR nuevo.
 
@@ -106,7 +106,7 @@ Entorno local (detalle en `paquetes/servidor/README.md`):
 
 - `docker compose up -d --wait`: PostgreSQL y S3 locales.
 - `pnpm --filter @teins/servidor migrar` · `sembrar` · `dev:web` · `dev:worker`.
-- Administración por comando: `crear-usuario`, `desactivar-usuario`, `marcar-administrador`, `crear-cliente`, `crear-visita`, `reasignar-visita`, `publicar-formato`, `crear-acceso-cliente` (tabla en `paquetes/servidor/README.md`). Usuarios, accesos de clientes y retiro de versiones también tienen pantalla en oficina (iteración 6), para quien tiene la marca de administrador y el segundo factor activo.
+- Administración por comando: `crear-usuario`, `desactivar-usuario`, `marcar-administrador`, `crear-cliente`, `crear-visita`, `reasignar-visita`, `publicar-formato`, `crear-acceso-cliente` (tabla en `paquetes/servidor/README.md`). Usuarios, accesos de clientes y retiro de versiones también tienen pantalla en oficina (iteración 6), para quien tiene la marca de administrador y el segundo factor activo; clientes, sitios y visitas, para toda persona de oficina (iteración 7).
 - `pnpm dev:campo` (5173), `pnpm --filter @teins/oficina dev` (5174) y `pnpm --filter @teins/portal dev` (5175); reenvían `/api` al servidor.
 
 Verificación, en el orden de la integración continua (ADR-0018):

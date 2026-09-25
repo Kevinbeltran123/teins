@@ -92,6 +92,7 @@ Se aloja localmente (subconjunto latino) para funcionar sin conexión. Cifras si
 | Campo · Mis visitas | La siguiente visita, en el bloque azul, con hora grande y la acción "Continuar levantamiento" |
 | Campo · Captura | El nombre del área y el campo activo con halo amarillo |
 | Oficina · Tablero | El panel "Esperando revisión" con el levantamiento que más lleva esperando y "Tomar para revisar" |
+| Oficina · Visitas | La lista de próximas visitas, empezando por las de hoy, con "Programar visita" |
 | Oficina · Administración | La credencial recién creada (contraseña temporal, o clave con su QR) en el bloque azul, mostrada una sola vez hasta "Ya la entregué" |
 
 Todo lo demás en la pantalla es visiblemente secundario.

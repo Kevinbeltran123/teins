@@ -13,6 +13,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | 4 | Informe: composición mínima, publicación inmutable y PDF | Versiones inmutables (QA-9), PDF reproducible en segundo plano (QA-17) | Terminado y desplegado en el entorno de pruebas, con supuestos de P22, P23 y P26 |
 | 5 | Portal: acceso con QR y clave, descarga del informe vigente | Cero accesos cruzados entre clientes (QA-4, QA-7) | Terminado y desplegado en el entorno de pruebas |
 | Iteración 6 | Administración con segundo factor: usuarios, teléfonos, accesos de clientes, retiro de versiones | Cuenta de mayor impacto protegida (ADR-0009), operar el piloto sin comandos | Terminada y desplegada en el entorno de pruebas |
+| Iteración 7 | Gestión de visitas y clientes desde oficina | Operar el piloto sin comandos; cambios de agenda que llegan solos a los teléfonos | Terminada y desplegada en el entorno de pruebas; el aviso de visita cancelada en campo espera la prueba en iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -23,9 +24,9 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 1. **Prueba en iPhone** de los cortes 1 a 5 (aplazada por Kevin), con la guía de [`entorno-de-pruebas.md`](entorno-de-pruebas.md), más abrir el portal desde el QR en el celular.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
 
-**Iteración 6, administración, terminada el 2026-09-25** y desplegada; en el entorno de pruebas `oficina.prueba` ya tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
+**Iteraciones 6 (administración) y 7 (visitas y clientes) terminadas el 2026-09-25** y desplegadas. Con ellas, TEINS opera el piloto desde las pantallas: solo la primera persona administradora y la publicación de formatos siguen por comando. En el entorno de pruebas, `oficina.prueba` tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
 
-Siguiente iteración, por riesgo (recomendación, a decidir con Kevin): **gestión de visitas y clientes** desde oficina (crear clientes y sitios, programar y reasignar visitas), porque es lo único que TEINS todavía haría por comando para operar el piloto. Después: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo, passkeys, cifrado local y el entorno de producción con su simulacro de restauración (ADR-0016).
+Siguiente, por riesgo (recomendación, a decidir con Kevin): **entorno de producción con su simulacro de restauración** (ADR-0016), porque sin él no hay piloto con datos reales; o, si TEINS ya respondió P7 y P8, **secciones repetibles** para capturar sus formatos reales. Después: bocetos (ADR-0019), cantidades con catálogo, passkeys y cifrado local.
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
 
@@ -540,3 +541,53 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Panel de teléfonos:** alerta cuando el pendiente más antiguo lleva más de un día sin subir y cuando el almacenamiento no es persistente; se relee cada minuto.
 - **Auditoría:** `usuario_creado`, `contrasena_restablecida`, `usuario_desactivado`, `administrador_cambiado`, `segundo_factor_activado` y `segundo_factor_desactivado` en la cadena de cada usuario; `version_retirada` con su motivo en la del informe; accesos como en el corte 5.
 - **Oficina se prueba en escritorio:** en el viewport de celular el encabezado de oficina desborda (oficina se usa en monitor, `docs/diseno/pendientes.md`); las pruebas de oficina usan 1366 × 900.
+
+---
+
+## Iteración 7 · Gestión de visitas y clientes
+
+**Estado:** terminada y desplegada el 2026-09-25 (Kevin aceptó la recomendación: "Ok. Hazlo").
+
+**Para qué:** que oficina programe el trabajo de campo sin comandos: clientes con sus sitios, visitas con fecha, motivo y técnicos, y los cambios de agenda (reasignar, reprogramar, cancelar) llegando solos a los teléfonos por la bajada del corte 2.
+
+### Alcance
+
+- **Quién:** cualquier persona de oficina (programar es trabajo de oficina, no de administración). Supuesto de P2 vigente: oficina programa y asigna; el técnico no crea visitas.
+- **Clientes:** lista con sus sitios; crear un cliente con su primer sitio; agregar sitios. Datos mínimos (regla 18): nombre del cliente, nombre y dirección del sitio.
+- **Visitas:** lista en tres vistas (próximas, anteriores, canceladas) con técnicos y avance deducido de sus levantamientos (modelo de dominio, sección 5); programar (cliente, sitio, motivo, fecha, técnicos); reasignar técnicos (regla 17); reprogramar fecha y motivo; cancelar con motivo, el único estado explícito.
+- **Campo:** una visita cancelada sale del teléfono como una reasignada; si ya tenía levantamientos empezados, se conservan y se pueden enviar (regla 17), con el aviso "Oficina canceló esta visita".
+- **Concurrencia:** cada cambio de una visita lleva la versión que se tenía abierta; si otra persona la cambió antes, se rechaza (QA-25).
+- **Auditoría:** cliente creado, sitio agregado, visita creada, reasignada, reprogramada y cancelada.
+
+### Fuera de la iteración 7
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Corregir el nombre de un cliente o la dirección de un sitio | Cuando TEINS lo pida; exige avisar a los teléfonos con visitas de ese sitio |
+| Contactos del cliente | Cuando TEINS diga qué datos necesita el técnico (regla 18) |
+| Calendario semanal o por técnico | Después del piloto, si la lista no alcanza |
+| Visita no programada creada en campo | Solo si TEINS responde P2 distinto al supuesto |
+| Aviso push de visitas nuevas | Después del piloto (ADR-0014) |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Extremo a extremo: oficina crea un cliente con su sitio, programa una visita y el técnico la ve en su teléfono; la reprograma y el teléfono muestra la fecha nueva; la cancela y sale del teléfono | Cumplido en Chromium y WebKit en local y en Chromium contra el entorno (`e2e/pruebas/programacion.spec.ts`) |
+| 2. Reasignar y cancelar conservan los levantamientos empezados, que se pueden enviar | Cumplido en integración (`pruebas/visitas.test.ts`: envío a una visita reasignada y cancelada) y en campo (`motor.test.ts`: la visita cancelada con algo empezado se queda con su motivo) |
+| 3. Dos personas cambiando la misma visita: la segunda recibe "otra persona la cambió" | Cumplido en integración (409 `conflicto_de_version`) |
+| 4. Técnicos no programan; nada cruza organizaciones; cada cambio queda en la auditoría | Cumplido en integración, con las cadenas de cliente y de visita verificadas |
+| 5. Desplegado en el entorno de pruebas con el extremo a extremo en verde contra él | Cumplido el 2026-09-25 (migración 0013 aplicada por `campo`) |
+
+### Decisiones tomadas al construirlo
+
+- **Cancelar reutiliza la salida del alcance** del corte 2: el teléfono ya sabe retirar una visita y conservarla si tiene algo empezado. La bajada agrega `motivo` (`reasignada` o `cancelada`) a `fuera_de_alcance`, como expansión (ADR-0015): una app anterior no lo lee y muestra "se asignó a otra persona"; la nueva dice "Oficina canceló esta visita". La versión de la app no cambia (sigue en 3).
+- **Una visita cancelada no vuelve a los teléfonos:** `asignadas` la excluye aunque luego llegue otro cambio, y no se puede reasignar, reprogramar ni volver a cancelar (`estado_invalido`). Cancelar es definitivo; si hace falta, se programa otra. Los levantamientos de una visita cancelada se siguen recibiendo (regla 17) y cuentan en su avance.
+- **Reprogramar** cambia fecha y motivo y avisa a los técnicos asignados con un cambio de la visita; el teléfono la reemplaza en la siguiente bajada.
+- **Concurrencia:** reasignar, reprogramar y cancelar llevan la versión de la visita (la columna ya existía); con otra versión, `conflicto_de_version` (409) con `versionActual`. El formulario queda abierto y reintenta con la versión recién leída. El comando `reasignar-visita` sigue sin versión.
+- **Avance deducido** con un conteo por estado que aporta `levantamientos` (`conteosPorVisita`). `visitas` no importa `levantamientos` (sería un ciclo, porque `levantamientos` usa `visitas`): recibe esa función al componer el rol web en `app.ts`.
+- **Técnicos asignables:** solo técnicos activos de la organización, validados en el servidor contra `identidad.tecnicosActivos`; nueva operación `listarTecnicos` para oficina.
+- **Vistas:** "próximas" desde hoy (fecha del navegador, que envía oficina en la consulta: el servidor no supone zona horaria), completas y por fecha ascendente; "anteriores" y "canceladas", las 100 más recientes. Índice nuevo por organización y fecha.
+- **Motivo:** en oficina, las tres opciones del lenguaje común (mantenimiento, cotización, modificación); el contrato lo sigue aceptando como texto, por las visitas que ya existían.
+- **Componentes nuevos en `ui`:** `CampoSeleccion` (lista nativa, para clientes y sitios) y fecha en `CampoTexto`.
+- **Auditoría:** `cliente_creado` y `sitio_agregado` en la cadena del cliente; `visita_reprogramada` (antes y después) y `visita_cancelada` (con su motivo) en la de la visita, junto a las que ya existían.
