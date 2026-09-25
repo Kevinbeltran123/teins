@@ -1,4 +1,4 @@
-import { bucket, defineRailway, postgres, preserve, project, service, volume } from "railway/iac";
+import { bucket, defineRailway, postgres, preserve, project, service } from "railway/iac";
 
 /**
  * Infraestructura de TEINS en Railway (ADR-0016, ADR-0021). El mismo archivo describe los dos proyectos:
@@ -19,8 +19,14 @@ export default defineRailway((ctx) => {
 
   const Postgres = postgres("Postgres", { region: REGION });
   Postgres.networking = { privateNetworkEndpoint: "postgres" };
-  const postgresVolume = volume("postgres-volume", { alerts: { usage: { "100": {}, "80": {}, "95": {} } }, allowOnlineResize: true, region: REGION, sizeMB: 5000 });
+  // El volumen de Postgres es de la base: no se declara (declararlo en un proyecto nuevo crearía otro).
   const almacen = bucket(nombreDelAlmacen, { region: "iad" });
+  // Archivo continuo de la recuperación a un punto en el tiempo (ADR-0016, nivel 1). Lo crea
+  // `railway postgres pitr enable`; se declara para que ningún `apply` lo borre. Solo el primer `apply`
+  // de un proyecto nuevo, antes de activarla, lo omite con TEINS_SIN_PITR=1 (montar.sh).
+  const conPitr = process.env.TEINS_SIN_PITR !== "1";
+  // Railway eligió su región al activarla (no se puede cambiar): iad en pruebas, sjc en producción.
+  const archivoPitr = bucket("Postgres-PITR", { region: produccion ? "sjc" : "iad" });
 
   /** Conexión con un rol de la aplicación: su contraseña vive en el servicio Postgres (infra/roles.sql). */
   const conexion = (rol: string, contrasena: string) =>
@@ -87,6 +93,8 @@ export default defineRailway((ctx) => {
     [`RCLONE_CONFIG_${lado}_SECRET_ACCESS_KEY`]: valores.secreto,
   });
   const respaldos = service("respaldos", {
+    // Junto a la base: el volcado viaja por la red privada de la región.
+    replicas: { [REGION]: 1 },
     deploy: { cronSchedule: "0 7 * * *", restartPolicyType: "NEVER" },
     env: {
       DATABASE_URL: ref("Postgres", "DATABASE_URL"),
@@ -98,6 +106,6 @@ export default defineRailway((ctx) => {
   });
 
   return project(produccion ? "teins-produccion" : "teins-pruebas", {
-    resources: [campo, oficina, portal, worker, respaldos, Postgres, postgresVolume, almacen],
+    resources: [campo, oficina, portal, worker, respaldos, Postgres, almacen, ...(conPitr ? [archivoPitr] : [])],
   });
 });

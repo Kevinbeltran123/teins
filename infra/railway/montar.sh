@@ -42,7 +42,8 @@ campo_de() { python3 -c "import json; print(json.load(open('$CREDENCIALES'))['$1
 paso "2. Proyecto ${PROYECTO} y sus recursos (.railway/railway.ts)"
 railway link --project "$PROYECTO" > /dev/null 2>&1 || railway init --name "$PROYECTO" > /dev/null
 railway link --project "$PROYECTO" > /dev/null
-railway config apply --yes
+# Sin el archivo de la recuperación a un punto en el tiempo, que todavía no existe: lo crea el paso 7.
+if railway bucket info --bucket Postgres-PITR > /dev/null 2>&1; then railway config apply --yes; else TEINS_SIN_PITR=1 railway config apply --yes; fi
 
 paso "3. Secretos"
 AUTH=$(aleatorio 32)
@@ -57,11 +58,24 @@ secreto respaldos RCLONE_CONFIG_DESTINO_SECRET_ACCESS_KEY "$(campo_de secretAcce
 
 paso "4. Roles de la aplicación en la base (infra/roles.sql), con las contraseñas que ya viven en Postgres"
 # Se ejecuta dentro del contenedor de Postgres: las contraseñas se expanden allí, no en esta máquina.
+# Un contenedor solo ve las variables que tenía al arrancar: si las contraseñas son nuevas, se redespliega
+# Postgres antes. Y nunca se aplica una contraseña vacía (dejaría a la aplicación sin poder conectarse).
+ve_las_contrasenas() {
+  railway ssh -s Postgres -- sh -c "[ -n \"\$TEINS_APP_CONTRASENA\" ] && [ -n \"\$TEINS_PORTAL_CONTRASENA\" ] && echo si || echo no" 2> /dev/null | tail -1
+}
+if [ "$(ve_las_contrasenas)" != "si" ]; then
+  echo "  Postgres no ve todavía las contraseñas: se redespliega"
+  railway service redeploy --service Postgres --yes > /dev/null
+  sleep 10
+  until [ "$(railway deployment list --service Postgres --json | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['status'])")" = "SUCCESS" ]; do sleep 5; done
+  until [ "$(ve_las_contrasenas)" = "si" ]; do sleep 5; done
+fi
 # El SQL viaja en base64 para que ningún shell toque sus `$$`.
 SQL=$(base64 < paquetes/servidor/infra/roles.sql | tr -d '\n')
-railway ssh -s Postgres -- sh -c "echo $SQL | base64 -d | psql -v ON_ERROR_STOP=1 -q -U \"\$PGUSER\" -d \"\$PGDATABASE\" \
-  && psql -v ON_ERROR_STOP=1 -q -U \"\$PGUSER\" -d \"\$PGDATABASE\" \
-       -c \"ALTER ROLE teins_app PASSWORD '\$TEINS_APP_CONTRASENA'\" -c \"ALTER ROLE teins_portal PASSWORD '\$TEINS_PORTAL_CONTRASENA'\""
+PSQL='psql -v ON_ERROR_STOP=1 -q -U "$PGUSER" -d "$PGDATABASE"'
+railway ssh -s Postgres -- sh -c "[ -n \"\$TEINS_APP_CONTRASENA\" ] && [ -n \"\$TEINS_PORTAL_CONTRASENA\" ] && echo $SQL | base64 -d | $PSQL && $PSQL -c \"ALTER ROLE teins_app PASSWORD '\$TEINS_APP_CONTRASENA'\" -c \"ALTER ROLE teins_portal PASSWORD '\$TEINS_PORTAL_CONTRASENA'\" && echo roles-listos" | grep -q roles-listos \
+  || { echo "  No se pudieron preparar los roles"; exit 1; }
+echo "  Roles teins_app y teins_portal listos"
 
 paso "5. Dominios gratuitos de Railway, uno por superficie (ADR-0016)"
 for servicio in campo oficina portal; do
@@ -76,12 +90,17 @@ railway up infra/respaldos --path-as-root --service respaldos --ci > /dev/null
 
 paso "7. Copias en la plataforma (ADR-0016, nivel 1): punto en el tiempo y copias del volumen"
 railway postgres pitr status --service Postgres | grep -q "Status:.*enabled" || railway postgres pitr enable --service Postgres
-railway postgres pitr schedule set --service Postgres --daily --weekly --monthly > /dev/null
+# Con el plan Hobby, Railway rechaza programar las copias del volumen ("You do not have access"); la
+# recuperación a un punto en el tiempo sí queda activa y cubre el nivel 1. Con el plan de TEINS se programan.
+railway postgres pitr schedule set --service Postgres --daily --weekly --monthly > /dev/null 2>&1 \
+  || echo "  Aviso: Railway no dejó programar las copias del volumen con este plan; queda la recuperación a un punto en el tiempo"
 
 paso "8. Primera persona administradora (debe activar su segundo factor al entrar a Administración)"
 mkdir -p privado
 if [ ! -f "privado/${PROYECTO}.txt" ]; then
   CONTRASENA=$(aleatorio 18)
+  # Producción nunca se siembra: la organización se crea aquí (en pruebas ya existe y no se toca).
+  railway ssh -s campo -- node dist/cli/crear-organizacion.js --id "$ORGANIZACION" --nombre "TEINS" > /dev/null
   railway ssh -s campo -- env TEINS_CONTRASENA="$CONTRASENA" node dist/cli/crear-usuario.js --organizacion "$ORGANIZACION" --usuario administracion --nombre "Administración TEINS" --rol oficina > /dev/null
   railway ssh -s campo -- node dist/cli/marcar-administrador.js --usuario administracion > /dev/null
   printf 'Proyecto %s\nUsuario: administracion\nContraseña: %s\n' "$PROYECTO" "$CONTRASENA" > "privado/${PROYECTO}.txt"
