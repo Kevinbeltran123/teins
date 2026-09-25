@@ -1,7 +1,7 @@
 {
   "name": "teins",
   "private": true,
-  "description": "Sistema de levantamientos t\u00e9cnicos de TEINS",
+  "description": "Sistema de levantamientos técnicos de TEINS",
   "packageManager": "pnpm@10.34.5",
   "engines": {
     "node": ">=24"
@@ -17,6 +17,7 @@
   "devDependencies": {
     "@types/node": "^26.6.2",
     "dependency-cruiser": "^18.4.0",
+    "railway": "3.11.0",
     "typescript": "^6.0.3",
     "vitest": "^5.0.1"
   },
