@@ -22,6 +22,9 @@ services:
     environment:
       COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: teins-archivos
       COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+      # Sin esta raíz, S3Mock guarda en /tmp del contenedor: al recrearlo se pierden las fotos
+      # mientras la base (que sí persiste) las sigue dando por verificadas.
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
     ports: ["9090:9090"]
     volumes:
       - s3:/s3mockroot
