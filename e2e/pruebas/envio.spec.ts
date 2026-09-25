@@ -66,6 +66,8 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
 
   await expect(bandeja.getByRole("heading", { name: `Levantamiento de ${tecnico.nombre}` })).toBeVisible();
   await expect(bandeja.getByText("12,5 kVA")).toBeVisible();
+  // La visita viaja con el envío desde campo.
+  await expect(bandeja.getByText(`${cliente} · Sede E2E`)).toBeVisible();
   await expect(bandeja.getByText("Cuarto de prueba E2E")).toBeVisible();
   const foto = bandeja.getByRole("img", { name: "Foto 1 de Fotos del equipo" });
   await expect(foto).toBeVisible();

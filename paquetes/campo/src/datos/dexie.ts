@@ -69,6 +69,8 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
               id,
               formato: enviado.formato,
               versionFormato: enviado.versionFormato,
+              // Sin visita solo los borradores de los cortes 0 y 1 (ADR-0015, expansión).
+              ...(enviado.visitaId ? { visitaId: enviado.visitaId } : {}),
               respuestas: enviado.respuestas,
               creadoEn: enviado.creadoEn,
               enviadoEn: enviado.enviadoEn!,

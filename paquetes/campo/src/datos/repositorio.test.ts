@@ -34,6 +34,16 @@ afterEach(async () => {
 });
 
 describe("repositorio de levantamientos en Dexie", () => {
+  it("el comando de envío lleva la visita del levantamiento (corte 2)", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const [id, visitaId] = ["0192f0e0-0000-7000-8000-000000000322", "0192f0e0-0000-7000-8000-000000000321"];
+    const sinObligatorios: VersionFormato = { ...formato, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "t", etiqueta: "T", tipo: "texto" }] }] };
+    await repo.crear(crearLevantamiento(sinObligatorios, id, ahora, visitaId), "t1");
+    expect((await repo.enviar(id, sinObligatorios, despues)).ok).toBe(true);
+    expect((await db.envios.get(id))?.comando.levantamiento.visitaId).toBe(visitaId);
+  });
+
   it("guarda y borra respuestas, y actualiza la hora de modificación", async () => {
     const repo = repositorioDexie(nuevaBase());
     await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
