@@ -321,6 +321,20 @@ describe("bajada (ADR-0003)", () => {
     expect(await db.visitas.toArray()).toEqual([{ ...visita(idVisita(2)), tecnicoId: "t1", fueraDeAlcance: true }]);
   });
 
+  it("una visita cancelada con algo empezado se queda con el motivo, para avisarle al técnico (iteración 7)", async () => {
+    const db = abrirBase(`motor-${Math.random()}`);
+    bases.push(db);
+    const s = servidorFalso();
+    const reloj = { ahora: () => Date.parse("2026-09-24T11:00:00Z") };
+    s.publicar({ tipo: "visita", visita: visita(idVisita(3)) });
+    await motorDe(db, s, reloj).sincronizar();
+    await repositorioDexie(db).crear(crearLevantamiento(formato, "0192f0e0-0000-7000-8000-000000000998", new Date(), idVisita(3)), "t1");
+
+    s.publicar({ tipo: "fuera_de_alcance", entidad: "visita", id: idVisita(3), motivo: "cancelada" });
+    await motorDe(db, s, reloj).sincronizar({ bajar: true });
+    expect(await db.visitas.toArray()).toEqual([{ ...visita(idVisita(3)), tecnicoId: "t1", fueraDeAlcance: true, motivoSalida: "cancelada" }]);
+  });
+
   it("informa la salud del dispositivo con cada bajada, sin contenido de levantamientos (ADR-0017)", async () => {
     const { db, reloj } = await dispositivo(1, 1);
     const s = servidorFalso();

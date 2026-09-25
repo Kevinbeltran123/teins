@@ -234,7 +234,9 @@ function PanelVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal
         <Marquilla tono="superficie">{visita.motivo}</Marquilla>
       </div>
       {visita.fueraDeAlcance && (
-        <p className="text-ayuda text-texto-secundario">Esta visita se asignó a otra persona. Puedes terminar y enviar lo que ya empezaste.</p>
+        <p className="text-ayuda text-texto-secundario">
+          {visita.motivoSalida === "cancelada" ? "Oficina canceló esta visita." : "Esta visita se asignó a otra persona."} Puedes terminar y enviar lo que ya empezaste.
+        </p>
       )}
       {levantamientos.length > 0 && <Filas levantamientos={levantamientos} contexto={contexto} />}
       {!visita.fueraDeAlcance && <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="secundaria" />}

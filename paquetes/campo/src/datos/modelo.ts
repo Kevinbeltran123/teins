@@ -70,7 +70,12 @@ export type FormatoLocal = VersionFormato;
  * Visita asignada, por técnico: en un teléfono compartido cada uno ve las suyas. Si se reasigna y el
  * técnico ya empezó levantamientos en ella, se conserva marcada para que pueda terminarlos (regla 17).
  */
-export type VisitaLocal = VisitaAsignada & { tecnicoId: string; fueraDeAlcance?: true };
+export type VisitaLocal = VisitaAsignada & {
+  tecnicoId: string;
+  fueraDeAlcance?: true;
+  /** Por qué salió (desde la iteración 7); sin él, se trata como reasignada. */
+  motivoSalida?: "reasignada" | "cancelada";
+};
 
 /** Nota de oficina sobre un levantamiento enviado (corte 3). No modifica datos. */
 export interface ComentarioDeOficina {

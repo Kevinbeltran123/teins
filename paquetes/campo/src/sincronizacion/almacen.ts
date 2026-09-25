@@ -128,7 +128,7 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
               break;
             case "fuera_de_alcance": {
               const empezados = await db.levantamientos.where("tecnicoId").equals(tecnicoId).filter((l) => l.visitaId === cambio.id).count();
-              if (empezados > 0) await db.visitas.update([tecnicoId, cambio.id], { fueraDeAlcance: true });
+              if (empezados > 0) await db.visitas.update([tecnicoId, cambio.id], { fueraDeAlcance: true, ...(cambio.motivo ? { motivoSalida: cambio.motivo } : {}) });
               else await db.visitas.delete([tecnicoId, cambio.id]);
               break;
             }
