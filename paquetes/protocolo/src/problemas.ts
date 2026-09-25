@@ -18,6 +18,8 @@ export const ESTADO_POR_CODIGO = {
   no_tomado: 403,
   /** El borrador del informe no cumple sus reglas (regla 9). */
   informe_invalido: 422,
+  /** Administrar exige segundo factor activo (ADR-0009). */
+  segundo_factor_requerido: 403,
   archivos_faltantes: 409,
   archivos_en_verificacion: 409,
   archivo_demasiado_grande: 413,
@@ -44,6 +46,7 @@ export const REINTENTABLE: Readonly<Record<CodigoProblema, boolean>> = {
   estado_invalido: false,
   no_tomado: false,
   informe_invalido: false,
+  segundo_factor_requerido: false,
   archivos_faltantes: true,
   archivos_en_verificacion: true,
   archivo_demasiado_grande: false,

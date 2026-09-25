@@ -41,6 +41,7 @@ async function leerProblema(respuesta: Response): Promise<Problema> {
     if (leido.success) return leido.data;
   }
   // Respuestas que no vienen de la aplicación (proxy, plataforma, biblioteca de autenticación).
+  if (respuesta.status === 400) return problemaSintetico(400, "entrada_invalida", "Solicitud rechazada");
   if (respuesta.status === 401) return problemaSintetico(401, "no_autenticado", "Se requiere iniciar sesión");
   if (respuesta.status === 403) return problemaSintetico(403, "sin_permiso", "No tiene permiso");
   if (respuesta.status === 429) return problemaSintetico(429, "demasiadas_solicitudes", "Demasiados intentos");
@@ -79,19 +80,34 @@ export function crearClienteApi({ base = "", fetch: f = globalThis.fetch.bind(gl
     return op.respuesta.parse(await respuesta.json()) as Respuesta<N>;
   }
 
-  async function autenticacion(ruta: string, cuerpo: unknown): Promise<void> {
+  async function autenticacion(ruta: string, cuerpo: unknown): Promise<unknown> {
     const respuesta = await solicitar(`${base}/api/auth${ruta}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(cuerpo),
     });
     if (!respuesta.ok) throw new ErrorApi(await leerProblema(respuesta));
+    return respuesta.json().catch(() => null);
   }
 
   return {
     llamar,
-    iniciarSesion: (usuario: string, contrasena: string) => autenticacion("/sign-in/username", { username: usuario.trim().toLowerCase(), password: contrasena }),
-    cerrarSesion: () => autenticacion("/sign-out", {}),
+    /** Con el segundo factor activo no hay sesión todavía: `pideCodigo` indica que falta `verificarSegundoFactor`. */
+    async iniciarSesion(usuario: string, contrasena: string): Promise<{ pideCodigo: boolean }> {
+      const r = await autenticacion("/sign-in/username", { username: usuario.trim().toLowerCase(), password: contrasena });
+      return { pideCodigo: (r as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect === true };
+    },
+    /** Seis dígitos de la app autenticadora, o uno de los códigos de respaldo. */
+    async verificarSegundoFactor(codigo: string): Promise<void> {
+      const limpio = codigo.replace(/\s/g, "");
+      await autenticacion(/^\d{6}$/.test(limpio) ? "/two-factor/verify-totp" : "/two-factor/verify-backup-code", { code: limpio });
+    },
+    /** Primer paso de la activación: el URI para la app autenticadora y los códigos de respaldo. No cuenta hasta verificar un código. */
+    async activarSegundoFactor(contrasena: string): Promise<{ uri: string; codigosDeRespaldo: string[] }> {
+      const r = (await autenticacion("/two-factor/enable", { password: contrasena })) as { totpURI: string; backupCodes: string[] };
+      return { uri: r.totpURI, codigosDeRespaldo: r.backupCodes };
+    },
+    cerrarSesion: async () => void (await autenticacion("/sign-out", {})),
   };
 }
 

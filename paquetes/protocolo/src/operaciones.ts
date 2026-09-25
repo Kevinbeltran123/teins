@@ -27,7 +27,15 @@ export interface Operacion {
 const Rol = z.enum(["tecnico", "oficina"]);
 export const Sesion = z
   .object({
-    usuario: z.object({ id: z.string(), nombre: z.string(), rol: Rol }),
+    usuario: z.object({
+      id: z.string(),
+      nombre: z.string(),
+      rol: Rol,
+      /** Persona de oficina que además administra (iteración 6). */
+      administrador: z.boolean().default(false),
+      /** Segundo factor activo: obligatorio para administrar (ADR-0009). */
+      segundoFactor: z.boolean().default(false),
+    }),
     /** Hasta cuándo el dispositivo puede trabajar sin contacto (ADR-0009, parte 2). Cada bajada lo renueva. */
     permisoLocalHasta: Fecha,
   })
@@ -260,7 +268,14 @@ const Plano = z.object({ huella: Huella, nombre: z.string().trim().min(1).max(20
 const EstadoPdf = z.enum(["generando", "listo", "fallido"]);
 
 export const VersionPublicada = z
-  .object({ numero: z.int().positive(), publicadaEn: Fecha, publicadaPor: Persona, pdf: EstadoPdf })
+  .object({
+    numero: z.int().positive(),
+    publicadaEn: Fecha,
+    publicadaPor: Persona,
+    pdf: EstadoPdf,
+    /** Retirada del portal por una persona administradora (el cliente ya no la ve); se conserva. */
+    retirada: z.object({ en: Fecha, por: Persona, motivo: z.string() }).nullable().default(null),
+  })
   .meta({ id: "VersionPublicada" });
 
 const VisitaDelInforme = z.object({ cliente: z.string(), sitio: z.string(), direccion: z.string(), motivo: z.string(), programadaPara: z.iso.date() });
@@ -319,6 +334,38 @@ export const InformesDelCliente = z
     ),
   })
   .meta({ id: "InformesDelCliente" });
+
+// Administración (iteración 6): solo personas administradoras con segundo factor activo.
+
+export const UsuarioAdministrado = z
+  .object({
+    id: z.string(),
+    usuario: z.string(),
+    nombre: z.string(),
+    rol: Rol,
+    administrador: z.boolean(),
+    segundoFactor: z.boolean(),
+    desactivadoEn: Fecha.nullable(),
+    creadoEn: Fecha,
+  })
+  .meta({ id: "UsuarioAdministrado" });
+
+export const SaludDeDispositivo = z
+  .object({
+    id: Uuid,
+    usuario: Persona,
+    registradoEn: Fecha,
+    ultimoContacto: Fecha,
+    salud: SaludDispositivo.nullable(),
+    ordenDeBorradoEn: Fecha.nullable(),
+    borradoConfirmadoEn: Fecha.nullable(),
+  })
+  .meta({ id: "SaludDeDispositivo" });
+
+/** Credenciales nuevas de un acceso de cliente: se muestran una sola vez. */
+export const CredencialesDeAcceso = z.object({ identificador: z.string(), clave: z.string(), url: z.url() }).meta({ id: "CredencialesDeAcceso" });
+
+const NombreDeUsuario = z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,30}$/);
 
 export const operaciones = {
   obtenerSesion: {
@@ -583,6 +630,89 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: UrlDeArchivo,
     errores: ["no_autenticado", "no_encontrado"],
+  },
+  listarUsuarios: {
+    metodo: "GET",
+    ruta: "/api/administracion/usuarios",
+    resumen: "Usuarios de la organización",
+    estadoExito: 200,
+    respuesta: z.object({ usuarios: z.array(UsuarioAdministrado) }),
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido"],
+  },
+  crearUsuarioAdministrado: {
+    metodo: "POST",
+    ruta: "/api/administracion/usuarios",
+    resumen: "Crea un técnico o una persona de oficina con contraseña temporal (se muestra una vez)",
+    cuerpo: z.object({ usuario: NombreDeUsuario, nombre: z.string().trim().min(1).max(120), rol: Rol }),
+    estadoExito: 201,
+    respuesta: z.object({ usuario: UsuarioAdministrado, contrasena: z.string() }),
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "conflicto", "entrada_invalida"],
+  },
+  restablecerContrasenaAdministrada: {
+    metodo: "POST",
+    ruta: "/api/administracion/usuarios/{id}/restablecer-contrasena",
+    resumen: "Contraseña temporal nueva (se muestra una vez); cierra las sesiones del usuario",
+    parametros: z.object({ id: z.string() }),
+    estadoExito: 200,
+    respuesta: z.object({ contrasena: z.string() }),
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "estado_invalido"],
+  },
+  desactivarUsuarioAdministrado: {
+    metodo: "POST",
+    ruta: "/api/administracion/usuarios/{id}/desactivar",
+    resumen: "Revoca: sin acceso y sus teléfonos borran sus datos al conectarse (regla 13)",
+    parametros: z.object({ id: z.string() }),
+    estadoExito: 200,
+    respuesta: UsuarioAdministrado,
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "estado_invalido"],
+  },
+  marcarAdministrador: {
+    metodo: "POST",
+    ruta: "/api/administracion/usuarios/{id}/administrador",
+    resumen: "Da o quita la marca de administrador a una persona de oficina",
+    parametros: z.object({ id: z.string() }),
+    cuerpo: z.object({ administrador: z.boolean() }),
+    estadoExito: 200,
+    respuesta: UsuarioAdministrado,
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "estado_invalido"],
+  },
+  listarDispositivos: {
+    metodo: "GET",
+    ruta: "/api/administracion/dispositivos",
+    resumen: "Salud de los teléfonos de campo (ADR-0017)",
+    estadoExito: 200,
+    respuesta: z.object({ dispositivos: z.array(SaludDeDispositivo) }),
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido"],
+  },
+  listarAccesosDeClientes: {
+    metodo: "GET",
+    ruta: "/api/administracion/accesos",
+    resumen: "Clientes de la organización y su acceso al portal",
+    estadoExito: 200,
+    respuesta: z.object({
+      clientes: z.array(z.object({ id: Uuid, nombre: z.string(), acceso: z.object({ creadoEn: Fecha, regeneradoEn: Fecha.nullable() }).nullable() })),
+    }),
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido"],
+  },
+  crearAccesoDeCliente: {
+    metodo: "POST",
+    ruta: "/api/administracion/accesos/{clienteId}",
+    resumen: "Crea o regenera el acceso de un cliente; regenerar invalida el QR, la clave y las sesiones anteriores",
+    parametros: z.object({ clienteId: Uuid }),
+    cuerpo: z.object({ regenerar: z.boolean().default(false) }),
+    estadoExito: 200,
+    respuesta: CredencialesDeAcceso,
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "conflicto"],
+  },
+  retirarVersion: {
+    metodo: "POST",
+    ruta: "/api/informes/{id}/versiones/{numero}/retirar",
+    resumen: "Retira una versión del portal; se conserva y queda registrado",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
+    cuerpo: z.object({ motivo: z.string().trim().min(1).max(500) }),
+    estadoExito: 200,
+    respuesta: VersionPublicada,
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "estado_invalido"],
   },
   urlDeArchivo: {
     metodo: "GET",
