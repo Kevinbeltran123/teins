@@ -1,5 +1,5 @@
-import type { Levantamiento } from "@teins/dominio";
-import type { EnviarLevantamiento } from "@teins/protocolo";
+import type { Levantamiento, VersionFormato } from "@teins/dominio";
+import type { EnviarLevantamiento, VisitaAsignada } from "@teins/protocolo";
 
 /**
  * Levantamiento en el dispositivo, con su responsable (regla 1). Un teléfono puede compartirse:
@@ -63,4 +63,58 @@ export interface EstadoRed {
   desde: string;
 }
 
-export type Ajuste = { clave: "usuario"; valor: UsuarioLocal } | { clave: "red"; valor: EstadoRed };
+/** Versión de formato recibida en la bajada (ADR-0006). Inmutable: se guarda tal cual llegó. */
+export type FormatoLocal = VersionFormato;
+
+/**
+ * Visita asignada, por técnico: en un teléfono compartido cada uno ve las suyas. Si se reasigna y el
+ * técnico ya empezó levantamientos en ella, se conserva marcada para que pueda terminarlos (regla 17).
+ */
+export type VisitaLocal = VisitaAsignada & { tecnicoId: string; fueraDeAlcance?: true };
+
+/** Nota de oficina sobre un levantamiento enviado (corte 3). No modifica datos. */
+export interface ComentarioDeOficina {
+  id: string;
+  texto: string;
+  seccion?: string | undefined;
+  campo?: string | undefined;
+  autor: string;
+  creadoEn: string;
+}
+
+/** Estado de negocio de un levantamiento propio según el servidor. Distinto del estado de envío. */
+export interface EstadoServidor {
+  id: string;
+  tecnicoId: string;
+  estado: "enviado" | "en_revision" | "revisado";
+  recibidoEn: string;
+  /** Sin índice: agregar el campo no exige una versión nueva de la base local. */
+  comentarios?: ComentarioDeOficina[] | undefined;
+}
+
+/** Avance de la bajada de un técnico y su permiso de trabajo sin conexión (ADR-0009, parte 2). */
+export interface BajadaLocal {
+  tecnicoId: string;
+  puntoDeControl: number;
+  /** Versión de la app con que se bajó hasta ese punto: si cambia, se baja desde cero (ADR-0015, punto 4). */
+  versionApp: number;
+  ultimaEn?: string | undefined;
+  permisoLocalHasta: string;
+  /** El servidor rechazó la sesión y no hay orden de borrado: hay que iniciar sesión. */
+  sesionVencida?: boolean | undefined;
+}
+
+/** Identidad del teléfono ante el servidor. El secreto autentica la consulta de órdenes de borrado. */
+export interface DispositivoLocal {
+  id: string;
+  secreto: string;
+}
+
+export type Ajuste =
+  | { clave: "usuario"; valor: UsuarioLocal }
+  | { clave: "red"; valor: EstadoRed }
+  | { clave: "dispositivo"; valor: DispositivoLocal }
+  /** Se borraron los datos de un usuario revocado: la pantalla de inicio de sesión lo explica. */
+  | { clave: "acceso_cerrado"; valor: { nombre: string; en: string } }
+  /** Usuarios cuyos datos ya se borraron y falta avisarle al servidor. */
+  | { clave: "borrados_por_confirmar"; valor: string[] };

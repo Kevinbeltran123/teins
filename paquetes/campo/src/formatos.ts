@@ -1,18 +1,23 @@
-import type { Levantamiento, VersionFormato } from "@teins/dominio";
-import v1 from "@teins/dominio/formatos-de-prueba/prueba-ups.v1.json";
-import v2 from "@teins/dominio/formatos-de-prueba/prueba-ups.v2.json";
+import { useLiveQuery } from "dexie-react-hooks";
+import { versionesVigentes, type Levantamiento, type VersionFormato } from "@teins/dominio";
+import { db } from "./datos/instancia";
+import { VERSION_APP } from "./version";
 
-/**
- * Formatos incluidos en la app hasta que la bajada del corte 2 los entregue como datos.
- * Ficticios (R5). Un borrador termina con la versión con que empezó (ADR-0006, regla 3).
- */
-const incluidos = [v1, v2] as VersionFormato[];
+/** Versiones de formato en el teléfono, recibidas en la bajada (ADR-0006). `undefined` mientras carga. */
+export function useFormatos(): VersionFormato[] | undefined {
+  return useLiveQuery(() => db.formatos.toArray());
+}
 
-export const NOMBRE_FORMATO = "Formato de prueba";
+/** La versión exacta con que se creó el levantamiento: un borrador termina con la suya (regla 3). */
+export function formatoDe(formatos: readonly VersionFormato[], levantamiento: Pick<Levantamiento, "formato" | "versionFormato">): VersionFormato | undefined {
+  return formatos.find((f) => f.formato === levantamiento.formato && f.version === levantamiento.versionFormato);
+}
 
-/** Versión con la que se crean los levantamientos nuevos. */
-export const formatoVigente: VersionFormato = incluidos.reduce((a, b) => (b.version > a.version ? b : a));
+/** Con qué versiones se crean los levantamientos nuevos. */
+export const vigentes = (formatos: readonly VersionFormato[]) => versionesVigentes(formatos, VERSION_APP);
 
-export function formatoDe(levantamiento: Pick<Levantamiento, "formato" | "versionFormato">): VersionFormato | undefined {
-  return incluidos.find((f) => f.formato === levantamiento.formato && f.version === levantamiento.versionFormato);
+/** Nombre que ve el técnico. Las versiones viejas no lo tienen: se toma el de otra versión del mismo formato. */
+export function nombreDeFormato(formatos: readonly VersionFormato[], formato: string): string {
+  const conNombre = formatos.filter((f) => f.formato === formato && f.nombre).sort((a, b) => b.version - a.version)[0];
+  return conNombre?.nombre ?? formato;
 }

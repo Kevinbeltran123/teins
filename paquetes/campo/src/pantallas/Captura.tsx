@@ -12,11 +12,11 @@ import {
 } from "@teins/dominio";
 import { Aviso, Boton, CampoFotos, CampoMedida, CampoTexto, MarcaNoObtenido, Marquilla, ValorLeido } from "@teins/ui";
 import { db, repositorio } from "../datos/instancia";
-import type { EnvioLocal, LevantamientoLocal } from "../datos/modelo";
+import type { EnvioLocal, EstadoServidor, LevantamientoLocal } from "../datos/modelo";
 import { procesarFoto } from "../fotos/procesar";
-import { horaExacta } from "../formato";
-import { formatoDe, NOMBRE_FORMATO } from "../formatos";
-import { claseDeTono, estadoDeEnvio, mensajeDeValidacion } from "../mensajes";
+import { fechaHora, horaExacta } from "../formato";
+import { formatoDe, nombreDeFormato, useFormatos } from "../formatos";
+import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion } from "../mensajes";
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 
@@ -27,13 +27,25 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   // `null` distingue "no existe" de `undefined` (cargando).
   const levantamiento = useLiveQuery(async () => (await repositorio.obtener(id)) ?? null, [id]);
   const envio = useLiveQuery(async () => (await db.envios.get(id)) ?? null, [id]);
+  const servidor = useLiveQuery(async () => (await db.estadosServidor.get(id)) ?? null, [id]);
+  const formatos = useFormatos();
+  const visita = useLiveQuery(async () => {
+    const l = await repositorio.obtener(id);
+    return l?.visitaId && l.tecnicoId ? ((await db.visitas.get([l.tecnicoId, l.visitaId])) ?? null) : null;
+  }, [id]);
+  // Vencido el permiso de trabajo local, el borrador se ve pero no se edita (ADR-0009, parte 2).
+  const bloqueado = useLiveQuery(async () => {
+    const l = await repositorio.obtener(id);
+    const bajada = l?.tecnicoId ? await db.bajadas.get(l.tecnicoId) : undefined;
+    return bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
+  }, [id]);
   // Los campos leen los valores una sola vez; después solo escriben (ver CampoTexto).
   const [inicial, setInicial] = useState<LevantamientoLocal>();
   useEffect(() => {
     if (levantamiento && !inicial) setInicial(levantamiento);
   }, [levantamiento, inicial]);
 
-  const formato = levantamiento ? formatoDe(levantamiento) : undefined;
+  const formato = levantamiento && formatos ? formatoDe(formatos, levantamiento) : undefined;
   const seccion = formato?.secciones[0];
 
   return (
@@ -44,17 +56,20 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
           onClick={volver}
           className="-ml-2 min-h-tactil rounded-control px-2 text-cuerpo font-bold text-sobre-superficie-suave focus-visible:outline-3 focus-visible:outline-acento"
         >
-          Volver a levantamientos
+          Volver a mis visitas
         </button>
         <div className="mt-2 flex items-center gap-3">
           <Marquilla tono="sobre-superficie">{levantamiento?.estado === "enviado" ? "Enviado" : "Borrador"}</Marquilla>
-          <span className="text-ayuda text-sobre-superficie-suave">{NOMBRE_FORMATO}</span>
+          <span className="text-ayuda text-sobre-superficie-suave">
+            {levantamiento && formatos ? nombreDeFormato(formatos, levantamiento.formato) : ""}
+            {visita ? ` · ${visita.cliente.nombre}` : ""}
+          </span>
         </div>
         <h1 className="mt-2 text-titulo leading-tight font-extrabold tracking-tight">{seccion?.titulo ?? "Levantamiento"}</h1>
       </header>
 
       <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-6">
-        {levantamiento === undefined || envio === undefined || (levantamiento && !inicial) ? (
+        {levantamiento === undefined || envio === undefined || formatos === undefined || bloqueado === undefined || (levantamiento && !inicial) ? (
           <div aria-busy="true" aria-label="Cargando levantamiento" className="flex flex-col gap-6">
             <div className="h-[180px] animate-pulse rounded-panel bg-panel" />
             <div className="h-[140px] animate-pulse rounded-panel bg-panel" />
@@ -62,12 +77,17 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
         ) : levantamiento === null || !inicial ? (
           <>
             <Aviso tono="error">Este levantamiento no está en este teléfono.</Aviso>
-            <Boton onClick={volver}>Volver a levantamientos</Boton>
+            <Boton onClick={volver}>Volver a mis visitas</Boton>
           </>
         ) : !formato ? (
-          <Aviso tono="error">Este levantamiento usa un formato que esta versión de la app no conoce. Actualiza la app; el levantamiento se conserva.</Aviso>
+          <Aviso tono="error">Falta en este teléfono el formato de este levantamiento. Conéctate para descargarlo; el levantamiento se conserva.</Aviso>
         ) : levantamiento.estado === "enviado" ? (
-          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} />
+          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} />
+        ) : bloqueado ? (
+          <>
+            <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>
+            <Enviado levantamiento={levantamiento} formato={formato} envio={null} servidor={null} />
+          </>
         ) : (
           <Borrador id={id} formato={formato} inicial={inicial} actual={levantamiento} />
         )}
@@ -290,9 +310,23 @@ function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: string; secc
   );
 }
 
-function Enviado({ levantamiento, formato, envio }: { levantamiento: LevantamientoLocal; formato: VersionFormato; envio: EnvioLocal | null }) {
+function Enviado({
+  levantamiento,
+  formato,
+  envio,
+  servidor,
+}: {
+  levantamiento: LevantamientoLocal;
+  formato: VersionFormato;
+  envio: EnvioLocal | null;
+  servidor: EstadoServidor | null;
+}) {
   const enLinea = useServidorAlcanzable();
-  const estado = envio ? estadoDeEnvio(envio, enLinea) : null;
+  // Lo que dijo el servidor en la bajada manda sobre el estado de envío del teléfono.
+  const estado = servidor ? estadoSegunServidor(servidor) : envio ? estadoDeEnvio(envio, enLinea) : null;
+  const comentarios = servidor?.comentarios ?? [];
+  const sobre = (c: { seccion?: string | undefined; campo?: string | undefined }) =>
+    formato.secciones.find((s) => s.clave === c.seccion)?.campos.find((f) => f.clave === c.campo)?.etiqueta;
   return (
     <>
       {estado && (
@@ -311,6 +345,24 @@ function Enviado({ levantamiento, formato, envio }: { levantamiento: Levantamien
             </Boton>
           )}
         </div>
+      )}
+      {comentarios.length > 0 && (
+        <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-3 rounded-panel bg-panel p-4">
+          <h2 id="titulo-comentarios" className="text-subtitulo font-extrabold">
+            Comentarios de oficina
+          </h2>
+          <ul className="flex flex-col gap-3">
+            {comentarios.map((c) => (
+              <li key={c.id} className="flex flex-col gap-0.5 border-l-[3px] border-division pl-3">
+                <p className="text-ayuda text-texto-secundario">
+                  {c.autor} · {fechaHora(c.creadoEn)}
+                  {sobre(c) && ` · Sobre ${sobre(c)!.toLowerCase()}`}
+                </p>
+                <p className="text-cuerpo whitespace-pre-line">{c.texto}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {formato.secciones.map((seccion) =>
         agrupar(seccion.campos).map((grupo) => (

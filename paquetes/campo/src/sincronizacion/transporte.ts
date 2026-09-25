@@ -1,4 +1,4 @@
-import { ErrorDeRed, type ClienteApi, type EnviarLevantamiento, type Respuesta } from "@teins/protocolo";
+import { ErrorDeRed, type ClienteApi, type CuerpoEntrada, type EnviarLevantamiento, type Respuesta } from "@teins/protocolo";
 
 /** Lo que el motor necesita del servidor. En las pruebas se reemplaza por un servidor falso con fallas inducidas. */
 export interface Transporte {
@@ -7,6 +7,9 @@ export interface Transporte {
   subir(url: string, cabeceras: Record<string, string>, datos: ArrayBuffer): Promise<void>;
   confirmarSubida(huella: string): Promise<Respuesta<"confirmarSubida">>;
   enviarComando(comando: EnviarLevantamiento): Promise<Respuesta<"enviarComando">>;
+  obtenerCambios(desde: number, app: number): Promise<Respuesta<"obtenerCambios">>;
+  informarDispositivo(cuerpo: CuerpoEntrada<"informarDispositivo">): Promise<Respuesta<"informarDispositivo">>;
+  consultarOrdenes(cuerpo: CuerpoEntrada<"consultarOrdenes">): Promise<Respuesta<"consultarOrdenes">>;
 }
 
 /** El almacenamiento rechazó la carga (firma vencida, huella distinta). Se vuelve a pedir autorización. */
@@ -31,5 +34,8 @@ export function transporteHttp(cliente: ClienteApi, f: typeof fetch = globalThis
     },
     confirmarSubida: (huella) => cliente.llamar("confirmarSubida", { parametros: { huella } }),
     enviarComando: (comando) => cliente.llamar("enviarComando", { cuerpo: comando }),
+    obtenerCambios: (desde, app) => cliente.llamar("obtenerCambios", { consulta: { desde, app } }),
+    informarDispositivo: (cuerpo) => cliente.llamar("informarDispositivo", { cuerpo }),
+    consultarOrdenes: (cuerpo) => cliente.llamar("consultarOrdenes", { cuerpo }),
   };
 }

@@ -5,9 +5,9 @@
  */
 const cargar = () => import("./instancia");
 
-export function sincronizarEnSegundoPlano(): void {
+export function sincronizarEnSegundoPlano(opciones: { bajar?: boolean } = {}): void {
   cargar()
-    .then((m) => m.sincronizarEnSegundoPlano())
+    .then((m) => m.sincronizarEnSegundoPlano(opciones))
     .catch((error: unknown) => console.error("No se pudo cargar la sincronización", error));
 }
 

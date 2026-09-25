@@ -1,5 +1,5 @@
 import type { CodigoErrorValidacion } from "@teins/dominio";
-import type { EnvioLocal } from "./datos/modelo";
+import type { EnvioLocal, EstadoServidor } from "./datos/modelo";
 
 /** Textos en español de Colombia, con el vocabulario de TEINS (AGENTS.md). */
 export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
@@ -14,6 +14,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   campo_desconocido: "Este dato no pertenece al formato",
   seccion_desconocida: "Esta sección no pertenece al formato",
   no_obtenido_no_permitido: "Este dato no es obligatorio: bórralo en lugar de marcarlo",
+  no_corregible: "Este dato no se corrige desde oficina",
 };
 
 export type Tono = "ok" | "pendiente" | "error";
@@ -37,6 +38,20 @@ export function estadoDeEnvio(envio: EnvioLocal, enLinea: boolean): { texto: str
       return { texto: "Pendiente de enviar", tono: "pendiente" };
   }
 }
+
+/** Estado de negocio según el servidor (bajada). */
+export function estadoSegunServidor(estado: EstadoServidor): { texto: string; tono: Tono } {
+  switch (estado.estado) {
+    case "enviado":
+      return { texto: "Recibido en oficina", tono: "ok" };
+    case "en_revision":
+      return { texto: "En revisión en oficina", tono: "pendiente" };
+    case "revisado":
+      return { texto: "Revisado por oficina", tono: "ok" };
+  }
+}
+
+export const comentariosDeOficina = (n: number) => (n === 1 ? "1 comentario de oficina" : `${n} comentarios de oficina`);
 
 export const claseDeTono: Record<Tono, string> = {
   ok: "text-sync-ok",

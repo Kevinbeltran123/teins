@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
-import { EnviarLevantamiento, ErrorApi, ErrorDeRed, tipoDeProblema, type CodigoProblema, type Problema } from "@teins/protocolo";
+import { EnviarLevantamiento, ErrorApi, ErrorDeRed, tipoDeProblema, type Cambio, type CodigoProblema, type Problema, type SaludDispositivo } from "@teins/protocolo";
 import { fotosReferenciadas } from "@teins/dominio";
 import { ErrorDeSubida, type Transporte } from "../transporte";
 
 /** Falla que se aplica a la próxima llamada de una operación. */
 export type Falla =
+  /** La llamada responde normal: sirve para programar una falla en una llamada posterior. */
+  | "ninguna"
   /** La solicitud no llega: el servidor no se entera. */
   | "red_antes"
   /** El servidor procesa y confirma, pero la respuesta se pierde (ADR-0018, nivel 3). */
@@ -29,11 +31,20 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
   const llamadas: Operacion[] = [];
   let verificacionesPendientes = opciones.verificacionesPendientes ?? 0;
   let reloj = 0;
+  /** Registro de cambios del servidor: la posición + 1 es la secuencia. */
+  const cambios: Cambio[] = [];
+  const informes: { id: string; secreto: string; salud: SaludDispositivo }[] = [];
+  /** Revocado: toda operación con sesión responde "no autenticado"; la consulta con secreto devuelve la orden. */
+  const revocados = new Set<string>();
+  const confirmados: string[] = [];
+  let permisoLocalHasta = "2026-10-01T00:00:00.000Z";
+  let tamanoDePagina = 100;
 
   function aplicarFalla<T>(op: Operacion, ejecutar: () => T): T {
     llamadas.push(op);
     const falla = fallas.get(op)?.shift();
     if (falla === "red_antes") throw new ErrorDeRed(new TypeError("Failed to fetch"));
+    if (revocados.size > 0 && op !== "subir" && op !== "consultarOrdenes") throw error("no_autenticado", 401);
     if (falla === "error_500") throw error("error_interno", 500);
     if (falla === "sesion_vencida") throw error("no_autenticado", 401);
     const resultado = ejecutar();
@@ -86,7 +97,27 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
         }
         const resultado = { resultado: "aceptado" as const, levantamientoId: valido.levantamiento.id, recibidoEn: new Date(Date.UTC(2026, 8, 24, 0, 0, reloj++)).toISOString() };
         recibidos.set(valido.llave, { resultado, veces: 1 });
+        cambios.push({ tipo: "levantamiento", id: valido.levantamiento.id, estado: "enviado", recibidoEn: resultado.recibidoEn });
         return resultado;
+      });
+    },
+    async obtenerCambios(desde) {
+      return aplicarFalla("obtenerCambios", () => {
+        const pagina = cambios.slice(desde, desde + tamanoDePagina);
+        return { cambios: pagina, puntoDeControl: desde + pagina.length, hayMas: desde + pagina.length < cambios.length, permisoLocalHasta };
+      });
+    },
+    async informarDispositivo(cuerpo) {
+      return aplicarFalla("informarDispositivo", () => {
+        informes.push(cuerpo);
+        return {};
+      });
+    },
+    async consultarOrdenes({ id, secreto, confirmados: nuevos = [] }) {
+      return aplicarFalla("consultarOrdenes", () => {
+        if (!informes.some((i) => i.id === id && i.secreto === secreto)) throw error("no_autenticado", 401);
+        confirmados.push(...nuevos.filter((u) => revocados.has(u) && !confirmados.includes(u)));
+        return { borrar: [...revocados].filter((u) => !confirmados.includes(u)) };
       });
     },
   };
@@ -104,5 +135,20 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     recibidos,
     almacenamiento,
     llamadas,
+    cambios,
+    informes,
+    confirmados,
+    publicar(...nuevos: Cambio[]) {
+      cambios.push(...nuevos);
+    },
+    revocar(usuarioId: string) {
+      revocados.add(usuarioId);
+    },
+    renovarPermiso(hasta: string) {
+      permisoLocalHasta = hasta;
+    },
+    paginasDe(n: number) {
+      tamanoDePagina = n;
+    },
   };
 }

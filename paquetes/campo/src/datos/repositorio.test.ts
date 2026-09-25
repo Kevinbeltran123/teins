@@ -157,7 +157,7 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
 
     const v2 = abrirBase(nombre);
     bases.push(v2);
-    expect(v2.verno).toBe(2);
+    expect(v2.verno).toBe(3);
     expect(await v2.levantamientos.get("l1")).toEqual(borrador);
     const archivos = await v2.archivos.toArray();
     expect(archivos.map((a) => [a.id, a.subida, new Uint8Array(a.datos)[0]])).toEqual([
@@ -165,5 +165,29 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
       [h("b"), "pendiente", 2],
     ]);
     expect(await v2.envios.count()).toBe(0);
+  });
+
+  it("la versión 3 conserva borradores y envíos pendientes, trae los formatos que venían en la app y no bloquea a quien ya tenía sesión", async () => {
+    const nombre = nombreNuevo();
+    // Base tal como la dejó el corte 1: un borrador, un envío pendiente y una sesión.
+    const v2 = new Dexie(nombre);
+    v2.version(1).stores({ levantamientos: "id, estado, actualizadoEn", archivos: "id" });
+    v2.version(2).stores({ levantamientos: "id, estado, actualizadoEn, tecnicoId", archivos: "id, subida", envios: "levantamientoId, estado, tecnicoId", ajustes: "clave" });
+    const borrador = { ...crearLevantamiento(formato, "l1", ahora), tecnicoId: "t1" };
+    const envio = { levantamientoId: "l2", tecnicoId: "t1", estado: "pendiente", intentos: 3, proximoIntentoEn: 0, creadoEn: ahora.toISOString() };
+    await v2.table("levantamientos").add(borrador);
+    await v2.table("envios").add(envio);
+    await v2.table("ajustes").add({ clave: "usuario", valor: { id: "t1", nombre: "Técnico", rol: "tecnico" } });
+    v2.close();
+
+    const v3 = abrirBase(nombre);
+    bases.push(v3);
+    expect(v3.verno).toBe(3);
+    expect(await v3.levantamientos.get("l1")).toEqual(borrador);
+    expect(await v3.envios.get("l2")).toEqual(envio);
+    expect((await v3.formatos.toArray()).map((f) => `${f.formato}@${f.version}`)).toEqual(["prueba-ups@1", "prueba-ups@2"]);
+    const bajada = await v3.bajadas.get("t1");
+    expect(bajada).toMatchObject({ puntoDeControl: 0 });
+    expect(Date.parse(bajada!.permisoLocalHasta) - Date.now()).toBeGreaterThan(6.9 * 86_400_000);
   });
 });

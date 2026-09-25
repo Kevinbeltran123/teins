@@ -1,5 +1,6 @@
 import { db, repositorio } from "../datos/instancia";
 import { almacen, cliente, sincronizarEnSegundoPlano } from "../sincronizacion/instancia";
+import { VERSION_APP } from "../version";
 
 /** Un usuario de oficina no captura en campo (tabla de permisos del modelo de dominio). */
 export class RolNoPermitido extends Error {
@@ -15,15 +16,18 @@ export class RolNoPermitido extends Error {
  */
 export async function iniciarSesion(usuario: string, contrasena: string): Promise<void> {
   await cliente.iniciarSesion(usuario, contrasena);
-  const { usuario: datos } = await cliente.llamar("obtenerSesion");
+  const { usuario: datos, permisoLocalHasta } = await cliente.llamar("obtenerSesion");
   if (datos.rol !== "tecnico") {
     await cliente.cerrarSesion().catch(() => undefined);
     throw new RolNoPermitido();
   }
+  await almacen.renovarPermiso(datos.id, permisoLocalHasta, VERSION_APP);
   await db.ajustes.put({ clave: "usuario", valor: datos });
+  await db.ajustes.delete("acceso_cerrado");
   await repositorio.asignarSinResponsable(datos.id);
   await almacen.reanudar("requiere_sesion");
-  sincronizarEnSegundoPlano();
+  // La primera instalación descarga visitas y formatos de inmediato (ADR-0015, sección 5).
+  sincronizarEnSegundoPlano({ bajar: true });
 }
 
 /** Cierra la sesión. Nunca borra datos del teléfono: lo pendiente espera a que su responsable vuelva. */

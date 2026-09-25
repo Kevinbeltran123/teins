@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
 import { Aviso, Boton, CampoTexto } from "@teins/ui";
+import { db } from "../datos/instancia";
 import { useConexionDelNavegador } from "../dispositivo/useConexion";
 import { iniciarSesion, RolNoPermitido } from "../sesion/sesion";
 
@@ -15,6 +17,11 @@ function mensajeDeError(error: unknown): string {
 /** `alCancelar` existe cuando la sesión venció: se puede volver a capturar sin iniciar sesión. */
 export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
   const enLinea = useConexionDelNavegador();
+  // Tras una revocación (QA-5): quien vuelva a abrir la app sabe por qué no hay nada.
+  const accesoCerrado = useLiveQuery(async () => {
+    const ajuste = await db.ajustes.get("acceso_cerrado");
+    return ajuste?.clave === "acceso_cerrado" ? ajuste.valor : null;
+  });
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [estado, setEstado] = useState<{ tipo: "listo" } | { tipo: "enviando" } | { tipo: "error"; mensaje: string }>({ tipo: "listo" });
@@ -41,6 +48,7 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
         <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">Iniciar sesión</h1>
       </header>
       <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 py-6">
+        {accesoCerrado && <Aviso tono="alerta">Se cerró el acceso de {accesoCerrado.nombre} en este teléfono y se borraron sus datos.</Aviso>}
         {alCancelar && <Aviso tono="alerta">Tu sesión venció. Inicia sesión para enviar lo pendiente; lo capturado sigue en este teléfono.</Aviso>}
         {!enLinea && <Aviso>Sin conexión. Iniciar sesión necesita señal la primera vez.</Aviso>}
         <form onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel bg-panel p-4">
