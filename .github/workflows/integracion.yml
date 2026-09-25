@@ -59,6 +59,10 @@ jobs:
     name: Secretos fuera del repositorio
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # En un pull request, gitleaks lee sus commits por la API.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,6 +84,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Chromium para el PDF del informe (la misma versión de playwright-core del servidor)
+        run: pnpm --filter @teins/servidor exec playwright-core install --with-deps chromium-headless-shell
       - name: Pruebas de integración (Testcontainers)
         run: pnpm --filter @teins/servidor test
 
