@@ -295,6 +295,31 @@ export const DetalleInforme = z
   })
   .meta({ id: "DetalleInforme" });
 
+// Portal del cliente (corte 5, ADR-0009 parte 4)
+
+/** Identificador del acceso: aleatorio, no adivinable, viaja en el QR. Nunca la clave. */
+export const IDENTIFICADOR_ACCESO = /^[a-hjkmnp-z2-9]{20}$/;
+
+export const SesionPortal = z.object({ cliente: z.string() }).meta({ id: "SesionPortal" });
+
+export const InformesDelCliente = z
+  .object({
+    cliente: z.string(),
+    /** Por informe, la versión vigente con su PDF listo (regla 12, ADR-0013). */
+    informes: z.array(
+      z.object({
+        id: Uuid,
+        numero: z.int().positive(),
+        publicadaEn: Fecha,
+        sitio: z.string(),
+        direccion: z.string(),
+        motivo: z.string(),
+        programadaPara: z.iso.date(),
+      }),
+    ),
+  })
+  .meta({ id: "InformesDelCliente" });
+
 export const operaciones = {
   obtenerSesion: {
     metodo: "GET",
@@ -516,6 +541,48 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: UrlDeArchivo,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  ingresarAlPortal: {
+    metodo: "POST",
+    ruta: "/api/portal/ingresar",
+    resumen: "Ingreso del cliente con el identificador del QR y su clave; límite de intentos (QA-7)",
+    cuerpo: z.object({ identificador: z.string().trim().toLowerCase().regex(IDENTIFICADOR_ACCESO), clave: z.string().max(64) }),
+    estadoExito: 200,
+    respuesta: SesionPortal,
+    errores: ["no_autenticado", "demasiadas_solicitudes", "entrada_invalida"],
+  },
+  sesionDelPortal: {
+    metodo: "GET",
+    ruta: "/api/portal/sesion",
+    resumen: "Cliente de la sesión del portal",
+    estadoExito: 200,
+    respuesta: SesionPortal,
+    errores: ["no_autenticado"],
+  },
+  salirDelPortal: {
+    metodo: "POST",
+    ruta: "/api/portal/salir",
+    resumen: "Cierra la sesión del portal",
+    estadoExito: 200,
+    respuesta: z.object({}),
+    errores: [],
+  },
+  informesDelPortal: {
+    metodo: "GET",
+    ruta: "/api/portal/informes",
+    resumen: "Informes vigentes del cliente de la sesión",
+    estadoExito: 200,
+    respuesta: InformesDelCliente,
+    errores: ["no_autenticado"],
+  },
+  pdfDelPortal: {
+    metodo: "GET",
+    ruta: "/api/portal/informes/{id}/pdf",
+    resumen: "URL firmada del PDF vigente de un informe del cliente; la descarga queda registrada",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: UrlDeArchivo,
+    errores: ["no_autenticado", "no_encontrado"],
   },
   urlDeArchivo: {
     metodo: "GET",
