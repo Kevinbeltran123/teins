@@ -1,6 +1,7 @@
 export { Aviso } from "./Aviso";
 export { Boton, claseBoton } from "./Boton";
 export { CampoFotos } from "./CampoFotos";
+export { Casilla } from "./Casilla";
 export { CampoMedida } from "./CampoMedida";
 export { CampoTexto } from "./CampoTexto";
 export { CampoTextoLargo } from "./CampoTextoLargo";
@@ -8,5 +9,6 @@ export { EtiquetaCampo, MensajeError } from "./Etiqueta";
 export { MarcaNoObtenido } from "./MarcaNoObtenido";
 export { Marquilla } from "./Marquilla";
 export { Pestanas } from "./Pestanas";
+export { SelectorDeArchivo } from "./SelectorDeArchivo";
 export type { Pestana } from "./Pestanas";
 export { ValorLeido } from "./ValorLeido";
