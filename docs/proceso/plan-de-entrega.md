@@ -22,7 +22,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 **El recorrido delgado está completo (cortes 0 a 5, 2026-09-25)** y desplegado en el entorno de pruebas. Antes de la primera demostración a TEINS:
 
-1. **Prueba en iPhone** de los cortes 1 a 5 (aplazada por Kevin), con la guía de [`entorno-de-pruebas.md`](entorno-de-pruebas.md), más abrir el portal desde el QR en el celular.
+1. **Prueba en iPhone y verificación manual** de todas las fases (aplazada por Kevin), con la guía de [`verificacion-manual.md`](verificacion-manual.md).
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
 
 **Iteración 8 terminada el 2026-09-25:** producción provisional montada en `teins-produccion` con dominios gratuitos, recreable desde el repositorio, con respaldo diario y simulacro verificado; sin datos reales hasta transferirla a TEINS (ADR-0021, [`produccion.md`](produccion.md)). La rama está en GitHub (pull request #1, en borrador) con la integración continua en verde.

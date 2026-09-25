@@ -81,25 +81,8 @@ El entorno conserva el límite de 5 inicios de sesión por minuto (QA-7): corra 
 
 Si más adelante se conecta el repositorio de GitHub (`railway service source connect --repo Kevinbeltran123/teins --branch <rama> --service <servicio>`), cada subida a esa rama despliega sola.
 
-## Prueba en iPhone (criterio 4 del corte 1 y criterio 9 del corte 2)
+## Prueba en iPhone y verificación manual
 
-Contraseñas en `privado/entorno-de-pruebas.txt` (computador de Kevin): `tecnico.prueba`, `oficina.prueba` y `tecnico.revocable`, un técnico desechable con su propia visita para la revocación.
-
-1. **Instalar.** Safari → dominio de campo → Compartir → Agregar a inicio. Cerrar Safari y abrir **desde el ícono**.
-2. **Iniciar sesión** con `tecnico.prueba`. Aparece "Mis visitas" con "Cliente de prueba" en el bloque azul.
-3. **Diagnóstico** (al final de la pantalla): anotar si el almacenamiento es persistente.
-4. **Sin señal:** modo avión. Tocar "Iniciar levantamiento", llenar potencia y descripción, tomar 3 o 4 fotos con la cámara. Volver a "Mis visitas": debe decir "Continuar levantamiento".
-5. **Cerrar la app** desde el selector de apps, **reiniciar el teléfono** y abrirla sin señal: el borrador y sus fotos siguen ahí. En el diagnóstico, "Verificar fotos": todas íntegras, cero perdidas.
-6. **Enviar sin señal:** "Enviar a oficina" → "Confirmar envío". Debe decir "Sin conexión: se enviará al recuperar señal".
-7. **Recuperar señal:** quitar el modo avión y volver a la app. En menos de un minuto: "Recibido en oficina".
-8. **Oficina,** en el computador: dominio de oficina con `oficina.prueba`; el levantamiento está en "Esperando revisión" con sus fotos.
-9. **Revocación con teléfono compartido:** en el iPhone, "Cerrar sesión"; entrar con `tecnico.revocable` y esperar a que aparezca su visita "Cliente revocación" (así el teléfono ya quedó registrado); iniciar un levantamiento y escribir algo. En el computador:
-
-   ```sh
-   railway ssh -s campo -- node dist/cli/desactivar-usuario.js --usuario tecnico.revocable
-   ```
-
-   En el iPhone, salir de la app y volver a abrirla (con señal): debe aparecer "Se cerró el acceso de Técnico revocable en este teléfono y se borraron sus datos". Entrar otra vez con `tecnico.prueba`: su levantamiento enviado sigue ahí.
-10. **Anotar** en el plan de entrega (fila del corte 0): modelo de iPhone, versión de iOS, persistente sí o no, fotos tomadas, íntegras.
+El paso a paso completo, de la instalación en iPhone al portal y producción, está en [`verificacion-manual.md`](verificacion-manual.md). Las contraseñas de `tecnico.prueba`, `oficina.prueba` y `tecnico.revocable` están en `privado/entorno-de-pruebas.txt` (computador de Kevin).
 
 El permiso vencido no se prueba en el iPhone: exige 7 días sin señal (`DIAS_PERMISO_LOCAL`, mínimo 1 día). Lo cubre el extremo a extremo en Chromium.
