@@ -1,6 +1,6 @@
 import { useRef, useState, type RefObject } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { crearMedida, describirValor, esNoObtenido, type DefinicionCampo, type Valor, type ValorMedida, type VersionFormato } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import { Aviso, Boton, CampoFotos, CampoMedida, CampoTexto, CampoTextoLargo, claseBoton, MarcaNoObtenido, Marquilla, ValorLeido } from "@teins/ui";
@@ -8,6 +8,7 @@ import { consultas } from "../api";
 import { aFechaHora } from "../formato";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
 import { useComentar, useCorregir, useMarcarRevisado, useTomar } from "../revision";
+import { useAbrirInformeDeVisita } from "../informes";
 
 type Levantamiento = Respuesta<"obtenerLevantamiento">;
 interface Destino {
@@ -137,7 +138,15 @@ function PanelRevision({ l, mia, recargar }: { l: Levantamiento; mia: boolean; r
       </>
     );
   } else if (l.estado === "revisado") {
-    contenido = <p className="text-cuerpo">Revisado por {l.revisor?.nombre ?? "[Sin responsable]"}. Ya se puede incluir en un informe.</p>;
+    contenido = (
+      <>
+        <p className="text-cuerpo">
+          Revisado por {l.revisor?.nombre ?? "[Sin responsable]"}.{" "}
+          {l.visita ? "Ya se puede incluir en el informe de su visita." : "No tiene visita, así que no entra en un informe."}
+        </p>
+        {l.visita && <AbrirInforme visitaId={l.visita.id} />}
+      </>
+    );
   } else if (mia) {
     contenido = (
       <>
@@ -195,6 +204,23 @@ function PanelRevision({ l, mia, recargar }: { l: Levantamiento; mia: boolean; r
         </div>
       )}
     </section>
+  );
+}
+
+function AbrirInforme({ visitaId }: { visitaId: string }) {
+  const abrir = useAbrirInformeDeVisita();
+  const navegar = useNavigate();
+  return (
+    <div className="flex flex-col gap-2">
+      <Boton
+        variante="principal"
+        disabled={abrir.isPending}
+        onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}
+      >
+        {abrir.isPending ? "Abriendo…" : "Abrir el informe de esta visita"}
+      </Boton>
+      {abrir.isError && <Aviso tono="error">{mensajeDeError(abrir.error)}</Aviso>}
+    </div>
   );
 }
 

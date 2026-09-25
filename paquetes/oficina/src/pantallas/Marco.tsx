@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Aviso } from "@teins/ui";
 import { cliente } from "../api";
 import { useConexion } from "../conexion";
@@ -18,7 +19,24 @@ export function Marco({ nombre, children }: { nombre: string; children: ReactNod
   return (
     <div className="min-h-dvh bg-fondo">
       <header className="mx-3 mt-3 flex items-center justify-between gap-4 rounded-panel bg-superficie px-6 py-3 text-sobre-superficie">
-        <p className="text-cuerpo font-extrabold">TEINS Oficina</p>
+        <div className="flex items-center gap-6">
+          <p className="text-cuerpo font-extrabold">TEINS Oficina</p>
+          <nav aria-label="Secciones" className="flex gap-1">
+            {[
+              { a: "/", texto: "Levantamientos" },
+              { a: "/informes", texto: "Informes" },
+            ].map((e) => (
+              <Link
+                key={e.a}
+                to={e.a}
+                activeOptions={{ exact: e.a === "/" }}
+                className="inline-flex min-h-tactil items-center rounded-control px-3 text-ayuda font-bold text-sobre-superficie-suave data-[status=active]:bg-superficie-elevada data-[status=active]:text-sobre-superficie focus-visible:outline-3 focus-visible:outline-acento"
+              >
+                {e.texto}
+              </Link>
+            ))}
+          </nav>
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-ayuda text-sobre-superficie-suave">{nombre}</span>
           <button

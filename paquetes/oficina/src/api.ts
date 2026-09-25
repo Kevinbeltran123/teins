@@ -17,6 +17,8 @@ export const consultas = {
   sesion: () => queryOptions({ queryKey: ["sesion"], queryFn: () => cliente.llamar("obtenerSesion"), staleTime: 60_000 }),
   levantamiento: (id: string) => queryOptions({ queryKey: ["levantamiento", id], queryFn: () => cliente.llamar("obtenerLevantamiento", { parametros: { id } }) }),
   historial: (id: string) => queryOptions({ queryKey: ["levantamiento", id, "historial"], queryFn: () => cliente.llamar("historialLevantamiento", { parametros: { id } }) }),
+  informes: () => queryOptions({ queryKey: ["informes"], queryFn: () => cliente.llamar("listarInformes") }),
+  informe: (id: string) => queryOptions({ queryKey: ["informes", id], queryFn: () => cliente.llamar("obtenerInforme", { parametros: { id } }) }),
   // La URL firmada dura 5 minutos: se renueva antes de que venza.
   urlDeArchivo: (huella: string) =>
     queryOptions({ queryKey: ["archivo", huella], queryFn: () => cliente.llamar("urlDeArchivo", { parametros: { huella } }), staleTime: 4 * 60_000 }),
