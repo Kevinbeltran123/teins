@@ -24,7 +24,9 @@ export type CodigoErrorValidacion =
   | "fotos_insuficientes"
   | "foto_invalida"
   | "motivo_requerido"
-  | "no_obtenido_no_permitido";
+  | "no_obtenido_no_permitido"
+  /** Oficina no corrige este tipo de campo (hoy, fotos). */
+  | "no_corregible";
 
 export interface ErrorValidacion {
   seccion: string;
@@ -64,7 +66,8 @@ export function validarRespuestas(formato: VersionFormato, respuestas: Respuesta
   return errores;
 }
 
-function validarCampo(campo: DefinicionCampo, valor: unknown): CodigoErrorValidacion | null {
+/** Valida un solo valor contra su campo, con las mismas reglas del envío. */
+export function validarCampo(campo: DefinicionCampo, valor: unknown): CodigoErrorValidacion | null {
   if (esNoObtenido(valor)) {
     if (!campo.obligatorio) return "no_obtenido_no_permitido";
     if (typeof valor.motivo !== "string" || valor.motivo.trim() === "") return "motivo_requerido";

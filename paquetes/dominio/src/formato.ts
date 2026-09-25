@@ -20,5 +20,12 @@ export interface DefinicionSeccion {
 export interface VersionFormato {
   formato: string;
   version: number;
+  /** Nombre que ve el técnico. Opcional porque las versiones publicadas antes no lo tienen (regla 8). */
+  nombre?: string | undefined;
+  /**
+   * Versión mínima de `campo` que sabe mostrar esta versión (ADR-0015, punto 4). La bajada no la
+   * entrega a dispositivos más viejos: el técnico sigue con la versión anterior hasta actualizar.
+   */
+  appMinima?: number | undefined;
   secciones: readonly DefinicionSeccion[];
 }

@@ -20,12 +20,15 @@ export type Valor = string | ValorMedida | ValorFotos | ValorNoObtenido;
 /** Respuestas por clave de sección y clave de campo. */
 export type Respuestas = Readonly<Record<string, Readonly<Record<string, Valor>>>>;
 
-export type EstadoLevantamiento = "borrador" | "enviado";
+/** Ciclo de vida (modelo de dominio, sección 5). Anulado llega cuando haga falta. */
+export type EstadoLevantamiento = "borrador" | "enviado" | "en_revision" | "revisado";
 
 export interface Levantamiento {
   id: string;
   formato: string;
   versionFormato: number;
+  /** Visita en la que se captura. Los borradores de los cortes 0 y 1 no tienen (ADR-0015, expansión). */
+  visitaId?: string | undefined;
   estado: EstadoLevantamiento;
   respuestas: Respuestas;
   /** Horas del dispositivo (regla 16): declarativas; la oficial la pone el servidor al recibirlo. */
@@ -34,12 +37,13 @@ export interface Levantamiento {
   enviadoEn?: string;
 }
 
-export function crearLevantamiento(formato: VersionFormato, id: string, ahora: Date): Levantamiento {
+export function crearLevantamiento(formato: VersionFormato, id: string, ahora: Date, visitaId?: string): Levantamiento {
   const fecha = ahora.toISOString();
   return {
     id,
     formato: formato.formato,
     versionFormato: formato.version,
+    ...(visitaId ? { visitaId } : {}),
     estado: "borrador",
     respuestas: {},
     creadoEn: fecha,
