@@ -6,6 +6,7 @@ Entorno montado el 2026-09-25 desde la CLI de Railway (ADR-0016). Solo datos fic
 |---|---|---|
 | Superficie de campo (rol web, migra antes de cada versión) | `campo` | https://campo-production-2642.up.railway.app |
 | Superficie de oficina (rol web) | `oficina` | https://oficina-production-d24f.up.railway.app |
+| Portal del cliente (rol web, con la conexión `teins_portal`) | `portal` | https://portal-production-d5d9.up.railway.app |
 | Rol worker | `worker` | Sin dominio |
 | PostgreSQL 18 | `Postgres` | Red privada, sin acceso público |
 | Almacenamiento compatible con S3 | bucket `teins-pruebas` | Privado, región `iad` |
@@ -29,9 +30,11 @@ Variables, iguales en los tres servicios (las credenciales son referencias, nunc
 | `S3_REGION` · `S3_FORZAR_RUTA` · `S3_CONFIGURAR_CORS` · `S3_EXIGIR_HUELLA` | `auto` · `false` · `true` · `true` |
 | `ORIGENES_CONFIABLES` · `SUPERFICIE_CAMPO_HOST` · `SUPERFICIE_OFICINA_HOST` | Los dos dominios |
 | `AUTH_SECRETO` | Generado con `openssl rand -base64 32`; no se guardó en ningún otro lado |
-| `PORT` (solo `campo` y `oficina`) | `3000`: Railway prueba la salud en ese puerto |
+| `PORT` (solo servicios web) | `3000`: Railway prueba la salud en ese puerto |
+| `DATABASE_URL_PORTAL` · `SUPERFICIE_PORTAL_HOST` (solo `portal`) | `postgresql://teins_portal:${{Postgres.TEINS_PORTAL_CONTRASENA}}@…` y su dominio |
+| `PORTAL_URL` | Dominio del portal: la URL que lleva el QR de cada acceso |
 
-- **`TEINS_APP_CONTRASENA`** vive en el servicio `Postgres`. El rol `teins_app` se creó con `infra/roles.sql` a través de `railway connect Postgres --tunnel-only` (túnel por SSH).
+- **`TEINS_APP_CONTRASENA`** y **`TEINS_PORTAL_CONTRASENA`** viven en el servicio `Postgres`. El rol `teins_app` se creó con `infra/roles.sql` a través de `railway connect Postgres --tunnel-only` (túnel por SSH).
 - **`campo`:** pre-deploy `node dist/cli/migrar.js` (una sola migración por versión) y salud en `/salud`.
 - **`oficina`:** salud en `/salud`.
 - **`worker`:** arranque con `node --enable-source-maps dist/worker.js`.
@@ -53,6 +56,7 @@ railway up --service worker --detach
 railway ssh -s campo -- node dist/cli/crear-visita.js --organizacion 00000000-0000-4000-8000-000000000001 ...
 railway ssh -s campo -- node dist/cli/desactivar-usuario.js --usuario ana.prueba
 railway ssh -s campo -- node dist/cli/restablecer-contrasena.js --usuario tecnico.prueba
+railway ssh -s campo -- node dist/cli/crear-acceso-cliente.js --organizacion 00000000-0000-4000-8000-000000000001 --cliente <uuid>
 
 # Registros
 railway logs --service campo --deployment
@@ -64,6 +68,7 @@ Extremo a extremo contra el entorno (crea usuarios y clientes ficticios en cada 
 cd e2e
 E2E_CAMPO_URL=https://campo-production-2642.up.railway.app \
 E2E_OFICINA_URL=https://oficina-production-d24f.up.railway.app \
+E2E_PORTAL_URL=https://portal-production-d5d9.up.railway.app \
 npx playwright test --project chromium
 ```
 
