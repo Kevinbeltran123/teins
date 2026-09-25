@@ -29,5 +29,6 @@ export default defineConfig({
     { ...servidor, command: "npx tsx --env-file=.env src/web.ts", url: "http://localhost:3000/salud", reuseExistingServer: false },
     { cwd: "../paquetes/campo", command: "pnpm build && pnpm preview --port 5173 --strictPort", url: "http://localhost:5173", reuseExistingServer: !enCI, timeout: 120_000 },
     { cwd: "../paquetes/oficina", command: "pnpm build && pnpm preview", url: "http://localhost:5174", reuseExistingServer: !enCI, timeout: 120_000 },
+    { cwd: "../paquetes/portal", command: "pnpm build && pnpm preview", url: "http://localhost:5175", reuseExistingServer: !enCI, timeout: 120_000 },
       ],
 });

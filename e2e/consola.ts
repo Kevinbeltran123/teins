@@ -42,10 +42,21 @@ export function nuevoUsuario(rol: "tecnico" | "oficina", prefijo: string): Usuar
 
 /** Cliente ficticio con una visita para hoy asignada al técnico. Devuelve el nombre del cliente. */
 export function nuevaVisita(tecnico: Usuario): string {
+  return nuevaVisitaConCliente(tecnico).cliente;
+}
+
+export function nuevaVisitaConCliente(tecnico: Usuario): { cliente: string; clienteId: string } {
   const cliente = `Cliente E2E ${randomBytes(3).toString("hex")}`;
   const salida = comando("crear-cliente", ["--organizacion", ORGANIZACION, "--nombre", cliente, "--sitio", "Sede E2E", "--direccion", "Calle [N] # [N]-[N]"]);
   const [clienteId, sitioId] = [...salida.matchAll(/creado: ([0-9a-f-]{36})/g)].map((m) => m[1]!);
   const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
   comando("crear-visita", ["--organizacion", ORGANIZACION, "--cliente", clienteId!, "--sitio", sitioId!, "--motivo", "Mantenimiento", "--fecha", hoy, "--tecnicos", tecnico.usuario]);
-  return cliente;
+  return { cliente, clienteId: clienteId! };
+}
+
+/** Acceso de cliente al portal: identificador, clave y la URL que lleva el QR. */
+export function nuevoAcceso(clienteId: string): { identificador: string; clave: string; url: string } {
+  const salida = comando("crear-acceso-cliente", ["--organizacion", ORGANIZACION, "--cliente", clienteId]);
+  const valor = (etiqueta: string) => new RegExp(`${etiqueta}: (\\S+)`).exec(salida)?.[1] ?? "";
+  return { identificador: valor("Identificador"), clave: valor("Clave"), url: valor("URL del QR") };
 }
