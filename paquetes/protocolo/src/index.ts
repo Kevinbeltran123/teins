@@ -9,17 +9,24 @@ export {
   tipoDeProblema,
 } from "./problemas";
 export {
+  Bajada,
   BYTES_MAXIMOS_ARCHIVO,
+  Cambio,
   Comando,
+  Comentario,
   DetalleLevantamiento,
   EnviarLevantamiento,
+  Historial,
   llaveDeEnvio,
   operaciones,
+  OrdenesDelDispositivo,
   PaginaLevantamientos,
   ResultadoComando,
+  SaludDispositivo,
   Sesion,
   TIPOS_DE_ARCHIVO,
   UrlDeArchivo,
+  VisitaAsignada,
 } from "./operaciones";
 export type {
   Consulta,

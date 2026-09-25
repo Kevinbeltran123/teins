@@ -36,6 +36,8 @@ export const VersionFormato = z
   .object({
     formato: IdFormato,
     version: z.int().positive(),
+    nombre: z.string().min(1).max(120).optional(),
+    appMinima: z.int().positive().optional(),
     secciones: z
       .array(z.object({ clave: ClaveEsquema, titulo: z.string().min(1).max(200), campos: z.array(DefinicionCampo).readonly() }))
       .readonly(),

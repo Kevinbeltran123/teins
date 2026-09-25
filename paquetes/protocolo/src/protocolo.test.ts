@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LIMITES } from "@teins/dominio";
 import { documentoOpenApi } from "./openapi";
-import { EnviarLevantamiento, llaveDeEnvio, operaciones } from "./operaciones";
+import { Bajada, EnviarLevantamiento, llaveDeEnvio, operaciones } from "./operaciones";
 import { ESTADO_POR_CODIGO, REINTENTABLE } from "./problemas";
 
 const id = "01927a3e-7c1b-7e2a-9f00-123456789abc";
@@ -39,6 +39,79 @@ describe("EnviarLevantamiento", () => {
   it("rechaza claves de sección o campo fuera del alfabeto permitido", () => {
     const con = { ...comando, levantamiento: { ...comando.levantamiento, respuestas: { "__proto__x": {} } } };
     expect(EnviarLevantamiento.safeParse(con).success).toBe(false);
+  });
+});
+
+describe("EnviarLevantamiento con visita (ADR-0015, expansión)", () => {
+  it("acepta el comando con y sin visita, y rechaza una visita que no es UUID", () => {
+    const con = (visitaId: unknown) => ({ ...comando, levantamiento: { ...comando.levantamiento, visitaId } });
+    expect(EnviarLevantamiento.safeParse(con("01927a3e-7c1b-7e2a-9f00-000000000001")).success).toBe(true);
+    expect(EnviarLevantamiento.safeParse(comando).success).toBe(true);
+    expect(EnviarLevantamiento.safeParse(con("visita-1")).success).toBe(false);
+  });
+});
+
+describe("Bajada", () => {
+  const bajada = {
+    cambios: [
+      { tipo: "formato", definicion: { formato: "ups", version: 2, nombre: "UPS", appMinima: 2, secciones: [] } },
+      {
+        tipo: "visita",
+        visita: { id, cliente: { nombre: "Cliente ficticio" }, sitio: { nombre: "Sede", direccion: "Calle [N]" }, motivo: "Mantenimiento", programadaPara: "2026-09-25" },
+      },
+      { tipo: "levantamiento", id, estado: "enviado", recibidoEn: "2026-09-24T11:00:00.000Z" },
+      { tipo: "fuera_de_alcance", entidad: "visita", id },
+    ],
+    puntoDeControl: 42,
+    hayMas: false,
+    permisoLocalHasta: "2026-10-01T11:00:00.000Z",
+  };
+
+  it("acepta los cuatro tipos de cambio", () => {
+    expect(Bajada.safeParse(bajada).success).toBe(true);
+  });
+
+  it("rechaza un tipo de cambio desconocido y un punto de control negativo", () => {
+    expect(Bajada.safeParse({ ...bajada, cambios: [{ tipo: "otro", id }] }).success).toBe(false);
+    expect(Bajada.safeParse({ ...bajada, puntoDeControl: -1 }).success).toBe(false);
+  });
+
+  it("la consulta exige la versión de la app y parte de cero", () => {
+    const consulta = operaciones.obtenerCambios.consulta;
+    expect(consulta.safeParse({}).success).toBe(false);
+    expect(consulta.parse({ app: "2" })).toEqual({ desde: 0, app: 2, limite: 200 });
+  });
+});
+
+describe("revisión (corte 3)", () => {
+  it("una corrección acepta borrar con null y exige al menos un cambio con su versión", () => {
+    const cuerpo = operaciones.corregirLevantamiento.cuerpo;
+    expect(cuerpo.safeParse({ version: 2, correcciones: [{ seccion: "s", campo: "c", valor: null }] }).success).toBe(true);
+    expect(cuerpo.safeParse({ version: 2, correcciones: [] }).success).toBe(false);
+    expect(cuerpo.safeParse({ correcciones: [{ seccion: "s", campo: "c", valor: "x" }] }).success).toBe(false);
+  });
+
+  it("tomar no reasigna si no se pide", () => {
+    expect(operaciones.tomarLevantamiento.cuerpo.parse({ version: 1 })).toEqual({ version: 1, reasignar: false });
+  });
+
+  it("la bajada lleva estados de revisión y comentarios, que siguen siendo opcionales", () => {
+    const base = { tipo: "levantamiento", id, estado: "revisado", recibidoEn: "2026-09-24T11:00:00.000Z" };
+    const comentario = { id, texto: "Revisa la placa", campo: "potencia", seccion: "cuarto", autor: "Oficina", creadoEn: "2026-09-25T10:00:00.000Z" };
+    const bajada = (cambio: object) => Bajada.safeParse({ cambios: [cambio], puntoDeControl: 1, hayMas: false, permisoLocalHasta: "2026-10-01T00:00:00.000Z" });
+    expect(bajada({ ...base, comentarios: [comentario] }).success).toBe(true);
+    expect(bajada(base).success).toBe(true);
+    expect(bajada({ ...base, estado: "anulado" }).success).toBe(false);
+  });
+});
+
+describe("dispositivo", () => {
+  const secreto = "A".repeat(43);
+  it("el secreto tiene exactamente 32 bytes en base64url", () => {
+    const cuerpo = operaciones.consultarOrdenes.cuerpo;
+    expect(cuerpo.parse({ id, secreto })).toEqual({ id, secreto, confirmados: [] });
+    expect(cuerpo.safeParse({ id, secreto: "A".repeat(42) }).success).toBe(false);
+    expect(cuerpo.safeParse({ id, secreto: `${"A".repeat(42)}=` }).success).toBe(false);
   });
 });
 
