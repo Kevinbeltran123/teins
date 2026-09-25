@@ -5,11 +5,13 @@ import { Aviso, Boton } from "@teins/ui";
 import { consultas } from "./api";
 import { Administracion } from "./pantallas/Administracion";
 import { Bandeja } from "./pantallas/Bandeja";
+import { Clientes } from "./pantallas/Clientes";
 import { Detalle } from "./pantallas/Detalle";
 import { InformeDeVisita } from "./pantallas/Informe";
 import { Informes } from "./pantallas/Informes";
 import { IniciarSesion } from "./pantallas/IniciarSesion";
 import { Marco } from "./pantallas/Marco";
+import { Visitas } from "./pantallas/Visitas";
 
 /** Toda pantalla de oficina exige una sesión de oficina; la autorización real la aplica el servidor. */
 function Raiz() {
@@ -59,6 +61,9 @@ const informe = createRoute({
   },
 });
 
+const visitas = createRoute({ getParentRoute: () => raiz, path: "visitas", component: Visitas });
+const clientes = createRoute({ getParentRoute: () => raiz, path: "clientes", component: Clientes });
+
 const administracion = createRoute({
   getParentRoute: () => raiz,
   path: "administracion",
@@ -68,7 +73,7 @@ const administracion = createRoute({
   },
 });
 
-export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, listaDeInformes, informe, administracion]) });
+export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, visitas, clientes, listaDeInformes, informe, administracion]) });
 
 declare module "@tanstack/react-router" {
   interface Register {

@@ -24,6 +24,8 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
           <nav aria-label="Secciones" className="flex gap-1">
             {[
               { a: "/", texto: "Levantamientos" },
+              { a: "/visitas", texto: "Visitas" },
+              { a: "/clientes", texto: "Clientes" },
               { a: "/informes", texto: "Informes" },
               ...(administrador ? [{ a: "/administracion", texto: "Administración" }] : []),
             ].map((e) => (
