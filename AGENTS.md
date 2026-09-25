@@ -6,7 +6,7 @@ Instrucciones para cualquier agente de programación que trabaje en este reposit
 
 Sistema de levantamientos técnicos para TEINS: los técnicos capturan información en campo (con o sin conexión) desde una PWA, oficina la revisa y corrige con trazabilidad, y el cliente descarga el informe PDF desde un portal. Monolito modular en TypeScript sobre PostgreSQL.
 
-**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-24: corte 0 terminado; corte 1 construido y verificado, pendiente del entorno de pruebas y de la prueba en iPhone.
+**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-24: cortes 0 y 1 terminados en local (la prueba del corte 1 en iPhone y el entorno de pruebas se aplazaron); el siguiente es el corte 2, que aún no empieza.
 
 ## Antes de tocar cualquier cosa, lee en este orden
 

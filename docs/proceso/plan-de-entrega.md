@@ -7,8 +7,8 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Corte | Entregable demostrable | Riesgo que cierra | Estado |
 |---|---|---|---|
 | 0 | Captura sin conexión con fotos, instalada en iPhone | Durabilidad de la PWA en Safari (QA-1, ADR-0002) | Terminado |
-| 1 | El técnico inicia sesión, envía el levantamiento y oficina lo ve en su bandeja | Entrega completa, sin duplicados y con archivos verificados (QA-2), idempotencia, aislamiento por organización | En cierre: faltan iPhone y entorno de pruebas |
-| 2 | Bajada: formatos como datos, visitas asignadas, estado de mis levantamientos, permiso de trabajo local, revocación con borrado | Punto de control seguro (ADR-0005), revocación sin conexión (QA-5), formatos sin publicar la app (QA-11) | Pendiente |
+| 1 | El técnico inicia sesión, envía el levantamiento y oficina lo ve en su bandeja | Entrega completa, sin duplicados y con archivos verificados (QA-2), idempotencia, aislamiento por organización | Terminado en local; prueba en iPhone aplazada (ver criterio 4) |
+| 2 | Bajada: formatos como datos, visitas asignadas, estado de mis levantamientos, permiso de trabajo local, revocación con borrado | Punto de control seguro (ADR-0005), revocación sin conexión (QA-5), formatos sin publicar la app (QA-11) | Siguiente |
 | 3 | Revisión: tomar, corregir con trazabilidad por campo, comentar al técnico, marcar revisado | Concurrencia en oficina (QA-25), trazabilidad (QA-8) | Pendiente |
 | 4 | Informe: composición mínima, publicación inmutable y PDF | Versiones inmutables (QA-9), PDF reproducible en segundo plano (QA-17) | Pendiente |
 | 5 | Portal: acceso con QR y clave, descarga del informe vigente | Cero accesos cruzados entre clientes (QA-4, QA-7) | Pendiente |
@@ -17,9 +17,23 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 ## Próximo paso
 
-**Cerrar el corte 1:** desplegar el entorno de pruebas y hacer la prueba en iPhone (criterio 4 del corte 1). La propuesta de proveedores está en "Entorno de pruebas" dentro del corte 1 y espera la aprobación de Kevin, que crea las cuentas. Después: corte 2 (bajada).
+**Empezar el corte 2 (bajada), desarrollando en local.** Decisión de Kevin (2026-09-24): el entorno de pruebas y la prueba en iPhone del corte 1 se aplazan hasta **antes de la primera demostración a TEINS o al terminar el corte 2, lo que llegue primero**; así una sola prueba en iPhone cubre los dos cortes.
 
-Pendientes pequeños que no bloquean: completar la fila de resultados del corte 0 (modelo de iPhone, versión de iOS, persistente, fotos íntegras) y repetir esa prueba en Android.
+Cómo empezar el corte 2, con la misma forma de trabajo del corte 1:
+
+1. Leer ADR-0003 (bajada con punto de control), ADR-0005 (patrón 3: punto de control seguro con bloqueo consultivo), ADR-0009 (parte 2: permiso de trabajo local y revocación), ADR-0015 (compatibilidad N-1 y formatos que exigen versión de app) y ADR-0017 (parte 3: informe de salud del dispositivo, que viaja con la bajada).
+2. Escribir en este archivo la sección "Corte 2" con alcance, lo que queda fuera y la tabla "Terminado cuando", y mostrársela a Kevin **antes de programar**.
+3. Revisar qué preguntas de `docs/producto/preguntas-pendientes.md` necesita (probablemente P2, visitas programadas o creadas en campo) y pedirlas a TEINS antes de empezar; mientras tanto, trabajar con el supuesto del modelo de dominio (sección 9).
+4. Contrato primero: esquemas en `protocolo`, después servidor, después campo. Cerrar con la lista "Al cerrar un corte" de `AGENTS.md`.
+
+**Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1 y v2 y los usuarios `tecnico.prueba` y `oficina.prueba`. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
+
+**Pendientes que no bloquean el corte 2:**
+
+- Entorno de pruebas y prueba en iPhone del corte 1 (criterio 4), con la condición de arriba. La propuesta está en "Entorno de pruebas" dentro del corte 1.
+- Completar la fila de resultados del corte 0 (modelo de iPhone, versión de iOS, persistente, fotos íntegras) y repetir esa prueba en Android.
+- Medir el presupuesto de JavaScript de campo en un celular de gama media (ADR-0011).
+- La rama `corte-0` tiene los cortes 0 y 1 sin fusionar ni subir: al subirla corre por primera vez la integración continua de GitHub Actions.
 
 **Preguntas a TEINS antes del corte 3:** P7 y P8 (formatos y campos obligatorios reales), P9 (errores frecuentes). **Antes del corte 4:** P22, P23 y P26 (informe). **Antes del piloto:** P40 a P43.
 
@@ -148,9 +162,9 @@ Pendientes pequeños que no bloquean: completar la fila de resultados del corte 
 | 1. El recorrido extremo a extremo pasa en Chromium y WebKit | Cumplido en local |
 | 2. Pasan las pruebas de los cuatro niveles y las reglas de arquitectura en integración continua | Cumplido en local; el flujo de GitHub Actions corre al subir la rama |
 | 3. Pantallas solo con componentes de `ui` y estados vacío, cargando, error y sin conexión | Cumplido |
-| 4. Probado en un iPhone real: captura sin conexión, recuperar señal, enviar con fotos y verlo en oficina | Pendiente: requiere el entorno de pruebas desplegado |
+| 4. Probado en un iPhone real: captura sin conexión, recuperar señal, enviar con fotos y verlo en oficina | Aplazado por decisión de Kevin: se hace antes de la primera demostración a TEINS o al terminar el corte 2, junto con el entorno de pruebas |
 
-### Entorno de pruebas (propuesta, pendiente de aprobación)
+### Entorno de pruebas (propuesta, aplazada junto con el criterio 4)
 
 Datos ficticios, cuentas de Kevin, región en Estados Unidos (Ley 1581). Verificado contra la lista de ADR-0016 el 2026-09-24:
 

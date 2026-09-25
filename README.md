@@ -13,7 +13,7 @@ Sistema para capturar levantamientos técnicos en campo (con o sin conexión), r
 | Decisiones de arquitectura (ADR 0001 a 0020) | Aceptadas |
 | Dirección visual (Marquilla, estructura Placa, una sola familia de letra) | Definida en `DESIGN.md` y aplicada en campo y oficina; faltan las pantallas de los cortes siguientes |
 | Plan de entrega | Cortes 0 a 5 definidos; estado y próximo paso en [`docs/proceso/plan-de-entrega.md`](docs/proceso/plan-de-entrega.md) |
-| Código | Corte 0 terminado; corte 1 (envío a oficina) construido y verificado; falta entorno de pruebas e iPhone |
+| Código | Cortes 0 y 1 terminados en local (prueba del corte 1 en iPhone aplazada); siguiente: corte 2 (bajada) |
 
 ## Mapa del repositorio
 
