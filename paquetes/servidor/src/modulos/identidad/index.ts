@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Config } from "../../config";
 import { ROLES, type Actor, type Rol } from "../../plataforma/actor";
-import { enOrganizacion, type BaseDeDatos } from "../../plataforma/base-de-datos";
+import { enOrganizacion, esViolacionUnica, type BaseDeDatos } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion, registrarOperacionDeDispositivo, registrarRutaPublica } from "../../plataforma/rutas";
@@ -29,6 +29,8 @@ export interface Identidad {
   crearUsuario(datos: NuevoUsuario): Promise<{ id: string }>;
   /** Recuperación de acceso por el administrador (ADR-0009): cambia la contraseña y cierra todas sus sesiones. */
   restablecerContrasena(usuario: string, contrasena: string): Promise<void>;
+  /** Marca o desmarca a una persona de oficina como administradora (primer administrador: por comando). */
+  marcarAdministrador(usuario: string, administrador: boolean, contexto: { autorId: string; correlacion: string }): Promise<void>;
   /**
    * Revocación (regla 13, P36): no vuelve a autenticar, pierde sus sesiones de inmediato y sus
    * dispositivos reciben la orden de borrar sus datos en el siguiente contacto. Su autoría se conserva.
@@ -45,33 +47,162 @@ export interface Identidad {
 /** El servidor guarda solo la huella del secreto del dispositivo. */
 const huellaDeSecreto = (secreto: string) => createHash("sha256").update(secreto).digest("hex");
 
+/** Contraseña temporal de 16 caracteres (96 bits): se muestra una sola vez a quien administra. */
+const contrasenaTemporal = () => randomBytes(12).toString("base64url");
+
+const columnasAdministradas = {
+  id: usuarios.id,
+  usuario: usuarios.username,
+  nombre: usuarios.name,
+  rol: usuarios.rol,
+  administrador: usuarios.administrador,
+  segundoFactor: usuarios.twoFactorEnabled,
+  desactivadoEn: usuarios.desactivadoEn,
+  creadoEn: usuarios.createdAt,
+  organizacionId: usuarios.organizacionId,
+};
+interface FilaAdministrada {
+  id: string;
+  usuario: string | null;
+  nombre: string;
+  rol: string;
+  administrador: boolean;
+  segundoFactor: boolean;
+  desactivadoEn: Date | null;
+  creadoEn: Date;
+  organizacionId: string;
+}
+
+const comoAdministrado = (f: FilaAdministrada) => ({
+  id: f.id,
+  usuario: f.usuario ?? "",
+  nombre: f.nombre,
+  rol: f.rol as Rol,
+  administrador: f.administrador,
+  segundoFactor: f.segundoFactor,
+  desactivadoEn: f.desactivadoEn?.toISOString() ?? null,
+  creadoEn: f.creadoEn.toISOString(),
+});
+
 /** Interfaz pública del módulo de identidad (ADR-0009). */
 export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
-  const auth = crearAuth(bd, config, async (sesion) => {
-    const [usuario] = await bd.select({ organizacionId: usuarios.organizacionId }).from(usuarios).where(eq(usuarios.id, sesion.userId));
-    if (!usuario) return;
-    // Evento de seguridad en la cadena de la organización (ADR-0008).
-    await enOrganizacion(bd, usuario.organizacionId, (tx) =>
-      registrar(tx, [
-        {
-          organizacionId: usuario.organizacionId,
-          agregadoTipo: "organizacion",
-          agregadoId: usuario.organizacionId,
-          tipoEvento: "inicio_de_sesion",
-          autorId: sesion.userId,
-          correlacion: sesion.id,
-        },
-      ]),
-    );
-  });
+  const auth = crearAuth(
+    bd,
+    config,
+    async (sesion) => {
+      const [usuario] = await bd.select({ organizacionId: usuarios.organizacionId }).from(usuarios).where(eq(usuarios.id, sesion.userId));
+      if (!usuario) return;
+      // Evento de seguridad en la cadena de la organización (ADR-0008).
+      await enOrganizacion(bd, usuario.organizacionId, (tx) =>
+        registrar(tx, [
+          {
+            organizacionId: usuario.organizacionId,
+            agregadoTipo: "organizacion",
+            agregadoId: usuario.organizacionId,
+            tipoEvento: "inicio_de_sesion",
+            autorId: sesion.userId,
+            correlacion: sesion.id,
+          },
+        ]),
+      );
+    },
+    async (usuarioId, activo) => {
+      const [usuario] = await bd.select({ organizacionId: usuarios.organizacionId }).from(usuarios).where(eq(usuarios.id, usuarioId));
+      if (!usuario) return;
+      await enOrganizacion(bd, usuario.organizacionId, (tx) =>
+        registrar(tx, [
+          {
+            organizacionId: usuario.organizacionId,
+            agregadoTipo: "usuario",
+            agregadoId: usuarioId,
+            tipoEvento: activo ? "segundo_factor_activado" : "segundo_factor_desactivado",
+            autorId: usuarioId,
+            correlacion: `segundo-factor:${randomUUID()}`,
+          },
+        ]),
+      );
+    },
+  );
 
   async function resolverActor(solicitud: FastifyRequest): Promise<Actor | null> {
     const sesion = await auth.api.getSession({ headers: fromNodeHeaders(solicitud.headers) });
     if (!sesion) return null;
-    const { id, organizacionId, rol, desactivadoEn } = sesion.user as typeof sesion.user & { organizacionId: string; rol: string; desactivadoEn?: Date | null };
+    const { id, organizacionId, rol, desactivadoEn, administrador, twoFactorEnabled } = sesion.user as typeof sesion.user & {
+      organizacionId: string;
+      rol: string;
+      desactivadoEn?: Date | null;
+      administrador?: boolean | null;
+      twoFactorEnabled?: boolean | null;
+    };
     // Desactivar borra las sesiones; esto cubre una sesión creada durante la desactivación.
     if (desactivadoEn || !ROLES.includes(rol as Rol)) return null;
-    return { usuarioId: id, organizacionId, rol: rol as Rol };
+    // La marca solo vale para oficina: un técnico marcado por error no administra.
+    return { usuarioId: id, organizacionId, rol: rol as Rol, administrador: rol === "oficina" && !!administrador, segundoFactor: !!twoFactorEnabled };
+  }
+
+  /** Usuario de la organización de quien administra; de otra organización es como si no existiera. */
+  async function administrado(organizacionId: string, id: string): Promise<FilaAdministrada> {
+    const [fila] = await bd.select(columnasAdministradas).from(usuarios).where(and(eq(usuarios.id, id), eq(usuarios.organizacionId, organizacionId)));
+    if (!fila) throw problema("no_encontrado", "El usuario no existe");
+    return fila;
+  }
+
+  async function porNombreDeUsuario(usuario: string): Promise<FilaAdministrada> {
+    const [fila] = await bd.select(columnasAdministradas).from(usuarios).where(eq(usuarios.username, usuario.trim().toLowerCase()));
+    if (!fila) throw new Error(`No existe el usuario ${usuario}`);
+    return fila;
+  }
+
+  async function restablecer(id: string, contrasena: string) {
+    const contexto = await auth.$context;
+    await contexto.internalAdapter.updatePassword(id, await contexto.password.hash(contrasena));
+    await contexto.internalAdapter.deleteUserSessions(id);
+  }
+
+  async function desactivar(fila: FilaAdministrada, { autorId, correlacion }: { autorId: string; correlacion: string }) {
+    await enOrganizacion(bd, fila.organizacionId, async (tx) => {
+      const ahora = new Date();
+      await tx.update(usuarios).set({ desactivadoEn: ahora }).where(eq(usuarios.id, fila.id));
+      // Revocar es borrar la sesión: efecto inmediato en la siguiente solicitud (ADR-0009, parte 2).
+      await tx.delete(sesiones).where(eq(sesiones.userId, fila.id));
+      const marcados = await tx
+        .update(dispositivos)
+        .set({ ordenDeBorradoEn: ahora })
+        .where(and(eq(dispositivos.usuarioId, fila.id), isNull(dispositivos.ordenDeBorradoEn)))
+        .returning({ id: dispositivos.id });
+      await registrar(tx, [
+        {
+          organizacionId: fila.organizacionId,
+          agregadoTipo: "usuario",
+          agregadoId: fila.id,
+          tipoEvento: "usuario_desactivado",
+          autorId,
+          correlacion,
+          valorNuevo: { dispositivosConOrdenDeBorrado: marcados.length },
+        },
+      ]);
+    });
+  }
+
+  async function marcar(fila: FilaAdministrada, administrador: boolean, { autorId, correlacion }: { autorId: string; correlacion: string }) {
+    if (fila.rol !== "oficina") throw problema("estado_invalido", "Solo una persona de oficina puede administrar");
+    if (fila.desactivadoEn) throw problema("estado_invalido", "El usuario está desactivado");
+    if (fila.administrador === administrador) return;
+    await enOrganizacion(bd, fila.organizacionId, async (tx) => {
+      await tx.update(usuarios).set({ administrador }).where(eq(usuarios.id, fila.id));
+      await registrar(tx, [
+        {
+          organizacionId: fila.organizacionId,
+          agregadoTipo: "usuario",
+          agregadoId: fila.id,
+          tipoEvento: "administrador_cambiado",
+          autorId,
+          correlacion,
+          valorAnterior: fila.administrador,
+          valorNuevo: administrador,
+        },
+      ]);
+    });
   }
 
   const permisoLocalHasta = (ahora = new Date()) => new Date(ahora.getTime() + config.DIAS_PERMISO_LOCAL * 86_400_000).toISOString();
@@ -121,43 +252,18 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
 
     async restablecerContrasena(usuario, contrasena) {
       if (contrasena.length < 10) throw new Error("La contraseña debe tener al menos 10 caracteres");
-      const [fila] = await bd.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.username, usuario.trim().toLowerCase()));
-      if (!fila) throw new Error(`No existe el usuario ${usuario}`);
-      const contexto = await auth.$context;
-      await contexto.internalAdapter.updatePassword(fila.id, await contexto.password.hash(contrasena));
-      await contexto.internalAdapter.deleteUserSessions(fila.id);
+      await restablecer((await porNombreDeUsuario(usuario)).id, contrasena);
     },
 
-    async desactivarUsuario(usuario, { autorId, correlacion }) {
-      const [fila] = await bd
-        .select({ id: usuarios.id, organizacionId: usuarios.organizacionId, desactivadoEn: usuarios.desactivadoEn })
-        .from(usuarios)
-        .where(eq(usuarios.username, usuario.trim().toLowerCase()));
-      if (!fila) throw new Error(`No existe el usuario ${usuario}`);
+    async desactivarUsuario(usuario, contexto) {
+      const fila = await porNombreDeUsuario(usuario);
       if (fila.desactivadoEn) return "ya_estaba";
-      await enOrganizacion(bd, fila.organizacionId, async (tx) => {
-        const ahora = new Date();
-        await tx.update(usuarios).set({ desactivadoEn: ahora }).where(eq(usuarios.id, fila.id));
-        // Revocar es borrar la sesión: efecto inmediato en la siguiente solicitud (ADR-0009, parte 2).
-        await tx.delete(sesiones).where(eq(sesiones.userId, fila.id));
-        const marcados = await tx
-          .update(dispositivos)
-          .set({ ordenDeBorradoEn: ahora })
-          .where(and(eq(dispositivos.usuarioId, fila.id), isNull(dispositivos.ordenDeBorradoEn)))
-          .returning({ id: dispositivos.id });
-        await registrar(tx, [
-          {
-            organizacionId: fila.organizacionId,
-            agregadoTipo: "usuario",
-            agregadoId: fila.id,
-            tipoEvento: "usuario_desactivado",
-            autorId,
-            correlacion,
-            valorNuevo: { dispositivosConOrdenDeBorrado: marcados.length },
-          },
-        ]);
-      });
+      await desactivar(fila, contexto);
       return "desactivado";
+    },
+
+    async marcarAdministrador(usuario, administrador, contexto) {
+      await marcar(await porNombreDeUsuario(usuario), administrador, contexto);
     },
 
     async nombreDeOrganizacion(organizacionId) {
@@ -208,7 +314,113 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         manejar: async ({ actor }) => {
           const nombre = (await this.nombres(actor.organizacionId, [actor.usuarioId])).get(actor.usuarioId);
           if (!nombre) throw problema("no_autenticado");
-          return { usuario: { id: actor.usuarioId, nombre, rol: actor.rol }, permisoLocalHasta: permisoLocalHasta() };
+          return {
+            usuario: { id: actor.usuarioId, nombre, rol: actor.rol, administrador: actor.administrador, segundoFactor: actor.segundoFactor },
+            permisoLocalHasta: permisoLocalHasta(),
+          };
+        },
+      });
+
+      // Administración (iteración 6). La organización sale siempre de la sesión de quien administra.
+      registrarOperacion(app, "listarUsuarios", {
+        politica: politicas.administrador,
+        manejar: async ({ actor }) => {
+          const filas = await bd
+            .select(columnasAdministradas)
+            .from(usuarios)
+            .where(eq(usuarios.organizacionId, actor.organizacionId))
+            .orderBy(asc(usuarios.desactivadoEn), asc(usuarios.name));
+          return { usuarios: filas.map(comoAdministrado) };
+        },
+      });
+
+      registrarOperacion(app, "crearUsuarioAdministrado", {
+        politica: politicas.administrador,
+        manejar: async ({ cuerpo, actor, correlacion }) => {
+          const [existente] = await bd.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.username, cuerpo.usuario));
+          if (existente) throw problema("conflicto", "Ese nombre de usuario ya existe");
+          const contrasena = contrasenaTemporal();
+          let id: string;
+          try {
+            ({ id } = await this.crearUsuario({ organizacionId: actor.organizacionId, usuario: cuerpo.usuario, nombre: cuerpo.nombre, rol: cuerpo.rol, contrasena }));
+          } catch (error) {
+            // El nombre de usuario es único en todo el sistema: es con lo que se inicia sesión.
+            if (esViolacionUnica(error)) throw problema("conflicto", "Ese nombre de usuario ya existe");
+            throw error;
+          }
+          await enOrganizacion(bd, actor.organizacionId, (tx) =>
+            registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "usuario", agregadoId: id, tipoEvento: "usuario_creado", autorId: actor.usuarioId, correlacion, valorNuevo: { usuario: cuerpo.usuario, rol: cuerpo.rol } },
+            ]),
+          );
+          return { usuario: comoAdministrado(await administrado(actor.organizacionId, id)), contrasena };
+        },
+      });
+
+      registrarOperacion(app, "restablecerContrasenaAdministrada", {
+        politica: politicas.administrador,
+        manejar: async ({ parametros: { id }, actor, correlacion }) => {
+          const fila = await administrado(actor.organizacionId, id);
+          if (fila.desactivadoEn) throw problema("estado_invalido", "El usuario está desactivado");
+          const contrasena = contrasenaTemporal();
+          await restablecer(fila.id, contrasena);
+          await enOrganizacion(bd, actor.organizacionId, (tx) =>
+            registrar(tx, [{ organizacionId: actor.organizacionId, agregadoTipo: "usuario", agregadoId: fila.id, tipoEvento: "contrasena_restablecida", autorId: actor.usuarioId, correlacion }]),
+          );
+          return { contrasena };
+        },
+      });
+
+      registrarOperacion(app, "desactivarUsuarioAdministrado", {
+        politica: politicas.administrador,
+        manejar: async ({ parametros: { id }, actor, correlacion }) => {
+          const fila = await administrado(actor.organizacionId, id);
+          if (fila.id === actor.usuarioId) throw problema("estado_invalido", "No puede desactivarse a sí mismo");
+          if (!fila.desactivadoEn) await desactivar(fila, { autorId: actor.usuarioId, correlacion });
+          return comoAdministrado(await administrado(actor.organizacionId, id));
+        },
+      });
+
+      registrarOperacion(app, "marcarAdministrador", {
+        politica: politicas.administrador,
+        manejar: async ({ parametros: { id }, cuerpo, actor, correlacion }) => {
+          const fila = await administrado(actor.organizacionId, id);
+          // Quitarse la marca a sí mismo podría dejar la organización sin nadie que administre.
+          if (fila.id === actor.usuarioId && !cuerpo.administrador) throw problema("estado_invalido", "Otra persona administradora debe quitarle la marca");
+          await marcar(fila, cuerpo.administrador, { autorId: actor.usuarioId, correlacion });
+          return comoAdministrado(await administrado(actor.organizacionId, id));
+        },
+      });
+
+      registrarOperacion(app, "listarDispositivos", {
+        politica: politicas.administrador,
+        manejar: async ({ actor }) => {
+          const filas = await bd
+            .select({
+              id: dispositivos.id,
+              usuarioId: dispositivos.usuarioId,
+              nombre: usuarios.name,
+              registradoEn: dispositivos.registradoEn,
+              ultimoContacto: dispositivos.ultimoContacto,
+              salud: dispositivos.salud,
+              ordenDeBorradoEn: dispositivos.ordenDeBorradoEn,
+              borradoConfirmadoEn: dispositivos.borradoConfirmadoEn,
+            })
+            .from(dispositivos)
+            .innerJoin(usuarios, eq(usuarios.id, dispositivos.usuarioId))
+            .where(eq(dispositivos.organizacionId, actor.organizacionId))
+            .orderBy(desc(dispositivos.ultimoContacto));
+          return {
+            dispositivos: filas.map((f) => ({
+              id: f.id,
+              usuario: { id: f.usuarioId, nombre: f.nombre },
+              registradoEn: f.registradoEn.toISOString(),
+              ultimoContacto: f.ultimoContacto.toISOString(),
+              salud: f.salud ?? null,
+              ordenDeBorradoEn: f.ordenDeBorradoEn?.toISOString() ?? null,
+              borradoConfirmadoEn: f.borradoConfirmadoEn?.toISOString() ?? null,
+            })),
+          };
         },
       });
 

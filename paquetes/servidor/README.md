@@ -64,12 +64,13 @@ pnpm --filter @teins/servidor dev:web     # http://localhost:3000
 pnpm --filter @teins/servidor dev:worker
 ```
 
-Administración, mientras llegan las pantallas (uso en el encabezado de cada archivo de `src/cli/`):
+Comandos de administración (uso en el encabezado de cada archivo de `src/cli/`). Desde la iteración 6, usuarios, accesos de clientes y retiro de versiones también se hacen en oficina, sección "Administración"; los comandos quedan para la primera persona administradora y para lo que aún no tiene pantalla:
 
 | Comando | Qué hace |
 |---|---|
 | `crear-usuario`, `restablecer-contrasena` | Usuarios internos y recuperación de acceso |
 | `desactivar-usuario` | Revoca: cierra sus sesiones, no vuelve a entrar y sus teléfonos borran sus datos al conectarse |
+| `marcar-administrador` | Marca (o con `--quitar`, desmarca) a una persona de oficina como administradora; para administrar debe activar además el segundo factor en oficina |
 | `crear-cliente` | Cliente con su primer sitio |
 | `crear-visita`, `reasignar-visita` | Programa una visita para uno o varios técnicos; al reasignar, sale del teléfono de quien deja de tenerla |
 | `publicar-formato` | Publica una versión de formato desde un JSON; llega a los teléfonos en la siguiente bajada |

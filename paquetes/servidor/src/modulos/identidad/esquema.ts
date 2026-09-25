@@ -34,6 +34,10 @@ export const usuarios = identidad.table(
     rol: text("rol").notNull(),
     /** Regla 13: un usuario desactivado no autentica y sus dispositivos borran sus datos; su autoría se conserva. */
     desactivadoEn: marcaDeTiempo("desactivado_en"),
+    /** Persona de oficina que administra usuarios, dispositivos y accesos (iteración 6). */
+    administrador: boolean("administrador").notNull().default(false),
+    /** Segundo factor activo y verificado (Better Auth, ADR-0009). */
+    twoFactorEnabled: boolean("segundo_factor").notNull().default(false),
   },
   (t) => [check("usuarios_rol_valido", sql`${t.rol} in ('tecnico', 'oficina')`), index("usuarios_organizacion_idx").on(t.organizacionId)],
 );
@@ -113,6 +117,26 @@ export const verificaciones = identidad.table(
     updatedAt: marcaDeTiempo("actualizada_en").notNull().defaultNow(),
   },
   (t) => [index("verificaciones_identificador_idx").on(t.identifier)],
+);
+
+/**
+ * Segundo factor TOTP (ADR-0009). Better Auth guarda el secreto y los códigos de respaldo cifrados
+ * con el secreto de autenticación; el factor no cuenta hasta que la persona verifica un código.
+ */
+export const segundosFactores = identidad.table(
+  "segundos_factores",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secreto").notNull(),
+    backupCodes: text("codigos_de_respaldo").notNull(),
+    userId: text("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    verified: boolean("verificado").notNull().default(true),
+    failedVerificationCount: integer("intentos_fallidos").notNull().default(0),
+    lockedUntil: marcaDeTiempo("bloqueado_hasta"),
+  },
+  (t) => [index("segundos_factores_usuario_idx").on(t.userId)],
 );
 
 /** Límite de intentos compartido entre instancias (QA-7): vive en la base, no en memoria. */

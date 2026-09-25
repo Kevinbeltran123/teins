@@ -19,6 +19,7 @@
     "publicar-formato": "tsx --env-file=.env src/cli/publicar-formato.ts",
     "crear-acceso-cliente": "tsx --env-file=.env src/cli/crear-acceso-cliente.ts",
     "regenerar-acceso-cliente": "tsx --env-file=.env src/cli/crear-acceso-cliente.ts --regenerar",
+    "marcar-administrador": "tsx --env-file=.env src/cli/marcar-administrador.ts",
     "compilar": "node scripts/compilar.mjs"
   },
   "dependencies": {

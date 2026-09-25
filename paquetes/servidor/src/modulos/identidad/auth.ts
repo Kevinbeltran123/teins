@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { username } from "better-auth/plugins";
+import { twoFactor, username } from "better-auth/plugins";
 import type { Config } from "../../config";
 import type { BaseDeDatos } from "../../plataforma/base-de-datos";
 import { eq } from "drizzle-orm";
-import { cuentas, limitesDeTasa, sesiones, usuarios, verificaciones } from "./esquema";
+import { cuentas, limitesDeTasa, segundosFactores, sesiones, usuarios, verificaciones } from "./esquema";
 
 export interface SesionCreada {
   id: string;
@@ -17,7 +17,12 @@ export interface SesionCreada {
  * Autenticación con Better Auth (ADR-0009): sesiones opacas en la base, cookie HttpOnly,
  * sin registro público. Revocar es borrar la fila de la sesión.
  */
-export function crearAuth(bd: BaseDeDatos, config: Config, alCrearSesion: (sesion: SesionCreada) => Promise<void>) {
+export function crearAuth(
+  bd: BaseDeDatos,
+  config: Config,
+  alCrearSesion: (sesion: SesionCreada) => Promise<void>,
+  alCambiarSegundoFactor: (usuarioId: string, activo: boolean) => Promise<void>,
+) {
   return betterAuth({
     appName: "TEINS",
     secret: config.AUTH_SECRETO,
@@ -32,7 +37,7 @@ export function crearAuth(bd: BaseDeDatos, config: Config, alCrearSesion: (sesio
     trustedOrigins: config.ORIGENES_CONFIABLES,
     database: drizzleAdapter(bd, {
       provider: "pg",
-      schema: { user: usuarios, session: sesiones, account: cuentas, verification: verificaciones, rateLimit: limitesDeTasa },
+      schema: { user: usuarios, session: sesiones, account: cuentas, verification: verificaciones, rateLimit: limitesDeTasa, twoFactor: segundosFactores },
     }),
     emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 10, maxPasswordLength: 128 },
     user: {
@@ -40,6 +45,7 @@ export function crearAuth(bd: BaseDeDatos, config: Config, alCrearSesion: (sesio
         organizacionId: { type: "string", required: true, input: false },
         rol: { type: "string", required: true, input: false },
         desactivadoEn: { type: "date", required: false, input: false },
+        administrador: { type: "boolean", required: false, defaultValue: false, input: false },
       },
     },
     session: {
@@ -51,7 +57,11 @@ export function crearAuth(bd: BaseDeDatos, config: Config, alCrearSesion: (sesio
       storage: "database",
       window: 60,
       max: 100,
-      customRules: { "/sign-in/username": { window: 60, max: config.INICIOS_DE_SESION_POR_MINUTO } },
+      customRules: {
+        "/sign-in/username": { window: 60, max: config.INICIOS_DE_SESION_POR_MINUTO },
+        // El código del segundo factor tiene el mismo límite por origen; además, 10 fallos bloquean la cuenta 15 minutos.
+        "/two-factor/*": { window: 60, max: config.INICIOS_DE_SESION_POR_MINUTO },
+      },
     },
     advanced: {
       cookiePrefix: "teins",
@@ -60,8 +70,31 @@ export function crearAuth(bd: BaseDeDatos, config: Config, alCrearSesion: (sesio
       trustedProxyHeaders: config.NODE_ENV === "production",
       database: { generateId: () => randomUUID() },
     },
-    plugins: [username({ minUsernameLength: 3, maxUsernameLength: 30 })],
+    plugins: [
+      username({ minUsernameLength: 3, maxUsernameLength: 30 }),
+      // Segundo factor TOTP (ADR-0009), obligatorio para administrar. El inicio de sesión de quien lo tiene
+      // activo no crea sesión: responde twoFactorRedirect y la sesión nace al verificar el código.
+      twoFactor({ issuer: "TEINS", twoFactorTable: "twoFactor" }),
+    ],
+    hooks: {
+      // Solo oficina activa el segundo factor: campo no sabe pedir el código (el técnico quedaría por fuera).
+      before: createAuthMiddleware(async (ctx) => {
+        if (!ctx.path.startsWith("/two-factor/enable")) return;
+        const sesion = await getSessionFromCtx(ctx);
+        if ((sesion?.user as { rol?: string } | undefined)?.rol !== "oficina") throw new APIError("FORBIDDEN", { message: "Solo oficina activa el segundo factor" });
+      }),
+    },
     databaseHooks: {
+      user: {
+        update: {
+          // El segundo factor solo cambia al confirmarlo con un código o al desactivarlo: evento de seguridad (ADR-0008).
+          after: async (usuario, contexto) => {
+            if (contexto?.path === "/two-factor/verify-totp" || contexto?.path === "/two-factor/disable") {
+              await alCambiarSegundoFactor(usuario.id, (usuario as { twoFactorEnabled?: boolean }).twoFactorEnabled === true);
+            }
+          },
+        },
+      },
       session: {
         create: {
           // Regla 13: un usuario desactivado no autentica. Responde igual que una contraseña equivocada.

@@ -18,7 +18,7 @@ import { clientesYSitios } from "./modulos/clientes";
 import { crearSincronizacion } from "./modulos/sincronizacion";
 import { crearVisitas } from "./modulos/visitas";
 import { crearInformes } from "./modulos/informes";
-import { crearPortal } from "./modulos/portal";
+import { crearAccesosDeClientes, crearPortal } from "./modulos/portal";
 
 export interface Dependencias {
   config: Config;
@@ -157,6 +157,7 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   levantamientos.registrarRutas(app);
   sincronizacion.registrarRutas(app);
   informes.registrarRutas(app);
+  crearAccesosDeClientes(bd).registrarRutas(app, config);
   if (bdPortal) crearPortal({ bdPortal, almacenamiento, config }).registrarRutas(app);
 
   const superficies: Superficie[] = [

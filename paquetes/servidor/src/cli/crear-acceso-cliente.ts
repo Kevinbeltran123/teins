@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import QRCode from "qrcode";
 import { leerConfig } from "../config";
 import { conectar } from "../plataforma/base-de-datos";
-import { crearAccesosDeClientes, type CredencialesDeAcceso } from "../modulos/portal";
+import { crearAccesosDeClientes, urlDeAcceso, type CredencialesDeAcceso } from "../modulos/portal";
 
 /**
  * Crea (o con --regenerar, reemplaza) el acceso de un cliente al portal (ADR-0009, parte 4). Muestra
@@ -31,7 +31,7 @@ try {
   const accesos = crearAccesosDeClientes(conexion.bd);
   const contexto = { autorId: "administrador", correlacion: `consola:${randomUUID()}` };
   const c: CredencialesDeAcceso = regenerar ? await accesos.regenerar(organizacion, cliente, contexto) : await accesos.crear(organizacion, cliente, contexto);
-  const url = `${config.PORTAL_URL.replace(/\/$/, "")}/?acceso=${c.identificador}`;
+  const url = urlDeAcceso(config.PORTAL_URL, c.identificador);
   console.log(`Identificador: ${c.identificador}\nClave: ${c.clave}\nURL del QR: ${url}`);
   console.log("Entregue la clave por un medio distinto al del QR. No se vuelve a mostrar.");
   console.log(await QRCode.toString(url, { type: "terminal", small: true }));

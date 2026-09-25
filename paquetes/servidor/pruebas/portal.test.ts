@@ -168,4 +168,41 @@ describe("portal del cliente (ADR-0009, parte 4)", () => {
     expect(String(salida.headers["set-cookie"])).toContain("Max-Age=0");
     expect((await portal(cookie, "/api/portal/informes")).statusCode).toBe(401);
   });
+
+  it("una versión retirada deja de verse en el portal, se conserva para oficina y queda registrada (iteración 6)", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const admin = await s.nuevoAdministrador(org.organizacionId);
+    const f = await clienteConInforme(org, "Cliente F");
+    expect((await f.publicarOtra()).statusCode).toBe(201);
+    await hastaQueNoHayaPdfPendientes(org.organizacionId);
+    const credenciales = await accesos.crear(org.organizacionId, f.clienteId, contexto);
+    const cookie = cookieDe(await ingresar(credenciales.identificador, credenciales.clave, "10.7.0.1"));
+    expect((await portal(cookie, "/api/portal/informes")).json().informes[0].numero).toBe(2);
+
+    const retirar = (quien: string, numero: number) =>
+      app.inject({ method: "POST", url: `/api/informes/${f.informeId}/versiones/${numero}/retirar`, headers: { cookie: quien, origin: PORTAL }, payload: { motivo: "Datos del equipo equivocados" } });
+    expect((await retirar(org.oficina.cookie, 2)).json().codigo).toBe("sin_permiso");
+    const retirada = await retirar(admin.cookie, 2);
+    expect(retirada.statusCode, retirada.body).toBe(200);
+    expect(retirada.json()).toMatchObject({ numero: 2, retirada: { por: { id: admin.id }, motivo: "Datos del equipo equivocados" } });
+    expect((await retirar(admin.cookie, 2)).json().codigo).toBe("estado_invalido");
+
+    // El cliente vuelve a ver la versión anterior; si se retiran todas, el informe desaparece del portal.
+    expect((await portal(cookie, "/api/portal/informes")).json().informes[0].numero).toBe(1);
+    expect((await retirar(admin.cookie, 1)).statusCode).toBe(200);
+    expect((await portal(cookie, "/api/portal/informes")).json().informes).toEqual([]);
+    expect((await portal(cookie, `/api/portal/informes/${f.informeId}/pdf`)).json().codigo).toBe("no_encontrado");
+
+    const detalle = (await app.inject({ method: "GET", url: `/api/informes/${f.informeId}`, headers: { cookie: org.oficina.cookie } })).json();
+    expect(detalle.versiones.map((v: { retirada: unknown }) => v.retirada !== null)).toEqual([true, true]);
+    const { rows } = await s.propietario.pool.query("select motivo from auditoria.registros where tipo_evento = 'version_retirada' and agregado_id = $1", [f.informeId]);
+    expect(rows).toHaveLength(2);
+
+    // Retirar no abre la copia congelada: la aplicación sigue sin poder escribirla.
+    const error = await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) => tx.execute(sql`update informes.versiones set contenido = '{}'::jsonb`)).then(
+      () => null,
+      (e: Error) => String((e as { cause?: Error }).cause?.message ?? e.message),
+    );
+    expect(error).toMatch(/permission denied/);
+  });
 });

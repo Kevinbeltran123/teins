@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { fotosReferenciadas, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
@@ -90,6 +90,26 @@ async function leerTodo(almacenamiento: Almacenamiento, ruta: string): Promise<B
   return Buffer.concat(partes);
 }
 
+interface FilaVersion {
+  numero: number;
+  publicadaEn: Date;
+  publicadaPor: string;
+  pdf: EstadoPdf;
+  retiradaEn: Date | null;
+  retiradaPor: string | null;
+  motivoRetiro: string | null;
+}
+
+const comoVersion = (v: FilaVersion, nombres: Map<string, string>) => ({
+  numero: v.numero,
+  publicadaEn: v.publicadaEn.toISOString(),
+  publicadaPor: { id: v.publicadaPor, nombre: nombres.get(v.publicadaPor) ?? SIN_NOMBRE },
+  pdf: v.pdf,
+  retirada: v.retiradaEn
+    ? { en: v.retiradaEn.toISOString(), por: { id: v.retiradaPor ?? "", nombre: nombres.get(v.retiradaPor ?? "") ?? SIN_NOMBRE }, motivo: v.motivoRetiro ?? "" }
+    : null,
+});
+
 const invalido = (errores: ErrorInforme[]) => problema("informe_invalido", "El informe no cumple sus reglas", { erroresInforme: errores.map((e) => ({ ...e })) });
 
 /** Lo único que necesita el worker: generar el PDF de una versión desde su copia congelada. */
@@ -154,7 +174,17 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
 
   async function versionesDe(tx: TxOrganizacion, informeId: string) {
     return tx
-      .select({ id: versionesPublicadas.id, numero: versionesPublicadas.numero, publicadaEn: versionesPublicadas.publicadaEn, publicadaPor: versionesPublicadas.publicadaPor, pdf: versionesPublicadas.pdfEstado, pdfHuella: versionesPublicadas.pdfHuella })
+      .select({
+        id: versionesPublicadas.id,
+        numero: versionesPublicadas.numero,
+        publicadaEn: versionesPublicadas.publicadaEn,
+        publicadaPor: versionesPublicadas.publicadaPor,
+        pdf: versionesPublicadas.pdfEstado,
+        pdfHuella: versionesPublicadas.pdfHuella,
+        retiradaEn: versionesPublicadas.retiradaEn,
+        retiradaPor: versionesPublicadas.retiradaPor,
+        motivoRetiro: versionesPublicadas.motivoRetiro,
+      })
       .from(versionesPublicadas)
       .where(eq(versionesPublicadas.informeId, informeId))
       .orderBy(desc(versionesPublicadas.numero));
@@ -169,10 +199,11 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
         manejar: async ({ actor }) =>
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const filas = await tx.select({ id: informes.id, visitaId: informes.visitaId }).from(informes);
-            // La versión vigente es la de mayor número (regla 10).
+            // La versión vigente es la de mayor número sin retirar (regla 10): la que ve el cliente.
             const publicadas = await tx
               .select({ informeId: versionesPublicadas.informeId, numero: versionesPublicadas.numero, pdf: versionesPublicadas.pdfEstado })
               .from(versionesPublicadas)
+              .where(isNull(versionesPublicadas.retiradaEn))
               .orderBy(desc(versionesPublicadas.numero));
             const vigentes = new Map<string, { numero: number; pdf: EstadoPdf }>();
             for (const v of publicadas) if (!vigentes.has(v.informeId)) vigentes.set(v.informeId, v);
@@ -229,7 +260,9 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             return { informe, visita, lista, nombresDeFormato, versiones: await versionesDe(tx, id) };
           });
           if (!r.visita) throw problema("no_encontrado", "La visita del informe no existe");
-          const nombres = await identidad.nombres(actor.organizacionId, [...new Set([...r.lista.map((l) => l.tecnicoId), ...r.versiones.map((v) => v.publicadaPor)])]);
+          const nombres = await identidad.nombres(actor.organizacionId, [
+            ...new Set([...r.lista.map((l) => l.tecnicoId), ...r.versiones.flatMap((v) => [v.publicadaPor, ...(v.retiradaPor ? [v.retiradaPor] : [])])]),
+          ]);
           return {
             id: r.informe.id,
             visitaId: r.informe.visitaId,
@@ -246,12 +279,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               estado: l.estado,
               recibidoEn: l.recibidoEn.toISOString(),
             })),
-            versiones: r.versiones.map((v) => ({
-              numero: v.numero,
-              publicadaEn: v.publicadaEn.toISOString(),
-              publicadaPor: { id: v.publicadaPor, nombre: nombres.get(v.publicadaPor) ?? SIN_NOMBRE },
-              pdf: v.pdf,
-            })),
+            versiones: r.versiones.map((v) => comoVersion(v, nombres)),
           };
         },
       });
@@ -361,6 +389,32 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             publicadaPor: { id: actor.usuarioId, nombre: publicada.publicadaPor },
             pdf: "generando" as const,
           };
+        },
+      });
+
+      registrarOperacion(app, "retirarVersion", {
+        politica: politicas.administrador,
+        manejar: async ({ parametros: { id, numero }, cuerpo, actor, correlacion }) => {
+          const version = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            await leerInforme(tx, id);
+            const [existe] = await tx
+              .select({ retiradaEn: versionesPublicadas.retiradaEn })
+              .from(versionesPublicadas)
+              .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero)));
+            if (!existe) throw problema("no_encontrado", "La versión no existe");
+            // Retirar es definitivo: para volver a entregar se publica una versión nueva (regla 10).
+            if (existe.retiradaEn) throw problema("estado_invalido", "La versión ya estaba retirada");
+            await tx
+              .update(versionesPublicadas)
+              .set({ retiradaEn: new Date(), retiradaPor: actor.usuarioId, motivoRetiro: cuerpo.motivo })
+              .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero), isNull(versionesPublicadas.retiradaEn)));
+            await registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "version_retirada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero }, motivo: cuerpo.motivo },
+            ]);
+            return (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
+          });
+          const nombres = await identidad.nombres(actor.organizacionId, [version.publicadaPor, actor.usuarioId]);
+          return comoVersion(version, nombres);
         },
       });
 

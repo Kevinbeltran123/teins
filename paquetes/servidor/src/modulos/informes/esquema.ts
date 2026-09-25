@@ -48,20 +48,28 @@ export const versionesPublicadas = esquemaInformes.table(
     pdfHuella: text("pdf_huella"),
     pdfGeneradoEn: marcaDeTiempo("pdf_generado_en"),
     pdfError: text("pdf_error"),
+    /**
+     * Retiro del portal por una persona administradora (iteración 6). La copia congelada no cambia:
+     * la versión se conserva, oficina la sigue viendo y el cliente deja de verla.
+     */
+    retiradaEn: marcaDeTiempo("retirada_en"),
+    retiradaPor: text("retirada_por"),
+    motivoRetiro: text("motivo_retiro"),
   },
   (t) => [
     unique("versiones_numero").on(t.informeId, t.numero),
     index("versiones_informe_idx").on(t.informeId),
     aislamientoPorOrganizacion("versiones"),
     // ADR-0009, parte 3: aunque el código del portal falle, la base solo le devuelve lo publicado,
-    // con PDF listo, de la organización y el cliente de la sesión.
+    // con PDF listo y sin retirar, de la organización y el cliente de la sesión.
     pgPolicy("versiones_portal_cliente", {
       as: "permissive",
       to: rolPortal,
       for: "select",
       using: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid
         and cliente_id = nullif(current_setting('app.cliente', true), '')::uuid
-        and pdf_estado = 'listo'`,
+        and pdf_estado = 'listo'
+        and retirada_en is null`,
     }),
   ],
 ).enableRLS();

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { clientes, sitios } from "./esquema";
 
@@ -33,6 +33,10 @@ export const clientesYSitios = {
   async obtener(tx: TxOrganizacion, id: string): Promise<{ id: string; nombre: string } | undefined> {
     const [fila] = await tx.select({ id: clientes.id, nombre: clientes.nombre }).from(clientes).where(eq(clientes.id, id));
     return fila;
+  },
+
+  async listar(tx: TxOrganizacion): Promise<{ id: string; nombre: string }[]> {
+    return tx.select({ id: clientes.id, nombre: clientes.nombre }).from(clientes).orderBy(asc(clientes.nombre));
   },
 
   async sitios(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, Sitio>> {

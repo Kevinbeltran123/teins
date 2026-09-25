@@ -55,6 +55,7 @@ import { crearFormatos } from "../src/modulos/formatos";
 import { crearIdentidad } from "../src/modulos/identidad";
 import { crearGeneradorPdf } from "../src/modulos/informes";
 import { definirTareas } from "../src/tareas";
+import { codigoTotp } from "./totp";
 
 const requerir = createRequire(import.meta.url);
 export const formatoDePrueba = (version: 1 | 2) =>
@@ -114,19 +115,37 @@ export async function servidorDePrueba() {
     throw new Error("La cola no se vació");
   }
 
-  return { app, rutas, config, propietario, conexionApp, conexionPortal, identidad, nuevaOrganizacionConUsuarios, procesarCola };
+  /** Persona de oficina con la marca de administrador y el segundo factor activo (iteración 6). */
+  async function nuevoAdministrador(organizacionId: string) {
+    const usuario = `admin.${randomBytes(4).toString("hex")}`;
+    const contrasena = "contrasena-de-prueba";
+    const { id } = await identidad.crearUsuario({ organizacionId, usuario, nombre: "Administradora de prueba", rol: "oficina", contrasena });
+    await identidad.marcarAdministrador(usuario, true, { autorId: "administrador", correlacion: "prueba" });
+    const sinFactor = await iniciarSesion(app, usuario, contrasena);
+    const { totpURI } = (await autenticacion(app, "/two-factor/enable", { password: contrasena }, sinFactor)).json() as { totpURI: string };
+    const verificado = await autenticacion(app, "/two-factor/verify-totp", { code: codigoTotp(totpURI) }, sinFactor);
+    if (verificado.statusCode !== 200) throw new Error(`No se pudo activar el segundo factor: ${verificado.body}`);
+    return { id, usuario, contrasena, totpURI, cookie: cookiesDe(verificado) };
+  }
+
+  return { app, rutas, config, propietario, conexionApp, conexionPortal, identidad, nuevaOrganizacionConUsuarios, nuevoAdministrador, procesarCola };
 }
 
-export async function iniciarSesion(app: FastifyInstance, usuario: string, contrasena: string): Promise<string> {
-  const r = await app.inject({
-    method: "POST",
-    url: "/api/auth/sign-in/username",
-    headers: { origin: ORIGEN, "content-type": "application/json" },
-    payload: { username: usuario, password: contrasena },
-  });
-  if (r.statusCode !== 200) throw new Error(`No se pudo iniciar sesión (${r.statusCode}): ${r.body}`);
-  const cookies = [r.headers["set-cookie"]].flat().filter((c): c is string => typeof c === "string");
+/** Llamada a una ruta de Better Auth desde oficina. */
+export const autenticacion = (app: FastifyInstance, ruta: string, cuerpo: object, cookie?: string) =>
+  app.inject({ method: "POST", url: `/api/auth${ruta}`, headers: { origin: ORIGEN, "content-type": "application/json", ...(cookie ? { cookie } : {}) }, payload: cuerpo });
+
+/** Las cookies vigentes que deja una respuesta (las que expira se descartan). */
+export function cookiesDe(r: { headers: Record<string, unknown> }): string {
+  const cookies = [r.headers["set-cookie"]].flat().filter((c): c is string => typeof c === "string" && !/Max-Age=0/i.test(c));
   return cookies.map((c) => c.split(";")[0]).join("; ");
+}
+
+/** Inicia sesión. Con el segundo factor activo, la cookie es la del desafío, no la de sesión. */
+export async function iniciarSesion(app: FastifyInstance, usuario: string, contrasena: string): Promise<string> {
+  const r = await autenticacion(app, "/sign-in/username", { username: usuario, password: contrasena });
+  if (r.statusCode !== 200) throw new Error(`No se pudo iniciar sesión (${r.statusCode}): ${r.body}`);
+  return cookiesDe(r);
 }
 
 /** JPEG mínimo de 1×1 (ficticio). Un segmento de comentario con `variante` da otra huella al mismo dibujo. */

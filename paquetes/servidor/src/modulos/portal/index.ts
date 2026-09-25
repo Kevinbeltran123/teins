@@ -5,7 +5,8 @@ import type { Config } from "../../config";
 import type { Almacenamiento } from "../../plataforma/almacenamiento";
 import { enClienteDelPortal, enOrganizacion, type BaseDeDatos } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
-import { registrarOperacionDelPortal } from "../../plataforma/rutas";
+import { politicas } from "../../plataforma/politicas";
+import { registrarOperacion, registrarOperacionDelPortal } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
 import { clientesYSitios } from "../clientes";
 import { informesParaElPortal } from "../informes";
@@ -186,25 +187,57 @@ export interface CredencialesDeAcceso {
   clave: string;
 }
 
+/** URL que lleva el QR: identifica el acceso, nunca lleva la clave. */
+export const urlDeAcceso = (portalUrl: string, identificador: string) => `${portalUrl.replace(/\/$/, "")}/?acceso=${identificador}`;
+
 /**
- * Administración de accesosDeClientes de cliente, con el rol de la aplicación. Hasta que exista el rol
- * administrador, la usan los comandos `crear-acceso-cliente` y `regenerar-acceso-cliente`.
+ * Administración de los accesos de clientes, con el rol de la aplicación: desde oficina, por una
+ * persona administradora, o con los comandos `crear-acceso-cliente` y `regenerar-acceso-cliente`.
  */
 export function crearAccesosDeClientes(bd: BaseDeDatos) {
   return {
+    /** Operaciones de oficina (iteración 6). */
+    registrarRutas(app: FastifyInstance, config: Config) {
+      registrarOperacion(app, "listarAccesosDeClientes", {
+        politica: politicas.administrador,
+        manejar: async ({ actor }) =>
+          enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const lista = await clientesYSitios.listar(tx);
+            const accesos = await tx.select({ clienteId: accesosDeClientes.clienteId, creadoEn: accesosDeClientes.creadoEn, regeneradoEn: accesosDeClientes.regeneradoEn }).from(accesosDeClientes);
+            const porCliente = new Map(accesos.map((a) => [a.clienteId, a]));
+            return {
+              clientes: lista.map((c) => {
+                const a = porCliente.get(c.id);
+                return { id: c.id, nombre: c.nombre, acceso: a ? { creadoEn: a.creadoEn.toISOString(), regeneradoEn: a.regeneradoEn?.toISOString() ?? null } : null };
+              }),
+            };
+          }),
+      });
+
+      registrarOperacion(app, "crearAccesoDeCliente", {
+        politica: politicas.administrador,
+        manejar: async ({ parametros: { clienteId }, cuerpo, actor, correlacion }) => {
+          if (!config.PORTAL_URL) throw problema("error_interno", "Falta PORTAL_URL: la dirección del portal que lleva el QR");
+          const contexto = { autorId: actor.usuarioId, correlacion };
+          const c = cuerpo.regenerar ? await this.regenerar(actor.organizacionId, clienteId, contexto) : await this.crear(actor.organizacionId, clienteId, contexto);
+          return { ...c, url: urlDeAcceso(config.PORTAL_URL, c.identificador) };
+        },
+      });
+    },
+
     async crear(organizacionId: string, clienteId: string, contexto: { autorId: string; correlacion: string }): Promise<CredencialesDeAcceso> {
       const credenciales = { identificador: nuevoIdentificador(), clave: nuevaClave() };
       const claveHash = await hashDeClave(credenciales.clave);
       await enOrganizacion(bd, organizacionId, async (tx) => {
         const cliente = await clientesYSitios.obtener(tx, clienteId);
-        if (!cliente) throw new Error("El cliente no existe en la organización");
+        if (!cliente) throw problema("no_encontrado", "El cliente no existe en la organización");
         const id = randomUUID();
         const [creado] = await tx
           .insert(accesosDeClientes)
           .values({ id, organizacionId, clienteId, clienteNombre: cliente.nombre, identificador: credenciales.identificador, claveHash })
           .onConflictDoNothing()
           .returning({ id: accesosDeClientes.id });
-        if (!creado) throw new Error("El cliente ya tiene acceso: use regenerar-acceso-cliente para uno nuevo");
+        if (!creado) throw problema("conflicto", "El cliente ya tiene acceso: regenérelo para uno nuevo");
         await registrar(tx, [{ organizacionId, agregadoTipo: "acceso_cliente", agregadoId: id, tipoEvento: "acceso_cliente_creado", ...contexto, valorNuevo: { cliente: clienteId } }]);
       });
       return credenciales;
@@ -220,7 +253,7 @@ export function crearAccesosDeClientes(bd: BaseDeDatos) {
           .set({ identificador: credenciales.identificador, claveHash, regeneradoEn: new Date() })
           .where(eq(accesosDeClientes.clienteId, clienteId))
           .returning({ id: accesosDeClientes.id });
-        if (!acceso) throw new Error("El cliente no tiene acceso: use crear-acceso-cliente");
+        if (!acceso) throw problema("no_encontrado", "El cliente no tiene acceso: créelo primero");
         await tx.delete(sesionesDelPortal).where(eq(sesionesDelPortal.accesoId, acceso.id));
         await registrar(tx, [{ organizacionId, agregadoTipo: "acceso_cliente", agregadoId: acceso.id, tipoEvento: "acceso_cliente_regenerado", ...contexto }]);
       });
