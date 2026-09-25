@@ -7,13 +7,13 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Corte | Entregable demostrable | Riesgo que cierra | Estado |
 |---|---|---|---|
 | 0 | Captura sin conexión con fotos, instalada en iPhone | Durabilidad de la PWA en Safari (QA-1, ADR-0002) | Terminado |
-| 1 | El técnico inicia sesión, envía el levantamiento y oficina lo ve en su bandeja | Entrega completa, sin duplicados y con archivos verificados (QA-2), idempotencia, aislamiento por organización | Terminado y desplegado en el entorno de pruebas; falta la prueba en iPhone (criterio 4) |
-| 2 | Bajada: formatos como datos, visitas asignadas, estado de mis levantamientos, permiso de trabajo local, revocación con borrado | Punto de control seguro (ADR-0005), revocación sin conexión (QA-5), formatos sin publicar la app (QA-11) | Construido y desplegado en el entorno de pruebas; falta la prueba en iPhone (criterio 9) |
-| 3 | Revisión: tomar, corregir con trazabilidad por campo, comentar al técnico, marcar revisado | Concurrencia en oficina (QA-25), trazabilidad (QA-8) | Terminado y desplegado en el entorno de pruebas; lo que toca de campo espera la prueba en iPhone |
+| 1 | El técnico inicia sesión, envía el levantamiento y oficina lo ve en su bandeja | Entrega completa, sin duplicados y con archivos verificados (QA-2), idempotencia, aislamiento por organización | Terminado y desplegado en el entorno de pruebas; probado en iPhone el 2026-09-25 |
+| 2 | Bajada: formatos como datos, visitas asignadas, estado de mis levantamientos, permiso de trabajo local, revocación con borrado | Punto de control seguro (ADR-0005), revocación sin conexión (QA-5), formatos sin publicar la app (QA-11) | Terminado y desplegado en el entorno de pruebas; probado en iPhone el 2026-09-25 |
+| 3 | Revisión: tomar, corregir con trazabilidad por campo, comentar al técnico, marcar revisado | Concurrencia en oficina (QA-25), trazabilidad (QA-8) | Terminado y desplegado en el entorno de pruebas; probado en iPhone el 2026-09-25 |
 | 4 | Informe: composición mínima, publicación inmutable y PDF | Versiones inmutables (QA-9), PDF reproducible en segundo plano (QA-17) | Terminado y desplegado en el entorno de pruebas, con supuestos de P22, P23 y P26 |
 | 5 | Portal: acceso con QR y clave, descarga del informe vigente | Cero accesos cruzados entre clientes (QA-4, QA-7) | Terminado y desplegado en el entorno de pruebas |
 | Iteración 6 | Administración con segundo factor: usuarios, teléfonos, accesos de clientes, retiro de versiones | Cuenta de mayor impacto protegida (ADR-0009), operar el piloto sin comandos | Terminada y desplegada en el entorno de pruebas |
-| Iteración 7 | Gestión de visitas y clientes desde oficina | Operar el piloto sin comandos; cambios de agenda que llegan solos a los teléfonos | Terminada y desplegada en el entorno de pruebas; el aviso de visita cancelada en campo espera la prueba en iPhone |
+| Iteración 7 | Gestión de visitas y clientes desde oficina | Operar el piloto sin comandos; cambios de agenda que llegan solos a los teléfonos | Terminada y desplegada en el entorno de pruebas; probada en iPhone el 2026-09-25, salvo el aviso de visita cancelada, corregido después y por confirmar en el teléfono |
 | Iteración 8 | Producción provisional (transferible), respaldos diarios y simulacro | Copias probadas y entorno recreable antes del piloto (QA-10, QA-18) | Terminada; producción sin datos reales hasta transferirla a TEINS (ADR-0021) |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
@@ -22,16 +22,18 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 **El recorrido delgado está completo (cortes 0 a 5, 2026-09-25)** y desplegado en el entorno de pruebas. Antes de la primera demostración a TEINS:
 
-1. **Prueba en iPhone y verificación manual** de todas las fases (aplazada por Kevin), con la guía de [`verificacion-manual.md`](verificacion-manual.md).
+1. **Verificación manual hecha por Kevin el 2026-09-25** en un iPhone 15 Pro con iOS 26.6.1 (fases 1 a 7 de [`verificacion-manual.md`](verificacion-manual.md); producción quedó para después). Todo funcionó salvo dos avisos que no aparecían, ya corregidos con su prueba de extremo a extremo: "Oficina canceló esta visita" en el bloque azul de campo y "Su sesión se cerró" en el portal. Falta confirmarlos en el iPhone (fase 5, pasos 5 a 7, y fase 7, paso 7) y hacer la fase 8 de producción.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
 
 **Iteración 8 terminada el 2026-09-25:** producción provisional montada en `teins-produccion` con dominios gratuitos, recreable desde el repositorio, con respaldo diario y simulacro verificado; sin datos reales hasta transferirla a TEINS (ADR-0021, [`produccion.md`](produccion.md)). La rama está en GitHub (pull request #1, en borrador) con la integración continua en verde.
 
 **Iteraciones 6 (administración) y 7 (visitas y clientes) terminadas el 2026-09-25** y desplegadas. Con ellas, TEINS opera el piloto desde las pantallas: solo la primera persona administradora y la publicación de formatos siguen por comando. En el entorno de pruebas, `oficina.prueba` tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
 
-Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8) y el formato del informe (P22, P23, P26). Mientras llegan, **secciones repetibles** y **bocetos** (ADR-0019), porque sus formatos casi seguro los necesitan; y la prueba en iPhone, que sigue aplazada. Después: cantidades con catálogo, passkeys y cifrado local.
+Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8) y el formato del informe (P22, P23, P26). Mientras llegan, **secciones repetibles** y **bocetos** (ADR-0019), porque sus formatos casi seguro los necesitan; con el iPhone ya probado, campo puede seguir creciendo. Después: cantidades con catálogo, passkeys y cifrado local.
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
+
+**Observado en la verificación del 2026-09-25:** una vez, en la corrida completa del extremo a extremo, `envio.spec.ts` en WebKit falló con "Falta 1 dato por completar" después de llenar todo; no se reprodujo (12 de 12 con 4 trabajadores en paralelo, y verde en todas las corridas completas antes y después). Se vigila; la integración continua reintenta una vez. Las pruebas de oficina ahora cargan más páginas de la bandeja hasta encontrar su levantamiento (`filaDeLaBandeja`): en un entorno con datos de corridas anteriores, el recién enviado quedaba fuera de la primera página de 50.
 
 **Pendientes que no bloquean el cierre del corte 2:**
 
@@ -62,6 +64,7 @@ Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para e
 | Fecha | Dispositivo | Sistema | Persistente | Fotos | Íntegras | Resultado |
 |---|---|---|---|---|---|---|
 | 2026-09-24 | iPhone [modelo por registrar] | iOS [versión por registrar] | [por registrar] | [N] | [N] | Sin pérdida, según Kevin |
+| 2026-09-25 | iPhone 15 Pro | iOS 26.6.1 | Sí | 3 | 3 | Sin pérdida tras reiniciar el teléfono sin señal (verificación manual, fase 1) |
 
 **Decisión:** se mantiene la PWA (ADR-0002); Capacitor no es necesario. Pendiente: completar la fila con los datos exactos y repetir en Android.
 
@@ -166,7 +169,7 @@ Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para e
 | 1. El recorrido extremo a extremo pasa en Chromium y WebKit | Cumplido en local |
 | 2. Pasan las pruebas de los cuatro niveles y las reglas de arquitectura en integración continua | Cumplido en local; el flujo de GitHub Actions corre al subir la rama |
 | 3. Pantallas solo con componentes de `ui` y estados vacío, cargando, error y sin conexión | Cumplido |
-| 4. Probado en un iPhone real: captura sin conexión, recuperar señal, enviar con fotos y verlo en oficina | Pendiente, junto con el criterio 9 del corte 2. El entorno de pruebas ya existe (ver corte 2) |
+| 4. Probado en un iPhone real: captura sin conexión, recuperar señal, enviar con fotos y verlo en oficina | Cumplido el 2026-09-25 en un iPhone 15 Pro con iOS 26.6.1 (verificación manual, fase 1) |
 
 ### Entorno de pruebas (propuesta original; lo montado está en `entorno-de-pruebas.md`)
 
@@ -276,7 +279,7 @@ Revocar borra las sesiones, así que el siguiente contacto responde "no autentic
 | 6. La migración de Dexie a la versión 3 conserva borradores, envíos pendientes y formatos | Cumplido (`campo/src/datos/repositorio.test.ts`) |
 | 7. El informe de salud se guarda en el dispositivo del servidor | Cumplido (integración del servidor y motor de campo) |
 | 8. Pantallas solo con componentes de `ui` y estados vacío, cargando, error y sin conexión; reglas de arquitectura en verde | Cumplido |
-| 9. Entorno de pruebas desplegado y prueba en iPhone de los cortes 1 y 2 (decisión del 2026-09-24) | Entorno desplegado en Railway el 2026-09-25 y extremo a extremo en verde contra él (Chromium 3 de 3, WebKit 2 de 2 más el salto conocido). Falta la prueba en iPhone |
+| 9. Entorno de pruebas desplegado y prueba en iPhone de los cortes 1 y 2 (decisión del 2026-09-24) | Entorno desplegado en Railway el 2026-09-25 y extremo a extremo en verde contra él (Chromium 3 de 3, WebKit 2 de 2 más el salto conocido). Prueba en iPhone cumplida el 2026-09-25: bajada, estado según el servidor y revocación con borrado confirmado por el teléfono (verificación manual, fases 1 y 2) |
 
 ### Orden de construcción
 

@@ -46,7 +46,7 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
    - Debe: todas íntegras, cero perdidas.
    - **Anotar:** modelo de iPhone, versión de iOS, fotos tomadas, fotos íntegras.
 8. Sin señal, abra el levantamiento y toque **Enviar a oficina** → **Confirmar envío**.
-   - Debe: decir que se enviará al recuperar señal.
+   - Debe: en "Mis visitas", bajo la visita, la fila del levantamiento dice "Sin conexión: se enviará al recuperar señal".
 9. Quite el modo avión y vuelva a la app.
    - Debe: en menos de un minuto, "Recibido en oficina".
 10. En el computador, abra oficina e inicie sesión con `oficina.prueba`.
@@ -59,8 +59,9 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 2. Inicie un levantamiento en esa visita y escriba algo, sin enviarlo.
 3. En el computador, en oficina con `oficina.prueba`, vaya a **Administración** (si pide activar el segundo factor, haga primero los pasos 1 a 4 de la fase 6 y vuelva).
 4. En "Usuarios", toque **Desactivar a Técnico revocable** → **Sí, desactivar a Técnico revocable**.
-5. En el iPhone, salga de la app y vuelva a abrirla, con señal.
+5. En el iPhone, **sin cerrar sesión**, salga de la app y vuelva a abrirla, con señal.
    - Debe: aparecer "Se cerró el acceso de Técnico revocable en este teléfono y se borraron sus datos".
+   - Si antes cerró sesión, ese aviso no sale, pero el borrado ocurre igual (el paso 7 lo confirma). Y si intenta entrar con `tecnico.revocable`, dice "Usuario o contraseña incorrectos": es a propósito, para no revelar que la cuenta existe.
 6. Entre de nuevo con `tecnico.prueba`.
    - Debe: su levantamiento enviado en la fase 1 sigue ahí. El borrado solo afectó al usuario revocado.
 7. En oficina, pestaña "Teléfonos de campo".
@@ -108,7 +109,8 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 6. En oficina, toque **Cancelar la visita de …**, escriba el motivo y confirme.
    - Debe: la visita pasa a la pestaña "Canceladas" con su motivo.
 7. En el iPhone, cierre y abra la app.
-   - Debe: la visita sigue visible solo por el borrador, con el aviso "Oficina canceló esta visita. Puedes terminar y enviar lo que ya empezaste".
+   - Debe: la visita sigue en el bloque azul solo por el borrador, con el aviso "Oficina canceló esta visita. Puedes terminar y enviar lo que ya empezaste", y con "Continuar levantamiento" pero sin "Iniciar levantamiento".
+   - La cancelación no aparece en el historial del levantamiento: es de la visita, no del levantamiento. Se ve en oficina, **Visitas → Canceladas**, con quién la canceló, cuándo y por qué.
 8. Envíe ese levantamiento.
    - Debe: llegar a oficina, y la visita cancelada lo cuenta en su avance.
 
@@ -143,7 +145,7 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 6. En el portal del iPhone, recargue.
    - Debe: ver la versión 1. Si retira también la 1, el informe desaparece del portal.
 7. En oficina, en "Accesos de clientes", **Regenerar el acceso** de ese cliente. En el iPhone, recargue el portal.
-   - Debe: la sesión se cerró y la clave anterior ya no entra.
+   - Debe: volver a pedir la clave, con el aviso "Su sesión se cerró: pasaron 30 minutos sin usarla o TEINS le entregó una clave nueva". La clave anterior ya no entra; la nueva sí.
 
 ## Fase 8 · Producción (iteración 8)
 
