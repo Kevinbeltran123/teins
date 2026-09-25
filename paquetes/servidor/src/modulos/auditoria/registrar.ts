@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import type { TxOrganizacion } from "../../plataforma/base-de-datos";
+import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { calcularHash, VERSION_FORMATO_REGISTRO, type ContenidoRegistro } from "./cadena";
 import { registros } from "./esquema";
 
@@ -168,4 +168,16 @@ export async function verificarCadena(
     hashAnterior = f.hash;
   }
   return { integra: true, eslabones: filas.length };
+}
+
+/**
+ * Todas las cadenas de la base, para verificarlas después de restaurar una copia (ADR-0016, nivel 4).
+ * Solo con la conexión del dueño: la seguridad por fila no deja ver otras organizaciones.
+ */
+export async function todasLasCadenas(bd: BaseDeDatos): Promise<{ organizacionId: string; agregadoTipo: TipoAgregado; agregadoId: string }[]> {
+  const filas = await bd
+    .selectDistinct({ organizacionId: registros.organizacionId, agregadoTipo: registros.agregadoTipo, agregadoId: registros.agregadoId })
+    .from(registros)
+    .orderBy(registros.organizacionId, registros.agregadoTipo, registros.agregadoId);
+  return filas.map((f) => ({ ...f, agregadoTipo: f.agregadoTipo as TipoAgregado }));
 }

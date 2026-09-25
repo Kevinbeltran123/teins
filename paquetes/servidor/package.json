@@ -20,6 +20,7 @@
     "crear-acceso-cliente": "tsx --env-file=.env src/cli/crear-acceso-cliente.ts",
     "regenerar-acceso-cliente": "tsx --env-file=.env src/cli/crear-acceso-cliente.ts --regenerar",
     "marcar-administrador": "tsx --env-file=.env src/cli/marcar-administrador.ts",
+    "verificar-integridad": "tsx src/cli/verificar-integridad.ts",
     "compilar": "node scripts/compilar.mjs"
   },
   "dependencies": {

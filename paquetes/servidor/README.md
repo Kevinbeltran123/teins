@@ -70,6 +70,7 @@ Comandos de administración (uso en el encabezado de cada archivo de `src/cli/`)
 |---|---|
 | `crear-usuario`, `restablecer-contrasena` | Usuarios internos y recuperación de acceso |
 | `desactivar-usuario` | Revoca: cierra sus sesiones, no vuelve a entrar y sus teléfonos borran sus datos al conectarse |
+| `verificar-integridad` | Verifica todas las cadenas de la auditoría de una base con la conexión del dueño (`DATABASE_URL`); lo usa el simulacro de restauración (`docs/proceso/produccion.md`) |
 | `marcar-administrador` | Marca (o con `--quitar`, desmarca) a una persona de oficina como administradora; para administrar debe activar además el segundo factor en oficina |
 | `crear-cliente` | Cliente con su primer sitio |
 | `crear-visita`, `reasignar-visita` | Programa una visita para uno o varios técnicos; al reasignar, sale del teléfono de quien deja de tenerla |
