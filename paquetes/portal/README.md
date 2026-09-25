@@ -6,4 +6,6 @@ Portal del cliente: acceso con QR y clave, consulta y descarga de informes publi
 
 **ADR relevantes:** 0002, 0009
 
-Sin código todavía.
+Corte 5: ingreso con el código de acceso del QR (`?acceso=`) y la clave; lista de informes vigentes del cliente con su descarga en PDF; salir. Estados vacío, cargando, error y sin conexión. Sin enrutador ni service worker: dos pantallas según la sesión (`src/App.tsx`). En desarrollo, `pnpm --filter @teins/portal dev` en el puerto 5175, con `/api` reenviado al servidor.
+
+Los accesos se crean con `pnpm --filter @teins/servidor crear-acceso-cliente` (ver `paquetes/servidor/README.md`).
