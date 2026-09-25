@@ -1,12 +1,14 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { eq } from "drizzle-orm";
 import { leerConfig } from "../config";
 import { almacenamientoS3 } from "../plataforma/almacenamiento";
 import { conectar, enOrganizacion } from "../plataforma/base-de-datos";
+import { clientesYSitios } from "../modulos/clientes";
 import { crearFormatos } from "../modulos/formatos";
 import { crearIdentidad } from "../modulos/identidad";
+import { crearVisitas } from "../modulos/visitas";
 import { organizaciones, usuarios } from "../modulos/identidad/esquema";
 
 /**
@@ -15,8 +17,8 @@ import { organizaciones, usuarios } from "../modulos/identidad/esquema";
  */
 const ORGANIZACION_DE_DESARROLLO = "00000000-0000-4000-8000-000000000001";
 const config = leerConfig();
-if (config.NODE_ENV === "production") {
-  console.error("sembrar no corre en producción.");
+if (config.NODE_ENV === "production" && !config.ENTORNO_DE_PRUEBAS) {
+  console.error("sembrar no corre en producción (en el entorno de pruebas, ENTORNO_DE_PRUEBAS=true).");
   process.exit(1);
 }
 
@@ -29,7 +31,7 @@ try {
   await propietario.bd.insert(organizaciones).values({ id: ORGANIZACION_DE_DESARROLLO, nombre: "Organización de desarrollo" }).onConflictDoNothing();
 
   const formatos = crearFormatos();
-  for (const archivo of ["prueba-ups.v1.json", "prueba-ups.v2.json"]) {
+  for (const archivo of ["prueba-ups.v1.json", "prueba-ups.v2.json", "prueba-ups.v3.json"]) {
     const r = await enOrganizacion(app.bd, ORGANIZACION_DE_DESARROLLO, (tx) => formatos.publicar(tx, ORGANIZACION_DE_DESARROLLO, leerFormato(archivo)));
     console.log(`Formato ${archivo}: ${r === "publicada" ? "publicado" : "ya existía"}`);
   }
@@ -47,6 +49,31 @@ try {
     const contrasena = randomBytes(12).toString("base64url");
     await identidad.crearUsuario({ organizacionId: ORGANIZACION_DE_DESARROLLO, usuario, nombre, rol, contrasena });
     console.log(`Usuario ${usuario} (${rol}): contraseña ${contrasena}`);
+  }
+
+  // Un cliente ficticio con una visita para el técnico de prueba, solo si la organización no tiene clientes.
+  const { rows } = await propietario.pool.query("select 1 from clientes.clientes where organizacion_id = $1 limit 1", [ORGANIZACION_DE_DESARROLLO]);
+  if (rows.length === 0) {
+    const [tecnico] = await identidad.tecnicos(ORGANIZACION_DE_DESARROLLO, ["tecnico.prueba"]);
+    const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+    await enOrganizacion(app.bd, ORGANIZACION_DE_DESARROLLO, async (tx) => {
+      const { clienteId, sitioId } = await clientesYSitios.crear(tx, {
+        organizacionId: ORGANIZACION_DE_DESARROLLO,
+        nombre: "Cliente de prueba",
+        sitio: { nombre: "Sede de prueba", direccion: "Calle [N] # [N]-[N]" },
+      });
+      await crearVisitas(clientesYSitios).crear(tx, {
+        organizacionId: ORGANIZACION_DE_DESARROLLO,
+        autorId: "administrador",
+        correlacion: `sembrar:${randomUUID()}`,
+        clienteId,
+        sitioId,
+        motivo: "Mantenimiento",
+        programadaPara: hoy,
+        tecnicos: [tecnico!],
+      });
+    });
+    console.log(`Cliente de prueba con una visita para tecnico.prueba el ${hoy}`);
   }
 
   if (config.S3_CONFIGURAR_CORS) {

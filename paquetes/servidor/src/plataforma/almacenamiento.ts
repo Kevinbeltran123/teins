@@ -29,22 +29,31 @@ export function almacenamientoS3(config: Config): Almacenamiento {
     ...(config.S3_ENDPOINT ? { endpoint: config.S3_ENDPOINT } : {}),
     forcePathStyle: config.S3_FORZAR_RUTA,
     credentials: { accessKeyId: config.S3_ACCESS_KEY_ID, secretAccessKey: config.S3_SECRET_ACCESS_KEY },
+    // Sin esto, el SDK agrega a la URL firmada una suma CRC32 del cuerpo vacío y la carga real no coincide.
+    // La huella la decide `firmarSubida`, no el SDK.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
   const Bucket = config.S3_BUCKET;
 
   return {
     async firmarSubida(clave, { bytes, tipo, sha256Hex }) {
       const sha256 = Buffer.from(sha256Hex, "hex").toString("base64");
-      // La firma incluye tipo, tamaño y huella: el almacenamiento rechaza un contenido distinto (ADR-0007).
+      const huella = config.S3_EXIGIR_HUELLA;
+      // La firma incluye tipo, tamaño y, si el proveedor la admite, la huella: el almacenamiento rechaza
+      // un contenido distinto (ADR-0007). Sin huella firmada, el worker la verifica igual antes de aceptarlo.
       const url = await getSignedUrl(
         s3,
-        new PutObjectCommand({ Bucket, Key: clave, ContentType: tipo, ContentLength: bytes, ChecksumSHA256: sha256 }),
-        { expiresIn: SEGUNDOS_SUBIDA, signableHeaders: new Set(["content-type", "content-length", "x-amz-checksum-sha256"]) },
+        new PutObjectCommand({ Bucket, Key: clave, ContentType: tipo, ContentLength: bytes, ...(huella ? { ChecksumSHA256: sha256 } : {}) }),
+        {
+          expiresIn: SEGUNDOS_SUBIDA,
+          signableHeaders: new Set(["content-type", "content-length", ...(huella ? ["x-amz-checksum-sha256"] : [])]),
+        },
       );
       return {
         url,
         // content-length lo pone el navegador; las demás las envía el cliente tal cual.
-        cabeceras: { "content-type": tipo, "x-amz-checksum-sha256": sha256 },
+        cabeceras: { "content-type": tipo, ...(huella ? { "x-amz-checksum-sha256": sha256 } : {}) },
         expiraEn: new Date(Date.now() + SEGUNDOS_SUBIDA * 1000),
       };
     },

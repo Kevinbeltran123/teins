@@ -4,12 +4,25 @@ import { VersionFormato as EsquemaVersionFormato } from "@teins/protocolo";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { huellaCanonica } from "../../plataforma/canonico";
 import { problema } from "../../plataforma/errores";
+import { registrarCambios } from "../cambios";
 import { versiones } from "./esquema";
 
 export interface Formatos {
   obtener(tx: TxOrganizacion, formato: string, version: number): Promise<VersionFormato | undefined>;
-  /** Publica una versión nueva. Publicar dos veces la misma definición no hace nada; otra con el mismo número es un conflicto. */
+  /**
+   * Publica una versión nueva y la deja lista para la bajada de toda la organización (QA-11). Publicar dos
+   * veces la misma definición no hace nada; otra con el mismo número es un conflicto.
+   */
   publicar(tx: TxOrganizacion, organizacionId: string, definicion: unknown): Promise<"publicada" | "ya_existia">;
+}
+
+/** Identificador de una versión en el registro de cambios: `prueba-ups@3`. */
+export const idDeVersion = (formato: string, version: number) => `${formato}@${version}`;
+
+export function leerIdDeVersion(id: string): { formato: string; version: number } | undefined {
+  const i = id.lastIndexOf("@");
+  const version = Number(id.slice(i + 1));
+  return i > 0 && Number.isInteger(version) ? { formato: id.slice(0, i), version } : undefined;
 }
 
 /** Interfaz pública del módulo de formatos (ADR-0006). */
@@ -39,7 +52,10 @@ export function crearFormatos(): Formatos {
         .values({ organizacionId, formato: definicion.formato, version: definicion.version, definicion, huella })
         .onConflictDoNothing()
         .returning({ huella: versiones.huella });
-      if (insertada) return "publicada";
+      if (insertada) {
+        await registrarCambios(tx, [{ organizacionId, entidad: "formato", entidadId: idDeVersion(definicion.formato, definicion.version), operacion: "cambio" }]);
+        return "publicada";
+      }
 
       const [existente] = await tx
         .select({ huella: versiones.huella })

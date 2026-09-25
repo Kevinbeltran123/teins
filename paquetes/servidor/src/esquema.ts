@@ -5,3 +5,6 @@ export * from "./modulos/formatos/esquema";
 export * from "./modulos/archivos/esquema";
 export * from "./modulos/auditoria/esquema";
 export * from "./modulos/levantamientos/esquema";
+export * from "./modulos/cambios/esquema";
+export * from "./modulos/clientes/esquema";
+export * from "./modulos/visitas/esquema";

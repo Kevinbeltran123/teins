@@ -4,8 +4,20 @@ import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { calcularHash, VERSION_FORMATO_REGISTRO, type ContenidoRegistro } from "./cadena";
 import { registros } from "./esquema";
 
-export type TipoEvento = "levantamiento_creado" | "levantamiento_enviado" | "inicio_de_sesion";
-export type TipoAgregado = "levantamiento" | "organizacion";
+export type TipoEvento =
+  | "levantamiento_creado"
+  | "levantamiento_enviado"
+  | "inicio_de_sesion"
+  | "visita_creada"
+  | "visita_reasignada"
+  | "usuario_desactivado"
+  | "borrado_local_confirmado"
+  | "revision_tomada"
+  | "revision_reasignada"
+  | "campo_corregido"
+  | "levantamiento_revisado"
+  | "comentario_agregado";
+export type TipoAgregado = "levantamiento" | "organizacion" | "visita" | "usuario";
 
 export interface EntradaAuditoria {
   organizacionId: string;
@@ -70,6 +82,39 @@ export async function registrar(tx: TxOrganizacion, entradas: readonly EntradaAu
 }
 
 export type ResultadoVerificacion = { integra: true; eslabones: number } | { integra: false; primerEslabonRoto: number };
+
+export interface RegistroLeido {
+  secuencia: number;
+  tipoEvento: string;
+  rutaCampo: string | null;
+  valorAnterior: unknown;
+  valorNuevo: unknown;
+  autorId: string;
+  horaServidor: Date;
+  horaDispositivo: Date | null;
+  correlacion: string;
+  motivo: string | null;
+}
+
+/** La cadena de un agregado, en orden: el historial legible que ve oficina (ADR-0008). */
+export async function leerCadena(tx: TxOrganizacion, organizacionId: string, agregadoTipo: TipoAgregado, agregadoId: string): Promise<RegistroLeido[]> {
+  return tx
+    .select({
+      secuencia: registros.secuencia,
+      tipoEvento: registros.tipoEvento,
+      rutaCampo: registros.rutaCampo,
+      valorAnterior: registros.valorAnterior,
+      valorNuevo: registros.valorNuevo,
+      autorId: registros.autorId,
+      horaServidor: registros.horaServidor,
+      horaDispositivo: registros.horaDispositivo,
+      correlacion: registros.correlacion,
+      motivo: registros.motivo,
+    })
+    .from(registros)
+    .where(and(eq(registros.organizacionId, organizacionId), eq(registros.agregadoTipo, agregadoTipo), eq(registros.agregadoId, agregadoId)))
+    .orderBy(asc(registros.secuencia));
+}
 
 /** Recalcula la cadena de un agregado y reporta el primer eslabón roto (ADR-0008). */
 export async function verificarCadena(

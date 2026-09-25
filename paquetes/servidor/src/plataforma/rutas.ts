@@ -65,23 +65,55 @@ function verificarVersion(solicitud: FastifyRequest) {
 export function registrarOperacion<N extends NombreOperacion>(
   app: FastifyInstance,
   nombre: N,
-  opciones: { politica: Exclude<Politica, { tipo: "publica" }>; manejar: Manejador<N> },
+  opciones: { politica: Extract<Politica, { tipo: "roles" }>; manejar: Manejador<N> },
+): void {
+  registrar(
+    app,
+    nombre,
+    opciones.politica,
+    async (solicitud) => {
+      const actor = await app.resolverActor(solicitud);
+      const decision = evaluar(opciones.politica, actor);
+      if (decision !== "permitido") throw problema(decision);
+      return actor!;
+    },
+    opciones.manejar,
+  );
+}
+
+/**
+ * Operación que se autentica con el secreto del dispositivo y no con la sesión: la orden de borrado
+ * debe llegar aunque la revocación ya borró las sesiones (ADR-0009). El manejador verifica el secreto.
+ */
+export function registrarOperacionDeDispositivo<N extends NombreOperacion>(
+  app: FastifyInstance,
+  nombre: N,
+  manejar: (entrada: Omit<Entrada<N>, "actor">) => Promise<RespuestaServidor<N>>,
+): void {
+  registrar(app, nombre, { tipo: "secreto_de_dispositivo" }, async () => null, manejar);
+}
+
+/** La autorización va antes de validar la entrada: sin permiso, no se revela nada del contrato. */
+function registrar<N extends NombreOperacion, A>(
+  app: FastifyInstance,
+  nombre: N,
+  politica: Politica,
+  autorizar: (solicitud: FastifyRequest) => Promise<A>,
+  manejar: (entrada: Omit<Entrada<N>, "actor"> & { actor: A }) => Promise<RespuestaServidor<N>>,
 ): void {
   const op: Operacion = operaciones[nombre];
   app.route({
     method: op.metodo,
     url: rutaFastify(op.ruta),
-    config: { politica: opciones.politica, operacion: nombre },
+    config: { politica, operacion: nombre },
     handler: async (solicitud, respuesta) => {
       if (op.sincronizacion) verificarVersion(solicitud);
-      const actor = await app.resolverActor(solicitud);
-      const decision = evaluar(opciones.politica, actor);
-      if (decision !== "permitido") throw problema(decision);
-      const resultado = await opciones.manejar({
+      const actor = await autorizar(solicitud);
+      const resultado = await manejar({
         cuerpo: validar(op.cuerpo, solicitud.body, "cuerpo") as Cuerpo<N>,
         parametros: validar(op.parametros, solicitud.params, "parametros") as Parametros<N>,
         consulta: validar(op.consulta, solicitud.query, "consulta") as Consulta<N>,
-        actor: actor!,
+        actor,
         correlacion: solicitud.id,
       });
       respuesta.status(op.estadoExito);

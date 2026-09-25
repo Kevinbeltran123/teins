@@ -94,7 +94,7 @@ export async function servidorDePrueba() {
   /** Ejecuta los trabajos pendientes de la cola, como lo haría el worker. */
   const procesarCola = () => runOnce({ pgPool: propietario.pool, taskList: definirTareas({ archivos }) });
 
-  return { app, rutas, config, propietario, conexionApp, nuevaOrganizacionConUsuarios, procesarCola };
+  return { app, rutas, config, propietario, conexionApp, identidad, nuevaOrganizacionConUsuarios, procesarCola };
 }
 
 export async function iniciarSesion(app: FastifyInstance, usuario: string, contrasena: string): Promise<string> {

@@ -22,6 +22,34 @@
       "when": 1790281385857,
       "tag": "0002_cantidad_fotos",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790295639377,
+      "tag": "0003_bajada",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790295659165,
+      "tag": "0004_permisos_bajada",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790348401098,
+      "tag": "0005_revision",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790348410592,
+      "tag": "0006_permisos_revision",
+      "breakpoints": true
     }
   ]
 }

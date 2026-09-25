@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { username } from "better-auth/plugins";
 import type { Config } from "../../config";
 import type { BaseDeDatos } from "../../plataforma/base-de-datos";
+import { eq } from "drizzle-orm";
 import { cuentas, limitesDeTasa, sesiones, usuarios, verificaciones } from "./esquema";
 
 export interface SesionCreada {
@@ -37,6 +39,7 @@ export function crearAuth(bd: BaseDeDatos, config: Config, alCrearSesion: (sesio
       additionalFields: {
         organizacionId: { type: "string", required: true, input: false },
         rol: { type: "string", required: true, input: false },
+        desactivadoEn: { type: "date", required: false, input: false },
       },
     },
     session: {
@@ -59,7 +62,16 @@ export function crearAuth(bd: BaseDeDatos, config: Config, alCrearSesion: (sesio
     },
     plugins: [username({ minUsernameLength: 3, maxUsernameLength: 30 })],
     databaseHooks: {
-      session: { create: { after: (sesion) => alCrearSesion(sesion) } },
+      session: {
+        create: {
+          // Regla 13: un usuario desactivado no autentica. Responde igual que una contraseña equivocada.
+          before: async (sesion) => {
+            const [usuario] = await bd.select({ desactivadoEn: usuarios.desactivadoEn }).from(usuarios).where(eq(usuarios.id, sesion.userId));
+            if (!usuario || usuario.desactivadoEn) throw new APIError("UNAUTHORIZED", { message: "Invalid username or password" });
+          },
+          after: (sesion) => alCrearSesion(sesion),
+        },
+      },
     },
   });
 }

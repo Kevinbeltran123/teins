@@ -1,4 +1,5 @@
-import { bigint, boolean, check, index, integer, pgSchema, text, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, index, integer, jsonb, pgSchema, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import type { SaludDispositivo } from "@teins/protocolo";
 import { sql } from "drizzle-orm";
 import { marcaDeTiempo } from "../../plataforma/esquema-comun";
 
@@ -31,8 +32,35 @@ export const usuarios = identidad.table(
       .notNull()
       .references(() => organizaciones.id),
     rol: text("rol").notNull(),
+    /** Regla 13: un usuario desactivado no autentica y sus dispositivos borran sus datos; su autoría se conserva. */
+    desactivadoEn: marcaDeTiempo("desactivado_en"),
   },
   (t) => [check("usuarios_rol_valido", sql`${t.rol} in ('tecnico', 'oficina')`), index("usuarios_organizacion_idx").on(t.organizacionId)],
+);
+
+/**
+ * Uso de un teléfono por un usuario (modelo de dominio, agregado Dispositivo). Un teléfono compartido
+ * tiene una fila por usuario, todas con la huella del mismo secreto. El secreto autentica la consulta
+ * de órdenes de borrado cuando la sesión ya no existe (ADR-0009); el informe de salud viaja con cada
+ * sincronización (ADR-0017).
+ */
+export const dispositivos = identidad.table(
+  "dispositivos",
+  {
+    id: uuid("id").notNull(),
+    usuarioId: text("usuario_id")
+      .notNull()
+      .references(() => usuarios.id),
+    organizacionId: uuid("organizacion_id").notNull(),
+    /** SHA-256 del secreto: el servidor nunca guarda el secreto. */
+    secretoHuella: text("secreto_huella").notNull(),
+    salud: jsonb("salud").$type<SaludDispositivo>(),
+    registradoEn: marcaDeTiempo("registrado_en").notNull().defaultNow(),
+    ultimoContacto: marcaDeTiempo("ultimo_contacto").notNull(),
+    ordenDeBorradoEn: marcaDeTiempo("orden_de_borrado_en"),
+    borradoConfirmadoEn: marcaDeTiempo("borrado_confirmado_en"),
+  },
+  (t) => [primaryKey({ columns: [t.id, t.usuarioId] }), index("dispositivos_usuario_idx").on(t.usuarioId)],
 );
 
 export const sesiones = identidad.table(

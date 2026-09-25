@@ -12,6 +12,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "restablecer-contrasena": "tsx --env-file=.env src/cli/restablecer-contrasena.ts",
+    "desactivar-usuario": "tsx --env-file=.env src/cli/desactivar-usuario.ts",
+    "crear-cliente": "tsx --env-file=.env src/cli/crear-cliente.ts",
+    "crear-visita": "tsx --env-file=.env src/cli/crear-visita.ts",
+    "reasignar-visita": "tsx --env-file=.env src/cli/reasignar-visita.ts",
+    "publicar-formato": "tsx --env-file=.env src/cli/publicar-formato.ts",
     "compilar": "node scripts/compilar.mjs"
   },
   "dependencies": {

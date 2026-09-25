@@ -5,6 +5,7 @@ import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { encolar } from "../src/plataforma/cola";
 import { archivos } from "../src/modulos/archivos/esquema";
 import { registrar, verificarCadena } from "../src/modulos/auditoria";
+import { leerCambios, registrarCambios } from "../src/modulos/cambios";
 import { conexionesDePrueba, nuevaOrganizacion } from "./ayudas";
 
 const { app, propietario } = conexionesDePrueba();
@@ -49,7 +50,7 @@ describe("permisos del rol de la aplicación", () => {
       select n.nspname || '.' || c.relname as tabla, c.relrowsecurity as rls,
              has_table_privilege('teins_app', c.oid, 'DELETE') as borrar
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
-      where c.relkind = 'r' and n.nspname in ('formatos', 'archivos', 'auditoria', 'levantamientos')
+      where c.relkind = 'r' and n.nspname in ('formatos', 'archivos', 'auditoria', 'levantamientos', 'cambios', 'clientes', 'visitas')
       order by 1`);
     expect(rows.length).toBeGreaterThan(0);
     for (const fila of rows) {
@@ -57,10 +58,10 @@ describe("permisos del rol de la aplicación", () => {
     }
   });
 
-  it("la auditoría y los formatos no se pueden modificar desde la aplicación", async () => {
+  it("la auditoría, los formatos, el registro de cambios y los comentarios no se pueden modificar desde la aplicación", async () => {
     const { rows } = await propietario.pool.query<{ tabla: string; actualizar: boolean }>(`
       select t as tabla, has_table_privilege('teins_app', t, 'UPDATE') as actualizar
-      from unnest(array['auditoria.registros', 'formatos.versiones']) as t`);
+      from unnest(array['auditoria.registros', 'formatos.versiones', 'cambios.registro', 'levantamientos.comentarios']) as t`);
     expect(rows.every((r) => !r.actualizar)).toBe(true);
   });
 });
@@ -136,5 +137,47 @@ describe("cola transaccional (ADR-0012)", () => {
     const confirmada = huella();
     await enOrganizacion(app.bd, org, (tx) => encolar(tx, "archivos.verificar", { organizacionId: org, huella: confirmada }, { llave: confirmada }));
     expect(await contar(confirmada)).toBe("1");
+  });
+});
+
+describe("punto de control seguro (ADR-0005, patrón 3)", () => {
+  const cambio = (organizacionId: string, entidadId: string) => ({ organizacionId, entidad: "formato" as const, entidadId, operacion: "cambio" as const });
+  const pausa = (ms: number) => new Promise<"esperando">((r) => setTimeout(() => r("esperando"), ms));
+
+  it("una transacción que confirma después nunca queda detrás de un punto de control ya leído", async () => {
+    const [org, otra] = await Promise.all([nuevaOrganizacion(propietario), nuevaOrganizacion(propietario)]);
+    let liberar!: () => void;
+    const abierta = new Promise<void>((r) => (liberar = r));
+    const lenta = enOrganizacion(app.bd, org, async (tx) => {
+      await registrarCambios(tx, [cambio(org, "lenta@1")]);
+      await abierta;
+    });
+    await pausa(100);
+
+    // Sin el bloqueo, la rápida obtendría un número mayor y confirmaría primero: un dispositivo que la
+    // leyera avanzaría su punto de control más allá de la lenta y se la saltaría para siempre.
+    const rapida = enOrganizacion(app.bd, org, (tx) => registrarCambios(tx, [cambio(org, "rapida@1")]));
+    expect(await Promise.race([rapida.then(() => "confirmo" as const), pausa(300)])).toBe("esperando");
+    expect(await enOrganizacion(app.bd, org, (tx) => leerCambios(tx, "u", 0, 10))).toEqual([]);
+
+    // El bloqueo es por organización: las demás no esperan.
+    await enOrganizacion(app.bd, otra, (tx) => registrarCambios(tx, [cambio(otra, "ajena@1")]));
+
+    liberar();
+    await Promise.all([lenta, rapida]);
+    const leidos = await enOrganizacion(app.bd, org, (tx) => leerCambios(tx, "u", 0, 10));
+    expect(leidos.map((c) => c.entidadId)).toEqual(["lenta@1", "rapida@1"]);
+    expect(leidos[0]!.secuencia).toBeLessThan(leidos[1]!.secuencia);
+  });
+
+  it("un cambio de una transacción revertida no existe", async () => {
+    const org = await nuevaOrganizacion(propietario);
+    await expect(
+      enOrganizacion(app.bd, org, async (tx) => {
+        await registrarCambios(tx, [cambio(org, "revertido@1")]);
+        throw new Error("falla después de registrar");
+      }),
+    ).rejects.toThrow("falla después de registrar");
+    expect(await enOrganizacion(app.bd, org, (tx) => leerCambios(tx, "u", 0, 10))).toEqual([]);
   });
 });

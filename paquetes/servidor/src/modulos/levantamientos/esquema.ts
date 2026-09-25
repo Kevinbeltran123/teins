@@ -17,10 +17,16 @@ export const levantamientos = esquemaLevantamientos.table(
     tecnicoId: text("tecnico_id").notNull(),
     formato: text("formato").notNull(),
     versionFormato: integer("version_formato").notNull(),
+    /** Nulo en los levantamientos de los cortes 0 y 1, capturados antes de existir las visitas. */
+    visitaId: uuid("visita_id"),
     estado: text("estado").notNull(),
     respuestas: jsonb("respuestas").$type<Respuestas>().notNull(),
     /** Derivado de las respuestas al recibirlo: la bandeja lo muestra sin leer el documento. */
     cantidadFotos: integer("cantidad_fotos").notNull().default(0),
+    /** Quién tiene la revisión (I-1): solo esa persona corrige y marca revisado. */
+    revisorId: text("revisor_id"),
+    tomadoEn: marcaDeTiempo("tomado_en"),
+    revisadoEn: marcaDeTiempo("revisado_en"),
     /** Concurrencia optimista para la revisión (ADR-0005, QA-25). */
     version: integer("version").notNull().default(1),
     creadoEnDispositivo: marcaDeTiempo("creado_en_dispositivo").notNull(),
@@ -28,7 +34,7 @@ export const levantamientos = esquemaLevantamientos.table(
     recibidoEn: marcaDeTiempo("recibido_en").notNull(),
   },
   (t) => [
-    check("levantamientos_estado_valido", sql`${t.estado} in ('enviado')`),
+    check("levantamientos_estado_valido", sql`${t.estado} in ('enviado', 'en_revision', 'revisado')`),
     index("levantamientos_bandeja_idx").on(t.organizacionId, t.estado, t.recibidoEn, t.id),
     aislamientoPorOrganizacion("levantamientos"),
   ],
@@ -49,4 +55,25 @@ export const comandosProcesados = esquemaLevantamientos.table(
     procesadoEn: marcaDeTiempo("procesado_en").notNull().defaultNow(),
   },
   () => [aislamientoPorOrganizacion("comandos_procesados")],
+).enableRLS();
+
+/**
+ * Comentarios de oficina al técnico (modelo de dominio: no modifican datos). La aplicación solo
+ * inserta y lee; bajan al técnico con el estado de su levantamiento.
+ */
+export const comentarios = esquemaLevantamientos.table(
+  "comentarios",
+  {
+    id: uuid("id").primaryKey(),
+    organizacionId: organizacionId(),
+    levantamientoId: uuid("levantamiento_id")
+      .notNull()
+      .references(() => levantamientos.id),
+    autorId: text("autor_id").notNull(),
+    texto: text("texto").notNull(),
+    seccion: text("seccion"),
+    campo: text("campo"),
+    creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
+  },
+  (t) => [index("comentarios_levantamiento_idx").on(t.levantamientoId, t.creadoEn), aislamientoPorOrganizacion("comentarios")],
 ).enableRLS();

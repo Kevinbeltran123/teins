@@ -13,11 +13,16 @@ src/
   plataforma/   Lo que usan todos los módulos: base de datos, transacción por organización,
                 errores, rutas con política, cola, almacenamiento.
   modulos/
-    identidad/       Usuarios, sesiones (Better Auth), resolución del actor.
+    identidad/       Usuarios, sesiones (Better Auth), resolución del actor, desactivación,
+                     dispositivos (secreto, informe de salud, orden de borrado).
     formatos/        Versiones de formato inmutables y meta-esquema.
     archivos/        Subida firmada, verificación en el worker, descarga firmada.
     auditoria/       Registro semántico con cadena de hashes.
+    cambios/         Registro de cambios para la bajada, serializado por organización (punto de control seguro).
+    clientes/        Clientes y sitios, datos mínimos.
+    visitas/         Visitas programadas y técnicos asignados.
     levantamientos/  Recepción idempotente del envío (núcleo hexagonal) y bandeja de oficina.
+    sincronizacion/  Bajada: compone los cambios del técnico con las interfaces de los demás módulos.
   app.ts        Composición del rol web.
   web.ts        Punto de entrada del rol web.
   worker.ts     Punto de entrada del rol worker.
@@ -39,7 +44,7 @@ Reglas de la estructura:
 | Rol | Uso | Permisos |
 |---|---|---|
 | Dueño (`DATABASE_URL_PROPIETARIO`) | Migraciones y cola de trabajos | Dueño de los esquemas |
-| `teins_app` (`DATABASE_URL`) | Solicitudes y trabajos de negocio | Mínimos por tabla; sujeto a seguridad por fila; solo inserta y lee en auditoría y formatos |
+| `teins_app` (`DATABASE_URL`) | Solicitudes y trabajos de negocio | Mínimos por tabla; sujeto a seguridad por fila; solo inserta y lee en auditoría, formatos y el registro de cambios; no borra en ninguna tabla de negocio |
 
 `teins_app` lo crea la infraestructura con `infra/roles.sql` (en local lo hace Docker Compose).
 
@@ -49,12 +54,22 @@ Reglas de la estructura:
 docker compose up -d --wait          # desde la raíz: PostgreSQL y S3Mock
 cp paquetes/servidor/.env.example paquetes/servidor/.env   # y ponga AUTH_SECRETO
 pnpm --filter @teins/servidor migrar
-pnpm --filter @teins/servidor sembrar     # organización, formatos de prueba y dos usuarios (muestra sus contraseñas)
+pnpm --filter @teins/servidor sembrar     # organización, formatos de prueba, dos usuarios (muestra sus contraseñas) y un cliente con una visita
 pnpm --filter @teins/servidor dev:web     # http://localhost:3000
 pnpm --filter @teins/servidor dev:worker
 ```
 
-Administración: `crear-usuario` y `restablecer-contrasena` (ver el encabezado de cada archivo en `src/cli/`).
+Administración, mientras llegan las pantallas (uso en el encabezado de cada archivo de `src/cli/`):
+
+| Comando | Qué hace |
+|---|---|
+| `crear-usuario`, `restablecer-contrasena` | Usuarios internos y recuperación de acceso |
+| `desactivar-usuario` | Revoca: cierra sus sesiones, no vuelve a entrar y sus teléfonos borran sus datos al conectarse |
+| `crear-cliente` | Cliente con su primer sitio |
+| `crear-visita`, `reasignar-visita` | Programa una visita para uno o varios técnicos; al reasignar, sale del teléfono de quien deja de tenerla |
+| `publicar-formato` | Publica una versión de formato desde un JSON; llega a los teléfonos en la siguiente bajada |
+
+El permiso de trabajo sin conexión dura `DIAS_PERMISO_LOCAL` días (7 por defecto) desde el último contacto.
 
 Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/servidor generar-migracion --name <nombre>`. Los permisos de una tabla nueva van en una migración propia (`--custom`).
 
@@ -74,6 +89,6 @@ Una imagen para todo: `docker build -t teins .` desde la raíz. Incluye el servi
 
 Variables de entorno: las de `.env.example` más `NODE_ENV=production`, `SUPERFICIE_CAMPO_HOST` y `SUPERFICIE_OFICINA_HOST` (por ejemplo `campo.<dominio>` y `oficina.<dominio>`), con `ORIGENES_CONFIABLES` en `https://` para esos mismos hosts. Las contraseñas y el secreto van en el gestor de secretos de la plataforma, nunca en el repositorio.
 
-Antes del primer despliegue en un entorno: crear el rol `teins_app` con `infra/roles.sql` y darle contraseña desde la consola del proveedor; en el almacenamiento, `S3_CONFIGURAR_CORS=true` y `node dist/cli/sembrar.js` solo en pruebas (nunca corre en producción).
+Antes del primer despliegue en un entorno: crear el rol `teins_app` con `infra/roles.sql` y darle contraseña desde la consola del proveedor. CORS del almacenamiento: `S3_CONFIGURAR_CORS=true` si el token puede administrar el bucket; si no (R2 con token de objetos), en el panel del proveedor. Con Cloudflare R2, `S3_EXIGIR_HUELLA=false` (no admite la huella en la carga; la verifica el worker). `node dist/cli/sembrar.js` solo en pruebas, con `ENTORNO_DE_PRUEBAS=true`; nunca corre en producción. Entorno de pruebas en Railway (servicios, variables, operación): [`docs/proceso/entorno-de-pruebas.md`](../../docs/proceso/entorno-de-pruebas.md). La imagen incluye todo comando de `src/cli/` (`scripts/compilar.mjs`).
 
 Salud: `GET /salud` verifica la base de datos. El rol web detrás de un proxy confía en sus encabezados solo con `NODE_ENV=production`.

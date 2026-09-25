@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
-import type { RepositorioLevantamientos } from "./aplicacion/puertos";
-import { comandosProcesados, levantamientos } from "./esquema";
+import { and, eq, sql } from "drizzle-orm";
+import type { EstadoRevision } from "@teins/dominio";
+import type { RepositorioLevantamientos, RepositorioRevision } from "./aplicacion/puertos";
+import { comandosProcesados, comentarios, levantamientos } from "./esquema";
 
 /** Adaptador de Drizzle para el puerto del núcleo. */
 export const repositorioDrizzle: RepositorioLevantamientos = {
@@ -19,5 +20,35 @@ export const repositorioDrizzle: RepositorioLevantamientos = {
   },
   async insertar(tx, l) {
     await tx.insert(levantamientos).values({ ...l, estado: "enviado" });
+  },
+};
+
+export const repositorioRevision: RepositorioRevision = {
+  async obtener(tx, id) {
+    const [fila] = await tx
+      .select({
+        id: levantamientos.id,
+        tecnicoId: levantamientos.tecnicoId,
+        estado: levantamientos.estado,
+        revisorId: levantamientos.revisorId,
+        version: levantamientos.version,
+        formato: levantamientos.formato,
+        versionFormato: levantamientos.versionFormato,
+        respuestas: levantamientos.respuestas,
+      })
+      .from(levantamientos)
+      .where(eq(levantamientos.id, id));
+    return fila ? { ...fila, estado: fila.estado as EstadoRevision } : undefined;
+  },
+  async actualizar(tx, id, versionEsperada, cambios) {
+    const filas = await tx
+      .update(levantamientos)
+      .set({ ...cambios, version: sql`${levantamientos.version} + 1` })
+      .where(and(eq(levantamientos.id, id), eq(levantamientos.version, versionEsperada)))
+      .returning({ id: levantamientos.id });
+    return filas.length === 1;
+  },
+  async agregarComentario(tx, comentario) {
+    await tx.insert(comentarios).values(comentario);
   },
 };

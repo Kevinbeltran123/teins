@@ -8,7 +8,9 @@ import {
   RESTRICCION_LLAVE,
   type PuertoArchivos,
   type PuertoFormatos,
+  type PuertoVisitas,
   type RegistrarAuditoria,
+  type RegistrarCambios,
   type RepositorioLevantamientos,
 } from "./puertos";
 
@@ -17,7 +19,9 @@ export interface DependenciasEnvio {
   repositorio: RepositorioLevantamientos;
   formatos: PuertoFormatos;
   archivos: PuertoArchivos;
+  visitas: PuertoVisitas;
   registrarAuditoria: RegistrarAuditoria;
+  registrarCambios: RegistrarCambios;
   reloj?: () => Date;
 }
 
@@ -44,6 +48,8 @@ export async function recibirEnvio(
 
       const formato = await deps.formatos.obtener(tx, datos.formato, datos.versionFormato);
       if (!formato) throw problema("formato_desconocido", `${datos.formato} versión ${datos.versionFormato}`);
+      // Basta con que exista: una visita reasignada después de empezar no invalida el levantamiento (regla 17).
+      if (datos.visitaId && !(await deps.visitas.existe(tx, datos.visitaId))) throw problema("entrada_invalida", "La visita del levantamiento no existe");
 
       // El mismo validador que corrió en el dispositivo (ADR-0010): no puede haber diferencias.
       const borrador: Levantamiento = {
@@ -81,6 +87,7 @@ export async function recibirEnvio(
         tecnicoId: actor.usuarioId,
         formato: datos.formato,
         versionFormato: datos.versionFormato,
+        visitaId: datos.visitaId ?? null,
         respuestas: datos.respuestas,
         cantidadFotos: huellas.length,
         creadoEnDispositivo: new Date(datos.creadoEn),
@@ -103,6 +110,10 @@ export async function recibirEnvio(
 
       const resultado: ResultadoComando = { resultado: "aceptado", levantamientoId: datos.id, recibidoEn: recibidoEn.toISOString() };
       await deps.repositorio.guardarResultado(tx, llave, resultado);
+      // Al final: el bloqueo del registro de cambios dura hasta confirmar.
+      await deps.registrarCambios(tx, [
+        { organizacionId: actor.organizacionId, usuarioId: actor.usuarioId, entidad: "levantamiento", entidadId: datos.id, operacion: "cambio" },
+      ]);
       return resultado;
     });
   } catch (error) {
