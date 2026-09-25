@@ -143,8 +143,14 @@ export const Cambio = z
       /** Desde la app versión 3; a una anterior el servidor le manda "enviado" y sin comentarios (ADR-0015). */
       comentarios: z.array(ComentarioParaTecnico).optional(),
     }),
-    /** Salió del alcance del usuario (por ejemplo, la visita se reasignó): el dispositivo la retira. */
-    z.object({ tipo: z.literal("fuera_de_alcance"), entidad: z.enum(["visita"]), id: Uuid }),
+    /** Salió del alcance del usuario (la visita se reasignó o se canceló): el dispositivo la retira. */
+    z.object({
+      tipo: z.literal("fuera_de_alcance"),
+      entidad: z.enum(["visita"]),
+      id: Uuid,
+      /** Iteración 7, expansión (ADR-0015): una app anterior no lo lee y la trata como reasignada. */
+      motivo: z.enum(["reasignada", "cancelada"]).optional(),
+    }),
   ])
   .meta({ id: "Cambio" });
 export type Cambio = z.infer<typeof Cambio>;
@@ -364,6 +370,36 @@ export const SaludDeDispositivo = z
 
 /** Credenciales nuevas de un acceso de cliente: se muestran una sola vez. */
 export const CredencialesDeAcceso = z.object({ identificador: z.string(), clave: z.string(), url: z.url() }).meta({ id: "CredencialesDeAcceso" });
+
+// Programación (iteración 7): clientes, sitios y visitas, por oficina.
+
+const Texto = (maximo: number) => z.string().trim().min(1).max(maximo);
+
+export const ClienteConSitios = z
+  .object({
+    id: Uuid,
+    nombre: z.string(),
+    sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string() })),
+  })
+  .meta({ id: "ClienteConSitios" });
+
+export const VisitaProgramada = z
+  .object({
+    id: Uuid,
+    /** Concurrencia optimista (QA-25): cada cambio lleva la versión que se tenía abierta. */
+    version: z.int().positive(),
+    cliente: z.object({ id: Uuid, nombre: z.string() }),
+    sitio: z.object({ id: Uuid, nombre: z.string(), direccion: z.string() }),
+    motivo: z.string(),
+    programadaPara: z.iso.date(),
+    tecnicos: z.array(Persona),
+    /** Avance deducido de sus levantamientos (modelo de dominio, sección 5). */
+    levantamientos: z.object({ enviados: z.int().min(0), enRevision: z.int().min(0), revisados: z.int().min(0) }),
+    cancelada: z.object({ en: Fecha, por: Persona, motivo: z.string() }).nullable(),
+  })
+  .meta({ id: "VisitaProgramada" });
+
+const erroresDeVisita = ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "estado_invalido", "entrada_invalida"] as const;
 
 const NombreDeUsuario = z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,30}$/);
 
@@ -713,6 +749,89 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: VersionPublicada,
     errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "estado_invalido"],
+  },
+  listarClientes: {
+    metodo: "GET",
+    ruta: "/api/clientes",
+    resumen: "Clientes de la organización con sus sitios",
+    estadoExito: 200,
+    respuesta: z.object({ clientes: z.array(ClienteConSitios) }),
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  crearCliente: {
+    metodo: "POST",
+    ruta: "/api/clientes",
+    resumen: "Crea un cliente con su primer sitio",
+    cuerpo: z.object({ nombre: Texto(200), sitio: z.object({ nombre: Texto(200), direccion: Texto(300) }) }),
+    estadoExito: 201,
+    respuesta: ClienteConSitios,
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
+  },
+  agregarSitio: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/sitios",
+    resumen: "Agrega un sitio a un cliente",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ nombre: Texto(200), direccion: Texto(300) }),
+    estadoExito: 201,
+    respuesta: ClienteConSitios,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
+  },
+  listarTecnicos: {
+    metodo: "GET",
+    ruta: "/api/tecnicos",
+    resumen: "Técnicos activos de la organización, para asignar visitas",
+    estadoExito: 200,
+    respuesta: z.object({ tecnicos: z.array(z.object({ id: z.string(), nombre: z.string(), usuario: z.string() })) }),
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  listarVisitas: {
+    metodo: "GET",
+    ruta: "/api/visitas",
+    resumen: "Visitas de una vista: próximas (desde hoy), anteriores (las 100 más recientes) o canceladas",
+    consulta: z.object({ vista: z.enum(["proximas", "anteriores", "canceladas"]), hoy: z.iso.date() }),
+    estadoExito: 200,
+    respuesta: z.object({ visitas: z.array(VisitaProgramada) }),
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
+  },
+  programarVisita: {
+    metodo: "POST",
+    ruta: "/api/visitas",
+    resumen: "Programa una visita; llega a los teléfonos de sus técnicos en la siguiente bajada",
+    cuerpo: z.object({ clienteId: Uuid, sitioId: Uuid, motivo: Texto(120), programadaPara: z.iso.date(), tecnicos: z.array(z.string()).min(1).max(20) }),
+    estadoExito: 201,
+    respuesta: VisitaProgramada,
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
+  },
+  reasignarVisita: {
+    metodo: "POST",
+    ruta: "/api/visitas/{id}/tecnicos",
+    resumen: "Reemplaza los técnicos; sale del teléfono de quien deja de tenerla (regla 17: lo empezado se conserva)",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ version: z.int().positive(), tecnicos: z.array(z.string()).min(1).max(20) }),
+    estadoExito: 200,
+    respuesta: VisitaProgramada,
+    errores: [...erroresDeVisita],
+  },
+  reprogramarVisita: {
+    metodo: "POST",
+    ruta: "/api/visitas/{id}/reprogramar",
+    resumen: "Cambia la fecha y el motivo; los teléfonos lo reciben en la siguiente bajada",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ version: z.int().positive(), programadaPara: z.iso.date(), motivo: Texto(120) }),
+    estadoExito: 200,
+    respuesta: VisitaProgramada,
+    errores: [...erroresDeVisita],
+  },
+  cancelarVisita: {
+    metodo: "POST",
+    ruta: "/api/visitas/{id}/cancelar",
+    resumen: "Cancela la visita (único estado explícito); sale de los teléfonos y lo empezado se conserva",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ version: z.int().positive(), motivo: Texto(500) }),
+    estadoExito: 200,
+    respuesta: VisitaProgramada,
+    errores: [...erroresDeVisita],
   },
   urlDeArchivo: {
     metodo: "GET",

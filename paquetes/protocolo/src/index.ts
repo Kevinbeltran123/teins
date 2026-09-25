@@ -13,6 +13,7 @@ export {
   BYTES_MAXIMOS_ARCHIVO,
   Cambio,
   Comando,
+  ClienteConSitios,
   Comentario,
   CredencialesDeAcceso,
   DetalleInforme,
@@ -36,6 +37,7 @@ export {
   UsuarioAdministrado,
   VersionPublicada,
   VisitaAsignada,
+  VisitaProgramada,
 } from "./operaciones";
 export type {
   Consulta,
