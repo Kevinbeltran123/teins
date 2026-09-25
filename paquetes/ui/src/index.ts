@@ -3,6 +3,7 @@ export { Boton, claseBoton } from "./Boton";
 export { CampoFotos } from "./CampoFotos";
 export { Casilla } from "./Casilla";
 export { CampoMedida } from "./CampoMedida";
+export { CampoSeleccion } from "./CampoSeleccion";
 export { CampoTexto } from "./CampoTexto";
 export { CampoTextoLargo } from "./CampoTextoLargo";
 export { EtiquetaCampo, MensajeError } from "./Etiqueta";

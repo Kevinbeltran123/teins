@@ -9,3 +9,4 @@ Componentes compartidos (base shadcn/ui reestilizada) y tokens de diseño.
 Los tokens de tamaño son neutros (`texto-cuerpo`, `tactil`, `fondo`): cada superficie los redefine con `data-superficie` y los componentes no cambian. Una sola familia de letra en toda la interfaz (DESIGN.md).
 
 Iteración 6: `GrupoDeOpciones` (una opción entre pocas, a la vista) y `modoEntrada="numeric"` en `CampoTexto` para códigos de verificación.
+Iteración 7: `CampoSeleccion` (lista nativa para elegir entre muchos, como clientes y sitios) y `tipo="date"` en `CampoTexto`.

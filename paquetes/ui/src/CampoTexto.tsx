@@ -8,7 +8,7 @@ interface Props {
   obligatorio?: boolean | undefined;
   error?: string | undefined;
   deshabilitado?: boolean;
-  tipo?: "text" | "password";
+  tipo?: "text" | "password" | "date";
   autoComplete?: string;
   nombre?: string;
   /** Teclado del celular: "numeric" para códigos de verificación. */
