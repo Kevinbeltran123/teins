@@ -35,7 +35,8 @@ export const Sesion = z
 
 // Archivos (ADR-0007)
 
-export const TIPOS_DE_ARCHIVO = ["image/jpeg"] as const;
+/** Fotos desde campo; planos en PDF desde oficina (corte 4). */
+export const TIPOS_DE_ARCHIVO = ["image/jpeg", "application/pdf"] as const;
 
 const AutorizarSubida = z
   .object({
@@ -217,7 +218,7 @@ export const DetalleLevantamiento = ResumenLevantamiento.extend({
   creadoEnDispositivo: Fecha,
   enviadoEnDispositivo: Fecha,
   visita: z
-    .object({ cliente: z.string(), sitio: z.string(), direccion: z.string(), motivo: z.string(), programadaPara: z.iso.date() })
+    .object({ id: Uuid, cliente: z.string(), sitio: z.string(), direccion: z.string(), motivo: z.string(), programadaPara: z.iso.date() })
     .nullable(),
   comentarios: z.array(Comentario),
 }).meta({ id: "DetalleLevantamiento" });
@@ -250,6 +251,49 @@ export const Historial = z
   .meta({ id: "Historial" });
 
 export const UrlDeArchivo = z.object({ url: z.url(), expiraEn: Fecha }).meta({ id: "UrlDeArchivo" });
+
+// Informes (corte 4)
+
+const Plano = z.object({ huella: Huella, nombre: z.string().trim().min(1).max(200) });
+
+/** "Publicada" y "visible para el cliente" son distintos: sin PDF listo, el cliente no la ve (ADR-0013). */
+const EstadoPdf = z.enum(["generando", "listo", "fallido"]);
+
+export const VersionPublicada = z
+  .object({ numero: z.int().positive(), publicadaEn: Fecha, publicadaPor: Persona, pdf: EstadoPdf })
+  .meta({ id: "VersionPublicada" });
+
+const VisitaDelInforme = z.object({ cliente: z.string(), sitio: z.string(), direccion: z.string(), motivo: z.string(), programadaPara: z.iso.date() });
+
+export const PaginaInformes = z
+  .object({
+    elementos: z.array(
+      z.object({
+        id: Uuid,
+        visita: VisitaDelInforme,
+        /** Número de la versión vigente; null mientras no se publica ninguna. */
+        vigente: z.int().positive().nullable(),
+        pdf: EstadoPdf.nullable(),
+      }),
+    ),
+  })
+  .meta({ id: "PaginaInformes" });
+
+export const DetalleInforme = z
+  .object({
+    id: Uuid,
+    visitaId: Uuid,
+    visita: VisitaDelInforme,
+    version: z.int().positive(),
+    introduccion: z.string(),
+    conclusiones: z.string(),
+    levantamientos: z.array(Uuid),
+    planos: z.array(Plano),
+    /** Levantamientos de la visita, incluidos o no, para componer (solo los revisados se pueden incluir). */
+    candidatos: z.array(z.object({ id: Uuid, formato: z.string(), tecnico: z.string(), estado: EstadoLevantamiento, recibidoEn: Fecha })),
+    versiones: z.array(VersionPublicada),
+  })
+  .meta({ id: "DetalleInforme" });
 
 export const operaciones = {
   obtenerSesion: {
@@ -411,6 +455,67 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: Historial,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  listarInformes: {
+    metodo: "GET",
+    ruta: "/api/informes",
+    resumen: "Informes de la organización, de la visita más reciente a la más antigua",
+    estadoExito: 200,
+    respuesta: PaginaInformes,
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  abrirInformeDeVisita: {
+    metodo: "POST",
+    ruta: "/api/informes",
+    resumen: "Informe de una visita; lo crea en borrador si no existe (uno por visita)",
+    cuerpo: z.object({ visitaId: Uuid }),
+    estadoExito: 200,
+    respuesta: z.object({ id: Uuid }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  obtenerInforme: {
+    metodo: "GET",
+    ruta: "/api/informes/{id}",
+    resumen: "Borrador del informe, levantamientos de la visita y versiones publicadas",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: DetalleInforme,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  guardarInforme: {
+    metodo: "POST",
+    ruta: "/api/informes/{id}/borrador",
+    resumen: "Guarda el borrador: textos, levantamientos incluidos y planos, en orden",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({
+      ...ConVersion,
+      introduccion: z.string().max(20_000),
+      conclusiones: z.string().max(20_000),
+      levantamientos: z.array(Uuid).max(50),
+      planos: z.array(Plano).max(20),
+    }),
+    estadoExito: 200,
+    respuesta: z.object({ version: z.int().positive() }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "informe_invalido"],
+  },
+  publicarInforme: {
+    metodo: "POST",
+    ruta: "/api/informes/{id}/publicar",
+    resumen: "Publica una versión inmutable y encola su PDF (QA-9, QA-17)",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object(ConVersion),
+    estadoExito: 201,
+    respuesta: VersionPublicada,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "informe_invalido", "archivos_faltantes", "archivos_en_verificacion"],
+  },
+  pdfDeVersion: {
+    metodo: "GET",
+    ruta: "/api/informes/{id}/versiones/{numero}/pdf",
+    resumen: "URL firmada del PDF de una versión publicada",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
+    estadoExito: 200,
+    respuesta: UrlDeArchivo,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
   },
   urlDeArchivo: {
     metodo: "GET",

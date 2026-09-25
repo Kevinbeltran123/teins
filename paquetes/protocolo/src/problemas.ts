@@ -16,6 +16,8 @@ export const ESTADO_POR_CODIGO = {
   estado_invalido: 409,
   /** Solo quien tomó la revisión edita (regla 4). */
   no_tomado: 403,
+  /** El borrador del informe no cumple sus reglas (regla 9). */
+  informe_invalido: 422,
   archivos_faltantes: 409,
   archivos_en_verificacion: 409,
   archivo_demasiado_grande: 413,
@@ -41,6 +43,7 @@ export const REINTENTABLE: Readonly<Record<CodigoProblema, boolean>> = {
   tomado_por_otro: false,
   estado_invalido: false,
   no_tomado: false,
+  informe_invalido: false,
   archivos_faltantes: true,
   archivos_en_verificacion: true,
   archivo_demasiado_grande: false,
@@ -69,6 +72,9 @@ export const Problema = z
     /** Versión vigente cuando hay conflicto: la persona recarga y vuelve a intentar. */
     versionActual: z.int().optional(),
     revisor: z.object({ id: z.string(), nombre: z.string() }).optional(),
+    erroresInforme: z
+      .array(z.object({ codigo: z.string(), levantamientoId: z.string().optional(), huella: z.string().optional(), campo: z.string().optional() }))
+      .optional(),
     reintentarEnSegundos: z.int().optional(),
     campos: z.array(z.object({ ruta: z.string(), mensaje: z.string() })).optional(),
   })
