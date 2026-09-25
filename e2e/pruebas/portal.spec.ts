@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { nuevaVisitaConCliente, nuevoAcceso, nuevoUsuario } from "../consola";
+import { nuevaVisitaConCliente, nuevoAcceso, nuevoAdministrador, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { fotoDePrueba, iniciarSesion } from "./ayudas";
+import { activarSegundoFactor, fotoDePrueba, iniciarSesion } from "./ayudas";
 
 test("el recorrido completo: campo envía, oficina revisa y publica, y el cliente descarga su informe con el QR y la clave (QA-4)", async ({ page, browser }) => {
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
@@ -53,6 +53,21 @@ test("el recorrido completo: campo envía, oficina revisa y publica, y el client
   const pdf = c.waitForResponse((r) => r.request().method() === "GET" && (r.headers()["content-type"] ?? "").includes("application/pdf"));
   await c.getByRole("button", { name: /Descargar el informe de/ }).click();
   expect((await pdf).status()).toBe(200);
+
+  // Una persona administradora retira la versión del portal: el cliente deja de verla (iteración 6).
+  const admin = nuevoAdministrador();
+  const administracion = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });
+  const ad = await administracion.newPage();
+  await activarSegundoFactor(ad, OFICINA, admin);
+  await ad.goto(`${OFICINA}/informes`);
+  await ad.getByRole("link", { name: cliente }).click();
+  await ad.getByRole("button", { name: "Retirar la versión 1 del portal" }).click();
+  await ad.getByLabel("Motivo del retiro de la versión 1").fill("Prueba de retiro E2E");
+  await ad.getByRole("button", { name: "Sí, retirar la versión 1" }).click();
+  await expect(ad.getByText("Retirada del portal el", { exact: false })).toBeVisible();
+  await administracion.close();
+  await c.reload();
+  await expect(c.getByText("Todavía no hay informes publicados.", { exact: false })).toBeVisible();
   await celular.close();
 
   // Otro cliente, con su propio acceso, no ve ese informe (QA-4).

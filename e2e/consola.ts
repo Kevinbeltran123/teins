@@ -35,8 +35,15 @@ export interface Usuario {
 
 export function nuevoUsuario(rol: "tecnico" | "oficina", prefijo: string): Usuario {
   const sufijo = randomBytes(3).toString("hex");
-  const u = { usuario: `${prefijo}.${sufijo}`, nombre: `${prefijo === "oficina" ? "Oficina" : "Técnico"} E2E ${sufijo}`, contrasena: randomBytes(12).toString("base64url") };
+  const u = { usuario: `${prefijo}.${sufijo}`, nombre: `${rol === "oficina" ? "Oficina" : "Técnico"} E2E ${sufijo}`, contrasena: randomBytes(12).toString("base64url") };
   comando("crear-usuario", ["--organizacion", ORGANIZACION, "--usuario", u.usuario, "--nombre", u.nombre, "--rol", rol], { TEINS_CONTRASENA: u.contrasena });
+  return u;
+}
+
+/** Persona de oficina marcada como administradora; el segundo factor lo activa ella (iteración 6). */
+export function nuevoAdministrador(): Usuario {
+  const u = nuevoUsuario("oficina", "admin");
+  comando("marcar-administrador", ["--usuario", u.usuario]);
   return u;
 }
 

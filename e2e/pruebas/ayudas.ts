@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 import { deflateSync } from "node:zlib";
 import type { Page } from "@playwright/test";
+import { codigoTotp } from "../totp";
 
 /**
  * Imagen de prueba (ficticia, R5): la app la recodifica a JPEG como una foto de la cámara.
@@ -38,6 +39,21 @@ export async function iniciarSesion(page: Page, u: { usuario: string; contrasena
   await page.getByLabel("Usuario").fill(u.usuario);
   await page.getByLabel("Contraseña").fill(u.contrasena);
   await page.getByRole("button", { name: "Iniciar sesión" }).click();
+}
+
+/**
+ * Activa el segundo factor por la API, con la sesión de la página: para pruebas cuyo tema no es la
+ * activación (esa la recorre administracion.spec.ts por la interfaz). Deja la página con sesión.
+ */
+export async function activarSegundoFactor(page: Page, base: string, u: { usuario: string; contrasena: string }) {
+  const pedir = async (ruta: string, datos: object) => {
+    const r = await page.request.post(`${base}/api/auth${ruta}`, { data: datos, headers: { origin: base } });
+    if (!r.ok()) throw new Error(`${ruta}: ${r.status()} ${await r.text()}`);
+    return r.json();
+  };
+  await pedir("/sign-in/username", { username: u.usuario, password: u.contrasena });
+  const { totpURI } = await pedir("/two-factor/enable", { password: u.contrasena });
+  await pedir("/two-factor/verify-totp", { code: codigoTotp(new URL(totpURI).searchParams.get("secret")!) });
 }
 
 /** PDF mínimo válido de una página (ficticio, R5), armado a mano con su tabla de referencias. */
