@@ -11,6 +11,8 @@ interface Props {
   tipo?: "text" | "password";
   autoComplete?: string;
   nombre?: string;
+  /** Teclado del celular: "numeric" para códigos de verificación. */
+  modoEntrada?: "text" | "numeric";
 }
 
 export const claseControl =
@@ -19,7 +21,7 @@ export const claseControl =
 export const claseConError = "animate-[sacudida_var(--t-duracion-estandar)_var(--t-curva)] border-2 border-error";
 
 /** No controlado: cada tecla se guarda sin volver a leer de la base, así el cursor no salta. */
-export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, error, deshabilitado, tipo = "text", autoComplete = "off", nombre }: Props) {
+export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, error, deshabilitado, tipo = "text", autoComplete = "off", nombre, modoEntrada }: Props) {
   const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
@@ -31,6 +33,7 @@ export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, erro
         name={nombre}
         type={tipo}
         autoComplete={autoComplete}
+        inputMode={modoEntrada}
         className={`${claseControl} ${error ? claseConError : ""}`}
         defaultValue={valorInicial}
         disabled={deshabilitado}

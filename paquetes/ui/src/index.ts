@@ -6,6 +6,7 @@ export { CampoMedida } from "./CampoMedida";
 export { CampoTexto } from "./CampoTexto";
 export { CampoTextoLargo } from "./CampoTextoLargo";
 export { EtiquetaCampo, MensajeError } from "./Etiqueta";
+export { GrupoDeOpciones } from "./GrupoDeOpciones";
 export { MarcaNoObtenido } from "./MarcaNoObtenido";
 export { Marquilla } from "./Marquilla";
 export { Pestanas } from "./Pestanas";
