@@ -6,7 +6,8 @@ import { conectar } from "./plataforma/base-de-datos";
 /** Rol web (ADR-0001): atiende solicitudes. Sin estado: se puede tener varias instancias. */
 const config = leerConfig();
 const conexion = conectar(config.DATABASE_URL, config.POOL_MAXIMO, (error) => app.log.error({ err: error }, "Error de conexión"));
-const { app } = await construirApp({ config, bd: conexion.bd, almacenamiento: almacenamientoS3(config) });
+const portal = config.DATABASE_URL_PORTAL ? conectar(config.DATABASE_URL_PORTAL, 4, (error) => app.log.error({ err: error }, "Error de conexión del portal")) : undefined;
+const { app } = await construirApp({ config, bd: conexion.bd, ...(portal ? { bdPortal: portal.bd } : {}), almacenamiento: almacenamientoS3(config) });
 
 let cerrando = false;
 async function apagar(senal: string) {
@@ -15,7 +16,7 @@ async function apagar(senal: string) {
   app.log.info({ senal }, "Apagando: se terminan las solicitudes en curso");
   // Termina lo que está en curso antes de cerrar las conexiones.
   await app.close();
-  await conexion.cerrar();
+  await Promise.all([conexion.cerrar(), portal?.cerrar()]);
   process.exit(0);
 }
 process.on("SIGTERM", () => void apagar("SIGTERM"));

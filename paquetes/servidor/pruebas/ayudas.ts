@@ -20,6 +20,7 @@ export function configDePrueba(extra: Partial<Record<string, string>> = {}): Con
     NIVEL_REGISTRO: "silent",
     DATABASE_URL: inject("urlApp"),
     DATABASE_URL_PROPIETARIO: inject("urlPropietario"),
+    DATABASE_URL_PORTAL: inject("urlPortal"),
     S3_ENDPOINT: inject("s3Endpoint"),
     S3_REGION: "us-east-1",
     S3_BUCKET: BUCKET_DE_PRUEBA,
@@ -27,7 +28,8 @@ export function configDePrueba(extra: Partial<Record<string, string>> = {}): Con
     S3_SECRET_ACCESS_KEY: "prueba",
     S3_FORZAR_RUTA: "true",
     AUTH_SECRETO: "secreto-de-prueba-que-no-es-real-0123456789",
-    ORIGENES_CONFIABLES: "http://localhost:5173,http://localhost:5174",
+    ORIGENES_CONFIABLES: "http://localhost:5173,http://localhost:5174,http://localhost:5175",
+    PORTAL_URL: "http://localhost:5175",
     ...extra,
   });
 }
@@ -66,7 +68,9 @@ export async function servidorDePrueba() {
   const config = configDePrueba({ INICIOS_DE_SESION_POR_MINUTO: "1000" });
   const { app: conexionApp, propietario } = conexionesDePrueba();
   const almacenamiento = almacenamientoS3(config);
-  const { app, rutas } = await construirApp({ config, bd: conexionApp.bd, almacenamiento });
+  const conexionPortal = conectar(inject("urlPortal"), 4);
+  afterAll(() => conexionPortal.cerrar());
+  const { app, rutas } = await construirApp({ config, bd: conexionApp.bd, bdPortal: conexionPortal.bd, almacenamiento });
   afterAll(() => app.close());
   const identidad = crearIdentidad(conexionApp.bd, config);
   const archivos = crearArchivos({ bd: conexionApp.bd, almacenamiento, config });
@@ -92,11 +96,25 @@ export async function servidorDePrueba() {
     };
   }
 
-  /** Ejecuta los trabajos pendientes de la cola, como lo haría el worker. */
   const informes = crearGeneradorPdf({ bd: conexionApp.bd, almacenamiento, config });
-  const procesarCola = () => runOnce({ pgPool: propietario.pool, taskList: definirTareas({ archivos, informes }) });
+  /**
+   * Ejecuta los trabajos pendientes, como lo haría el worker. Los archivos de pruebas corren en paralelo
+   * y comparten la cola: una pasada puede terminar mientras otro archivo aún procesa un trabajo, así que
+   * se repite hasta que no quede ninguno listo ni en curso.
+   */
+  async function procesarCola() {
+    for (let i = 0; i < 200; i++) {
+      await runOnce({ pgPool: propietario.pool, taskList: definirTareas({ archivos, informes }) });
+      const { rows } = await propietario.pool.query(
+        "select count(*)::int as n from graphile_worker.jobs where locked_at is not null or (run_at <= now() and attempts < max_attempts)",
+      );
+      if (rows[0].n === 0) return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error("La cola no se vació");
+  }
 
-  return { app, rutas, config, propietario, conexionApp, identidad, nuevaOrganizacionConUsuarios, procesarCola };
+  return { app, rutas, config, propietario, conexionApp, conexionPortal, identidad, nuevaOrganizacionConUsuarios, procesarCola };
 }
 
 export async function iniciarSesion(app: FastifyInstance, usuario: string, contrasena: string): Promise<string> {

@@ -3,6 +3,8 @@ import { pgPolicy, pgRole, timestamp, uuid } from "drizzle-orm/pg-core";
 
 /** Rol con que corre la aplicación. Lo crea la infraestructura; las migraciones solo le dan permisos. */
 export const rolApp = pgRole("teins_app").existing();
+/** Rol exclusivo del portal del cliente (ADR-0009, parte 3). */
+export const rolPortal = pgRole("teins_portal").existing();
 
 export const conZona = { withTimezone: true, mode: "date" } as const;
 
@@ -23,3 +25,13 @@ export const aislamientoPorOrganizacion = (tabla: string) =>
   });
 
 export const marcaDeTiempo = (nombre: string) => timestamp(nombre, conZona);
+
+/** La misma barrera por organización para el rol del portal (auditoría de ingresos y descargas). */
+export const aislamientoDelPortal = (tabla: string) =>
+  pgPolicy(`${tabla}_portal_organizacion`, {
+    as: "permissive",
+    to: rolPortal,
+    for: "all",
+    using: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid`,
+    withCheck: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid`,
+  });

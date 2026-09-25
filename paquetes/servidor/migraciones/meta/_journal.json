@@ -64,6 +64,20 @@
       "when": 1790351345983,
       "tag": "0008_permisos_informes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790353716812,
+      "tag": "0009_portal",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790353717237,
+      "tag": "0010_permisos_portal",
+      "breakpoints": true
     }
   ]
 }

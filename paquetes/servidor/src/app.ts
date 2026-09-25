@@ -18,10 +18,13 @@ import { clientesYSitios } from "./modulos/clientes";
 import { crearSincronizacion } from "./modulos/sincronizacion";
 import { crearVisitas } from "./modulos/visitas";
 import { crearInformes } from "./modulos/informes";
+import { crearPortal } from "./modulos/portal";
 
 export interface Dependencias {
   config: Config;
   bd: BaseDeDatos;
+  /** Conexión con el rol `teins_portal` (ADR-0009, parte 3). Sin ella, el rol web no atiende el portal. */
+  bdPortal?: BaseDeDatos;
   almacenamiento: Almacenamiento;
 }
 
@@ -32,7 +35,7 @@ const CORRELACION_VALIDA = /^[A-Za-z0-9._-]{8,64}$/;
  * Construye el rol web (ADR-0001). Los módulos se componen aquí y solo se ven entre sí
  * por su interfaz pública.
  */
-export async function construirApp({ config, bd, almacenamiento }: Dependencias): Promise<{ app: FastifyInstance; rutas: Set<string> }> {
+export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dependencias): Promise<{ app: FastifyInstance; rutas: Set<string> }> {
   const app = Fastify({
     logger: {
       level: config.NIVEL_REGISTRO,
@@ -154,10 +157,12 @@ export async function construirApp({ config, bd, almacenamiento }: Dependencias)
   levantamientos.registrarRutas(app);
   sincronizacion.registrarRutas(app);
   informes.registrarRutas(app);
+  if (bdPortal) crearPortal({ bdPortal, almacenamiento, config }).registrarRutas(app);
 
   const superficies: Superficie[] = [
     ...(config.SUPERFICIE_CAMPO_HOST ? [{ host: config.SUPERFICIE_CAMPO_HOST, carpeta: `${config.SUPERFICIES_DIR}/campo` }] : []),
     ...(config.SUPERFICIE_OFICINA_HOST ? [{ host: config.SUPERFICIE_OFICINA_HOST, carpeta: `${config.SUPERFICIES_DIR}/oficina` }] : []),
+    ...(config.SUPERFICIE_PORTAL_HOST ? [{ host: config.SUPERFICIE_PORTAL_HOST, carpeta: `${config.SUPERFICIES_DIR}/portal` }] : []),
   ];
   if (superficies.length > 0) await servirSuperficies(app, superficies);
 

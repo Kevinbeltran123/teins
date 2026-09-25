@@ -1,5 +1,5 @@
 import { customType, index, integer, jsonb, pgSchema, smallint, text, unique, uuid } from "drizzle-orm/pg-core";
-import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
+import { aislamientoDelPortal, aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
 
@@ -34,5 +34,6 @@ export const registros = auditoria.table(
     unique("registros_cadena_unica").on(t.organizacionId, t.agregadoTipo, t.agregadoId, t.secuencia),
     index("registros_correlacion_idx").on(t.correlacion),
     aislamientoPorOrganizacion("registros"),
+    aislamientoDelPortal("registros"),
   ],
 ).enableRLS();

@@ -21,6 +21,11 @@ const Esquema = z.object({
   /** Rol dueño: migraciones y cola de trabajos. Nunca atiende solicitudes. */
   DATABASE_URL_PROPIETARIO: z.url(),
   POOL_MAXIMO: z.coerce.number().int().min(1).max(100).default(10),
+  /**
+   * Rol exclusivo del portal (ADR-0009, parte 3): solo ve versiones publicadas del cliente de la sesión.
+   * Sin valor, el rol web no atiende el portal.
+   */
+  DATABASE_URL_PORTAL: z.url().optional(),
 
   S3_ENDPOINT: z.url().optional(),
   S3_REGION: z.string().min(1),
@@ -50,6 +55,9 @@ const Esquema = z.object({
    */
   SUPERFICIE_CAMPO_HOST: z.string().min(1).optional(),
   SUPERFICIE_OFICINA_HOST: z.string().min(1).optional(),
+  SUPERFICIE_PORTAL_HOST: z.string().min(1).optional(),
+  /** Dirección pública del portal: la lleva el QR de cada acceso de cliente, con el identificador y nunca la clave. */
+  PORTAL_URL: z.url().optional(),
   SUPERFICIES_DIR: z.string().min(1).default("superficies"),
 
   AUTH_SECRETO: z.string().min(32, "AUTH_SECRETO debe tener al menos 32 caracteres"),

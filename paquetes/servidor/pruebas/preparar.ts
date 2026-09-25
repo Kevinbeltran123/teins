@@ -9,6 +9,7 @@ declare module "vitest" {
   export interface ProvidedContext {
     urlApp: string;
     urlPropietario: string;
+    urlPortal: string;
     s3Endpoint: string;
   }
 }
@@ -43,6 +44,7 @@ export default async function preparar(proyecto: TestProject) {
   await admin.connect();
   await admin.query(readFileSync(new URL("../infra/roles.sql", import.meta.url), "utf8"));
   await admin.query("ALTER ROLE teins_app PASSWORD 'app'");
+  await admin.query("ALTER ROLE teins_portal PASSWORD 'portal'");
   await admin.end();
   await migrar(urlPropietario, new URL("../migraciones", import.meta.url).pathname);
 
@@ -52,6 +54,10 @@ export default async function preparar(proyecto: TestProject) {
 
   proyecto.provide("urlPropietario", urlPropietario);
   proyecto.provide("urlApp", urlApp.toString());
+  const urlPortal = new URL(urlPropietario);
+  urlPortal.username = "teins_portal";
+  urlPortal.password = "portal";
+  proyecto.provide("urlPortal", urlPortal.toString());
   proyecto.provide("s3Endpoint", `http://${s3.getHost()}:${s3.getMappedPort(9090)}`);
 
   return async () => {

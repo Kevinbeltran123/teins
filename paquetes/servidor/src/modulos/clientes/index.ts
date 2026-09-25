@@ -30,6 +30,11 @@ export const clientesYSitios = {
     return { clienteId, sitioId };
   },
 
+  async obtener(tx: TxOrganizacion, id: string): Promise<{ id: string; nombre: string } | undefined> {
+    const [fila] = await tx.select({ id: clientes.id, nombre: clientes.nombre }).from(clientes).where(eq(clientes.id, id));
+    return fila;
+  },
+
   async sitios(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, Sitio>> {
     if (ids.length === 0) return new Map();
     const filas = await tx

@@ -1,6 +1,7 @@
-import { index, integer, jsonb, pgSchema, text, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { index, integer, jsonb, pgPolicy, pgSchema, text, unique, uuid } from "drizzle-orm/pg-core";
 import type { ContenidoVersion, Plano } from "@teins/dominio";
-import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
+import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId, rolPortal } from "../../plataforma/esquema-comun";
 
 export const esquemaInformes = pgSchema("informes");
 
@@ -36,6 +37,8 @@ export const versionesPublicadas = esquemaInformes.table(
     informeId: uuid("informe_id")
       .notNull()
       .references(() => informes.id),
+    /** Cliente de la visita al publicar: la barrera del portal filtra por él (QA-4). */
+    clienteId: uuid("cliente_id"),
     numero: integer("numero").notNull(),
     contenido: jsonb("contenido").$type<ContenidoVersion>().notNull(),
     publicadaPor: text("publicada_por").notNull(),
@@ -46,5 +49,19 @@ export const versionesPublicadas = esquemaInformes.table(
     pdfGeneradoEn: marcaDeTiempo("pdf_generado_en"),
     pdfError: text("pdf_error"),
   },
-  (t) => [unique("versiones_numero").on(t.informeId, t.numero), index("versiones_informe_idx").on(t.informeId), aislamientoPorOrganizacion("versiones")],
+  (t) => [
+    unique("versiones_numero").on(t.informeId, t.numero),
+    index("versiones_informe_idx").on(t.informeId),
+    aislamientoPorOrganizacion("versiones"),
+    // ADR-0009, parte 3: aunque el código del portal falle, la base solo le devuelve lo publicado,
+    // con PDF listo, de la organización y el cliente de la sesión.
+    pgPolicy("versiones_portal_cliente", {
+      as: "permissive",
+      to: rolPortal,
+      for: "select",
+      using: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid
+        and cliente_id = nullif(current_setting('app.cliente', true), '')::uuid
+        and pdf_estado = 'listo'`,
+    }),
+  ],
 ).enableRLS();

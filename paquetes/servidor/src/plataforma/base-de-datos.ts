@@ -37,6 +37,20 @@ export function enOrganizacion<T>(bd: BaseDeDatos, organizacionId: string, fn: (
   });
 }
 
+declare const marcaPortal: unique symbol;
+/**
+ * Transacción del portal (ADR-0009, parte 3): corre con el rol `teins_portal` y fija organización y
+ * cliente. La seguridad por fila de la base solo le deja ver lo publicado de ese cliente.
+ */
+export type TxPortal = TxOrganizacion & { readonly [marcaPortal]: "portal" };
+
+export function enClienteDelPortal<T>(bd: BaseDeDatos, organizacionId: string, clienteId: string, fn: (tx: TxPortal) => Promise<T>): Promise<T> {
+  return bd.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.organizacion', ${organizacionId}, true), set_config('app.cliente', ${clienteId}, true)`);
+    return fn(tx as TxPortal);
+  });
+}
+
 const CODIGO_VIOLACION_UNICA = "23505";
 
 export function esViolacionUnica(error: unknown, restriccion?: string): boolean {

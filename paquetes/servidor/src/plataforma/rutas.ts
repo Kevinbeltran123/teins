@@ -93,6 +93,67 @@ export function registrarOperacionDeDispositivo<N extends NombreOperacion>(
   registrar(app, nombre, { tipo: "secreto_de_dispositivo" }, async () => null, manejar);
 }
 
+/** Lo que una operación del portal puede hacer con su cookie y saber del origen. */
+export interface ContextoPortal {
+  ip: string;
+  token: string | undefined;
+  ponerSesion(token: string, segundos: number): void;
+  quitarSesion(): void;
+}
+
+export interface OpcionesPortal<N extends NombreOperacion, S> {
+  /** Solo el ingreso es público (con límite de intentos); todo lo demás exige la sesión del portal. */
+  publica?: string;
+  nombreCookie: string;
+  seguro: boolean;
+  resolverSesion: (token: string) => Promise<S | null>;
+  manejar: (entrada: Omit<Entrada<N>, "actor"> & { sesion: S; portal: ContextoPortal }) => Promise<RespuestaServidor<N>>;
+}
+
+const leerCookie = (cabecera: string | undefined, nombre: string) =>
+  cabecera
+    ?.split(";")
+    .map((c) => c.trim().split("="))
+    .find(([k]) => k === nombre)?.[1];
+
+/**
+ * Operación del portal del cliente: su propia cookie en su propio host (ADR-0016), `HttpOnly`,
+ * `SameSite=Strict` y, en producción, `Secure` con el prefijo `__Host-`.
+ */
+export function registrarOperacionDelPortal<N extends NombreOperacion, S>(app: FastifyInstance, nombre: N, opciones: OpcionesPortal<N, S>): void {
+  const op: Operacion = operaciones[nombre];
+  const atributos = `Path=/; HttpOnly; SameSite=Strict${opciones.seguro ? "; Secure" : ""}`;
+  app.route({
+    method: op.metodo,
+    url: rutaFastify(op.ruta),
+    config: { politica: opciones.publica ? { tipo: "publica", motivo: opciones.publica } : { tipo: "sesion_de_portal" }, operacion: nombre },
+    handler: async (solicitud, respuesta) => {
+      const token = leerCookie(solicitud.headers.cookie, opciones.nombreCookie);
+      let sesion: S | null = null;
+      if (!opciones.publica) {
+        sesion = token ? await opciones.resolverSesion(token) : null;
+        if (!sesion) throw problema("no_autenticado", "Ingrese con su clave");
+      }
+      const portal: ContextoPortal = {
+        ip: solicitud.ip,
+        token,
+        ponerSesion: (valor, segundos) => void respuesta.header("set-cookie", `${opciones.nombreCookie}=${valor}; Max-Age=${segundos}; ${atributos}`),
+        quitarSesion: () => void respuesta.header("set-cookie", `${opciones.nombreCookie}=; Max-Age=0; ${atributos}`),
+      };
+      const resultado = await opciones.manejar({
+        cuerpo: validar(op.cuerpo, solicitud.body, "cuerpo") as Cuerpo<N>,
+        parametros: validar(op.parametros, solicitud.params, "parametros") as Parametros<N>,
+        consulta: validar(op.consulta, solicitud.query, "consulta") as Consulta<N>,
+        correlacion: solicitud.id,
+        sesion: sesion as S,
+        portal,
+      });
+      respuesta.status(op.estadoExito);
+      return op.respuesta.parse(resultado);
+    },
+  });
+}
+
 /** La autorización va antes de validar la entrada: sin permiso, no se revela nada del contrato. */
 function registrar<N extends NombreOperacion, A>(
   app: FastifyInstance,

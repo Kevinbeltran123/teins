@@ -25,6 +25,8 @@ src/
     sincronizacion/  Bajada: compone los cambios del técnico con las interfaces de los demás módulos.
     informes/        Informe por visita, versiones publicadas inmutables y su PDF (plantilla HTML,
                      Chromium y pdf-lib en el worker, ADR-0013).
+    portal/          Accesos de cliente (scrypt, límite de intentos, sesiones cortas) y rutas del portal,
+                     siempre con la conexión del rol teins_portal (ADR-0009, partes 3 y 4).
   app.ts        Composición del rol web.
   web.ts        Punto de entrada del rol web.
   worker.ts     Punto de entrada del rol worker.
@@ -46,6 +48,7 @@ Reglas de la estructura:
 | Rol | Uso | Permisos |
 |---|---|---|
 | Dueño (`DATABASE_URL_PROPIETARIO`) | Migraciones y cola de trabajos | Dueño de los esquemas |
+| `teins_portal` (`DATABASE_URL_PORTAL`) | Rutas del portal del cliente | Solo versiones publicadas con PDF listo del cliente de la sesión, sus accesos, sesiones e intentos, y registrar en auditoría |
 | `teins_app` (`DATABASE_URL`) | Solicitudes y trabajos de negocio | Mínimos por tabla; sujeto a seguridad por fila; solo inserta y lee en auditoría, formatos y el registro de cambios; no borra en ninguna tabla de negocio |
 
 `teins_app` lo crea la infraestructura con `infra/roles.sql` (en local lo hace Docker Compose).
@@ -70,6 +73,7 @@ Administración, mientras llegan las pantallas (uso en el encabezado de cada arc
 | `crear-cliente` | Cliente con su primer sitio |
 | `crear-visita`, `reasignar-visita` | Programa una visita para uno o varios técnicos; al reasignar, sale del teléfono de quien deja de tenerla |
 | `publicar-formato` | Publica una versión de formato desde un JSON; llega a los teléfonos en la siguiente bajada |
+| `crear-acceso-cliente`, `regenerar-acceso-cliente` | Acceso de un cliente al portal: muestra una sola vez identificador, clave y QR (`--qr archivo.svg` lo guarda); regenerar invalida el anterior y sus sesiones |
 
 El permiso de trabajo sin conexión dura `DIAS_PERMISO_LOCAL` días (7 por defecto) desde el último contacto.
 

@@ -39,6 +39,7 @@ export interface Visitas {
   existe(tx: TxOrganizacion, id: string): Promise<boolean>;
   /** Visitas que siguen asignadas al técnico; las demás no aparecen. */
   asignadas(tx: TxOrganizacion, ids: readonly string[], tecnicoId: string): Promise<Map<string, VisitaAsignada>>;
+  clienteDe(tx: TxOrganizacion, visitaId: string): Promise<string | undefined>;
   /** Cliente, sitio, motivo y fecha de cada visita, sin importar a quién esté asignada (oficina). */
   resumenes(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, VisitaAsignada>>;
 }
@@ -99,6 +100,10 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
 
     asignadas: (tx, ids, tecnicoId) => leer(tx, ids, tecnicoId),
     resumenes: (tx, ids) => leer(tx, ids),
+    async clienteDe(tx, visitaId) {
+      const [fila] = await tx.select({ clienteId: visitas.clienteId }).from(visitas).where(eq(visitas.id, visitaId));
+      return fila?.clienteId;
+    },
   };
   return publica;
 

@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { fotosReferenciadas, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
 import type { Almacenamiento } from "../../plataforma/almacenamiento";
-import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
+import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } from "../../plataforma/base-de-datos";
 import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
@@ -27,10 +27,46 @@ interface Dependencias {
   config: Config;
   archivos: Pick<Archivos, "estados">;
   levantamientos: Pick<Levantamientos, "deVisita">;
-  visitas: Pick<Visitas, "existe" | "resumenes">;
+  visitas: Pick<Visitas, "existe" | "resumenes" | "clienteDe">;
   identidad: Pick<Identidad, "nombres" | "nombreDeOrganizacion">;
   formatos: Pick<Formatos, "obtener">;
 }
+
+export interface VersionVigente {
+  informeId: string;
+  numero: number;
+  publicadaEn: Date;
+  visita: ContenidoVersion["visita"];
+}
+
+/**
+ * Lo que el portal lee, siempre con la transacción del portal: la seguridad por fila ya restringe a
+ * lo publicado con PDF listo del cliente de la sesión (ADR-0009, parte 3).
+ */
+export const informesParaElPortal = {
+  /** Por informe, la versión más reciente visible (regla 12). */
+  async vigentes(tx: TxPortal): Promise<VersionVigente[]> {
+    const filas = await tx
+      .selectDistinctOn([versionesPublicadas.informeId], {
+        informeId: versionesPublicadas.informeId,
+        numero: versionesPublicadas.numero,
+        publicadaEn: versionesPublicadas.publicadaEn,
+        visita: sql<ContenidoVersion["visita"]>`${versionesPublicadas.contenido} -> 'visita'`,
+      })
+      .from(versionesPublicadas)
+      .orderBy(versionesPublicadas.informeId, desc(versionesPublicadas.numero));
+    return filas.sort((a, b) => b.visita.programadaPara.localeCompare(a.visita.programadaPara));
+  },
+  async pdfVigente(tx: TxPortal, informeId: string): Promise<{ numero: number; huella: string } | undefined> {
+    const [fila] = await tx
+      .select({ numero: versionesPublicadas.numero, huella: versionesPublicadas.pdfHuella })
+      .from(versionesPublicadas)
+      .where(eq(versionesPublicadas.informeId, informeId))
+      .orderBy(desc(versionesPublicadas.numero))
+      .limit(1);
+    return fila?.huella ? { numero: fila.numero, huella: fila.huella } : undefined;
+  },
+};
 
 export interface Informes {
   /** Trabajo del worker (cola `pdf`, de a uno). Idempotente: un PDF listo nunca se vuelve a generar (QA-17). */
@@ -302,7 +338,8 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             }
 
             const versionId = randomUUID();
-            await tx.insert(versionesPublicadas).values({ id: versionId, organizacionId: actor.organizacionId, informeId: id, numero: contenido.numero, contenido, publicadaPor: actor.usuarioId, publicadaEn });
+            const clienteId = await visitas.clienteDe(tx, informe.visitaId);
+            await tx.insert(versionesPublicadas).values({ id: versionId, organizacionId: actor.organizacionId, informeId: id, clienteId, numero: contenido.numero, contenido, publicadaPor: actor.usuarioId, publicadaEn });
             await registrar(tx, [
               {
                 organizacionId: actor.organizacionId,

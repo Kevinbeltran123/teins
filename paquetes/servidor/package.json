@@ -17,6 +17,8 @@
     "crear-visita": "tsx --env-file=.env src/cli/crear-visita.ts",
     "reasignar-visita": "tsx --env-file=.env src/cli/reasignar-visita.ts",
     "publicar-formato": "tsx --env-file=.env src/cli/publicar-formato.ts",
+    "crear-acceso-cliente": "tsx --env-file=.env src/cli/crear-acceso-cliente.ts",
+    "regenerar-acceso-cliente": "tsx --env-file=.env src/cli/crear-acceso-cliente.ts --regenerar",
     "compilar": "node scripts/compilar.mjs"
   },
   "dependencies": {
@@ -36,12 +38,14 @@
     "pg": "^8.23.0",
     "pino": "^10.3.1",
     "playwright-core": "1.62.1",
+    "qrcode": "^1.5.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^26.6.2",
     "@types/pg": "^8.23.1",
+    "@types/qrcode": "^1.5.6",
     "drizzle-kit": "^0.31.11",
     "esbuild": "^0.28.2",
     "testcontainers": "^12.1.0",

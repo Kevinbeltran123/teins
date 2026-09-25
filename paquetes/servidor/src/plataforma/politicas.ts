@@ -8,7 +8,9 @@ export type Politica =
   | { tipo: "publica"; motivo: string }
   | { tipo: "roles"; roles: readonly Rol[] }
   /** Sin sesión: el manejador verifica el secreto del dispositivo (órdenes de borrado, ADR-0009). */
-  | { tipo: "secreto_de_dispositivo" };
+  | { tipo: "secreto_de_dispositivo" }
+  /** Sesión del portal del cliente, con su propia cookie y su propio rol de base de datos (ADR-0009). */
+  | { tipo: "sesion_de_portal" };
 
 export const politicas = {
   /** Sin sesión. Solo para salud, contrato y autenticación; el motivo queda escrito. */
@@ -21,7 +23,7 @@ export const politicas = {
 export type ResultadoPolitica = "permitido" | "no_autenticado" | "sin_permiso";
 
 export function evaluar(politica: Politica, actor: Actor | null): ResultadoPolitica {
-  if (politica.tipo === "publica" || politica.tipo === "secreto_de_dispositivo") return "permitido";
+  if (politica.tipo === "publica" || politica.tipo === "secreto_de_dispositivo" || politica.tipo === "sesion_de_portal") return "permitido";
   if (!actor) return "no_autenticado";
   return politica.roles.includes(actor.rol) ? "permitido" : "sin_permiso";
 }

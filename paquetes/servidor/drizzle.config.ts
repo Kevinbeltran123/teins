@@ -4,5 +4,5 @@ export default defineConfig({
   dialect: "postgresql",
   schema: "./src/esquema.ts",
   out: "./migraciones",
-  entities: { roles: { provider: "", exclude: ["teins_app"] } },
+  entities: { roles: { provider: "", exclude: ["teins_app", "teins_portal"] } },
 });
