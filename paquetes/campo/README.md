@@ -13,6 +13,6 @@ PWA de campo: captura sin conexión, outbox, sincronización, editor de bocetos.
 - Desde la versión 3 (corte 3), la bajada trae el estado de revisión y los comentarios de oficina: se ven en la lista y en el levantamiento enviado.
 - `version.ts`: versión de la app. Súbala cuando la app aprenda un tipo de campo nuevo; los formatos que lo usen declaran `appMinima`.
 - Pantallas: "Mis visitas" (la siguiente visita es el punto focal; el orden está en `visitas.ts`), captura y, con el permiso vencido, borradores de solo lectura.
-- Iteración 7: una visita que sale del teléfono con algo empezado guarda por qué (`motivoSalida`): "Oficina canceló esta visita" o "se asignó a otra persona". Lo empezado se puede terminar y enviar.
+- Iteración 7: una visita que sale del teléfono con algo empezado guarda por qué (`motivoSalida`): "Oficina canceló esta visita" o "se asignó a otra persona", también en el bloque azul de la siguiente visita. Lo empezado se puede terminar y enviar; no se pueden iniciar levantamientos nuevos en ella.
 - Presupuesto de JavaScript inicial: `pnpm presupuesto` desde la raíz (ADR-0011).
 - En desarrollo, `/api` se reenvía al servidor en `localhost:3000`; para abrirla desde un celular en la red local, agregue ese origen a `ORIGENES_CONFIABLES` del servidor.

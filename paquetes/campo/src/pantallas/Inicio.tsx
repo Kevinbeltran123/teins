@@ -213,6 +213,7 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
       <div className="mt-2">
         <Marquilla tono="sobre-superficie">{visita.motivo}</Marquilla>
       </div>
+      {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} className="mt-2 text-sobre-superficie-suave" />}
       <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="principal" />
     </section>
   );
@@ -233,14 +234,19 @@ function PanelVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal
       <div>
         <Marquilla tono="superficie">{visita.motivo}</Marquilla>
       </div>
-      {visita.fueraDeAlcance && (
-        <p className="text-ayuda text-texto-secundario">
-          {visita.motivoSalida === "cancelada" ? "Oficina canceló esta visita." : "Esta visita se asignó a otra persona."} Puedes terminar y enviar lo que ya empezaste.
-        </p>
-      )}
+      {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} className="text-texto-secundario" />}
       {levantamientos.length > 0 && <Filas levantamientos={levantamientos} contexto={contexto} />}
       {!visita.fueraDeAlcance && <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="secundaria" />}
     </article>
+  );
+}
+
+/** Por qué la visita ya no es del técnico; solo se muestra si tiene algo empezado (regla 17). */
+function AvisoDeSalida({ visita, className }: { visita: VisitaLocal; className: string }) {
+  return (
+    <p className={`text-ayuda ${className}`}>
+      {visita.motivoSalida === "cancelada" ? "Oficina canceló esta visita." : "Esta visita se asignó a otra persona."} Puedes terminar y enviar lo que ya empezaste.
+    </p>
   );
 }
 
@@ -267,6 +273,8 @@ function Acciones({
       </Boton>
     );
   }
+  // Una visita que ya no es del técnico no admite levantamientos nuevos.
+  if (visita.fueraDeAlcance) return null;
   if (contexto.bloqueado) {
     return (
       <Boton variante={variante} className={clase} disabled>
