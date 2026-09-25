@@ -8,13 +8,14 @@ WORKDIR /repo
 FROM base AS compilacion
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @teins/campo --filter @teins/oficina build \
+RUN pnpm --filter @teins/campo --filter @teins/oficina --filter @teins/portal build \
  && pnpm --filter @teins/servidor compilar
 # Solo el servidor con sus dependencias de producción; dominio y protocolo ya van dentro de dist/.
 RUN pnpm --filter @teins/servidor deploy --prod --legacy /app \
  && mkdir -p /app/superficies \
  && cp -r paquetes/campo/dist /app/superficies/campo \
- && cp -r paquetes/oficina/dist /app/superficies/oficina
+ && cp -r paquetes/oficina/dist /app/superficies/oficina \
+ && cp -r paquetes/portal/dist /app/superficies/portal
 
 FROM node:24-alpine AS ejecucion
 # Chromium para el PDF del informe (ADR-0013): el de Alpine, con su versión fijada por la imagen base.
