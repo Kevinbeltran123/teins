@@ -1,13 +1,28 @@
 import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { Aviso } from "@teins/ui";
-import { Captura } from "./pantallas/Captura";
 import { Inicio } from "./pantallas/Inicio";
 import { useUsuario } from "./sesion/usuario";
 import { programarSincronizacion } from "./sincronizacion/disparar";
 
 // Solo hace falta la primera vez o cuando la sesión vence: se carga aparte.
 const IniciarSesion = lazy(() => import("./pantallas/IniciarSesion").then((m) => ({ default: m.IniciarSesion })));
+// La captura no hace falta para abrir la app: se carga al abrir un levantamiento. El service worker la guarda
+// con todo lo demás, así que abre igual sin conexión (ADR-0011).
+const Captura = lazy(() => import("./pantallas/Captura").then((m) => ({ default: m.Captura })));
+
+/**
+ * Mientras se lee el teléfono o se carga una pantalla: el nombre de la app y qué pasa, nada más. Evita la
+ * pantalla en blanco sin inventar contenido.
+ */
+function Abriendo() {
+  return (
+    <main aria-busy="true" className="flex min-h-dvh flex-col items-center justify-center gap-1 bg-fondo px-4">
+      <p className="text-subtitulo font-extrabold text-superficie">TEINS</p>
+      <p className="text-ayuda text-texto-secundario">Abriendo…</p>
+    </main>
+  );
+}
 
 class ErrorDeLectura extends Component<{ children: ReactNode }, { fallo: boolean }> {
   override state = { fallo: false };
@@ -42,7 +57,7 @@ export function App() {
   useEffect(() => (conSesion ? programarSincronizacion() : undefined), [conSesion]);
 
   let pantalla: ReactNode;
-  if (usuario === undefined) pantalla = <div className="min-h-dvh bg-fondo" aria-busy="true" />;
+  if (usuario === undefined) pantalla = <Abriendo />;
   // La primera instalación requiere iniciar sesión (ADR-0015, sección 5).
   else if (usuario === null) pantalla = <IniciarSesion />;
   else if (pidiendoSesion) pantalla = <IniciarSesion alCancelar={() => setPidiendoSesion(false)} />;
@@ -60,7 +75,7 @@ export function App() {
 
   return (
     <ErrorDeLectura>
-      <Suspense fallback={<div className="min-h-dvh bg-fondo" aria-busy="true" />}>{pantalla}</Suspense>
+      <Suspense fallback={<Abriendo />}>{pantalla}</Suspense>
     </ErrorDeLectura>
   );
 }

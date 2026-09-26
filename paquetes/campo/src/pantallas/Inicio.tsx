@@ -1,8 +1,8 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, Marquilla } from "@teins/ui";
+import { Aviso, Boton, BotonIcono, CalendarDays, CloudOff, Confirmacion, EsqueletoBloques, EstadoVacio, Insignia, LogOut } from "@teins/ui";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
 import { estadosDe, visitasDe } from "../datos/lecturas";
@@ -26,12 +26,15 @@ interface Props {
 }
 
 const fotos = (n: number) => (n === 1 ? "1 foto" : `${n} fotos`);
+const levantamientos = (n: number) => (n === 1 ? "1 levantamiento" : `${n} levantamientos`);
 
 function contarFotos(l: LevantamientoLocal): number {
   return Object.values(l.respuestas)
     .flatMap((seccion) => Object.values(seccion))
     .reduce<number>((total, valor) => total + (Array.isArray(valor) ? valor.length : 0), 0);
 }
+
+const cerrarSesion = () => import("../sesion/sesion").then((m) => m.cerrarSesion());
 
 /** Lo que la pantalla necesita para mostrar y crear levantamientos. */
 interface Contexto {
@@ -46,7 +49,7 @@ interface Contexto {
 }
 
 export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
-  const levantamientos = useLiveQuery(() => repositorio.listar(usuario.id), [usuario.id]);
+  const lista = useLiveQuery(() => repositorio.listar(usuario.id), [usuario.id]);
   const envios = useLiveQuery(async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
   const servidor = useLiveQuery(async () => new Map((await estadosDe(db, usuario.id)).map((e) => [e.id, e])), [usuario.id]);
   const visitas = useLiveQuery(() => visitasDe(db, usuario.id), [usuario.id]);
@@ -55,12 +58,14 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   const deOtros = useLiveQuery(() => repositorio.contarDeOtros(usuario.id), [usuario.id]);
   const enLinea = useConexionDelNavegador();
   const alcanzable = useServidorAlcanzable();
+  const [confirmandoSalida, setConfirmandoSalida] = useState(false);
 
-  const lista = [...(envios?.values() ?? [])];
-  const porEnviar = lista.filter((e) => e.estado !== "recibido").length;
-  const esperanSesion = lista.some((e) => e.estado === "requiere_sesion") || Boolean(bajada?.sesionVencida);
-  const esperanActualizacion = lista.some((e) => e.estado === "requiere_actualizar");
+  const deEnvios = [...(envios?.values() ?? [])];
+  const porEnviar = deEnvios.filter((e) => e.estado !== "recibido").length;
+  const esperanSesion = deEnvios.some((e) => e.estado === "requiere_sesion") || Boolean(bajada?.sesionVencida);
+  const esperanActualizacion = deEnvios.some((e) => e.estado === "requiere_actualizar");
   const permisoVencido = bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
+  const sinConexion = !enLinea || (!alcanzable && porEnviar > 0);
 
   async function iniciar(visitaId: string, formato: VersionFormato) {
     const levantamiento = crearLevantamiento(formato, uuidv7(), new Date(), visitaId, nuevoIdDeRepeticion);
@@ -68,13 +73,12 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
     abrir(levantamiento.id);
   }
 
-  const cargando = levantamientos === undefined || envios === undefined || servidor === undefined || visitas === undefined || bajada === undefined || formatos === undefined;
+  const cargando = lista === undefined || envios === undefined || servidor === undefined || visitas === undefined || bajada === undefined || formatos === undefined;
   const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar };
 
   // Visitas con sus levantamientos; una reasignada solo se muestra si el técnico ya empezó algo en ella (regla 17).
-  const porVisita = Map.groupBy(levantamientos ?? [], (l) => l.visitaId ?? "");
-  const visitasCon = (estado: LevantamientoLocal["estado"]) =>
-    new Set((levantamientos ?? []).filter((l) => l.estado === estado && l.visitaId).map((l) => l.visitaId!));
+  const porVisita = Map.groupBy(lista ?? [], (l) => l.visitaId ?? "");
+  const visitasCon = (estado: LevantamientoLocal["estado"]) => new Set((lista ?? []).filter((l) => l.estado === estado && l.visitaId).map((l) => l.visitaId!));
   const mostradas = ordenarVisitas(
     (visitas ?? []).filter((v) => !v.fueraDeAlcance || porVisita.has(v.id)),
     hoyLocal(),
@@ -83,39 +87,32 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   );
   const [siguiente, ...otras] = mostradas;
   const idsMostradas = new Set(mostradas.map((v) => v.id));
-  const sueltos = (levantamientos ?? []).filter((l) => !l.visitaId || !idsMostradas.has(l.visitaId));
+  const sueltos = (lista ?? []).filter((l) => !l.visitaId || !idsMostradas.has(l.visitaId));
 
   return (
     <div className="min-h-dvh bg-fondo">
-      <header className="mx-3 mt-3 rounded-panel bg-superficie px-4 pt-5 pb-4 text-sobre-superficie">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="text-ayuda text-sobre-superficie-suave">Datos de prueba, no reales</p>
-          <button
-            type="button"
-            onClick={() => void import("../sesion/sesion").then((m) => m.cerrarSesion())}
-            className="min-h-tactil rounded-control px-2 text-ayuda font-bold text-sobre-superficie-suave underline focus-visible:outline-3 focus-visible:outline-acento"
-          >
-            Cerrar sesión
-          </button>
+      <header className="border-b border-division bg-panel">
+        <div className="mx-auto flex max-w-xl items-center gap-2 py-3 pr-2 pl-4">
+          <div className="flex min-w-0 grow flex-col">
+            <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Mis visitas</h1>
+            <p className="text-ayuda text-texto-secundario">{usuario.nombre}</p>
+          </div>
+          {/* Solo cuando dice algo: sin señal, o cuánto espera para salir del teléfono. */}
+          {sinConexion ? (
+            <span className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-control bg-alerta-fondo px-2.5 text-ayuda font-bold text-alerta-texto [&_svg]:size-4">
+              <CloudOff aria-hidden />
+              Sin conexión
+            </span>
+          ) : (
+            porEnviar > 0 && <span className="inline-flex min-h-8 shrink-0 items-center rounded-control bg-superficie-suave px-2.5 text-ayuda font-bold text-superficie">{`${porEnviar} por enviar`}</span>
+          )}
+          <BotonIcono icono={LogOut} etiqueta="Cerrar sesión" tamano="pequeno" onClick={() => (porEnviar > 0 ? setConfirmandoSalida(true) : void cerrarSesion())} />
         </div>
-        <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">Mis visitas</h1>
-        <p className="text-ayuda text-sobre-superficie-suave">
-          {usuario.nombre}
-          {porEnviar > 0 && <span className="font-bold text-sobre-superficie"> · {porEnviar} por enviar</span>}
-        </p>
-        {contexto && siguiente && <VisitaFocal visita={siguiente} levantamientos={porVisita.get(siguiente.id) ?? []} contexto={contexto} />}
       </header>
 
-      <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-6">
+      <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-5">
         <div className="flex flex-col gap-3 empty:hidden">
-          {(!enLinea || (!alcanzable && porEnviar > 0)) && (
-            <Aviso>Sin conexión. Todo lo que captures se guarda en este teléfono y se envía al recuperar señal.</Aviso>
-          )}
-          {permisoVencido && (
-            <Aviso tono="alerta">
-              Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.
-            </Aviso>
-          )}
+          {permisoVencido && <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>}
           {esperanSesion && (
             <Aviso tono="alerta">
               <p>Tu sesión venció. Inicia sesión para enviar lo pendiente y recibir tus visitas.</p>
@@ -126,9 +123,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
           )}
           {esperanActualizacion && <Aviso tono="alerta">Esta versión de la app ya no puede enviar. Actualízala para enviar lo pendiente; nada se pierde.</Aviso>}
           {!estaInstalada() && (
-            <Aviso tono="alerta">
-              Instala la app para que el teléfono no borre los datos: en Safari, toca Compartir y luego “Agregar a inicio”. Después ábrela desde ese ícono.
-            </Aviso>
+            <Aviso tono="alerta">Instala la app para que el teléfono no borre los datos: en Safari, toca Compartir y luego “Agregar a inicio”. Después ábrela desde ese ícono.</Aviso>
           )}
           {actualizacion.disponible && (
             <Aviso>
@@ -141,12 +136,11 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
         </div>
 
         {!contexto ? (
-          <div aria-busy="true" aria-label="Cargando visitas" className="flex flex-col gap-2">
-            <div className="h-[132px] animate-pulse rounded-panel bg-panel" />
-            <div className="h-[76px] animate-pulse rounded-panel bg-panel" />
-          </div>
+          <EsqueletoBloques etiqueta="Cargando visitas" altos={["alto", "bajo"]} />
         ) : (
           <>
+            {siguiente && <VisitaFocal visita={siguiente} levantamientos={porVisita.get(siguiente.id) ?? []} contexto={contexto} />}
+
             {siguiente && (porVisita.get(siguiente.id)?.length ?? 0) > 0 && (
               <section aria-labelledby="titulo-esta-visita" className="flex flex-col gap-3">
                 <h2 id="titulo-esta-visita" className="text-subtitulo font-extrabold">
@@ -157,20 +151,15 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
             )}
 
             {mostradas.length === 0 && (
-              <section aria-labelledby="titulo-sin-visitas" className="flex flex-col gap-2">
-                <h2 id="titulo-sin-visitas" className="text-subtitulo font-extrabold">
-                  Sin visitas asignadas
-                </h2>
+              <EstadoVacio icono={CalendarDays} titulo="Sin visitas asignadas">
                 {!bajada?.ultimaEn && !alcanzable ? (
-                  <p className="text-cuerpo text-texto-secundario">Conéctate para descargar tus visitas y los formatos.</p>
+                  "Conéctate para descargar tus visitas y los formatos."
                 ) : !bajada?.ultimaEn ? (
-                  <p className="text-cuerpo text-texto-secundario" aria-busy="true">
-                    Descargando tus visitas…
-                  </p>
+                  <span aria-busy="true">Descargando tus visitas…</span>
                 ) : (
-                  <p className="text-cuerpo text-texto-secundario">Cuando oficina te asigne una visita, aparece aquí al tener señal.</p>
+                  "Cuando oficina te asigne una visita, aparece aquí al tener señal."
                 )}
-              </section>
+              </EstadoVacio>
             )}
 
             {otras.length > 0 && (
@@ -197,7 +186,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
 
         {deOtros !== undefined && deOtros > 0 && (
           <p className="text-ayuda text-texto-secundario">
-            Hay {deOtros === 1 ? "1 levantamiento" : `${deOtros} levantamientos`} de otra persona en este teléfono. Se conservan y se envían cuando esa persona inicie sesión.
+            Hay {levantamientos(deOtros)} de otra persona en este teléfono. Se conservan y se envían cuando esa persona inicie sesión.
           </p>
         )}
 
@@ -207,23 +196,38 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
 
         <Diagnostico />
       </main>
+
+      {confirmandoSalida && (
+        <Confirmacion
+          forma="inferior"
+          titulo={`¿Cerrar sesión con ${levantamientos(porEnviar)} por enviar?`}
+          confirmar="Cerrar sesión"
+          accion={cerrarSesion}
+          mensajeDeError={() => "No se pudo cerrar la sesión. Intenta de nuevo."}
+          alCerrar={() => setConfirmandoSalida(false)}
+        >
+          <p>Lo que falta por enviar se queda en este teléfono y se envía cuando vuelvas a iniciar sesión.</p>
+        </Confirmacion>
+      )}
     </div>
   );
 }
 
-/** Punto focal (DESIGN.md): la siguiente visita, en el bloque azul, con la única acción amarilla. */
+/** Punto focal (DESIGN.md): la siguiente visita, en la primera tarjeta, con la fecha grande y la única acción principal. */
 function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal; levantamientos: LevantamientoLocal[]; contexto: Contexto }) {
   return (
-    <section aria-label="Siguiente visita" className="mt-4 flex flex-col gap-1 border-t border-sobre-superficie-tenue pt-4">
-      <p className="text-cifra-focal leading-none font-extrabold">{fechaDeVisita(visita.programadaPara, hoyLocal())}</p>
-      <p className="mt-2 text-subtitulo font-bold">{visita.cliente.nombre}</p>
-      <p className="text-ayuda text-sobre-superficie-suave">
-        {visita.sitio.nombre} · {visita.sitio.direccion}
-      </p>
-      <div className="mt-2">
-        <Marquilla tono="sobre-superficie">{visita.motivo}</Marquilla>
+    <section aria-label="Siguiente visita" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-4">
+      <p className="text-cifra-focal leading-none font-extrabold tracking-tight text-superficie">{fechaDeVisita(visita.programadaPara, hoyLocal())}</p>
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-subtitulo leading-snug font-extrabold">{visita.cliente.nombre}</h2>
+        <p className="text-ayuda text-texto-secundario">
+          {visita.sitio.nombre} · {visita.sitio.direccion}
+        </p>
       </div>
-      {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} className="mt-2 text-sobre-superficie-suave" />}
+      <div>
+        <Insignia tono="neutro">{visita.motivo}</Insignia>
+      </div>
+      {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} />}
       <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="principal" />
     </section>
   );
@@ -231,7 +235,7 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
 
 function PanelVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal; levantamientos: LevantamientoLocal[]; contexto: Contexto }) {
   return (
-    <article className="flex flex-col gap-3 rounded-panel bg-panel p-4">
+    <article className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col">
           <h3 className="text-cuerpo font-bold">{visita.cliente.nombre}</h3>
@@ -242,9 +246,9 @@ function PanelVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal
         <p className="shrink-0 text-ayuda font-bold">{fechaDeVisita(visita.programadaPara, hoyLocal())}</p>
       </div>
       <div>
-        <Marquilla tono="superficie">{visita.motivo}</Marquilla>
+        <Insignia tono="neutro">{visita.motivo}</Insignia>
       </div>
-      {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} className="text-texto-secundario" />}
+      {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} />}
       {levantamientos.length > 0 && <Filas levantamientos={levantamientos} contexto={contexto} />}
       {!visita.fueraDeAlcance && <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="secundaria" />}
     </article>
@@ -252,9 +256,9 @@ function PanelVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal
 }
 
 /** Por qué la visita ya no es del técnico; solo se muestra si tiene algo empezado (regla 17). */
-function AvisoDeSalida({ visita, className }: { visita: VisitaLocal; className: string }) {
+function AvisoDeSalida({ visita }: { visita: VisitaLocal }) {
   return (
-    <p className={`text-ayuda ${className}`}>
+    <p className="text-ayuda text-texto-secundario">
       {visita.motivoSalida === "cancelada" ? "Oficina canceló esta visita." : "Esta visita se asignó a otra persona."} Puedes terminar y enviar lo que ya empezaste.
     </p>
   );
@@ -274,11 +278,10 @@ function Acciones({
 }) {
   const borrador = levantamientos.find((l) => l.estado === "borrador");
   const disponibles = vigentes(contexto.formatos);
-  const clase = "mt-3 w-full";
 
   if (borrador) {
     return (
-      <Boton variante={variante} className={clase} onClick={() => contexto.abrir(borrador.id)}>
+      <Boton variante={variante} className="w-full" onClick={() => contexto.abrir(borrador.id)}>
         Continuar levantamiento
       </Boton>
     );
@@ -287,26 +290,26 @@ function Acciones({
   if (visita.fueraDeAlcance) return null;
   if (contexto.bloqueado) {
     return (
-      <Boton variante={variante} className={clase} disabled>
+      <Boton variante={variante} className="w-full" disabled>
         Captura bloqueada: conéctate
       </Boton>
     );
   }
   if (disponibles.length === 0) {
-    return <p className="mt-3 text-ayuda">Faltan los formatos en este teléfono. Conéctate un momento para descargarlos.</p>;
+    return <p className="text-ayuda text-texto-secundario">Faltan los formatos en este teléfono. Conéctate un momento para descargarlos.</p>;
   }
   if (disponibles.length === 1) {
     return (
-      <Boton variante={variante} className={clase} onClick={() => contexto.iniciar(visita.id, disponibles[0]!)}>
+      <Boton variante={variante} className="w-full" onClick={() => contexto.iniciar(visita.id, disponibles[0]!)}>
         Iniciar levantamiento
       </Boton>
     );
   }
   return (
-    <div className="mt-3 flex flex-col gap-2">
+    <div className="flex flex-col gap-2">
       <p className="text-ayuda font-bold">Iniciar levantamiento</p>
       {disponibles.map((f, i) => (
-        <Boton key={f.formato} variante={i === 0 ? variante : "secundaria"} onClick={() => contexto.iniciar(visita.id, f)}>
+        <Boton key={f.formato} variante={i === 0 ? variante : "secundaria"} className="w-full" onClick={() => contexto.iniciar(visita.id, f)}>
           {nombreDeFormato(contexto.formatos, f.formato)}
         </Boton>
       ))}
@@ -335,7 +338,7 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
     <button
       type="button"
       onClick={() => contexto.abrir(l.id)}
-      className="flex w-full items-center justify-between gap-3 rounded-panel border-[1.5px] border-division bg-panel px-4 py-3 text-left focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie"
+      className="flex min-h-tactil w-full items-center justify-between gap-3 rounded-panel border border-division bg-panel px-4 py-3 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie"
     >
       <span className="flex min-w-0 flex-col">
         <span className="text-cuerpo font-bold">{nombreDeFormato(contexto.formatos, l.formato)}</span>
@@ -345,7 +348,7 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
         {estado && <span className={`text-ayuda font-bold ${claseDeTono[estado.tono]}`}>{estado.texto}</span>}
         {(servidor?.comentarios?.length ?? 0) > 0 && <span className="text-ayuda font-bold">{comentariosDeOficina(servidor!.comentarios!.length)}</span>}
       </span>
-      <Marquilla tono={l.estado === "borrador" ? "borrador" : "enviado"}>{l.estado === "borrador" ? "Borrador" : "Enviado"}</Marquilla>
+      <Insignia tono={l.estado === "borrador" ? "borrador" : "enviado"}>{l.estado === "borrador" ? "Borrador" : "Enviado"}</Insignia>
     </button>
   );
 }

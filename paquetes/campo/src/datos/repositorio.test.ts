@@ -123,6 +123,70 @@ describe("repositorio de levantamientos en Dexie", () => {
     ]);
   });
 
+  it("quita la foto del campo y borra su archivo si nada más lo usa (iteración 14)", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
+    await repo.agregarFoto("l1", "s", "fotos", archivo(h("a")), despues);
+    await repo.agregarFoto("l1", "s", "fotos", archivo(h("b")), despues);
+
+    await repo.quitarFoto("l1", "s", "fotos", h("a"), despues);
+    expect((await repo.obtener("l1"))?.respuestas["s"]?.["fotos"]).toEqual([h("b")]);
+    expect(await db.archivos.get(h("a"))).toBeUndefined();
+    expect(await db.archivos.get(h("b"))).toBeDefined();
+
+    // La última foto deja el campo vacío, no una lista vacía.
+    await repo.quitarFoto("l1", "s", "fotos", h("b"), despues);
+    expect((await repo.obtener("l1"))?.respuestas["s"]).toEqual({});
+    expect(await repo.todosLosArchivos()).toEqual([]);
+  });
+
+  it("al quitar una foto conserva el archivo que usa otro campo u otro levantamiento", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const dosCampos: VersionFormato = { ...formato, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "fotos", etiqueta: "F", tipo: "foto" }, { clave: "otras", etiqueta: "O", tipo: "foto" }] }] };
+    await repo.crear(crearLevantamiento(dosCampos, "l1", ahora), "t1");
+    await repo.crear(crearLevantamiento(dosCampos, "l2", ahora), "t1");
+    await repo.agregarFoto("l1", "s", "fotos", archivo(h("a")), despues);
+    await repo.agregarFoto("l1", "s", "otras", archivo(h("a")), despues);
+    await repo.agregarFoto("l2", "s", "fotos", archivo(h("b")), despues);
+    await repo.agregarFoto("l1", "s", "fotos", archivo(h("b")), despues);
+
+    await repo.quitarFoto("l1", "s", "fotos", h("a"), despues);
+    await repo.quitarFoto("l1", "s", "fotos", h("b"), despues);
+    expect(await db.archivos.get(h("a"))).toBeDefined();
+    expect(await db.archivos.get(h("b"))).toBeDefined();
+    expect((await repo.obtener("l1"))?.respuestas["s"]).toEqual({ otras: [h("a")] });
+  });
+
+  it("una foto quitada deja de subir, y una subida que ya iba termina sin efecto", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const almacen = almacenDexie(db);
+    await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
+    await repo.agregarFoto("l1", "s", "fotos", archivo(h("a")), despues);
+    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).toEqual([h("a")]);
+
+    await repo.quitarFoto("l1", "s", "fotos", h("a"), despues);
+    await almacen.marcarSubida(h("a"));
+    expect(await almacen.archivosPorSubir("t1")).toEqual([]);
+    expect(await db.archivos.get(h("a"))).toBeUndefined();
+  });
+
+  it("deshacer vuelve a guardar la misma foto con sus bytes", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
+    await repo.agregarFoto("l1", "s", "fotos", archivo(h("a")), despues);
+    const [antes] = await repo.obtenerArchivos([h("a")]);
+    await repo.quitarFoto("l1", "s", "fotos", h("a"), despues);
+
+    const { subida: _s, ultimoErrorDeSubida: _e, ...deVuelta } = antes!;
+    await repo.agregarFoto("l1", "s", "fotos", deVuelta, despues);
+    expect((await repo.obtener("l1"))?.respuestas["s"]?.["fotos"]).toEqual([h("a")]);
+    expect(new Uint8Array((await repo.obtenerArchivos([h("a")]))[0]!.datos)).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
   it("no guarda el archivo si el levantamiento no existe", async () => {
     const repo = repositorioDexie(nuevaBase());
     await expect(repo.agregarFoto("no-existe", "s", "fotos", archivo(h("a")), despues)).rejects.toThrow();

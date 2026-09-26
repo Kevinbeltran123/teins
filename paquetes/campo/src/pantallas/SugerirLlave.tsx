@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { admiteLlaves, esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Boton } from "@teins/ui";
+import { Aviso, Boton, KeyRound } from "@teins/ui";
 import { cliente } from "../sincronizacion/instancia";
 
 /** "Ahora no" es por técnico y por teléfono: una comodidad, no un dato del negocio. */
@@ -52,17 +52,18 @@ export default function SugerirLlave({ usuarioId, enLinea }: { usuarioId: string
   }
 
   if (estado === "oculta") return null;
-  if (estado === "creada") return <Aviso tono="info">Listo. La próxima vez entra con "Entrar con llave de acceso": Face ID, huella o el PIN del teléfono.</Aviso>;
+  if (estado === "creada") return <Aviso tono="exito">Listo. La próxima vez entra con "Entrar con llave de acceso": Face ID, huella o el PIN del teléfono.</Aviso>;
   return (
-    <section aria-labelledby="titulo-llave" className="flex flex-col gap-3 rounded-panel bg-panel p-4">
+    <section aria-labelledby="titulo-llave" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-4">
       <h2 id="titulo-llave" className="text-subtitulo font-extrabold">
         Entra sin escribir la contraseña
       </h2>
       <p className="text-cuerpo">Crea una llave de acceso en este teléfono y entra con Face ID, huella o el PIN. Es más rápido y más seguro que una contraseña.</p>
       {estado === "error" && <Aviso tono="error">No se pudo crear la llave. Revisa la señal e intenta de nuevo.</Aviso>}
+      {/* Secundaria: la acción principal de la pantalla es la de la siguiente visita. */}
       <div className="flex flex-wrap gap-2">
-        <Boton variante="principal" onClick={() => void crear()} disabled={estado === "creando"}>
-          {estado === "creando" ? "Creando…" : "Crear llave de acceso"}
+        <Boton icono={KeyRound} onClick={() => void crear()} cargando={estado === "creando"}>
+          Crear llave de acceso
         </Boton>
         <Boton onClick={ahoraNo}>Ahora no</Boton>
       </div>

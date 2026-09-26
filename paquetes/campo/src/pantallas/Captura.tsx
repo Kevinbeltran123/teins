@@ -8,13 +8,17 @@ import {
   esBoceto,
   esCantidades,
   esNoObtenido,
+  leerClave,
   LIENZO,
   normalizarDecimal,
   LIMITES,
   nombreDeDato,
+  rutaLegible,
+  validarRespuestas,
   type CodigoErrorValidacion,
   type DefinicionCampo,
   type DefinicionSeccion,
+  type ErrorValidacion,
   type Valor,
   type ValorMedida,
   type VersionFormato,
@@ -23,15 +27,24 @@ import {
   Aviso,
   Boceto,
   Boton,
+  BotonIcono,
   CampoFotos,
   CampoMedida,
   CampoTexto,
+  ChevronLeft,
+  Confirmacion,
   EditorCantidades,
+  EsqueletoBloques,
   EtiquetaCampo,
+  Insignia,
   MarcaNoObtenido,
-  Marquilla,
   MensajeError,
+  Pencil,
+  Plus,
+  Send,
   TablaCantidades,
+  Trash,
+  useNotificar,
   ValorLeido,
   type LineaEditable,
 } from "@teins/ui";
@@ -39,6 +52,7 @@ import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
 import { estadoDe, visitaDe } from "../datos/lecturas";
 import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal } from "../datos/modelo";
+import type { ArchivoNuevo } from "../datos/repositorio";
 import { procesarFoto } from "../fotos/procesar";
 import { fechaHora, horaExacta } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos } from "../formatos";
@@ -46,10 +60,12 @@ import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion } 
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 
-type Errores = ReadonlyMap<string, CodigoErrorValidacion>;
 // El editor de bocetos pesa (perfect-freehand y la lógica del lienzo): se carga solo al dibujar (ADR-0011).
 const EditorBoceto = lazy(() => import("./EditorBoceto"));
 const claveDeError = (seccion: string, campo: string) => `${seccion}.${campo}`;
+/** Ancla de un dato en la pantalla: el resumen de errores lleva hasta él. */
+const anclaDeDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`;
+const anclaDeSeccion = (seccion: string) => `seccion-${seccion}`;
 
 export function Captura({ id, volver }: { id: string; volver: () => void }) {
   // `null` distingue "no existe" de `undefined` (cargando).
@@ -74,34 +90,38 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   }, [levantamiento, inicial]);
 
   const formato = levantamiento && formatos ? formatoDe(formatos, levantamiento) : undefined;
-  const seccion = formato?.secciones[0];
+  const borrador = levantamiento?.estado === "borrador";
 
   return (
     <div className="min-h-dvh bg-fondo">
-      <header className="mx-3 mt-3 rounded-panel bg-superficie px-4 pt-2 pb-5 text-sobre-superficie">
-        <button
-          type="button"
-          onClick={volver}
-          className="-ml-2 min-h-tactil rounded-control px-2 text-cuerpo font-bold text-sobre-superficie-suave focus-visible:outline-3 focus-visible:outline-acento"
-        >
-          Volver a mis visitas
-        </button>
-        <div className="mt-2 flex items-center gap-3">
-          <Marquilla tono="sobre-superficie">{levantamiento?.estado === "enviado" ? "Enviado" : "Borrador"}</Marquilla>
-          <span className="text-ayuda text-sobre-superficie-suave">
-            {levantamiento && formatos ? nombreDeFormato(formatos, levantamiento.formato) : ""}
-            {visita ? ` · ${visita.cliente.nombre}` : ""}
-          </span>
+      <header className="border-b border-division bg-panel">
+        <div className="mx-auto flex max-w-xl items-start gap-1 py-3 pr-4 pl-1">
+          <BotonIcono icono={ChevronLeft} etiqueta="Volver a mis visitas" tamano="pequeno" onClick={volver} />
+          <div className="flex min-w-0 grow flex-col gap-1 pt-0.5">
+            <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{levantamiento && formatos ? nombreDeFormato(formatos, levantamiento.formato) : "Levantamiento"}</h1>
+            {visita && (
+              <p className="text-ayuda text-texto-secundario">
+                {visita.cliente.nombre} · {visita.sitio.nombre}
+              </p>
+            )}
+            {levantamiento && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <Insignia tono={borrador ? "borrador" : "enviado"}>{borrador ? "Borrador" : "Enviado"}</Insignia>
+                {/* Cada dato se guarda al escribirlo: la hora confirma que nada se pierde si la app se cierra. */}
+                {borrador && (
+                  <p className="text-ayuda text-texto-secundario" aria-live="polite">
+                    Guardado en este teléfono a las {horaExacta(levantamiento.actualizadoEn)}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-        <h1 className="mt-2 text-titulo leading-tight font-extrabold tracking-tight">{seccion?.titulo ?? "Levantamiento"}</h1>
       </header>
 
-      <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 py-6">
+      <main className={`mx-auto flex max-w-xl flex-col gap-6 px-4 py-5 ${borrador && formato && !bloqueado ? "pb-36" : ""}`}>
         {levantamiento === undefined || envio === undefined || formatos === undefined || bloqueado === undefined || (levantamiento && !inicial) ? (
-          <div aria-busy="true" aria-label="Cargando levantamiento" className="flex flex-col gap-6">
-            <div className="h-[180px] animate-pulse rounded-panel bg-panel" />
-            <div className="h-[140px] animate-pulse rounded-panel bg-panel" />
-          </div>
+          <EsqueletoBloques etiqueta="Cargando levantamiento" altos={["alto", "medio"]} />
         ) : levantamiento === null || !inicial ? (
           <>
             <Aviso tono="error">Este levantamiento no está en este teléfono.</Aviso>
@@ -124,10 +144,9 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   );
 }
 
-/** Panel por grupo (DESIGN.md, Placa): campos de datos seguidos juntos; cada campo de fotos aparte. */
+/** Panel por grupo (DESIGN.md): campos de datos seguidos juntos; cada campo de fotos, bocetos o cantidades aparte. */
 function agrupar(campos: readonly DefinicionCampo[]): DefinicionCampo[][] {
   const grupos: DefinicionCampo[][] = [];
-  // Fotos y bocetos van solos en su panel; los demás campos se agrupan.
   const solo = (c: DefinicionCampo) => c.tipo === "foto" || c.tipo === "boceto" || c.tipo === "cantidades";
   for (const campo of campos) {
     const ultimo = grupos.at(-1);
@@ -137,66 +156,131 @@ function agrupar(campos: readonly DefinicionCampo[]): DefinicionCampo[][] {
   return grupos;
 }
 
+/**
+ * Cuánto falta para poder enviar, con la misma validación del envío (dominio): no hay una regla aparte que
+ * pueda decir "listo" cuando el envío diría que no.
+ */
+function progreso(formato: VersionFormato, l: LevantamientoLocal) {
+  const errores = validarRespuestas(formato, l.respuestas, l.repeticiones);
+  const conError = new Set(errores.map((e) => claveDeError(e.seccion, e.campo ?? "")));
+  let obligatorios = 0;
+  let completos = 0;
+  for (const b of bloques(formato, l.repeticiones ?? {})) {
+    for (const c of b.seccion.campos) {
+      if (!c.obligatorio) continue;
+      obligatorios++;
+      if (!conError.has(claveDeError(b.clave, c.clave))) completos++;
+    }
+  }
+  return { errores, obligatorios, completos };
+}
+
+/** Lleva al dato del error y le da el foco; si es de una sección (faltan repeticiones), a la sección. */
+function irAlError(e: ErrorValidacion) {
+  const destino = document.getElementById(e.campo ? anclaDeDato(e.seccion, e.campo) : anclaDeSeccion(leerClave(e.seccion).seccion));
+  if (!destino) return;
+  destino.scrollIntoView({ block: "center" });
+  destino.querySelector<HTMLElement>("input:not(:disabled), select:not(:disabled), textarea, button:not(:disabled)")?.focus({ preventScroll: true });
+}
+
+class FaltanDatos extends Error {}
+
 function Borrador({ id, formato, inicial, actual }: { id: string; formato: VersionFormato; inicial: LevantamientoLocal; actual: LevantamientoLocal }) {
-  const [errores, setErrores] = useState<Errores | null>(null);
+  const [errores, setErrores] = useState<readonly ErrorValidacion[] | null>(null);
   const [confirmando, setConfirmando] = useState(false);
-  const [enviando, setEnviando] = useState(false);
   const resumen = useRef<HTMLDivElement>(null);
+  const porClave: ReadonlyMap<string, CodigoErrorValidacion> = new Map((errores ?? []).map((e) => [claveDeError(e.seccion, e.campo ?? ""), e.codigo]));
+  const { errores: pendientes, obligatorios, completos } = progreso(formato, actual);
+
+  function mostrarErrores(lista: readonly ErrorValidacion[]) {
+    setErrores(lista);
+    requestAnimationFrame(() => {
+      resumen.current?.scrollIntoView({ block: "start" });
+      resumen.current?.focus({ preventScroll: true });
+    });
+  }
+
+  function intentarEnviar() {
+    if (pendientes.length > 0) mostrarErrores(pendientes);
+    else setConfirmando(true);
+  }
 
   async function enviar() {
-    setEnviando(true);
-    try {
-      const resultado = await repositorio.enviar(id, formato, new Date());
-      if (resultado.ok) {
-        sincronizarEnSegundoPlano();
-        return;
-      }
-      if (resultado.motivo === "respuestas_invalidas") {
-        setErrores(new Map(resultado.errores.map((e) => [claveDeError(e.seccion, e.campo ?? ""), e.codigo])));
-        setConfirmando(false);
-        requestAnimationFrame(() => resumen.current?.focus());
-      }
-    } finally {
-      setEnviando(false);
+    const resultado = await repositorio.enviar(id, formato, new Date());
+    if (resultado.ok) {
+      sincronizarEnSegundoPlano();
+      return;
     }
+    if (resultado.motivo === "respuestas_invalidas") {
+      mostrarErrores(resultado.errores);
+      throw new FaltanDatos();
+    }
+    throw new Error(resultado.motivo);
   }
 
   // Al corregir, el error de ese campo se va: la validación completa se repite al enviar.
   const alGuardar = (seccion: string, campo: string) => {
-    if (errores?.has(claveDeError(seccion, campo))) {
-      const siguiente = new Map(errores);
-      siguiente.delete(claveDeError(seccion, campo));
-      setErrores(siguiente);
-    }
+    if (porClave.has(claveDeError(seccion, campo))) setErrores((lista) => (lista ?? []).filter((e) => claveDeError(e.seccion, e.campo ?? "") !== claveDeError(seccion, campo)));
   };
+
+  const erroresPorSeccion = new Map<string, number>();
+  for (const e of errores ?? []) {
+    const seccion = leerClave(e.seccion).seccion;
+    erroresPorSeccion.set(seccion, (erroresPorSeccion.get(seccion) ?? 0) + 1);
+  }
 
   return (
     <>
-      {errores && errores.size > 0 && (
-        <div ref={resumen} tabIndex={-1} className="focus:outline-none">
+      {errores && errores.length > 0 && (
+        <div ref={resumen} tabIndex={-1} className="scroll-mt-4 focus:outline-none">
           <Aviso tono="error">
-            {errores.size === 1 ? "Falta 1 dato por completar." : `Faltan ${errores.size} datos por completar.`} Revisa los campos marcados.
+            <p className="font-bold">{errores.length === 1 ? "Falta 1 dato por completar." : `Faltan ${errores.length} datos por completar.`}</p>
+            <ul className="mt-1 flex flex-col" aria-label="Datos por completar">
+              {errores.map((e) => (
+                <li key={`${claveDeError(e.seccion, e.campo ?? "")}:${e.codigo}`}>
+                  <button
+                    type="button"
+                    onClick={() => irAlError(e)}
+                    className="min-h-control-sm py-2 text-left font-bold text-superficie underline underline-offset-2 focus-visible:outline-3 focus-visible:outline-superficie"
+                  >
+                    {e.campo ? nombreDeDato(formato, actual.repeticiones ?? {}, e.seccion, e.campo) : rutaLegible(formato, actual.repeticiones ?? {}, e.seccion)}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </Aviso>
         </div>
       )}
+
+      {/* Con varias secciones: saltar a cada una y ver dónde falta algo después de intentar enviar. */}
+      {formato.secciones.length > 1 && (
+        <nav aria-label="Secciones" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+          {formato.secciones.map((s) => {
+            const n = erroresPorSeccion.get(s.clave) ?? 0;
+            return (
+              <a
+                key={s.clave}
+                href={`#${anclaDeSeccion(s.clave)}`}
+                className="inline-flex min-h-control-sm shrink-0 items-center gap-1.5 rounded-control border border-borde-suave bg-panel px-3 text-ayuda font-bold text-texto no-underline hover:bg-panel-hundido focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie"
+              >
+                {s.titulo}
+                {n > 0 && <span className="text-error">{n === 1 ? "· falta 1" : `· faltan ${n}`}</span>}
+              </a>
+            );
+          })}
+        </nav>
+      )}
+
       {formato.secciones.map((seccion) =>
         seccion.repetible ? (
-          <SeccionRepetible
-            key={seccion.clave}
-            id={id}
-            formato={formato}
-            seccion={seccion}
-            inicial={inicial}
-            actual={actual}
-            errores={errores}
-            alGuardar={alGuardar}
-          />
+          <SeccionRepetible key={seccion.clave} id={id} formato={formato} seccion={seccion} inicial={inicial} actual={actual} errores={porClave} alGuardar={alGuardar} />
         ) : (
-          <div key={seccion.clave} className="flex flex-col gap-3">
-            {/* Con una sola sección, el título ya está en el encabezado. */}
-            {formato.secciones.length > 1 && <h2 className="text-subtitulo font-extrabold">{seccion.titulo}</h2>}
+          <section key={seccion.clave} id={anclaDeSeccion(seccion.clave)} aria-labelledby={`titulo-${seccion.clave}`} className="flex scroll-mt-4 flex-col gap-3">
+            <h2 id={`titulo-${seccion.clave}`} className="text-subtitulo font-extrabold">
+              {seccion.titulo}
+            </h2>
             {agrupar(seccion.campos).map((grupo) => (
-              <div key={`${seccion.clave}.${grupo[0]!.clave}`} className="flex flex-col gap-6 rounded-panel bg-panel p-4">
+              <div key={`${seccion.clave}.${grupo[0]!.clave}`} className="flex flex-col gap-6 rounded-panel border border-division bg-panel p-4">
                 {grupo.map((campo) => (
                   <Campo
                     key={campo.clave}
@@ -205,32 +289,50 @@ function Borrador({ id, formato, inicial, actual }: { id: string; formato: Versi
                     campo={campo}
                     inicial={inicial.respuestas[seccion.clave]?.[campo.clave]}
                     actual={actual.respuestas[seccion.clave]?.[campo.clave]}
-                    error={errores?.get(claveDeError(seccion.clave, campo.clave))}
+                    error={porClave.get(claveDeError(seccion.clave, campo.clave))}
                     alGuardar={() => alGuardar(seccion.clave, campo.clave)}
                   />
                 ))}
               </div>
             ))}
-          </div>
+          </section>
         ),
       )}
-      <p className="text-ayuda text-texto-secundario" aria-live="polite">
-        Guardado en este teléfono a las {horaExacta(actual.actualizadoEn)}
-      </p>
-      {confirmando ? (
-        <Aviso>
-          <p>Después de enviar ya no podrás editar este levantamiento. Oficina lo revisará.</p>
-          <div className="mt-3 flex flex-col gap-2">
-            <Boton variante="principal" onClick={enviar} disabled={enviando}>
-              {enviando ? "Enviando…" : "Confirmar envío"}
-            </Boton>
-            <Boton onClick={() => setConfirmando(false)}>Seguir editando</Boton>
+
+      {/* La acción de la pantalla, abajo y al alcance del pulgar; lo que falta, a su lado (DESIGN.md). */}
+      <div data-barra-inferior className="fixed inset-x-0 bottom-0 z-20 border-t border-division bg-panel">
+        <div className="mx-auto flex max-w-xl items-center gap-4 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="flex min-w-28 flex-col gap-1">
+            <span className="text-cuerpo leading-tight font-bold">{pendientes.length === 0 ? "Listo para enviar" : `Faltan ${pendientes.length}`}</span>
+            {obligatorios > 0 && (
+              <>
+                <progress
+                  value={completos}
+                  max={obligatorios}
+                  aria-label="Datos obligatorios completos"
+                  className="h-1.5 w-full appearance-none overflow-hidden rounded-control [&::-moz-progress-bar]:bg-superficie [&::-webkit-progress-bar]:bg-division [&::-webkit-progress-value]:bg-superficie"
+                />
+                <span className="text-ayuda leading-tight text-texto-secundario">{`${completos} de ${obligatorios} obligatorios`}</span>
+              </>
+            )}
           </div>
-        </Aviso>
-      ) : (
-        <Boton variante="principal" onClick={() => setConfirmando(true)}>
-          Enviar a oficina
-        </Boton>
+          <Boton variante="principal" icono={Send} className="grow" onClick={intentarEnviar}>
+            Enviar a oficina
+          </Boton>
+        </div>
+      </div>
+
+      {confirmando && (
+        <Confirmacion
+          forma="inferior"
+          titulo="¿Enviar a oficina?"
+          confirmar="Enviar levantamiento"
+          accion={enviar}
+          mensajeDeError={(e) => (e instanceof FaltanDatos ? "Faltan datos por completar. Cierra y revisa la lista de arriba." : "No se pudo enviar. Intenta de nuevo.")}
+          alCerrar={() => setConfirmando(false)}
+        >
+          <p>Después de enviar ya no podrás editar este levantamiento. Oficina lo revisará.</p>
+        </Confirmacion>
       )}
     </>
   );
@@ -254,14 +356,14 @@ function SeccionRepetible({
   seccion: DefinicionSeccion;
   inicial: LevantamientoLocal;
   actual: LevantamientoLocal;
-  errores: Errores | null;
+  errores: ReadonlyMap<string, CodigoErrorValidacion>;
   alGuardar: (seccion: string, campo: string) => void;
 }) {
-  const [quitando, setQuitando] = useState<string | null>(null);
+  const [quitando, setQuitando] = useState<{ id: string; nombre: string } | null>(null);
   const lista = actual.repeticiones?.[seccion.clave] ?? [];
   const etiqueta = seccion.repetible!.etiqueta;
   const maximo = seccion.repetible!.max ?? LIMITES.repeticiones;
-  const errorDeSeccion = errores?.get(claveDeError(seccion.clave, ""));
+  const errorDeSeccion = errores.get(claveDeError(seccion.clave, ""));
   const tituloId = `titulo-${seccion.clave}`;
 
   async function agregar() {
@@ -270,7 +372,7 @@ function SeccionRepetible({
   }
 
   return (
-    <section aria-labelledby={tituloId} className="flex flex-col gap-3">
+    <section id={anclaDeSeccion(seccion.clave)} aria-labelledby={tituloId} className="flex scroll-mt-4 flex-col gap-3">
       <h2 id={tituloId} className="text-subtitulo font-extrabold">
         {seccion.titulo}
       </h2>
@@ -279,7 +381,7 @@ function SeccionRepetible({
       {lista.map((r) => {
         const clave = claveDeRepeticion(seccion.clave, r.id);
         return (
-          <article key={r.id} aria-label={r.nombre} className="flex flex-col gap-6 rounded-panel bg-panel p-4">
+          <article key={r.id} aria-label={r.nombre} className="flex flex-col gap-6 rounded-panel border border-division bg-panel p-4">
             <CampoTexto
               etiqueta={`Nombre (${etiqueta.toLowerCase()})`}
               valorInicial={r.nombre}
@@ -297,36 +399,36 @@ function SeccionRepetible({
                 campo={campo}
                 inicial={inicial.respuestas[clave]?.[campo.clave]}
                 actual={actual.respuestas[clave]?.[campo.clave]}
-                error={errores?.get(claveDeError(clave, campo.clave))}
+                error={errores.get(claveDeError(clave, campo.clave))}
                 alGuardar={() => alGuardar(clave, campo.clave)}
               />
             ))}
-            {quitando === r.id ? (
-              <Aviso tono="alerta">
-                <p>Se borra lo que llenaste en {r.nombre}. Las fotos que tomaste en él también dejan de ir en el levantamiento.</p>
-                <div className="mt-3 flex flex-col gap-2">
-                  <Boton
-                    onClick={async () => {
-                      await repositorio.quitarRepeticion(id, seccion.clave, r.id, new Date());
-                      setQuitando(null);
-                      alGuardar(seccion.clave, "");
-                    }}
-                  >
-                    {`Sí, quitar ${r.nombre}`}
-                  </Boton>
-                  <Boton onClick={() => setQuitando(null)}>Cancelar</Boton>
-                </div>
-              </Aviso>
-            ) : (
-              <Boton onClick={() => setQuitando(r.id)}>{`Quitar ${r.nombre}`}</Boton>
-            )}
+            <div>
+              <Boton variante="fantasma" tamano="pequeno" icono={Trash} aria-label={`Quitar ${r.nombre}`} onClick={() => setQuitando(r)}>
+                Quitar
+              </Boton>
+            </div>
           </article>
         );
       })}
-      <Boton disabled={lista.length >= maximo} onClick={() => void agregar()}>
+      <Boton icono={Plus} disabled={lista.length >= maximo} onClick={() => void agregar()}>
         {`Agregar ${etiqueta.toLowerCase()}`}
       </Boton>
       {lista.length >= maximo && <p className="text-ayuda text-texto-secundario">{`Este formato permite hasta ${maximo}.`}</p>}
+      {quitando && (
+        <Confirmacion
+          forma="inferior"
+          peligro
+          titulo={`¿Quitar ${quitando.nombre}?`}
+          confirmar={`Quitar ${etiqueta.toLowerCase()}`}
+          accion={() => repositorio.quitarRepeticion(id, seccion.clave, quitando.id, new Date())}
+          mensajeDeError={() => "No se pudo quitar. Intenta de nuevo."}
+          alCerrar={() => setQuitando(null)}
+          alTerminar={() => alGuardar(seccion.clave, "")}
+        >
+          <p>Se borra lo que llenaste en {quitando.nombre}. Las fotos que tomaste en él también dejan de ir en el levantamiento.</p>
+        </Confirmacion>
+      )}
     </section>
   );
 }
@@ -341,7 +443,16 @@ interface PropsCampo {
   alGuardar: () => void;
 }
 
-function Campo({ id, seccion, campo, inicial, actual, error, alGuardar }: PropsCampo) {
+function Campo(props: PropsCampo) {
+  // El ancla deja que el resumen de errores lleve hasta este dato.
+  return (
+    <div id={anclaDeDato(props.seccion, props.campo.clave)} className="scroll-mt-24">
+      <ContenidoDeCampo {...props} />
+    </div>
+  );
+}
+
+function ContenidoDeCampo({ id, seccion, campo, inicial, actual, error, alGuardar }: PropsCampo) {
   const guardar = (valor: Valor | undefined) => {
     alGuardar();
     return repositorio.guardarRespuesta(id, seccion, campo.clave, valor, new Date());
@@ -464,7 +575,9 @@ function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: str
         <p className="text-ayuda text-texto-secundario">Todavía no hay boceto.</p>
       )}
       {error && <MensajeError id={`error-${seccion}-${campo.clave}`}>{error}</MensajeError>}
-      <Boton onClick={() => setEditando(true)}>{hayDibujo ? "Editar boceto" : "Dibujar boceto"}</Boton>
+      <Boton icono={Pencil} onClick={() => setEditando(true)}>
+        {hayDibujo ? "Editar boceto" : "Dibujar boceto"}
+      </Boton>
       {editando && (
         <Suspense fallback={<div aria-busy="true" aria-label="Abriendo el editor" className="fixed inset-0 z-50 bg-fondo" />}>
           <EditorBoceto
@@ -508,13 +621,15 @@ function useUrlsDeFotos(ids: readonly string[]) {
 }
 
 function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: string; seccion: string; campo: DefinicionCampo; ids: unknown; error: string | undefined; alGuardar: () => void }) {
-  const fotos = useUrlsDeFotos(Array.isArray(ids) ? (ids as string[]) : []);
+  const huellas = Array.isArray(ids) ? (ids as string[]) : [];
+  const fotos = useUrlsDeFotos(huellas);
+  const notificar = useNotificar();
   const [procesando, setProcesando] = useState(false);
-  const [fallo, setFallo] = useState(false);
+  const [fallo, setFallo] = useState<string | null>(null);
 
   async function agregar(originales: File[]) {
     setProcesando(true);
-    setFallo(false);
+    setFallo(null);
     try {
       for (const original of originales) {
         const archivo = await procesarFoto(original, new Date());
@@ -526,16 +641,50 @@ function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: string; secc
     } catch (error) {
       // El técnico ve un mensaje simple; soporte necesita la causa (ADR-0017).
       console.error("No se pudo guardar la foto", error);
-      setFallo(true);
+      setFallo("No se pudo guardar la foto. Tómala de nuevo.");
     } finally {
       setProcesando(false);
     }
   }
 
+  /** Quitar es inmediato y se deshace desde la notificación (DESIGN.md: qué se confirma y qué se deshace). */
+  async function quitar(huella: string) {
+    setFallo(null);
+    try {
+      const [archivo] = await repositorio.obtenerArchivos([huella]);
+      const posicion = huellas.indexOf(huella);
+      await repositorio.quitarFoto(id, seccion, campo.clave, huella, new Date());
+      if (!archivo) return;
+      const { subida: _subida, ultimoErrorDeSubida: _error, ...deVuelta } = archivo;
+      notificar({ texto: "Foto eliminada", accion: { texto: "Deshacer", alHacer: () => void restaurar(deVuelta, posicion) } });
+    } catch (error) {
+      console.error("No se pudo quitar la foto", error);
+      setFallo("No se pudo quitar la foto. Intenta de nuevo.");
+    }
+  }
+
+  async function restaurar(archivo: ArchivoNuevo, posicion: number) {
+    try {
+      await repositorio.agregarFoto(id, seccion, campo.clave, archivo, new Date());
+      // Agregar la pone al final: vuelve al lugar que tenía.
+      const actuales = (await repositorio.obtener(id))?.respuestas[seccion]?.[campo.clave];
+      if (Array.isArray(actuales)) {
+        const orden = (actuales as string[]).filter((h) => h !== archivo.id);
+        orden.splice(Math.min(posicion, orden.length), 0, archivo.id);
+        await repositorio.guardarRespuesta(id, seccion, campo.clave, orden, new Date());
+      }
+      sincronizarEnSegundoPlano();
+    } catch (error) {
+      // Por ejemplo, si el levantamiento ya se envió: la foto ya no puede volver.
+      console.error("No se pudo deshacer", error);
+      setFallo("No se pudo recuperar la foto.");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <CampoFotos etiqueta={campo.etiqueta} obligatorio={campo.obligatorio} error={error} fotos={fotos} procesando={procesando} onAgregar={agregar} />
-      {fallo && <Aviso tono="error">No se pudo guardar la foto. Tómala de nuevo.</Aviso>}
+      <CampoFotos etiqueta={campo.etiqueta} obligatorio={campo.obligatorio} error={error} fotos={fotos} procesando={procesando} onAgregar={agregar} onQuitar={(h) => void quitar(h)} />
+      {fallo && <Aviso tono="error">{fallo}</Aviso>}
     </div>
   );
 }
@@ -561,7 +710,7 @@ function Enviado({
   return (
     <>
       {estado && (
-        <div className="flex flex-col gap-3 rounded-panel bg-panel p-4">
+        <div className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-4">
           <p className={`text-cuerpo font-bold ${claseDeTono[estado.tono]}`} aria-live="polite">
             {estado.texto}
           </p>
@@ -578,13 +727,13 @@ function Enviado({
         </div>
       )}
       {comentarios.length > 0 && (
-        <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-3 rounded-panel bg-panel p-4">
+        <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-4">
           <h2 id="titulo-comentarios" className="text-subtitulo font-extrabold">
             Comentarios de oficina
           </h2>
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col divide-y divide-division">
             {comentarios.map((c) => (
-              <li key={c.id} className="flex flex-col gap-0.5 border-l-[3px] border-division pl-3">
+              <li key={c.id} className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0">
                 <p className="text-ayuda text-texto-secundario">
                   {c.autor} · {fechaHora(c.creadoEn)}
                   {sobre(c) && ` · Sobre ${sobre(c)}`}
@@ -597,7 +746,7 @@ function Enviado({
       )}
       {bloques(formato, levantamiento.repeticiones ?? {}).map(({ seccion, clave, titulo }, _i, todos) =>
         agrupar(seccion.campos).map((grupo, g) => (
-          <div key={`${clave}.${grupo[0]!.clave}`} className="flex flex-col gap-5 rounded-panel bg-panel p-4">
+          <div key={`${clave}.${grupo[0]!.clave}`} className="flex flex-col gap-5 rounded-panel border border-division bg-panel p-4">
             {g === 0 && todos.length > 1 && <h2 className="text-subtitulo font-extrabold">{titulo}</h2>}
             {grupo.map((campo) => {
               const valor = levantamiento.respuestas[clave]?.[campo.clave];

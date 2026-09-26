@@ -31,6 +31,12 @@ export interface RepositorioLevantamientos {
   obtenerBoceto(huella: string): Promise<DocumentoBoceto | null>;
   /** Guarda el archivo y su referencia en la misma transacción: nunca queda una foto sin referencia. */
   agregarFoto(id: string, seccion: string, campo: string, archivo: ArchivoNuevo, ahora: Date): Promise<void>;
+  /**
+   * Quita la foto del campo (iteración 14). En la misma transacción borra el archivo si nada más lo usa: se
+   * direccionan por contenido, así que otro campo u otro levantamiento pueden compartirlo. Si ya se estaba
+   * subiendo, la subida termina sin efecto (no queda nada que marcar) y el envío no lo menciona.
+   */
+  quitarFoto(id: string, seccion: string, campo: string, huella: string, ahora: Date): Promise<void>;
   obtenerArchivos(ids: readonly string[]): Promise<ArchivoLocal[]>;
   todosLosArchivos(): Promise<ArchivoLocal[]>;
   /** Todos los levantamientos del teléfono, de cualquier responsable: solo para el diagnóstico. */

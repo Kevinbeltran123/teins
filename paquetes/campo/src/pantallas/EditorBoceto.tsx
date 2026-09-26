@@ -1,7 +1,7 @@
 import { useRef, useState, type PointerEvent as EventoPuntero } from "react";
 import { getStroke } from "perfect-freehand";
 import { bocetoVacio, LIENZO, LIMITES_BOCETO, type DocumentoBoceto, type ElementoBoceto, type Punto, type PuntoConPresion } from "@teins/dominio";
-import { Aviso, Boceto, Boton, CampoTexto, ElementoDeBoceto, GrupoDeOpciones } from "@teins/ui";
+import { Aviso, Boceto, Boton, CampoTexto, Check, ElementoDeBoceto, GrupoDeOpciones, Redo2, Undo2 } from "@teins/ui";
 
 /**
  * Editor de bocetos (ADR-0019): trazo libre, línea recta, texto, borrador por trazo, deshacer y rehacer,
@@ -234,14 +234,14 @@ export default function EditorBoceto({
     <div role="dialog" aria-modal="true" aria-label={`Boceto: ${etiqueta}`} className="fixed inset-0 z-50 flex flex-col gap-3 overflow-y-auto bg-fondo p-3">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-subtitulo font-extrabold">{etiqueta}</h2>
-        <Boton variante="principal" onClick={cerrar}>
+        <Boton variante="principal" icono={Check} onClick={cerrar}>
           Listo
         </Boton>
       </div>
       <div
         ref={marco}
         aria-label="Lienzo del boceto"
-        className="relative w-full touch-none overflow-hidden rounded-panel border border-division select-none"
+        className="relative w-full touch-none overflow-hidden rounded-panel border border-division bg-panel select-none"
         onPointerDown={alBajar}
         onPointerMove={alMover}
         onPointerUp={alSubir}
@@ -254,7 +254,7 @@ export default function EditorBoceto({
         </div>
       </div>
       {textoEn ? (
-        <div className="flex flex-col gap-2 rounded-panel bg-panel p-3">
+        <div className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-3">
           <CampoTexto etiqueta="Texto del boceto" valorInicial="" onCambio={setTexto} />
           <div className="flex gap-2">
             <Boton onClick={ponerTexto}>Poner texto</Boton>
@@ -265,10 +265,10 @@ export default function EditorBoceto({
         <GrupoDeOpciones etiqueta="Herramienta" valor={herramienta} onCambio={setHerramienta} opciones={HERRAMIENTAS} />
       )}
       <div className="flex flex-wrap gap-2">
-        <Boton disabled={deshacer.length === 0} onClick={deshacerUno}>
+        <Boton icono={Undo2} disabled={deshacer.length === 0} onClick={deshacerUno}>
           Deshacer
         </Boton>
-        <Boton disabled={rehacer.length === 0} onClick={rehacerUno}>
+        <Boton icono={Redo2} disabled={rehacer.length === 0} onClick={rehacerUno}>
           Rehacer
         </Boton>
         <Boton disabled={vista.escala === 1} onClick={() => setVista({ escala: 1, x: 0, y: 0 })}>

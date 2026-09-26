@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { admiteLlaves, ErrorApi, ErrorDeRed, esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Boton, CampoTexto } from "@teins/ui";
+import { Aviso, Boton, CampoTexto, KeyRound } from "@teins/ui";
 import { db } from "../datos/instancia";
 import { useConexionDelNavegador } from "../dispositivo/useConexion";
 import { iniciarSesion, iniciarSesionConLlave, RolNoPermitido } from "../sesion/sesion";
@@ -57,30 +57,36 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
   }
 
   return (
-    <div className="min-h-dvh bg-fondo">
-      <header className="mx-3 mt-3 rounded-panel bg-superficie px-4 pt-5 pb-5 text-sobre-superficie">
-        <p className="text-ayuda text-sobre-superficie-suave">TEINS Campo</p>
-        <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">Iniciar sesión</h1>
-      </header>
-      <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 py-6">
+    <main className="min-h-dvh bg-fondo px-4 py-10">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-5">
+        <div className="flex flex-col gap-1">
+          <p className="text-ayuda text-texto-secundario">
+            <span className="font-extrabold tracking-wide text-superficie">TEINS</span> · Campo
+          </p>
+          <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Iniciar sesión</h1>
+        </div>
         {accesoCerrado && <Aviso tono="alerta">Se cerró el acceso de {accesoCerrado.nombre} en este teléfono y se borraron sus datos.</Aviso>}
         {alCancelar && <Aviso tono="alerta">Tu sesión venció. Inicia sesión para enviar lo pendiente; lo capturado sigue en este teléfono.</Aviso>}
-        {!enLinea && <Aviso>Sin conexión. Iniciar sesión necesita señal la primera vez.</Aviso>}
-        <form onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel bg-panel p-4">
+        {!enLinea && <Aviso tono="alerta">Sin conexión. Iniciar sesión necesita señal la primera vez.</Aviso>}
+        <form onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel border border-division bg-panel p-5">
           <CampoTexto etiqueta="Usuario" nombre="usuario" autoComplete="username" valorInicial="" onCambio={setUsuario} />
           <CampoTexto etiqueta="Contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setContrasena} />
           {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
-          <Boton type="submit" variante="principal" disabled={estado.tipo === "enviando"}>
-            {estado.tipo === "enviando" ? "Iniciando sesión…" : "Iniciar sesión"}
+          <Boton type="submit" variante="principal" cargando={estado.tipo === "enviando"}>
+            Iniciar sesión
           </Boton>
+          {conLlave && (
+            <Boton icono={KeyRound} onClick={() => void entrarConLlave()} disabled={estado.tipo === "enviando"}>
+              Entrar con llave de acceso
+            </Boton>
+          )}
         </form>
-        {conLlave && (
-          <Boton onClick={() => void entrarConLlave()} disabled={estado.tipo === "enviando"}>
-            Entrar con llave de acceso
+        {alCancelar && (
+          <Boton variante="fantasma" onClick={alCancelar}>
+            Seguir sin enviar
           </Boton>
         )}
-        {alCancelar && <Boton onClick={alCancelar}>Seguir sin enviar</Boton>}
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }

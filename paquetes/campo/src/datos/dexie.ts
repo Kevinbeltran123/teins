@@ -1,6 +1,7 @@
 import {
   agregarFoto,
   agregarRepeticion,
+  archivosReferenciados,
   enviarLevantamiento,
   esBoceto,
   leerBoceto,
@@ -174,6 +175,27 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
           async enTransaccion() {
             // Direccionado por contenido: la misma foto dos veces es un solo archivo, y su estado de subida se conserva.
             if (!(await db.archivos.get(archivo.id))) await db.archivos.add(sellado);
+          },
+        };
+      });
+    },
+
+    quitarFoto(id, seccion, campo, huella, ahora) {
+      return escribir(id, async (actual) => {
+        const fotos = actual.respuestas[seccion]?.[campo];
+        if (!Array.isArray(fotos) || !fotos.includes(huella)) return { resultado: undefined };
+        const restantes = (fotos as readonly string[]).filter((f) => f !== huella);
+        const nuevo: LevantamientoLocal = { ...responder(actual, seccion, campo, restantes.length > 0 ? restantes : undefined, ahora), tecnicoId: actual.tecnicoId };
+        return {
+          resultado: undefined,
+          levantamiento: nuevo,
+          tablas: [db.archivos],
+          async enTransaccion() {
+            // Las huellas de cada levantamiento están a la vista: no hace falta abrir ninguno.
+            const enUso =
+              archivosReferenciados(nuevo.respuestas).includes(huella) ||
+              (await db.levantamientos.toArray()).some((l) => l.id !== id && referencias(l).archivos.includes(huella));
+            if (!enUso) await db.archivos.delete(huella);
           },
         };
       });
