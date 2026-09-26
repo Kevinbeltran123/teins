@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, jsonb, pgSchema, text, uuid } from "drizzle-orm/pg-core";
-import type { Respuestas } from "@teins/dominio";
+import type { Repeticiones, Respuestas } from "@teins/dominio";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 export const esquemaLevantamientos = pgSchema("levantamientos");
@@ -21,6 +21,8 @@ export const levantamientos = esquemaLevantamientos.table(
     visitaId: uuid("visita_id"),
     estado: text("estado").notNull(),
     respuestas: jsonb("respuestas").$type<Respuestas>().notNull(),
+    /** Repeticiones de las secciones repetibles, en orden (iteración 9). Vacío en formatos sin ellas. */
+    repeticiones: jsonb("repeticiones").$type<Repeticiones>().notNull().default({}),
     /** Derivado de las respuestas al recibirlo: la bandeja lo muestra sin leer el documento. */
     cantidadFotos: integer("cantidad_fotos").notNull().default(0),
     /** Quién tiene la revisión (I-1): solo esa persona corrige y marca revisado. */

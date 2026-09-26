@@ -72,14 +72,7 @@ async function visitaConRevisado() {
 }
 
 /** La cola `pdf` procesa de a uno y otro archivo de pruebas puede estar usándola: se insiste hasta que termine. */
-async function hastaQueLosPdfEstenListos(informeId: string) {
-  for (let i = 0; i < 20; i++) {
-    await s.procesarCola();
-    const { rows } = await s.propietario.pool.query("select count(*)::int as pendientes from informes.versiones where informe_id = $1 and pdf_estado = 'generando'", [informeId]);
-    if (rows[0].pendientes === 0) return;
-  }
-  throw new Error("Los PDF no se generaron");
-}
+const hastaQueLosPdfEstenListos = (informeId: string) => s.esperarPdf({ informeId });
 
 async function descargar(cookie: string, informeId: string, numero: number) {
   const r = await get(cookie, `/api/informes/${informeId}/versiones/${numero}/pdf`);

@@ -1,4 +1,4 @@
-import { describirValor, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
+import { bloques, describirValor, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
 
 /**
  * Plantilla del informe (ADR-0013): HTML y CSS con la dirección de DESIGN.md. Se arma solo desde la
@@ -39,12 +39,13 @@ export interface RecursosPlantilla {
 export function plantillaInforme(c: ContenidoVersion, { fuente, fotos }: RecursosPlantilla): string {
   const capitulos = c.levantamientos
     .map((l, i) => {
-      const secciones = l.formato.secciones
-        .map((s) => {
+      // Cada sección, y cada repetición de las repetibles con su nombre, en orden (iteración 9).
+      const secciones = bloques(l.formato, l.repeticiones ?? {})
+        .map(({ seccion: s, clave, titulo }) => {
           const datos = s.campos
             .filter((campo) => campo.tipo !== "foto")
             .map((campo) => {
-              const valor = l.respuestas[s.clave]?.[campo.clave] as Valor | undefined;
+              const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
               const vacio = valor === undefined || esNoObtenido(valor);
               return `<tr><th>${escapar(campo.etiqueta)}</th><td${vacio ? ' class="tenue"' : ""}>${escapar(describirValor(campo, valor))}</td></tr>`;
             })
@@ -52,7 +53,7 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos }: Recurso
           const galerias = s.campos
             .filter((campo) => campo.tipo === "foto")
             .map((campo) => {
-              const huellas = l.respuestas[s.clave]?.[campo.clave];
+              const huellas = l.respuestas[clave]?.[campo.clave];
               if (!Array.isArray(huellas) || huellas.length === 0) return "";
               const figuras = (huellas as readonly string[])
                 .map((h, n) => {
@@ -64,7 +65,7 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos }: Recurso
               return `<h4>${escapar(campo.etiqueta)}</h4><div class="fotos">${figuras}</div>`;
             })
             .join("");
-          return `<section class="seccion"><h3>${escapar(s.titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${galerias}</section>`;
+          return `<section class="seccion"><h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${galerias}</section>`;
         })
         .join("");
       return `<article class="capitulo">

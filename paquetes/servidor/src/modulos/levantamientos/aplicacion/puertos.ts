@@ -1,4 +1,4 @@
-import type { EstadoRevision, Respuestas, VersionFormato } from "@teins/dominio";
+import type { EstadoRevision, Repeticiones, Respuestas, VersionFormato } from "@teins/dominio";
 import type { ResultadoComando } from "@teins/protocolo";
 import type { TxOrganizacion } from "../../../plataforma/base-de-datos";
 import type { EntradaAuditoria } from "../../auditoria";
@@ -14,6 +14,7 @@ export interface LevantamientoRecibido {
   versionFormato: number;
   visitaId: string | null;
   respuestas: Respuestas;
+  repeticiones: Repeticiones;
   cantidadFotos: number;
   creadoEnDispositivo: Date;
   enviadoEnDispositivo: Date;
@@ -43,6 +44,7 @@ export interface LevantamientoEnRevision {
   formato: string;
   versionFormato: number;
   respuestas: Respuestas;
+  repeticiones: Repeticiones;
 }
 
 export interface CambiosDeRevision {

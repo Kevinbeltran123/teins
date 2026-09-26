@@ -128,7 +128,24 @@ export async function servidorDePrueba() {
     return { id, usuario, contrasena, totpURI, cookie: cookiesDe(verificado) };
   }
 
-  return { app, rutas, config, propietario, conexionApp, conexionPortal, identidad, nuevaOrganizacionConUsuarios, nuevoAdministrador, procesarCola };
+  /**
+   * Espera a que no quede ningún PDF generándose (de la organización o del informe dado). Un PDF que falla
+   * una vez bajo carga (Chromium tarda en arrancar) vuelve a la cola unos segundos después: se espera por
+   * tiempo, procesando la cola en cada vuelta, y no por un número fijo de vueltas.
+   */
+  async function esperarPdf(filtro: { organizacionId: string } | { informeId: string }, limiteMs = 90_000) {
+    const [columna, valor] = "organizacionId" in filtro ? ["organizacion_id", filtro.organizacionId] : ["informe_id", filtro.informeId];
+    const hasta = Date.now() + limiteMs;
+    while (Date.now() < hasta) {
+      await procesarCola();
+      const { rows } = await propietario.pool.query(`select count(*)::int as n from informes.versiones where pdf_estado = 'generando' and ${columna} = $1`, [valor]);
+      if (rows[0].n === 0) return;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    throw new Error("Hay PDF sin generar");
+  }
+
+  return { app, rutas, config, propietario, conexionApp, conexionPortal, identidad, nuevaOrganizacionConUsuarios, nuevoAdministrador, procesarCola, esperarPdf };
 }
 
 /** Llamada a una ruta de Better Auth desde oficina. */

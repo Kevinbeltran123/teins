@@ -58,6 +58,7 @@ export async function recibirEnvio(
         versionFormato: datos.versionFormato,
         estado: "borrador",
         respuestas: datos.respuestas,
+        ...(datos.repeticiones ? { repeticiones: datos.repeticiones } : {}),
         creadoEn: datos.creadoEn,
         actualizadoEn: datos.enviadoEn,
       };
@@ -89,6 +90,7 @@ export async function recibirEnvio(
         versionFormato: datos.versionFormato,
         visitaId: datos.visitaId ?? null,
         respuestas: datos.respuestas,
+        repeticiones: datos.repeticiones ?? {},
         cantidadFotos: huellas.length,
         creadoEnDispositivo: new Date(datos.creadoEn),
         enviadoEnDispositivo: new Date(datos.enviadoEn),

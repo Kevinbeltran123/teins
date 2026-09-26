@@ -47,14 +47,7 @@ async function clienteConInforme(org: Org, nombre: string) {
   return { clienteId, informeId, publicarOtra: () => oficina(`/api/informes/${informeId}/publicar`, { version: 3 }) };
 }
 
-async function hastaQueNoHayaPdfPendientes(organizacionId: string) {
-  for (let i = 0; i < 20; i++) {
-    await s.procesarCola();
-    const { rows } = await s.propietario.pool.query("select count(*)::int as n from informes.versiones where pdf_estado = 'generando' and organizacion_id = $1", [organizacionId]);
-    if (rows[0].n === 0) return;
-  }
-  throw new Error("Hay PDF sin generar");
-}
+const hastaQueNoHayaPdfPendientes = (organizacionId: string) => s.esperarPdf({ organizacionId });
 
 const ingresar = (identificador: string, clave: string, ip = "10.1.1.1") =>
   app.inject({ method: "POST", url: "/api/portal/ingresar", remoteAddress: ip, headers: { origin: PORTAL }, payload: { identificador, clave } });

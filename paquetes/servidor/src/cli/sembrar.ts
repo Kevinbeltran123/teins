@@ -31,7 +31,7 @@ try {
   await propietario.bd.insert(organizaciones).values({ id: ORGANIZACION_DE_DESARROLLO, nombre: "Organización de desarrollo" }).onConflictDoNothing();
 
   const formatos = crearFormatos();
-  for (const archivo of ["prueba-ups.v1.json", "prueba-ups.v2.json", "prueba-ups.v3.json"]) {
+  for (const archivo of ["prueba-ups.v1.json", "prueba-ups.v2.json", "prueba-ups.v3.json", "prueba-ups.v4.json"]) {
     const r = await enOrganizacion(app.bd, ORGANIZACION_DE_DESARROLLO, (tx) => formatos.publicar(tx, ORGANIZACION_DE_DESARROLLO, leerFormato(archivo)));
     console.log(`Formato ${archivo}: ${r === "publicada" ? "publicado" : "ya existía"}`);
   }

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { EstadoRevision, Respuestas } from "@teins/dominio";
+import type { EstadoRevision, Repeticiones, Respuestas } from "@teins/dominio";
 import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { enOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
@@ -42,6 +42,7 @@ export interface LevantamientoDeVisita {
   revisorId: string | null;
   recibidoEn: Date;
   respuestas: Respuestas;
+  repeticiones: Repeticiones;
 }
 
 export interface Levantamientos {
@@ -140,6 +141,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             fotos: fila.cantidadFotos,
             version: fila.version,
             respuestas: fila.respuestas,
+            repeticiones: fila.repeticiones,
             formatoDefinicion: definicion,
             creadoEnDispositivo: fila.creadoEnDispositivo.toISOString(),
             enviadoEnDispositivo: fila.enviadoEnDispositivo.toISOString(),

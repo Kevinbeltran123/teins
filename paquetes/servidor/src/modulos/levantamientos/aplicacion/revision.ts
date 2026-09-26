@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { corregir, marcarRevisado, puedeEditar, tomarRevision, type EstadoRevision, type Valor } from "@teins/dominio";
+import { bloqueDe, corregir, marcarRevisado, puedeEditar, tomarRevision, type EstadoRevision, type Valor } from "@teins/dominio";
 import type { Actor } from "../../../plataforma/actor";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../../plataforma/base-de-datos";
 import { problema } from "../../../plataforma/errores";
@@ -107,7 +107,7 @@ export function corregirCampos(
     const formato = await deps.formatos.obtener(tx, actual.formato, actual.versionFormato);
     if (!formato) throw problema("error_interno", "El formato del levantamiento no existe");
 
-    const r = corregir(formato, actual.respuestas, pedidas.map((c) => ({ seccion: c.seccion, campo: c.campo, valor: c.valor ?? undefined })));
+    const r = corregir(formato, actual.respuestas, pedidas.map((c) => ({ seccion: c.seccion, campo: c.campo, valor: c.valor ?? undefined })), actual.repeticiones);
     if (!r.ok) throw problema("respuestas_invalidas", undefined, { errores: r.errores });
     if (r.cambios.length === 0) return { version: actual.version, cambios: 0 };
 
@@ -132,7 +132,7 @@ export function marcar(deps: DependenciasRevision, actor: Actor, id: string, ver
   return conVersion(deps, actor, id, versionVista, async (tx, actual) => {
     const formato = await deps.formatos.obtener(tx, actual.formato, actual.versionFormato);
     if (!formato) throw problema("error_interno", "El formato del levantamiento no existe");
-    const r = marcarRevisado({ estado: actual.estado, revisorId: actual.revisorId }, actor.usuarioId, formato, actual.respuestas);
+    const r = marcarRevisado({ estado: actual.estado, revisorId: actual.revisorId }, actor.usuarioId, formato, actual.respuestas, actual.repeticiones);
     if (!r.ok) {
       if (r.motivo === "respuestas_invalidas") throw problema("respuestas_invalidas", undefined, { errores: r.errores });
       if (r.motivo === "no_tomado") throw problema("no_tomado", "Solo quien tomó la revisión la marca como revisada");
@@ -167,7 +167,8 @@ export function comentar(
     if (datos.campo && !datos.seccion) throw problema("entrada_invalida", "Un comentario sobre un campo necesita su sección");
     if (datos.seccion) {
       const formato = await deps.formatos.obtener(tx, actual.formato, actual.versionFormato);
-      const seccion = formato?.secciones.find((s) => s.clave === datos.seccion);
+      // También una repetición de una sección repetible (`tableros~id`), si existe en este levantamiento.
+      const seccion = formato && bloqueDe(formato, actual.repeticiones, datos.seccion)?.seccion;
       if (!seccion || (datos.campo && !seccion.campos.some((c) => c.clave === datos.campo))) {
         throw problema("entrada_invalida", "El comentario apunta a un campo que no está en el formato");
       }

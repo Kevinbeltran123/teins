@@ -98,6 +98,7 @@ export async function deVisita(tx: TxOrganizacion, visitaId: string) {
       revisorId: levantamientos.revisorId,
       recibidoEn: levantamientos.recibidoEn,
       respuestas: levantamientos.respuestas,
+      repeticiones: levantamientos.repeticiones,
     })
     .from(levantamientos)
     .where(eq(levantamientos.visitaId, visitaId))

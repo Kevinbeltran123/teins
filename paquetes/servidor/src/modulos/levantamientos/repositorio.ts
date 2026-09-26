@@ -35,6 +35,7 @@ export const repositorioRevision: RepositorioRevision = {
         formato: levantamientos.formato,
         versionFormato: levantamientos.versionFormato,
         respuestas: levantamientos.respuestas,
+        repeticiones: levantamientos.repeticiones,
       })
       .from(levantamientos)
       .where(eq(levantamientos.id, id));

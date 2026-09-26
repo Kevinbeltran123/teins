@@ -362,6 +362,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
                 revisor: nombres.get(l.revisorId ?? "") ?? SIN_NOMBRE,
                 recibidoEn: l.recibidoEn.toISOString(),
                 respuestas: l.respuestas,
+                ...(Object.keys(l.repeticiones).length > 0 ? { repeticiones: l.repeticiones } : {}),
               });
             }
 
