@@ -12,7 +12,11 @@ export interface SubidaFirmada {
 /** Puerto del almacenamiento de objetos (ADR-0007): cualquier proveedor compatible con S3. */
 export interface Almacenamiento {
   firmarSubida(clave: string, datos: { bytes: number; tipo: string; sha256Hex: string }): Promise<SubidaFirmada>;
-  firmarDescarga(clave: string): Promise<{ url: string; expiraEn: Date }>;
+  /**
+   * Con `descargarComo`, el navegador guarda el archivo con ese nombre en vez de abrirlo (los PDF de los
+   * informes). Sin él se abre en línea, como deben verse las fotos y los bocetos dentro de un <img>.
+   */
+  firmarDescarga(clave: string, opciones?: { descargarComo?: string }): Promise<{ url: string; expiraEn: Date }>;
   existe(clave: string): Promise<boolean>;
   leer(clave: string): Promise<Readable>;
   /** Objetos que genera el servidor (el PDF de una versión). La clave es la huella: nunca se sobrescribe otro contenido. */
@@ -20,6 +24,19 @@ export interface Almacenamiento {
   eliminar(clave: string): Promise<void>;
   /** Permite que las superficies suban directo desde el navegador. Se aplica al preparar un entorno. */
   permitirOrigenes(origenes: readonly string[]): Promise<void>;
+}
+
+/**
+ * `Content-Disposition: attachment` con el nombre del archivo: en ASCII para navegadores viejos y en UTF-8
+ * (RFC 5987) para que conserve las tildes del cliente y del sitio.
+ */
+export function disposicionAdjunto(nombre: string): string {
+  const ascii = nombre
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^\x20-\x7e]|["\\]/g, "-");
+  const utf8 = encodeURIComponent(nombre).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`;
 }
 
 const SEGUNDOS_SUBIDA = 15 * 60;
@@ -59,8 +76,9 @@ export function almacenamientoS3(config: Config): Almacenamiento {
         expiraEn: new Date(Date.now() + SEGUNDOS_SUBIDA * 1000),
       };
     },
-    async firmarDescarga(clave) {
-      const url = await getSignedUrl(s3, new GetObjectCommand({ Bucket, Key: clave }), { expiresIn: SEGUNDOS_DESCARGA });
+    async firmarDescarga(clave, opciones) {
+      const disposicion = opciones?.descargarComo ? { ResponseContentDisposition: disposicionAdjunto(opciones.descargarComo) } : {};
+      const url = await getSignedUrl(s3, new GetObjectCommand({ Bucket, Key: clave, ...disposicion }), { expiresIn: SEGUNDOS_DESCARGA });
       return { url, expiraEn: new Date(Date.now() + SEGUNDOS_DESCARGA * 1000) };
     },
     async existe(clave) {

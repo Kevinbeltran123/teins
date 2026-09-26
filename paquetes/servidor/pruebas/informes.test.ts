@@ -77,7 +77,10 @@ const hastaQueLosPdfEstenListos = (informeId: string) => s.esperarPdf({ informeI
 async function descargar(cookie: string, informeId: string, numero: number) {
   const r = await get(cookie, `/api/informes/${informeId}/versiones/${numero}/pdf`);
   expect(r.statusCode, r.body).toBe(200);
-  return Buffer.from(await (await fetch(r.json().url)).arrayBuffer());
+  const archivo = await fetch(r.json().url);
+  // Se descarga como adjunto con el nombre del informe: la aplicación no pierde la pantalla.
+  expect(archivo.headers.get("content-disposition")).toMatch(new RegExp(`^attachment; filename=".* - version ${numero}\\.pdf"`));
+  return Buffer.from(await archivo.arrayBuffer());
 }
 
 describe("informe (corte 4)", () => {

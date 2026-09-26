@@ -173,7 +173,8 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
           });
           // Otro cliente o un informe sin publicar dan lo mismo: no existe (QA-4).
           if (!pdf) throw problema("no_encontrado");
-          const firma = await almacenamiento.firmarDescarga(`${sesion.organizacionId}/${pdf.huella}`);
+          // Se descarga, no se abre: el portal no pierde la pantalla.
+          const firma = await almacenamiento.firmarDescarga(`${sesion.organizacionId}/${pdf.huella}`, { descargarComo: pdf.nombre });
           return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
         },
       });

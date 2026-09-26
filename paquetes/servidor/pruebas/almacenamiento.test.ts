@@ -34,3 +34,19 @@ describe("subida firmada (ADR-0007)", () => {
     expect(createHash("sha256").update(guardado).digest("hex")).toBe(foto.huella);
   });
 });
+
+describe("descarga firmada", () => {
+  it("con nombre, el navegador guarda el PDF como adjunto con ese nombre, tildes incluidas", async () => {
+    const almacenamiento = almacenamientoS3(configDePrueba());
+    const clave = `prueba/${randomUUID()}`;
+    await almacenamiento.guardar(clave, Buffer.from("%PDF-1.7 prueba"), "application/pdf");
+    const adjunto = await fetch((await almacenamiento.firmarDescarga(clave, { descargarComo: "Informe Clínica San Rafael - versión 2.pdf" })).url);
+    expect(adjunto.ok).toBe(true);
+    expect(adjunto.headers.get("content-disposition")).toBe(
+      `attachment; filename="Informe Clinica San Rafael - version 2.pdf"; filename*=UTF-8''Informe%20Cl%C3%ADnica%20San%20Rafael%20-%20versi%C3%B3n%202.pdf`,
+    );
+    // Sin nombre se abre en línea: así se ven las fotos y los bocetos dentro de la página.
+    const enLinea = await fetch((await almacenamiento.firmarDescarga(clave)).url);
+    expect(enLinea.headers.get("content-disposition")).toBeNull();
+  });
+});

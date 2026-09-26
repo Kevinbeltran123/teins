@@ -39,6 +39,16 @@ export interface VersionVigente {
   visita: ContenidoVersion["visita"];
 }
 
+/** La visita tal como quedó congelada en la versión: de la misma fila, sin otra consulta. */
+const visitaDeLaVersion = sql<ContenidoVersion["visita"]>`${versionesPublicadas.contenido} -> 'visita'`;
+
+/**
+ * Nombre con que se guarda el PDF al descargarlo: quien lo recibe lo encuentra después en su carpeta de
+ * descargas por el cliente, el sitio y la versión. Sin los caracteres que un sistema de archivos no admite.
+ */
+const nombreDelPdf = (visita: { cliente: string; sitio: string }, numero: number) =>
+  `Informe ${visita.cliente} - ${visita.sitio} - versión ${numero}.pdf`.replace(/[/\\:*?"<>|]/g, "-");
+
 /**
  * Lo que el portal lee, siempre con la transacción del portal: la seguridad por fila ya restringe a
  * lo publicado con PDF listo del cliente de la sesión (ADR-0009, parte 3).
@@ -51,20 +61,20 @@ export const informesParaElPortal = {
         informeId: versionesPublicadas.informeId,
         numero: versionesPublicadas.numero,
         publicadaEn: versionesPublicadas.publicadaEn,
-        visita: sql<ContenidoVersion["visita"]>`${versionesPublicadas.contenido} -> 'visita'`,
+        visita: visitaDeLaVersion,
       })
       .from(versionesPublicadas)
       .orderBy(versionesPublicadas.informeId, desc(versionesPublicadas.numero));
     return filas.sort((a, b) => b.visita.programadaPara.localeCompare(a.visita.programadaPara));
   },
-  async pdfVigente(tx: TxPortal, informeId: string): Promise<{ numero: number; huella: string } | undefined> {
+  async pdfVigente(tx: TxPortal, informeId: string): Promise<{ numero: number; huella: string; nombre: string } | undefined> {
     const [fila] = await tx
-      .select({ numero: versionesPublicadas.numero, huella: versionesPublicadas.pdfHuella })
+      .select({ numero: versionesPublicadas.numero, huella: versionesPublicadas.pdfHuella, visita: visitaDeLaVersion })
       .from(versionesPublicadas)
       .where(eq(versionesPublicadas.informeId, informeId))
       .orderBy(desc(versionesPublicadas.numero))
       .limit(1);
-    return fila?.huella ? { numero: fila.numero, huella: fila.huella } : undefined;
+    return fila?.huella ? { numero: fila.numero, huella: fila.huella, nombre: nombreDelPdf(fila.visita, fila.numero) } : undefined;
   },
 };
 
@@ -430,13 +440,14 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
         manejar: async ({ parametros: { id, numero }, actor }) => {
           const [version] = await enOrganizacion(bd, actor.organizacionId, (tx) =>
             tx
-              .select({ estado: versionesPublicadas.pdfEstado, huella: versionesPublicadas.pdfHuella })
+              .select({ estado: versionesPublicadas.pdfEstado, huella: versionesPublicadas.pdfHuella, visita: visitaDeLaVersion })
               .from(versionesPublicadas)
               .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero))),
           );
           if (!version) throw problema("no_encontrado");
           if (version.estado !== "listo" || !version.huella) throw problema("estado_invalido", "El PDF de esta versión todavía no está listo");
-          const firma = await almacenamiento.firmarDescarga(clave(actor.organizacionId, version.huella));
+          // Se descarga, no se abre: la aplicación de oficina no pierde la pantalla.
+          const firma = await almacenamiento.firmarDescarga(clave(actor.organizacionId, version.huella), { descargarComo: nombreDelPdf(version.visita, numero) });
           return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
         },
       });

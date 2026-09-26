@@ -83,7 +83,7 @@ Comandos de administración (uso en el encabezado de cada archivo de `src/cli/`)
 
 El permiso de trabajo sin conexión dura `DIAS_PERMISO_LOCAL` días (7 por defecto) desde el último contacto.
 
-PDF del informe: el worker usa Chromium. En la imagen es el de Alpine (`CHROMIUM_RUTA=/usr/bin/chromium`); en desarrollo, sin esa variable, el que instala Playwright (`pnpm --filter @teins/e2e exec playwright install chromium` si falta).
+PDF del informe: las URL firmadas de descarga llevan `Content-Disposition: attachment` con un nombre legible (`firmarDescarga(clave, { descargarComo })`, iteración 14), así que oficina y el portal lo descargan sin salir de la pantalla; fotos y bocetos siguen en línea. El worker usa Chromium. En la imagen es el de Alpine (`CHROMIUM_RUTA=/usr/bin/chromium`); en desarrollo, sin esa variable, el que instala Playwright (`pnpm --filter @teins/e2e exec playwright install chromium` si falta).
 
 Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/servidor generar-migracion --name <nombre>`. Los permisos de una tabla nueva van en una migración propia (`--custom`).
 

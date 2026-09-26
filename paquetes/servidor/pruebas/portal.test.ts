@@ -76,7 +76,9 @@ describe("portal del cliente (ADR-0009, parte 4)", () => {
     expect(informes).toMatchObject({ cliente: "Cliente A", informes: [{ id: a.informeId, numero: 1, sitio: "Sede de Cliente A", programadaPara: "2026-09-30" }] });
     const pdf = await portal(cookie, `/api/portal/informes/${a.informeId}/pdf`);
     expect(pdf.statusCode).toBe(200);
-    const bytes = Buffer.from(await (await fetch(pdf.json().url)).arrayBuffer());
+    const archivo = await fetch(pdf.json().url);
+    expect(archivo.headers.get("content-disposition")).toMatch(/^attachment; filename="Informe Cliente A - Sede de Cliente A - version 1\.pdf"/);
+    const bytes = Buffer.from(await archivo.arrayBuffer());
     expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
 
     const { rows } = await s.propietario.pool.query(
