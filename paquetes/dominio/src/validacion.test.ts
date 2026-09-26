@@ -46,7 +46,9 @@ function valorValido(c: DefinicionCampo): fc.Arbitrary<Valor> {
       ? fc.string({ minLength: 1, maxLength: 60 }).filter((t) => t.trim() !== "")
       : c.tipo === "medida"
         ? fc.record({ valor: fc.stringMatching(DECIMAL_CANONICO), unidad: fc.constantFrom(...c.unidades) })
-        : fc.uniqueArray(huella, { minLength: Math.max(c.min ?? 0, c.obligatorio ? 1 : 0), maxLength: 5 });
+        : c.tipo === "foto"
+          ? fc.uniqueArray(huella, { minLength: Math.max(c.min ?? 0, c.obligatorio ? 1 : 0), maxLength: 5 })
+          : fc.record({ boceto: huella });
   return c.obligatorio ? fc.oneof(propio, noObtenido) : propio;
 }
 

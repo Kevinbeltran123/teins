@@ -1,5 +1,5 @@
 import type { DefinicionCampo, VersionFormato } from "./formato";
-import { esNoObtenido, type Respuestas } from "./levantamiento";
+import { esBoceto, esNoObtenido, type Respuestas } from "./levantamiento";
 import { LIMITES } from "./limites";
 import { bloques, ID_REPETICION, leerClave, type Repeticiones } from "./repeticiones";
 
@@ -26,6 +26,8 @@ export type CodigoErrorValidacion =
   | "repeticiones_insuficientes"
   | "repeticiones_excedidas"
   | "nombre_de_repeticion_invalido"
+  /** El valor de un boceto no es la huella de su archivo. */
+  | "boceto_invalido"
   /** Oficina no corrige este tipo de campo (hoy, fotos). */
   | "no_corregible";
 
@@ -138,6 +140,11 @@ export function validarCampo(campo: DefinicionCampo, valor: unknown): CodigoErro
       if (valor.length < minimo) return valor.length === 0 && campo.obligatorio ? "campo_obligatorio" : "fotos_insuficientes";
       return null;
     }
+    case "boceto": {
+      if (valor === undefined) return campo.obligatorio ? "campo_obligatorio" : null;
+      if (!esBoceto(valor) || Object.keys(valor).length !== 1) return "tipo_invalido";
+      return typeof valor.boceto === "string" && HUELLA_SHA256.test(valor.boceto) ? null : "boceto_invalido";
+    }
   }
 }
 
@@ -149,6 +156,32 @@ export function fotosReferenciadas(respuestas: Respuestas): string[] {
     for (const valor of Object.values(valores)) {
       if (Array.isArray(valor)) for (const id of valor) if (typeof id === "string") huellas.add(id);
     }
+  }
+  return [...huellas];
+}
+
+/**
+ * Huellas de todos los archivos que referencian las respuestas: fotos y bocetos. Son los que deben estar
+ * subidos y verificados antes de registrar un envío (QA-2).
+ */
+export function archivosReferenciados(respuestas: Respuestas): string[] {
+  const huellas = new Set<string>();
+  for (const valores of Object.values(respuestas)) {
+    if (typeof valores !== "object" || valores === null) continue;
+    for (const valor of Object.values(valores)) {
+      if (Array.isArray(valor)) for (const id of valor) if (typeof id === "string") huellas.add(id);
+      if (esBoceto(valor) && typeof valor.boceto === "string") huellas.add(valor.boceto);
+    }
+  }
+  return [...huellas];
+}
+
+/** Huellas de los bocetos solos: suben al enviar, no antes (ADR-0019, parte 3). */
+export function bocetosReferenciados(respuestas: Respuestas): string[] {
+  const huellas = new Set<string>();
+  for (const valores of Object.values(respuestas)) {
+    if (typeof valores !== "object" || valores === null) continue;
+    for (const valor of Object.values(valores)) if (esBoceto(valor) && typeof valor.boceto === "string") huellas.add(valor.boceto);
   }
   return [...huellas];
 }

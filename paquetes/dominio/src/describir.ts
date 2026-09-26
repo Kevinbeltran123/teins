@@ -1,5 +1,5 @@
 import type { DefinicionCampo } from "./formato";
-import { esNoObtenido, type Valor } from "./levantamiento";
+import { esBoceto, esNoObtenido, type Valor } from "./levantamiento";
 
 /**
  * Un valor como lo lee una persona, en español de Colombia: "12,5 kVA", "No se pudo obtener: …".
@@ -10,6 +10,7 @@ export function describirValor(campo: DefinicionCampo, valor: Valor | undefined)
   if (esNoObtenido(valor)) return `No se pudo obtener: ${valor.motivo}`;
   if (typeof valor === "string") return valor;
   if (Array.isArray(valor)) return valor.length === 1 ? "1 foto" : `${valor.length} fotos`;
+  if (esBoceto(valor)) return "Boceto";
   if (campo.tipo === "medida" && "valor" in valor) return `${valor.valor.replace(".", ",")} ${valor.unidad}`;
   return "Sin dato";
 }

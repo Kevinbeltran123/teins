@@ -11,13 +11,20 @@ export interface ValorMedida {
 /** Fotos: identificadores de archivo (huella SHA-256), nunca el binario (ADR-0007). */
 export type ValorFotos = readonly string[];
 
+/** Boceto: la huella de su archivo (ADR-0019), como una foto; el documento vive en el archivo. */
+export interface ValorBoceto {
+  boceto: string;
+}
+
 /** Regla 3: un dato obligatorio que no se pudo obtener se marca con su motivo. */
 export interface ValorNoObtenido {
   noObtenido: true;
   motivo: string;
 }
 
-export type Valor = string | ValorMedida | ValorFotos | ValorNoObtenido;
+export type Valor = string | ValorMedida | ValorFotos | ValorBoceto | ValorNoObtenido;
+
+export const esBoceto = (valor: unknown): valor is ValorBoceto => typeof valor === "object" && valor !== null && !Array.isArray(valor) && "boceto" in valor;
 
 /** Respuestas por clave de sección y clave de campo. */
 export type Respuestas = Readonly<Record<string, Readonly<Record<string, Valor>>>>;

@@ -73,7 +73,8 @@ export function corregir(formato: VersionFormato, respuestas: Respuestas, correc
       errores.push({ seccion, campo, codigo: "campo_desconocido" });
       continue;
     }
-    if (definicion.tipo === "foto") {
+    // Fotos y bocetos son captura de campo: oficina no los cambia.
+    if (definicion.tipo === "foto" || definicion.tipo === "boceto") {
       errores.push({ seccion, campo, codigo: "no_corregible" });
       continue;
     }
