@@ -6,8 +6,10 @@ import {
   crearMedida,
   describirValor,
   esBoceto,
+  esCantidades,
   esNoObtenido,
   LIENZO,
+  normalizarDecimal,
   LIMITES,
   nombreDeDato,
   type CodigoErrorValidacion,
@@ -17,7 +19,23 @@ import {
   type ValorMedida,
   type VersionFormato,
 } from "@teins/dominio";
-import { Aviso, Boceto, Boton, CampoFotos, CampoMedida, CampoTexto, EtiquetaCampo, MarcaNoObtenido, Marquilla, MensajeError, ValorLeido } from "@teins/ui";
+import {
+  Aviso,
+  Boceto,
+  Boton,
+  CampoFotos,
+  CampoMedida,
+  CampoTexto,
+  EditorCantidades,
+  EtiquetaCampo,
+  MarcaNoObtenido,
+  Marquilla,
+  MensajeError,
+  TablaCantidades,
+  ValorLeido,
+  type LineaEditable,
+} from "@teins/ui";
+import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
 import type { EnvioLocal, EstadoServidor, LevantamientoLocal } from "../datos/modelo";
 import { procesarFoto } from "../fotos/procesar";
@@ -109,7 +127,7 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
 function agrupar(campos: readonly DefinicionCampo[]): DefinicionCampo[][] {
   const grupos: DefinicionCampo[][] = [];
   // Fotos y bocetos van solos en su panel; los demás campos se agrupan.
-  const solo = (c: DefinicionCampo) => c.tipo === "foto" || c.tipo === "boceto";
+  const solo = (c: DefinicionCampo) => c.tipo === "foto" || c.tipo === "boceto" || c.tipo === "cantidades";
   for (const campo of campos) {
     const ultimo = grupos.at(-1);
     if (!solo(campo) && ultimo && !solo(ultimo[0]!)) ultimo.push(campo);
@@ -370,6 +388,16 @@ function Campo({ id, seccion, campo, inicial, actual, error, alGuardar }: PropsC
       }
       case "foto":
         return <Fotos id={id} seccion={seccion} campo={campo} ids={noObtenido ? [] : actual} error={noObtenido ? undefined : errorDelCampo} alGuardar={alGuardar} />;
+      case "cantidades":
+        return (
+          <CampoCantidades
+            campo={campo}
+            unidades={campo.unidades}
+            inicial={noObtenido ? undefined : inicial}
+            error={noObtenido ? undefined : errorDelCampo}
+            guardar={(valor) => void guardar(valor)}
+          />
+        );
       case "boceto":
         return <CampoBoceto id={id} seccion={seccion} campo={campo} actual={noObtenido ? undefined : actual} error={noObtenido ? undefined : errorDelCampo} alGuardar={alGuardar} />;
     }
@@ -389,6 +417,31 @@ function Campo({ id, seccion, campo, inicial, actual, error, alGuardar }: PropsC
       />
     </div>
   );
+}
+
+/**
+ * Cantidades (F9): texto libre, sin catálogo (regla 6). La cantidad se guarda como decimal canónico
+ * cuando se puede leer ("12,5" → "12.5"); si no, tal cual, y la validación al enviar la marca.
+ */
+function CampoCantidades({ campo, unidades, inicial, error, guardar }: { campo: DefinicionCampo; unidades: readonly string[]; inicial: Valor | undefined; error: string | undefined; guardar: (valor: Valor | undefined) => void }) {
+  const [lineas, setLineas] = useState<LineaEditable[]>(() =>
+    esCantidades(inicial) ? inicial.map((l) => ({ id: l.id, descripcion: l.descripcion, cantidad: l.cantidad.replace(".", ","), unidad: l.unidad, observacion: l.observacion ?? "" })) : [],
+  );
+  function cambiar(nuevas: LineaEditable[]) {
+    setLineas(nuevas);
+    guardar(
+      nuevas.length === 0
+        ? undefined
+        : nuevas.map((l) => ({
+            id: l.id,
+            descripcion: l.descripcion,
+            cantidad: normalizarDecimal(l.cantidad) ?? l.cantidad,
+            unidad: l.unidad,
+            ...(l.observacion.trim() ? { observacion: l.observacion.trim() } : {}),
+          })),
+    );
+  }
+  return <EditorCantidades etiqueta={campo.etiqueta} lineas={lineas} unidades={unidades} onCambio={cambiar} nuevoId={nuevoIdDeRepeticion} obligatorio={campo.obligatorio} error={error} />;
 }
 
 /** Boceto (ADR-0019): miniatura y editor a pantalla completa. El documento vive en el archivo local. */
@@ -549,6 +602,8 @@ function Enviado({
               const valor = levantamiento.respuestas[clave]?.[campo.clave];
               return campo.tipo === "foto" && !esNoObtenido(valor) ? (
                 <FotosLeidas key={campo.clave} etiqueta={campo.etiqueta} ids={Array.isArray(valor) ? (valor as string[]) : []} />
+              ) : campo.tipo === "cantidades" && esCantidades(valor) ? (
+                <TablaCantidades key={campo.clave} etiqueta={campo.etiqueta} lineas={valor} />
               ) : campo.tipo === "boceto" && !esNoObtenido(valor) ? (
                 <BocetoLeido key={campo.clave} etiqueta={campo.etiqueta} valor={valor} />
               ) : (
