@@ -123,6 +123,17 @@ describe("repositorio de levantamientos en Dexie", () => {
     expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).toContain(segunda.firma);
   });
 
+  it("guarda el catálogo que llega en la bajada, sin sellar, y un ítem desactivado lo reemplaza (iteración 17)", async () => {
+    const db = nuevaBase();
+    const almacen = almacenDexie(db);
+    const item = { id: "0192f0e0-0000-7000-8000-000000000017", codigo: "CAB-6A", descripcion: "Cable UTP categoría 6A", unidad: "m", activo: true };
+    const bajada = (activo: boolean, puntoDeControl: number) => ({ cambios: [{ tipo: "item_catalogo" as const, item: { ...item, activo } }], puntoDeControl, hayMas: false, permisoLocalHasta: despues.toISOString() });
+    await almacen.aplicarBajada("t1", bajada(true, 1), 8, ahora.toISOString());
+    expect(await db.catalogo.get(item.id)).toEqual(item);
+    await almacen.aplicarBajada("t1", bajada(false, 2), 8, despues.toISOString());
+    expect(await db.catalogo.toArray()).toEqual([{ ...item, activo: false }]);
+  });
+
   it("guarda y borra respuestas, y actualiza la hora de modificación", async () => {
     const repo = repositorioDexie(nuevaBase());
     await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
@@ -310,7 +321,7 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
 
     const v2 = abrirBase(nombre);
     bases.push(v2);
-    expect(v2.verno).toBe(4);
+    expect(v2.verno).toBe(5);
     expect(await v2.levantamientos.get("l1")).toEqual(borrador);
     const archivos = await v2.archivos.toArray();
     expect(archivos.map((a) => [a.id, a.subida, new Uint8Array(a.datos)[0]])).toEqual([
@@ -335,7 +346,7 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
 
     const v3 = abrirBase(nombre);
     bases.push(v3);
-    expect(v3.verno).toBe(4);
+    expect(v3.verno).toBe(5);
     expect(await v3.levantamientos.get("l1")).toEqual(borrador);
     expect(await v3.envios.get("l2")).toEqual(envio);
     expect((await v3.formatos.toArray()).map((f) => `${f.formato}@${f.version}`)).toEqual(["prueba-ups@1", "prueba-ups@2"]);

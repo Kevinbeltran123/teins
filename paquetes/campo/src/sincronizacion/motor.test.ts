@@ -343,7 +343,7 @@ describe("bajada (ADR-0003)", () => {
     await motorDe(db, s, reloj).sincronizar({ bajar: true });
     const [informe] = s.informes;
     expect(informe!.secreto).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(informe!.salud).toMatchObject({ versionApp: 2, versionEsquemaLocal: 4, pendientes: 1, pendienteMasAntiguo: "2026-09-24T11:00:00.000Z", ultimoError: "error_interno" });
+    expect(informe!.salud).toMatchObject({ versionApp: 2, versionEsquemaLocal: 5, pendientes: 1, pendienteMasAntiguo: "2026-09-24T11:00:00.000Z", ultimoError: "error_interno" });
     // El mismo dispositivo en cada informe.
     await motorDe(db, s, reloj).sincronizar({ bajar: true });
     expect(new Set(s.informes.map((i) => i.id)).size).toBe(1);

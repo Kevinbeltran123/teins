@@ -3,7 +3,7 @@ import type { VersionFormato } from "@teins/dominio";
 import v1 from "@teins/dominio/formatos-de-prueba/prueba-ups.v1.json";
 import v2 from "@teins/dominio/formatos-de-prueba/prueba-ups.v2.json";
 import { VERSION_APP } from "../version";
-import type { Ajuste, ClaveLocal, ArchivoGuardado, BajadaLocal, EnvioGuardado, EstadoServidorGuardado, FormatoLocal, LevantamientoGuardado, UsuarioLocal, VisitaGuardada } from "./modelo";
+import type { Ajuste, ClaveLocal, ArchivoGuardado, BajadaLocal, EnvioGuardado, EstadoServidorGuardado, FormatoLocal, ItemCatalogoLocal, LevantamientoGuardado, UsuarioLocal, VisitaGuardada } from "./modelo";
 
 export type BaseCampo = Dexie & {
   levantamientos: EntityTable<LevantamientoGuardado, "id">;
@@ -15,6 +15,7 @@ export type BaseCampo = Dexie & {
   estadosServidor: EntityTable<EstadoServidorGuardado, "id">;
   bajadas: EntityTable<BajadaLocal, "tecnicoId">;
   claves: EntityTable<ClaveLocal, "tecnicoId">;
+  catalogo: EntityTable<ItemCatalogoLocal, "id">;
 };
 
 /** Los formatos que los cortes 0 y 1 traían en el código. Solo los usa la migración a la versión 3. */
@@ -82,6 +83,10 @@ export function abrirBase(nombre = "teins-campo"): BaseCampo {
   // Iteración 12: una clave por técnico (ADR-0022). Sin `upgrade`: WebCrypto no cabe en la transacción
   // de la migración, así que lo de antes se sella después, registro por registro, sin borrar nada (regla 5).
   db.version(4).stores({ claves: "tecnicoId", archivos: "id, subida, cifrado" });
+
+  // Iteración 17: el catálogo de la organización, para elegir materiales sin conexión (ADR-0025). Llega con
+  // la bajada: al actualizar a la app 8, el teléfono baja todo de nuevo y lo trae completo.
+  db.version(5).stores({ catalogo: "id" });
 
   return db;
 }

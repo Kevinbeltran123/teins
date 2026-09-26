@@ -110,6 +110,18 @@ export interface EstadoRed {
 export type FormatoLocal = VersionFormato;
 
 /**
+ * Ítem del catálogo de la organización (iteración 17, ADR-0025): sin precio y sin sellar, como los formatos,
+ * porque no es dato de un cliente. Uno inactivo deja de sugerirse.
+ */
+export interface ItemCatalogoLocal {
+  id: string;
+  codigo: string;
+  descripcion: string;
+  unidad: string;
+  activo: boolean;
+}
+
+/**
  * Visita asignada, por técnico: en un teléfono compartido cada uno ve las suyas. Si se reasigna y el
  * técnico ya empezó levantamientos en ella, se conserva marcada para que pueda terminarlos (regla 17).
  */

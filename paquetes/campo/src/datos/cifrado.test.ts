@@ -139,7 +139,7 @@ describe("cifrado local (iteración 12, ADR-0022)", () => {
 
     const db = nuevaBase(nombre);
     const repo = repositorioDexie(db);
-    expect(db.verno).toBe(4);
+    expect(db.verno).toBe(5);
     expect(await contarPorSellar(db)).toBe(6);
     await sellarPendientes(db);
     expect(await contarPorSellar(db)).toBe(0);
