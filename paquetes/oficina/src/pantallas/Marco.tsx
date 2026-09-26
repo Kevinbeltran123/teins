@@ -26,6 +26,7 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
               { a: "/", texto: "Levantamientos" },
               { a: "/visitas", texto: "Visitas" },
               { a: "/clientes", texto: "Clientes" },
+              { a: "/catalogo", texto: "Catálogo" },
               { a: "/informes", texto: "Informes" },
               ...(administrador ? [{ a: "/administracion", texto: "Administración" }] : []),
             ].map((e) => (

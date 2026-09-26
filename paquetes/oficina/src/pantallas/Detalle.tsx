@@ -7,18 +7,36 @@ import {
   crearMedida,
   describirValor,
   esBoceto,
+  esCantidades,
   esNoObtenido,
   nombreDeDato,
+  normalizarDecimal,
   rutaLegible,
   type DefinicionCampo,
-  type Repeticiones,
+  type LineaCantidad,
   type Valor,
   type ValorMedida,
-  type VersionFormato,
 } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
-import { Aviso, Boceto, Boton, CampoFotos, CampoMedida, CampoTexto, CampoTextoLargo, claseBoton, MarcaNoObtenido, Marquilla, ValorLeido } from "@teins/ui";
+import {
+  Aviso,
+  Boceto,
+  Boton,
+  CampoFotos,
+  CampoMedida,
+  CampoSeleccion,
+  CampoTexto,
+  CampoTextoLargo,
+  claseBoton,
+  EditorCantidades,
+  MarcaNoObtenido,
+  Marquilla,
+  TablaCantidades,
+  ValorLeido,
+  type LineaEditable,
+} from "@teins/ui";
 import { consultas } from "../api";
+import { consultasDeCatalogo, useVincular } from "../catalogo";
 import { aFechaHora } from "../formato";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
 import { useComentar, useCorregir, useMarcarRevisado, useTomar } from "../revision";
@@ -136,7 +154,7 @@ export function Detalle({ id }: { id: string }) {
         ))}
 
       <Comentarios l={l} destino={comentandoSobre} quitarDestino={() => setComentandoSobre(null)} refCampo={formularioComentario} />
-      <Historial id={id} formato={l.formatoDefinicion} repeticiones={l.repeticiones} />
+      <Historial l={l} />
     </>
   );
 }
@@ -270,6 +288,8 @@ function FilaCampo({
         <Fotos etiqueta={campo.etiqueta} huellas={valor as readonly string[]} />
       ) : campo.tipo === "boceto" && esBoceto(valor) ? (
         <BocetoDeCampo etiqueta={campo.etiqueta} huella={valor.boceto} />
+      ) : campo.tipo === "cantidades" && esCantidades(valor) ? (
+        <LineasDeCantidad l={l} seccion={seccion} campo={campo} lineas={valor} mia={mia} recargar={recargar} />
       ) : (
         <ValorLeido etiqueta={campo.etiqueta}>
           <span className={valor === undefined || esNoObtenido(valor) ? "text-texto-secundario" : ""}>{describirValor(campo, valor)}</span>
@@ -359,6 +379,19 @@ function EditorCorreccion({
               setValido(m !== null);
               return m !== null;
             }}
+          />
+        );
+      }
+      case "cantidades": {
+        const lineas = esCantidades(valor) ? valor : [];
+        return (
+          <CorregirCantidades
+            etiqueta={`Líneas corregidas de ${campo.etiqueta.toLowerCase()}`}
+            inicial={lineas}
+            unidades={campo.unidades}
+            deshabilitado={marcado}
+            error={marcado ? undefined : mensajeCampo}
+            onCambio={setNuevo}
           />
         );
       }
@@ -466,6 +499,110 @@ function Comentarios({
   );
 }
 
+/** Id de una línea nueva: 8 caracteres en base 36, como los que genera campo. */
+const nuevoIdDeLinea = () => [...crypto.getRandomValues(new Uint8Array(8))].map((b) => (b % 36).toString(36)).join("");
+
+/**
+ * Las líneas de cantidad corregidas: la cantidad se escribe como la lee una persona ("12,5") y se guarda
+ * como decimal canónico; si no se puede leer, va tal cual y el servidor la marca.
+ */
+function CorregirCantidades({
+  etiqueta,
+  inicial,
+  unidades,
+  deshabilitado,
+  error,
+  onCambio,
+}: {
+  etiqueta: string;
+  inicial: readonly LineaCantidad[];
+  unidades: readonly string[];
+  deshabilitado: boolean;
+  error: string | undefined;
+  onCambio: (valor: Valor | undefined) => void;
+}) {
+  const [lineas, setLineas] = useState<LineaEditable[]>(() => inicial.map((l) => ({ ...l, cantidad: l.cantidad.replace(".", ","), observacion: l.observacion ?? "" })));
+  if (deshabilitado) return null;
+  function cambiar(nuevas: LineaEditable[]) {
+    setLineas(nuevas);
+    onCambio(
+      nuevas.length === 0
+        ? undefined
+        : nuevas.map((l) => ({
+            id: l.id,
+            descripcion: l.descripcion,
+            cantidad: normalizarDecimal(l.cantidad) ?? l.cantidad,
+            unidad: l.unidad,
+            ...(l.observacion.trim() ? { observacion: l.observacion.trim() } : {}),
+          })),
+    );
+  }
+  return <EditorCantidades etiqueta={etiqueta} lineas={lineas} unidades={unidades} onCambio={cambiar} nuevoId={nuevoIdDeLinea} error={error} />;
+}
+
+/**
+ * Tabla de cantidades con su vínculo al catálogo (iteración 11). Quien tiene la revisión elige el ítem
+ * de cada línea; el técnico escribió texto libre y no lo elige (regla 6).
+ */
+function LineasDeCantidad({
+  l,
+  seccion,
+  campo,
+  lineas,
+  mia,
+  recargar,
+}: {
+  l: Levantamiento;
+  seccion: string;
+  campo: DefinicionCampo;
+  lineas: readonly LineaCantidad[];
+  mia: boolean;
+  recargar: () => void;
+}) {
+  const catalogo = useQuery({ ...consultasDeCatalogo.items(), enabled: mia });
+  const vincular = useVincular(l.id);
+  const vinculoDe = (linea: string) => l.vinculos.find((v) => v.seccion === seccion && v.campo === campo.clave && v.linea === linea)?.item;
+
+  function celda(linea: string) {
+    const actual = vinculoDe(linea);
+    if (!mia) {
+      return actual ? `${actual.codigo} · ${actual.descripcion}` : <span className="text-texto-secundario">Sin vincular</span>;
+    }
+    if (catalogo.isPending) return <span className="text-texto-secundario">Cargando el catálogo…</span>;
+    if (catalogo.isError) return <span className="text-error">No se pudo cargar el catálogo</span>;
+    const activos = catalogo.data.items.filter((i) => i.activo || i.id === actual?.id);
+    if (activos.length === 0) return <span className="text-texto-secundario">El catálogo está vacío</span>;
+    const numero = lineas.findIndex((x) => x.id === linea) + 1;
+    return (
+      <CampoSeleccion
+        etiqueta={`Ítem del catálogo para la línea ${numero}`}
+        etiquetaOculta
+        vacio="Sin vincular"
+        valor={actual?.id ?? ""}
+        deshabilitado={vincular.isPending}
+        onCambio={(itemId) => vincular.mutate({ version: l.version, seccion, campo: campo.clave, linea, itemId: itemId || null })}
+        opciones={activos.map((i) => ({ valor: i.id, texto: `${i.codigo} · ${i.descripcion} (${i.unidad})` }))}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <TablaCantidades etiqueta={campo.etiqueta} lineas={lineas} extra={{ titulo: "Catálogo", celda }} />
+      {vincular.isError && (
+        <Aviso tono="error">
+          <p>{mensajeDeError(vincular.error)}</p>
+          {pideRecargar(vincular.error) && (
+            <Boton className="mt-3" onClick={recargar}>
+              Recargar
+            </Boton>
+          )}
+        </Aviso>
+      )}
+    </div>
+  );
+}
+
 const QUE_PASO: Record<string, string> = {
   levantamiento_creado: "Creó el levantamiento en el teléfono",
   levantamiento_enviado: "Envió el levantamiento",
@@ -474,11 +611,20 @@ const QUE_PASO: Record<string, string> = {
   campo_corregido: "Corrigió",
   levantamiento_revisado: "Marcó el levantamiento revisado",
   comentario_agregado: "Comentó",
+  linea_vinculada: "Vinculó al catálogo",
 };
 
 /** Historial legible por campo (ADR-0008), con la verificación de la cadena. */
-function Historial({ id, formato, repeticiones }: { id: string; formato: VersionFormato; repeticiones: Repeticiones }) {
+function Historial({ l }: { l: Levantamiento }) {
+  const { id, formatoDefinicion: formato, repeticiones } = l;
   const historial = useQuery(consultas.historial(id));
+  const vinculadas = historial.data?.eventos.some((e) => e.tipo === "linea_vinculada") ?? false;
+  const catalogo = useQuery({ ...consultasDeCatalogo.items(), enabled: vinculadas });
+  const codigoDe = (itemId: string | null | undefined) => (itemId ? (catalogo.data?.items.find((i) => i.id === itemId)?.codigo ?? "un ítem") : "sin vincular");
+  const descripcionDeLinea = (seccion: string | undefined, clave: string | undefined, linea: string | undefined) => {
+    const valor = seccion && clave ? l.respuestas[seccion]?.[clave] : undefined;
+    return (esCantidades(valor) ? valor.find((x) => x.id === linea)?.descripcion : undefined) ?? "una línea quitada";
+  };
   const campo = (seccion?: string, clave?: string) => (seccion && clave ? campoDeRuta(formato, repeticiones, seccion, clave) : undefined);
   const nombreDe = (seccion: string | undefined, definicion: DefinicionCampo) =>
     seccion ? nombreDeDato(formato, repeticiones, seccion, definicion.clave, true) : definicion.etiqueta.toLowerCase();
@@ -514,6 +660,10 @@ function Historial({ id, formato, repeticiones }: { id: string; formato: Version
               detalle = `${nombreDe(e.seccion, definicion)}: ${describirValor(definicion, e.anterior as Valor | undefined)} → ${describirValor(definicion, e.nuevo as Valor | undefined)}`;
             } else if (e.tipo === "revision_reasignada" && revisorAnterior) {
               detalle = `que tenía ${revisorAnterior}`;
+            } else if (e.tipo === "linea_vinculada") {
+              const antes = e.anterior as { linea?: string; item?: string | null } | undefined;
+              const despues = e.nuevo as { linea?: string; item?: string | null } | undefined;
+              detalle = `“${descripcionDeLinea(e.seccion, e.campo, despues?.linea)}”: ${codigoDe(antes?.item)} → ${codigoDe(despues?.item)}`;
             } else if (e.tipo === "comentario_agregado") {
               detalle = `${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
             }

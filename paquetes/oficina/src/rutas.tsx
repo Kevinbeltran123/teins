@@ -5,6 +5,7 @@ import { Aviso, Boton } from "@teins/ui";
 import { consultas } from "./api";
 import { Administracion } from "./pantallas/Administracion";
 import { Bandeja } from "./pantallas/Bandeja";
+import { Catalogo } from "./pantallas/Catalogo";
 import { Clientes } from "./pantallas/Clientes";
 import { Detalle } from "./pantallas/Detalle";
 import { InformeDeVisita } from "./pantallas/Informe";
@@ -63,6 +64,7 @@ const informe = createRoute({
 
 const visitas = createRoute({ getParentRoute: () => raiz, path: "visitas", component: Visitas });
 const clientes = createRoute({ getParentRoute: () => raiz, path: "clientes", component: Clientes });
+const catalogo = createRoute({ getParentRoute: () => raiz, path: "catalogo", component: Catalogo });
 
 const administracion = createRoute({
   getParentRoute: () => raiz,
@@ -73,7 +75,7 @@ const administracion = createRoute({
   },
 });
 
-export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, visitas, clientes, listaDeInformes, informe, administracion]) });
+export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, visitas, clientes, catalogo, listaDeInformes, informe, administracion]) });
 
 declare module "@tanstack/react-router" {
   interface Register {

@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import { Aviso, Boton, CampoSeleccion, CampoTexto, CampoTextoLargo, Casilla, GrupoDeOpciones, Marquilla, Pestanas } from "@teins/ui";
 import { cliente } from "../api";
+import { csvDetalle, csvResumen, descargar } from "../csv";
 import { aFechaHora } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
 import { consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
@@ -194,7 +195,7 @@ function ElegirTecnicos({ tecnicos, elegidos, onCambio }: { tecnicos: Tecnico[];
 
 // Una visita -------------------------------------------------------------------------------------
 
-type Edicion = null | "reasignar" | "reprogramar" | "cancelar";
+type Edicion = null | "reasignar" | "reprogramar" | "cancelar" | "exportar";
 
 function FilaVisita({ visita: v, hoy }: { visita: Visita; hoy: string }) {
   const [edicion, setEdicion] = useState<Edicion>(null);
@@ -227,8 +228,11 @@ function FilaVisita({ visita: v, hoy }: { visita: Visita; hoy: string }) {
           <button type="button" className={botonEnlace} onClick={() => setEdicion("reasignar")}>{`Reasignar la visita de ${v.cliente.nombre}`}</button>
           <button type="button" className={botonEnlace} onClick={() => setEdicion("reprogramar")}>{`Reprogramar la visita de ${v.cliente.nombre}`}</button>
           <button type="button" className={botonEnlace} onClick={() => setEdicion("cancelar")}>{`Cancelar la visita de ${v.cliente.nombre}`}</button>
+          <button type="button" className={botonEnlace} onClick={() => setEdicion("exportar")}>{`Exportar las cantidades de ${v.cliente.nombre}`}</button>
           {v.levantamientos.revisados > 0 && <AbrirInforme visitaId={v.id} />}
         </div>
+      ) : edicion === "exportar" ? (
+        <ExportarCantidades visita={v} alTerminar={() => setEdicion(null)} />
       ) : (
         <Editar visita={v} edicion={edicion} alTerminar={() => setEdicion(null)} />
       )}
@@ -246,7 +250,68 @@ function AbrirInforme({ visitaId }: { visitaId: string }) {
   );
 }
 
-function Editar({ visita: v, edicion, alTerminar }: { visita: Visita; edicion: Exclude<Edicion, null>; alTerminar: () => void }) {
+const paraArchivo = (t: string) =>
+  t
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+/**
+ * Cantidades de la visita en CSV para Excel (iteración 11): el detalle de cada línea y el resumen sumado
+ * por ítem del catálogo. Se leen al abrir, así el archivo trae lo último que corrigió oficina.
+ */
+function ExportarCantidades({ visita: v, alTerminar }: { visita: Visita; alTerminar: () => void }) {
+  const consulta = useQuery({ queryKey: ["cantidades", v.id], queryFn: () => cliente.llamar("cantidadesDeVisita", { parametros: { id: v.id } }), staleTime: 0 });
+  const nombre = `cantidades-${paraArchivo(v.cliente.nombre)}-${v.programadaPara}`;
+
+  let contenido;
+  if (consulta.isPending) contenido = <div aria-busy="true" aria-label="Cargando las cantidades" className="h-[60px] animate-pulse rounded-panel bg-fondo" />;
+  else if (consulta.isError) {
+    contenido = (
+      <Aviso tono="error">
+        <p>No se pudieron cargar las cantidades de la visita.</p>
+        <Boton className="mt-3" onClick={() => void consulta.refetch()}>
+          Reintentar
+        </Boton>
+      </Aviso>
+    );
+  } else if (consulta.data.lineas.length === 0) {
+    contenido = <p className="text-cuerpo text-texto-secundario">Los levantamientos recibidos de esta visita no tienen líneas de cantidad.</p>;
+  } else {
+    const { lineas } = consulta.data;
+    const levantamientos = new Set(lineas.map((l) => l.levantamientoId)).size;
+    const sinVincular = lineas.filter((l) => !l.item).length;
+    const porRevisar = lineas.some((l) => l.estado !== "revisado");
+    contenido = (
+      <>
+        <p className="text-cuerpo">
+          {`${lineas.length} ${lineas.length === 1 ? "línea" : "líneas"} de ${levantamientos} ${levantamientos === 1 ? "levantamiento" : "levantamientos"}`}
+          {sinVincular > 0 && ` · ${sinVincular} sin vincular al catálogo`}
+        </p>
+        {porRevisar && <Aviso tono="alerta">Hay levantamientos sin revisar: sus cantidades todavía pueden cambiar.</Aviso>}
+        <div className="flex flex-wrap gap-2">
+          <Boton variante="principal" onClick={() => descargar(`${nombre}-detalle.csv`, csvDetalle(consulta.data))}>
+            Descargar el detalle (CSV)
+          </Boton>
+          <Boton onClick={() => descargar(`${nombre}-resumen.csv`, csvResumen(consulta.data))}>Descargar el resumen (CSV)</Boton>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div aria-label={`Cantidades de la visita de ${v.cliente.nombre}`} role="group" className="flex max-w-3xl flex-col gap-3 rounded-panel border border-division p-4">
+      {contenido}
+      <div>
+        <Boton onClick={alTerminar}>Volver</Boton>
+      </div>
+    </div>
+  );
+}
+
+function Editar({ visita: v, edicion, alTerminar }: { visita: Visita; edicion: Exclude<Edicion, null | "exportar">; alTerminar: () => void }) {
   const tecnicos = useQuery({ ...consultasDeProgramacion.tecnicos(), enabled: edicion === "reasignar" });
   const [elegidos, setElegidos] = useState(v.tecnicos.map((t) => t.id));
   const [fecha, setFecha] = useState(v.programadaPara);

@@ -19,6 +19,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   repeticiones_excedidas: "Hay más repeticiones de las que permite el formato",
   nombre_de_repeticion_invalido: "Una repetición no tiene nombre",
   boceto_invalido: "El boceto no tiene la forma esperada",
+  cantidades_invalidas: "Cada línea necesita descripción, una cantidad mayor que cero y una unidad permitida",
 };
 
 /** Lo que una persona de oficina necesita saber de un error al guardar. */
