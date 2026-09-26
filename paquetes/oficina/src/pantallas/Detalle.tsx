@@ -1,7 +1,20 @@
 import { useRef, useState, type RefObject } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { crearMedida, describirValor, esNoObtenido, type DefinicionCampo, type Valor, type ValorMedida, type VersionFormato } from "@teins/dominio";
+import {
+  bloques,
+  campoDeRuta,
+  crearMedida,
+  describirValor,
+  esNoObtenido,
+  nombreDeDato,
+  rutaLegible,
+  type DefinicionCampo,
+  type Repeticiones,
+  type Valor,
+  type ValorMedida,
+  type VersionFormato,
+} from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import { Aviso, Boton, CampoFotos, CampoMedida, CampoTexto, CampoTextoLargo, claseBoton, MarcaNoObtenido, Marquilla, ValorLeido } from "@teins/ui";
 import { consultas } from "../api";
@@ -91,29 +104,38 @@ export function Detalle({ id }: { id: string }) {
 
       <PanelRevision l={l} mia={mia} recargar={() => void consulta.refetch()} />
 
-      {l.formatoDefinicion.secciones.map((seccion) => (
-        <section key={seccion.clave} aria-labelledby={`seccion-${seccion.clave}`} className="flex flex-col gap-5 rounded-panel bg-panel p-6">
-          <h2 id={`seccion-${seccion.clave}`} className="text-subtitulo font-extrabold">
-            {seccion.titulo}
+      {/* Cada sección, y cada repetición de las repetibles con su nombre (iteración 9). */}
+      {bloques(l.formatoDefinicion, l.repeticiones).map(({ seccion, clave, titulo, repeticion }) => (
+        <section key={clave} aria-labelledby={`seccion-${clave}`} className="flex flex-col gap-5 rounded-panel bg-panel p-6">
+          <h2 id={`seccion-${clave}`} className="text-subtitulo font-extrabold">
+            {titulo}
           </h2>
           <div className="flex flex-col divide-y divide-division">
             {seccion.campos.map((campo) => (
               <FilaCampo
                 key={campo.clave}
                 l={l}
-                seccion={seccion.clave}
+                seccion={clave}
                 campo={campo}
                 mia={mia}
                 recargar={() => void consulta.refetch()}
-                comentar={() => comentarSobre({ seccion: seccion.clave, campo: campo.clave, etiqueta: campo.etiqueta })}
+                comentar={() => comentarSobre({ seccion: clave, campo: campo.clave, etiqueta: repeticion ? `${repeticion.nombre} · ${campo.etiqueta}` : campo.etiqueta })}
               />
             ))}
           </div>
         </section>
       ))}
+      {l.formatoDefinicion.secciones
+        .filter((s) => s.repetible && (l.repeticiones[s.clave]?.length ?? 0) === 0)
+        .map((s) => (
+          <section key={s.clave} aria-label={s.titulo} className="rounded-panel bg-panel p-6">
+            <h2 className="text-subtitulo font-extrabold">{s.titulo}</h2>
+            <p className="mt-2 text-cuerpo text-texto-secundario">El técnico no agregó ninguno.</p>
+          </section>
+        ))}
 
       <Comentarios l={l} destino={comentandoSobre} quitarDestino={() => setComentandoSobre(null)} refCampo={formularioComentario} />
-      <Historial id={id} formato={l.formatoDefinicion} />
+      <Historial id={id} formato={l.formatoDefinicion} repeticiones={l.repeticiones} />
     </>
   );
 }
@@ -124,8 +146,7 @@ function PanelRevision({ l, mia, recargar }: { l: Levantamiento; mia: boolean; r
   const [confirmandoReasignar, setConfirmandoReasignar] = useState(false);
   const error = tomar.error ?? marcar.error;
   const invalidos = marcar.error instanceof ErrorApi ? (marcar.error.problema.errores ?? []) : [];
-  const etiqueta = (seccion: string, campo?: string) =>
-    l.formatoDefinicion.secciones.find((s) => s.clave === seccion)?.campos.find((c) => c.clave === campo)?.etiqueta ?? campo ?? seccion;
+  const etiqueta = (seccion: string, campo?: string) => (campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo) : rutaLegible(l.formatoDefinicion, l.repeticiones, seccion));
 
   let contenido;
   if (l.estado === "enviado") {
@@ -390,8 +411,7 @@ function Comentarios({
 }) {
   const comentar = useComentar(l.id);
   const [texto, setTexto] = useState("");
-  const etiqueta = (seccion?: string, campo?: string) =>
-    l.formatoDefinicion.secciones.find((s) => s.clave === seccion)?.campos.find((c) => c.clave === campo)?.etiqueta;
+  const etiqueta = (seccion?: string, campo?: string) => (seccion && campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo, true) : undefined);
 
   async function enviar() {
     if (!texto.trim()) return;
@@ -417,7 +437,7 @@ function Comentarios({
             <li key={c.id} className="flex flex-col gap-1 border-l-[3px] border-division pl-3">
               <p className="text-ayuda text-texto-secundario">
                 {c.autor.nombre} · {aFechaHora(c.creadoEn)}
-                {c.campo && ` · Sobre ${etiqueta(c.seccion, c.campo)?.toLowerCase() ?? c.campo}`}
+                {c.campo && ` · Sobre ${etiqueta(c.seccion, c.campo) ?? c.campo}`}
               </p>
               <p className="text-cuerpo whitespace-pre-line">{c.texto}</p>
             </li>
@@ -454,9 +474,11 @@ const QUE_PASO: Record<string, string> = {
 };
 
 /** Historial legible por campo (ADR-0008), con la verificación de la cadena. */
-function Historial({ id, formato }: { id: string; formato: VersionFormato }) {
+function Historial({ id, formato, repeticiones }: { id: string; formato: VersionFormato; repeticiones: Repeticiones }) {
   const historial = useQuery(consultas.historial(id));
-  const campo = (seccion?: string, clave?: string) => formato.secciones.find((s) => s.clave === seccion)?.campos.find((c) => c.clave === clave);
+  const campo = (seccion?: string, clave?: string) => (seccion && clave ? campoDeRuta(formato, repeticiones, seccion, clave) : undefined);
+  const nombreDe = (seccion: string | undefined, definicion: DefinicionCampo) =>
+    seccion ? nombreDeDato(formato, repeticiones, seccion, definicion.clave, true) : definicion.etiqueta.toLowerCase();
 
   return (
     <section aria-labelledby="titulo-historial" className="flex flex-col gap-4 rounded-panel bg-panel p-6">
@@ -486,11 +508,11 @@ function Historial({ id, formato }: { id: string; formato: VersionFormato }) {
             const revisorAnterior = (e.anterior as { revisor?: string } | undefined)?.revisor;
             let detalle = "";
             if (e.tipo === "campo_corregido" && definicion) {
-              detalle = `${definicion.etiqueta.toLowerCase()}: ${describirValor(definicion, e.anterior as Valor | undefined)} → ${describirValor(definicion, e.nuevo as Valor | undefined)}`;
+              detalle = `${nombreDe(e.seccion, definicion)}: ${describirValor(definicion, e.anterior as Valor | undefined)} → ${describirValor(definicion, e.nuevo as Valor | undefined)}`;
             } else if (e.tipo === "revision_reasignada" && revisorAnterior) {
               detalle = `que tenía ${revisorAnterior}`;
             } else if (e.tipo === "comentario_agregado") {
-              detalle = `${definicion ? `sobre ${definicion.etiqueta.toLowerCase()}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
+              detalle = `${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
             }
             return (
               <li key={e.secuencia} className="flex flex-col gap-0.5">
