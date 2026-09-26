@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LIMITES } from "@teins/dominio";
-import { Fecha, Huella, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
+import { Fecha, Huella, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
 import type { CodigoProblema } from "./problemas";
 
 /**
@@ -87,6 +87,8 @@ export const EnviarLevantamiento = z
       /** Opcional: los borradores de los cortes 0 y 1 no tienen visita (ADR-0015, expansión). */
       visitaId: Uuid.optional(),
       respuestas: Respuestas,
+      /** Solo en formatos con secciones repetibles (app 4, iteración 9): expansión, una app anterior no lo manda. */
+      repeticiones: Repeticiones.optional(),
       creadoEn: Fecha,
       enviadoEn: Fecha,
     }),
@@ -228,6 +230,7 @@ export const PaginaLevantamientos = z
 
 export const DetalleLevantamiento = ResumenLevantamiento.extend({
   respuestas: Respuestas,
+  repeticiones: Repeticiones.default({}),
   formatoDefinicion: VersionFormato,
   creadoEnDispositivo: Fecha,
   enviadoEnDispositivo: Fecha,
@@ -526,7 +529,7 @@ export const operaciones = {
     cuerpo: z.object({
       ...ConVersion,
       correcciones: z
-        .array(z.object({ seccion: z.string().max(64), campo: z.string().max(64), /** null borra el dato. */ valor: Valor.nullable() }))
+        .array(z.object({ seccion: z.string().max(80), campo: z.string().max(64), /** null borra el dato. */ valor: Valor.nullable() }))
         .min(1)
         .max(50),
       motivo: z.string().trim().max(500).optional(),
@@ -550,7 +553,7 @@ export const operaciones = {
     ruta: "/api/levantamientos/{id}/comentarios",
     resumen: "Comentario de oficina al técnico; llega en la siguiente bajada",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object({ texto: z.string().trim().min(1).max(2000), seccion: z.string().max(64).optional(), campo: z.string().max(64).optional() }),
+    cuerpo: z.object({ texto: z.string().trim().min(1).max(2000), seccion: z.string().max(80).optional(), campo: z.string().max(64).optional() }),
     estadoExito: 201,
     respuesta: Comentario,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],

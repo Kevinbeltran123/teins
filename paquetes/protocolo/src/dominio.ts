@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DECIMAL_CANONICO, HUELLA_SHA256, LIMITES } from "@teins/dominio";
+import { DECIMAL_CANONICO, HUELLA_SHA256, ID_REPETICION, LIMITES } from "@teins/dominio";
 import type * as dominio from "@teins/dominio";
 
 /**
@@ -23,7 +23,16 @@ const ClaveEsquema = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);
 /** Identificador de formato: admite guiones (`prueba-ups`); las claves de sección y campo no. */
 const IdFormato = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 
-export const Respuestas = z.record(ClaveEsquema, z.record(ClaveEsquema, Valor).readonly()).readonly().meta({ id: "Respuestas" });
+/** Sección o repetición de una sección repetible: `tableros~k3f9x2ab` (iteración 9). */
+export const ClaveDeRespuestas = z.string().regex(/^[a-z][a-z0-9_]{0,63}(~[a-z0-9]{8})?$/);
+
+export const Respuestas = z.record(ClaveDeRespuestas, z.record(ClaveEsquema, Valor).readonly()).readonly().meta({ id: "Respuestas" });
+
+/** Repeticiones de las secciones repetibles, en orden (iteración 9). La validación completa la hace `dominio`. */
+export const Repeticiones = z
+  .record(ClaveEsquema, z.array(z.object({ id: z.string().regex(ID_REPETICION), nombre: z.string().max(LIMITES.nombreDeRepeticion) }).strict()).max(LIMITES.repeticiones).readonly())
+  .readonly()
+  .meta({ id: "Repeticiones" });
 
 const CampoBase = { clave: ClaveEsquema, etiqueta: z.string().min(1).max(200), obligatorio: z.boolean().optional() };
 export const DefinicionCampo = z.discriminatedUnion("tipo", [
@@ -39,7 +48,20 @@ export const VersionFormato = z
     nombre: z.string().min(1).max(120).optional(),
     appMinima: z.int().positive().optional(),
     secciones: z
-      .array(z.object({ clave: ClaveEsquema, titulo: z.string().min(1).max(200), campos: z.array(DefinicionCampo).readonly() }))
+      .array(
+        z.object({
+          clave: ClaveEsquema,
+          titulo: z.string().min(1).max(200),
+          repetible: z
+            .object({
+              etiqueta: z.string().min(1).max(60),
+              min: z.int().min(0).max(LIMITES.repeticiones).optional(),
+              max: z.int().min(1).max(LIMITES.repeticiones).optional(),
+            })
+            .optional(),
+          campos: z.array(DefinicionCampo).readonly(),
+        }),
+      )
       .readonly(),
   })
   .meta({ id: "VersionFormato" });
@@ -47,6 +69,7 @@ export const VersionFormato = z
 // Comprobaciones en compilación: lo que la frontera acepta es exactamente lo que el dominio usa.
 type Asignable<A, B> = [A] extends [B] ? true : false;
 const _respuestas: Asignable<z.output<typeof Respuestas>, dominio.Respuestas> = true;
+const _repeticiones: Asignable<z.output<typeof Repeticiones>, dominio.Repeticiones> = true;
 const _formato: Asignable<z.output<typeof VersionFormato>, dominio.VersionFormato> = true;
 const _formatoInverso: Asignable<dominio.VersionFormato, z.input<typeof VersionFormato>> = true;
-void [_respuestas, _formato, _formatoInverso];
+void [_respuestas, _repeticiones, _formato, _formatoInverso];
