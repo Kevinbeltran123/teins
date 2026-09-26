@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { fotosReferenciadas, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
+import { bocetoASvg, bocetosReferenciados, fotosReferenciadas, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
 import type { Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } from "../../plataforma/base-de-datos";
@@ -124,11 +124,17 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         const huellas = [...new Set(c.levantamientos.flatMap((l) => fotosReferenciadas(l.respuestas)))];
         const fotos = new Map<string, string>();
         for (const h of huellas) fotos.set(h, `data:image/jpeg;base64,${(await leerTodo(almacenamiento, clave(organizacionId, h))).toString("base64")}`);
+        // Bocetos (ADR-0019): el documento vectorial se convierte a SVG con los colores de la marca.
+        const bocetos = new Map<string, string>();
+        for (const h of [...new Set(c.levantamientos.flatMap((l) => bocetosReferenciados(l.respuestas)))]) {
+          const documento = leerBoceto((await leerTodo(almacenamiento, clave(organizacionId, h))).toString("utf8"));
+          if (documento) bocetos.set(h, bocetoASvg(documento));
+        }
         const planos = [];
         for (const p of c.planos) planos.push(await leerTodo(almacenamiento, clave(organizacionId, p.huella)));
 
         const pdf = await imprimirInforme({
-          html: plantillaInforme(c, { fuente: fuenteIncrustada(), fotos }),
+          html: plantillaInforme(c, { fuente: fuenteIncrustada(), fotos, bocetos }),
           pie: piePagina(c),
           planos,
           metadatos: { titulo: `Informe técnico · ${c.visita.cliente} · versión ${c.numero}`, autor: c.organizacion.nombre, fecha: new Date(c.publicadaEn) },

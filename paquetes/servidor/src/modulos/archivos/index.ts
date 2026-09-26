@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyBaseLogger } from "fastify";
 import { fileTypeFromBuffer } from "file-type";
+import { leerBoceto, LIMITES_BOCETO, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
 import type { Config } from "../../config";
 import type { Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
@@ -24,7 +25,8 @@ export interface Archivos {
 /** El objeto vive en `organizacion/huella`: nunca se sobrescribe ni se comparte entre organizaciones. */
 const clave = (organizacionId: string, huella: string) => `${organizacionId}/${huella}`;
 const BYTES_PARA_DETECTAR_TIPO = 4100;
-const TIPO_POR_ROL = { tecnico: "image/jpeg", oficina: "application/pdf" } as const;
+/** Campo sube fotos y bocetos; oficina, planos en PDF. Ninguno sube el tipo del otro. */
+const TIPOS_POR_ROL: Record<"tecnico" | "oficina", readonly string[]> = { tecnico: ["image/jpeg", TIPO_ARCHIVO_BOCETO], oficina: ["application/pdf"] };
 
 /** Interfaz pública del módulo de archivos (ADR-0007). */
 export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos; almacenamiento: Almacenamiento; config: Config }): Archivos {
@@ -54,18 +56,23 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
       let bytes = 0;
       const partes: Buffer[] = [];
       let cabecera = 0;
+      // Un boceto no tiene firma de tipo: se lee completo (es pequeño) para validar su estructura.
+      const esBoceto = fila.tipo === TIPO_ARCHIVO_BOCETO;
       for await (const trozo of await almacenamiento.leer(clave(organizacionId, huella))) {
         const b = trozo as Buffer;
         bytes += b.length;
         // Se corta la lectura apenas supera el límite: un objeto enorme no consume memoria.
         if (bytes > config.BYTES_MAXIMOS_ARCHIVO) break;
         hash.update(b);
-        if (cabecera < BYTES_PARA_DETECTAR_TIPO) {
+        if (esBoceto || cabecera < BYTES_PARA_DETECTAR_TIPO) {
           partes.push(b);
           cabecera += b.length;
         }
       }
-      const tipoReal = await fileTypeFromBuffer(Buffer.concat(partes).subarray(0, BYTES_PARA_DETECTAR_TIPO));
+      const contenido = Buffer.concat(partes);
+      const tipoValido = esBoceto
+        ? contenido.length <= LIMITES_BOCETO.bytes && leerBoceto(contenido.toString("utf8")) !== null
+        : (await fileTypeFromBuffer(contenido.subarray(0, BYTES_PARA_DETECTAR_TIPO)))?.mime === fila.tipo;
 
       const motivo =
         bytes > config.BYTES_MAXIMOS_ARCHIVO
@@ -74,8 +81,8 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
             ? "el tamaño no coincide con el declarado"
             : hash.digest("hex") !== huella
               ? "la huella no coincide con el contenido"
-              : tipoReal?.mime !== fila.tipo
-                ? `el contenido no es ${fila.tipo}`
+              : !tipoValido
+                ? `el contenido no es ${esBoceto ? "un boceto válido" : fila.tipo}`
                 : null;
 
       if (motivo === null) {
@@ -93,8 +100,8 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
         politica: politicas.autenticado,
         manejar: async ({ cuerpo, actor }) => {
           if (cuerpo.bytes > config.BYTES_MAXIMOS_ARCHIVO) throw problema("archivo_demasiado_grande");
-          // Campo sube fotos; oficina, planos en PDF (corte 4). Ninguno sube el tipo del otro.
-          if (cuerpo.tipo !== TIPO_POR_ROL[actor.rol]) throw problema("tipo_de_archivo_no_permitido");
+          if (cuerpo.tipo === TIPO_ARCHIVO_BOCETO && cuerpo.bytes > LIMITES_BOCETO.bytes) throw problema("archivo_demasiado_grande");
+          if (!TIPOS_POR_ROL[actor.rol].includes(cuerpo.tipo)) throw problema("tipo_de_archivo_no_permitido");
           const existente = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const [fila] = await tx.select().from(archivos).where(eq(archivos.huella, cuerpo.huella));
             if (fila && (fila.estado === "subido" || fila.estado === "verificado")) return fila.estado;
@@ -151,6 +158,20 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
             }
           });
           return { archivo: "subido" as const };
+        },
+      });
+
+      registrarOperacion(app, "bocetoDeArchivo", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { huella }, actor }) => {
+          const fila = await leerFila(actor.organizacionId, huella);
+          if (fila?.estado !== "verificado" || fila.tipo !== TIPO_ARCHIVO_BOCETO) throw problema("no_encontrado");
+          const partes: Buffer[] = [];
+          for await (const trozo of await almacenamiento.leer(clave(actor.organizacionId, huella))) partes.push(trozo as Buffer);
+          // Verificado al subir; se vuelve a leer con el mismo validador antes de entregarlo.
+          const documento = leerBoceto(Buffer.concat(partes).toString("utf8"));
+          if (!documento) throw problema("error_interno", "El boceto guardado no es válido");
+          return documento;
         },
       });
 

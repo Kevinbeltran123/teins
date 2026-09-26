@@ -1,4 +1,4 @@
-import { enviarLevantamiento, fotosReferenciadas, type Levantamiento } from "@teins/dominio";
+import { archivosReferenciados, enviarLevantamiento, fotosReferenciadas, type Levantamiento } from "@teins/dominio";
 import type { EnviarLevantamiento, ResultadoComando } from "@teins/protocolo";
 import type { Actor } from "../../../plataforma/actor";
 import { enOrganizacion, esViolacionUnica, type BaseDeDatos } from "../../../plataforma/base-de-datos";
@@ -68,7 +68,8 @@ export async function recibirEnvio(
       }
 
       // Llegada completa (QA-2): solo se registra cuando todos sus archivos están verificados.
-      const huellas = fotosReferenciadas(datos.respuestas);
+      // Fotos y bocetos (iteración 10): todos deben estar subidos y verificados.
+      const huellas = archivosReferenciados(datos.respuestas);
       const estados = await deps.archivos.estados(tx, huellas);
       const faltantes = huellas.filter((h) => {
         const estado = estados.get(h);
@@ -91,7 +92,7 @@ export async function recibirEnvio(
         visitaId: datos.visitaId ?? null,
         respuestas: datos.respuestas,
         repeticiones: datos.repeticiones ?? {},
-        cantidadFotos: huellas.length,
+        cantidadFotos: fotosReferenciadas(datos.respuestas).length,
         creadoEnDispositivo: new Date(datos.creadoEn),
         enviadoEnDispositivo: new Date(datos.enviadoEn),
         recibidoEn,

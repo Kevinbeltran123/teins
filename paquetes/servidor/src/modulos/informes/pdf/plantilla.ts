@@ -1,4 +1,4 @@
-import { bloques, describirValor, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
+import { bloques, describirValor, esBoceto, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
 
 /**
  * Plantilla del informe (ADR-0013): HTML y CSS con la dirección de DESIGN.md. Se arma solo desde la
@@ -34,16 +34,18 @@ export interface RecursosPlantilla {
   fuente: string;
   /** Foto por huella, como data URI. Una que falte se muestra como marcador, nunca se inventa. */
   fotos: ReadonlyMap<string, string>;
+  /** Boceto por huella, ya convertido a SVG (ADR-0019). Uno que falte se muestra como marcador. */
+  bocetos?: ReadonlyMap<string, string>;
 }
 
-export function plantillaInforme(c: ContenidoVersion, { fuente, fotos }: RecursosPlantilla): string {
+export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos = new Map() }: RecursosPlantilla): string {
   const capitulos = c.levantamientos
     .map((l, i) => {
       // Cada sección, y cada repetición de las repetibles con su nombre, en orden (iteración 9).
       const secciones = bloques(l.formato, l.repeticiones ?? {})
         .map(({ seccion: s, clave, titulo }) => {
           const datos = s.campos
-            .filter((campo) => campo.tipo !== "foto")
+            .filter((campo) => campo.tipo !== "foto" && campo.tipo !== "boceto")
             .map((campo) => {
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
               const vacio = valor === undefined || esNoObtenido(valor);
@@ -65,7 +67,16 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos }: Recurso
               return `<h4>${escapar(campo.etiqueta)}</h4><div class="fotos">${figuras}</div>`;
             })
             .join("");
-          return `<section class="seccion"><h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${galerias}</section>`;
+          const croquis = s.campos
+            .filter((campo) => campo.tipo === "boceto")
+            .map((campo) => {
+              const valor = l.respuestas[clave]?.[campo.clave];
+              if (!esBoceto(valor)) return "";
+              const svg = bocetos.get(valor.boceto);
+              return `<h4>${escapar(campo.etiqueta)}</h4><figure class="boceto">${svg ?? '<div class="falta">[BOCETO]</div>'}</figure>`;
+            })
+            .join("");
+          return `<section class="seccion"><h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${galerias}${croquis}</section>`;
         })
         .join("");
       return `<article class="capitulo">
@@ -117,6 +128,8 @@ table.datos tr { break-inside: avoid; }
 .tenue { color: ${MARCA.secundario}; font-weight: 400 !important; }
 .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
 figure { margin: 0; break-inside: avoid; }
+figure.boceto svg { width: 100%; height: auto; display: block; border: 1px solid ${MARCA.division}; border-radius: 6px; }
+figure.boceto .falta { height: 62mm; border: 1.5px dashed ${MARCA.division}; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: ${MARCA.secundario}; }
 figure img { width: 100%; height: 62mm; object-fit: cover; border-radius: 6px; display: block; }
 figure.falta div { height: 62mm; border: 1.5px dashed ${MARCA.division}; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: ${MARCA.secundario}; }
 figcaption { font-size: 9pt; color: ${MARCA.secundario}; margin-top: 3pt; }
