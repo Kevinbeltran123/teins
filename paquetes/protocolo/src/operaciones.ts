@@ -146,6 +146,14 @@ export const Cambio = z
       /** Desde la app versión 3; a una anterior el servidor le manda "enviado" y sin comentarios (ADR-0015). */
       comentarios: z.array(ComentarioParaTecnico).optional(),
     }),
+    /**
+     * Ítem del catálogo (iteración 17, ADR-0025): solo a la app 8 o posterior. Sin precio (regla 7); uno
+     * desactivado baja con `activo: false` y deja de sugerirse.
+     */
+    z.object({
+      tipo: z.literal("item_catalogo"),
+      item: z.object({ id: Uuid, codigo: z.string(), descripcion: z.string(), unidad: z.string(), activo: z.boolean() }),
+    }),
     /** Salió del alcance del usuario (la visita se reasignó o se canceló): el dispositivo la retira. */
     z.object({
       tipo: z.literal("fuera_de_alcance"),
@@ -233,7 +241,14 @@ export const PaginaLevantamientos = z
 
 /** Vínculo de una línea de cantidad a un ítem del catálogo, que pone oficina (regla 6). */
 export const VinculoDeLinea = z
-  .object({ seccion: z.string(), campo: z.string(), linea: z.string(), item: z.object({ id: Uuid, codigo: z.string(), descripcion: z.string(), unidad: z.string() }) })
+  .object({
+    seccion: z.string(),
+    campo: z.string(),
+    linea: z.string(),
+    item: z.object({ id: Uuid, codigo: z.string(), descripcion: z.string(), unidad: z.string() }),
+    /** Lo eligió el técnico en campo y nadie lo ha cambiado (iteración 17, ADR-0025). */
+    elegidoEnCampo: z.boolean().default(false),
+  })
   .meta({ id: "VinculoDeLinea" });
 
 export const DetalleLevantamiento = ResumenLevantamiento.extend({

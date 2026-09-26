@@ -18,6 +18,8 @@ export const LineaCantidad = z
     cantidad: z.string().max(40),
     unidad: z.string().max(20),
     observacion: z.string().max(LIMITES_CANTIDADES.observacion).optional(),
+    /** Ítem del catálogo que eligió el técnico (iteración 17, ADR-0025). */
+    item: Uuid.optional(),
   })
   .strict()
   .meta({ id: "LineaCantidad" });
