@@ -17,12 +17,16 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   await page.getByRole("link", { name: "Administración" }).click();
   await expect(page.getByRole("heading", { name: "Active el segundo factor para administrar" })).toBeVisible();
   await page.getByLabel("Su contraseña").fill(admin.contrasena);
-  await page.getByRole("button", { name: "Empezar la activación" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByRole("img", { name: "Código QR para la app autenticadora" })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Códigos de respaldo" }).getByRole("listitem")).not.toHaveCount(0);
-  const clave = (await page.getByText("Si no puede escanearlo").locator("code").textContent())!;
+  // La clave para escribir a mano está detrás de "¿No puede escanearlo?", en bloques de cuatro.
+  await page.getByText("¿No puede escanearlo?").click();
+  const clave = (await page.locator("details code").textContent())!.replace(/\s/g, "");
   await page.getByLabel("Código de 6 dígitos que muestra la app").fill(codigoTotp(clave));
-  await page.getByRole("button", { name: "Confirmar y activar" }).click();
+  await page.getByRole("button", { name: "Verificar y activar" }).click();
+  // Los códigos de respaldo se muestran después de verificar, antes de entrar a administrar.
+  await expect(page.getByRole("list", { name: "Códigos de respaldo" }).getByRole("listitem")).not.toHaveCount(0);
+  await page.getByRole("button", { name: "Ya los guardé" }).click();
   await expect(page.getByRole("tab", { name: "Usuarios" })).toBeVisible();
 
   // Desde entonces, el ingreso pide el código.
@@ -40,12 +44,16 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   // Crear un técnico: la contraseña temporal se muestra una vez.
   const sufijo = randomBytes(3).toString("hex");
   const tecnico = { usuario: `tecnico.adm.${sufijo}`, nombre: `Técnico Administrado ${sufijo}`, contrasena: "" };
+  await page.getByRole("button", { name: "Nuevo usuario" }).click();
   await page.getByLabel("Nombre completo").fill(tecnico.nombre);
   await page.getByLabel("Usuario para iniciar sesión").fill(tecnico.usuario);
   await page.getByRole("button", { name: "Crear usuario" }).click();
-  await expect(page.getByRole("heading", { name: `Usuario creado: ${tecnico.nombre}` })).toBeVisible();
-  tecnico.contrasena = (await page.getByText("Contraseña temporal:").locator("code").textContent())!;
-  await page.getByRole("button", { name: "Ya la entregué" }).click();
+  const entrega = page.getByRole("dialog", { name: "Usuario creado" });
+  await expect(entrega.getByText(tecnico.nombre)).toBeVisible();
+  tecnico.contrasena = (await entrega.locator("dt:has-text('Contraseña temporal') + dd code").textContent())!;
+  await entrega.getByRole("button", { name: "Ya la entregué" }).click();
+  // El usuario nuevo queda primero en la tabla.
+  await expect(page.getByRole("row").nth(1)).toContainText(tecnico.nombre);
   await expect(page.getByRole("row").filter({ hasText: tecnico.nombre })).toContainText("Activo");
 
   // El técnico entra a campo con esa contraseña; su teléfono aparece en administración.
@@ -63,8 +71,9 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   await page.getByRole("tab", { name: "Accesos de clientes" }).click();
   await page.getByRole("button", { name: `Crear acceso de ${cliente}` }).click();
   await expect(page.getByRole("img", { name: `Código QR del acceso de ${cliente}` })).toBeVisible();
-  const claveCliente = (await page.getByText("Clave:").locator("code").textContent())!;
-  const identificador = /\(va en el QR\): (\S+)/.exec((await page.getByText("va en el QR").textContent())!)![1]!;
+  const acceso = page.getByRole("dialog", { name: "Acceso al portal creado" });
+  const claveCliente = (await acceso.locator("li:has-text('Dicte la clave') code").textContent())!;
+  const identificador = (await acceso.locator("p:has-text('va en el QR') code").textContent())!;
   const celular = await browser.newContext({ locale: "es-CO", viewport: { width: 390, height: 844 } });
   const c = await celular.newPage();
   await c.goto(`${PORTAL}/?acceso=${identificador}`);
@@ -74,8 +83,9 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
 
   // Regenerar cierra la sesión abierta del cliente, y el portal le dice por qué.
   await page.getByRole("button", { name: "Ya la entregué" }).click();
-  await page.getByRole("button", { name: `Regenerar el acceso de ${cliente}` }).click();
-  await page.getByRole("button", { name: `Sí, regenerar el acceso de ${cliente}` }).click();
+  await page.getByRole("button", { name: `Más acciones para ${cliente}` }).click();
+  await page.getByRole("menuitem", { name: "Regenerar acceso" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Regenerar acceso" }).click();
   await expect(page.getByRole("img", { name: `Código QR del acceso de ${cliente}` })).toBeVisible();
   await c.reload();
   await expect(c.getByText("Su sesión se cerró", { exact: false })).toBeVisible();

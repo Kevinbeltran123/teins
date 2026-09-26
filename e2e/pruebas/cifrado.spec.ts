@@ -57,7 +57,7 @@ test("cifrado local: lo capturado queda cifrado en el teléfono, se lee al volve
 
   // Y se envía: al servidor llegan los datos abiertos y la foto con la huella que la nombra.
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
-  await page.getByRole("button", { name: "Confirmar envío" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(secreto)).toBeVisible();
   expect((await baseCruda(page)).texto).not.toContain(secreto);

@@ -32,11 +32,11 @@ test("secciones repetibles: el técnico agrega tableros y quita uno; oficina los
   await expect(tableros.getByRole("article", { name: "Tablero principal" })).toBeVisible();
   await tableros.getByRole("button", { name: "Agregar tablero" }).click();
   await tableros.getByRole("button", { name: "Quitar Tablero 3" }).click();
-  await tableros.getByRole("button", { name: "Sí, quitar Tablero 3" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Quitar tablero", exact: true }).click();
   await expect(tableros.getByRole("article")).toHaveCount(2);
 
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
-  await page.getByRole("button", { name: "Confirmar envío" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });
 
   // Oficina: cada tablero es una sección con su nombre; corrige el segundo y el historial dice cuál.
@@ -60,10 +60,11 @@ test("secciones repetibles: el técnico agrega tableros y quita uno; oficina los
 
   // El informe se publica con los dos tableros.
   await o.getByRole("button", { name: "Marcar revisado" }).click();
+  await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
-  await o.getByRole("button", { name: "Sí, publicar la versión 1" }).click();
+  await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 1" }).click();
   await expect(o.getByRole("button", { name: "Descargar PDF de la versión 1" })).toBeVisible({ timeout: 60_000 });
   await escritorio.close();
 });

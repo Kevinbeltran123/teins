@@ -55,7 +55,7 @@ export async function filaDeLaBandeja(pagina: Page, nombre: string): Promise<Loc
     if (await fila.count()) return fila;
     if (!(await mas.isVisible())) break;
     await mas.click();
-    await pagina.getByRole("button", { name: "Cargando…" }).waitFor({ state: "detached" });
+    await pagina.locator('button[aria-busy="true"]').waitFor({ state: "detached" });
   }
   return fila;
 }

@@ -16,11 +16,14 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await o.goto(`${OFICINA}/`);
   await iniciarSesion(o, programadora);
   await o.getByRole("link", { name: "Clientes" }).click();
+  await o.getByRole("button", { name: "Nuevo cliente" }).click();
   await o.getByLabel("Nombre del cliente").fill(cliente);
   await o.getByLabel("Nombre del sitio").fill("Sede norte");
   await o.getByLabel("Dirección del sitio").fill("Calle [N] # [N]-[N]");
   await o.getByRole("button", { name: "Crear cliente" }).click();
-  await expect(o.getByRole("heading", { name: cliente })).toBeVisible();
+  // Lo recién creado queda primero en la lista y una notificación lo confirma.
+  await expect(o.getByRole("row").nth(1)).toContainText(cliente);
+  await expect(o.getByText(`Cliente creado: ${cliente}`)).toBeVisible();
 
   await o.getByRole("link", { name: "Visitas" }).click();
   await o.getByRole("button", { name: "Programar visita", exact: true }).click();
@@ -29,8 +32,8 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await expect(o.getByLabel("Sitio", { exact: true })).not.toHaveValue("");
   await o.getByRole("checkbox", { name: tecnico.nombre }).check();
   await o.getByRole("button", { name: "Programar la visita", exact: true }).click();
-  const fila = o.getByRole("listitem").filter({ has: o.getByRole("heading", { name: cliente }) });
-  await expect(fila.getByText(/^Hoy,/)).toBeVisible();
+  const fila = o.getByRole("row").filter({ hasText: cliente });
+  await expect(fila.getByText(/^Hoy$/)).toBeVisible();
 
   // El técnico la ve en su teléfono.
   const telefono = await browser.newContext({ ...zona, viewport: { width: 390, height: 844 } });
@@ -42,11 +45,12 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await expect(siguiente.getByText("Hoy")).toBeVisible();
 
   // Reprogramada para mañana: al abrir la app, la fecha cambia.
-  await fila.getByRole("button", { name: `Reprogramar la visita de ${cliente}` }).click();
+  await fila.getByRole("button", { name: `Más acciones para la visita de ${cliente}` }).click();
+  await o.getByRole("menuitem", { name: "Reprogramar" }).click();
   const manana = new Date(Date.now() + 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
   await o.getByLabel("Fecha nueva").fill(manana);
   await o.getByRole("button", { name: "Reprogramar la visita", exact: true }).click();
-  await expect(fila.getByText(/^Hoy,/)).toHaveCount(0);
+  await expect(fila.getByText(/^Hoy$/)).toHaveCount(0);
   await t.reload();
   await expect(siguiente.getByText(cliente)).toBeVisible();
   await expect(siguiente.getByText("Mañana")).toBeVisible();
@@ -58,10 +62,11 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await t.getByRole("button", { name: "Volver a mis visitas" }).click();
 
   // Cancelada: queda en "Canceladas" con su motivo; en el teléfono solo sigue lo empezado, con el aviso (regla 17).
-  await fila.getByRole("button", { name: `Cancelar la visita de ${cliente}` }).click();
+  await fila.getByRole("button", { name: `Más acciones para la visita de ${cliente}` }).click();
+  await o.getByRole("menuitem", { name: "Cancelar visita" }).click();
   await o.getByLabel("Motivo de la cancelación").fill("El cliente la aplazó (E2E)");
-  await o.getByRole("button", { name: "Sí, cancelar la visita" }).click();
-  await expect(o.getByRole("heading", { name: cliente })).toHaveCount(0);
+  await o.getByRole("dialog").getByRole("button", { name: "Cancelar visita" }).click();
+  await expect(fila).toHaveCount(0);
   await o.getByRole("tab", { name: "Canceladas" }).click();
   await expect(fila.getByText("El cliente la aplazó (E2E)", { exact: false })).toBeVisible();
   await t.reload();

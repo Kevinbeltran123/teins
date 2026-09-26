@@ -18,7 +18,7 @@ test("el recorrido completo: campo envía, oficina revisa y publica, y el client
   await page.locator("input[type=file]").setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
-  await page.getByRole("button", { name: "Confirmar envío" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });
 
   // Oficina: revisa y publica.
@@ -29,10 +29,11 @@ test("el recorrido completo: campo envía, oficina revisa y publica, y el client
   await (await filaDeLaBandeja(o, tecnico.nombre)).getByRole("link").click();
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
+  await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
-  await o.getByRole("button", { name: "Sí, publicar la versión 1" }).click();
+  await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 1" }).click();
   await expect(o.getByRole("button", { name: "Descargar PDF de la versión 1" })).toBeVisible({ timeout: 60_000 });
   await escritorio.close();
 
@@ -50,9 +51,11 @@ test("el recorrido completo: campo envía, oficina revisa y publica, y el client
   await c.getByLabel("Clave").fill(acceso.clave);
   await c.getByRole("button", { name: "Ver mis informes" }).click();
   await expect(c.getByRole("heading", { name: `Informes de ${cliente}` })).toBeVisible();
-  const pdf = c.waitForResponse((r) => r.request().method() === "GET" && (r.headers()["content-type"] ?? "").includes("application/pdf"));
+  // El PDF baja como archivo: el cliente sigue en su lista de informes.
+  const pdf = c.waitForEvent("download");
   await c.getByRole("button", { name: /Descargar el informe de/ }).click();
-  expect((await pdf).status()).toBe(200);
+  expect((await pdf).suggestedFilename()).toMatch(/\.pdf$/);
+  await expect(c.getByRole("heading", { name: `Informes de ${cliente}` })).toBeVisible();
 
   // Una persona administradora retira la versión del portal: el cliente deja de verla (iteración 6).
   const admin = nuevoAdministrador();
@@ -63,8 +66,8 @@ test("el recorrido completo: campo envía, oficina revisa y publica, y el client
   await ad.getByRole("link", { name: cliente }).click();
   await ad.getByRole("button", { name: "Retirar la versión 1 del portal" }).click();
   await ad.getByLabel("Motivo del retiro de la versión 1").fill("Prueba de retiro E2E");
-  await ad.getByRole("button", { name: "Sí, retirar la versión 1" }).click();
-  await expect(ad.getByText("Retirada del portal el", { exact: false })).toBeVisible();
+  await ad.getByRole("dialog").getByRole("button", { name: "Retirar la versión 1" }).click();
+  await expect(ad.getByText("Versión 1 retirada del portal")).toBeVisible();
   await administracion.close();
   await c.reload();
   await expect(c.getByText("Todavía no hay informes publicados.", { exact: false })).toBeVisible();

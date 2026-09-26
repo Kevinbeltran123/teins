@@ -49,7 +49,7 @@ test("llaves de acceso: el técnico y oficina crean una y entran sin contraseña
 
   await o.getByRole("link", { name: /^Mi cuenta/ }).click();
   await o.getByRole("button", { name: "Quitar la llave 1" }).click();
-  await o.getByRole("button", { name: "Sí, quitarla" }).click();
+  await o.getByRole("dialog").getByRole("button", { name: "Quitar llave" }).click();
   await expect(o.getByText("Todavía no tiene llaves de acceso.")).toBeVisible();
   await escritorio.close();
 });

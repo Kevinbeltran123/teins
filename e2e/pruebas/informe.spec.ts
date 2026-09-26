@@ -14,7 +14,7 @@ async function enviarDesdeCampo(page: Page, tecnico: Usuario, cliente: string) {
   await page.locator("input[type=file]").setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
-  await page.getByRole("button", { name: "Confirmar envío" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });
 }
 
@@ -38,6 +38,7 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
   await (await filaDeLaBandeja(o, tecnico.nombre)).getByRole("link").click();
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
+  await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
   await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
 
@@ -50,9 +51,10 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
   await expect(o.getByRole("button", { name: "Borrador guardado" })).toBeVisible();
 
   // El worker verifica el plano en segundos; publicar antes lo avisa y se reintenta.
+  // El error queda en el diálogo de confirmación, que sigue abierto: se reintenta desde ahí.
+  await o.getByRole("button", { name: "Publicar versión 1" }).click();
   await expect(async () => {
-    await o.getByRole("button", { name: "Publicar versión 1" }).click();
-    await o.getByRole("button", { name: "Sí, publicar la versión 1" }).click();
+    await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 1" }).click();
     await expect(o.getByText("Versión 1 vigente")).toBeVisible({ timeout: 3_000 });
   }).toPass({ timeout: 30_000 });
 
@@ -62,15 +64,16 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
   // Versión 2 con otra introducción: la 1 sigue ahí, con su PDF.
   await o.getByRole("textbox", { name: "Introducción" }).fill("Segunda versión del informe E2E.");
   await o.getByRole("button", { name: "Publicar versión 2" }).click();
-  await o.getByRole("button", { name: "Sí, publicar la versión 2" }).click();
+  await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 2" }).click();
   await expect(o.getByText("Versión 2 vigente")).toBeVisible();
   await expect(o.getByRole("button", { name: "Descargar PDF de la versión 2" })).toBeVisible({ timeout: 60_000 });
   await expect(descargar).toBeVisible();
 
-  // La descarga entrega un PDF.
-  const pdf = o.waitForResponse((r) => r.request().method() === "GET" && (r.headers()["content-type"] ?? "").includes("application/pdf"));
+  // La descarga entrega un PDF como archivo: la pantalla de oficina no cambia.
+  const pdf = o.waitForEvent("download");
   await descargar.click();
-  expect((await pdf).status()).toBe(200);
+  expect((await pdf).suggestedFilename()).toMatch(/\.pdf$/);
+  await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
 
   await o.context().close();
 });

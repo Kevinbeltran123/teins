@@ -34,8 +34,8 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
     await expect(visita.getByText(cliente)).toBeVisible();
   }
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  // Con datos faltantes, "Enviar a oficina" muestra el resumen directamente: no hay nada que confirmar.
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
-  await page.getByRole("button", { name: "Confirmar envío" }).click();
   await expect(page.getByText("Faltan 2 datos por completar.", { exact: false })).toBeVisible();
 
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("12,5");
@@ -44,7 +44,7 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
   if (!capturaCompletaSinRed) await context.setOffline(true);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
-  await page.getByRole("button", { name: "Confirmar envío" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Sin conexión: se enviará al recuperar señal")).toBeVisible();
 
   // Vuelve la señal: el envío sale solo.

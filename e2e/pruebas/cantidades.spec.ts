@@ -41,7 +41,7 @@ test("cantidades: el técnico anota líneas; oficina importa el catálogo, vincu
   await page.getByRole("button", { name: "Quitar la línea 3" }).click();
   await expect(page.getByRole("group", { name: "Línea 3" })).toHaveCount(0);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
-  await page.getByRole("button", { name: "Confirmar envío" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 60_000 });
   // Lo enviado se lee como tabla, con coma decimal.
   await expect(page.getByRole("table", { name: "Materiales" }).getByRole("cell", { name: "25,5" })).toBeVisible();
@@ -54,12 +54,14 @@ test("cantidades: el técnico anota líneas; oficina importa el catálogo, vincu
   // Catálogo: la lista de TEINS en CSV de Excel (punto y coma, encabezado, BOM).
   await o.getByRole("link", { name: "Catálogo" }).click();
   const csv = `﻿Código;Descripción;Unidad\r\n${cable};Cable THHN 12 AWG;m\r\n${breaker};"Breaker 1P; 20 A";und\r\n`;
-  await o.locator("input[type=file]").setInputFiles({ name: "catalogo.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
-  await expect(o.getByText("catalogo.csv: 2 ítems listos para importar.")).toBeVisible();
-  await o.getByRole("button", { name: "Importar 2 ítems" }).click();
-  await expect(o.getByText("Importado: 2 ítems nuevos y 0 actualizados.")).toBeVisible();
-  await o.getByRole("textbox", { name: "Buscar por código o descripción" }).fill(sufijo);
-  await expect(o.getByRole("list", { name: "Ítems del catálogo" }).getByRole("listitem")).toHaveCount(2);
+  await o.getByRole("button", { name: "Importar CSV" }).click();
+  const importar = o.getByRole("dialog", { name: "Importar desde un archivo" });
+  await importar.locator("input[type=file]").setInputFiles({ name: "catalogo.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await expect(importar.getByText("catalogo.csv: 2 ítems listos para importar.")).toBeVisible();
+  await importar.getByRole("button", { name: "Importar 2 ítems" }).click();
+  await expect(o.getByText("Importado: 2 ítems nuevos y 0 actualizados")).toBeVisible();
+  await o.getByRole("searchbox", { name: "Buscar por código o descripción" }).fill(sufijo);
+  await expect(o.getByRole("table", { name: "Ítems del catálogo" }).getByRole("row").filter({ hasText: sufijo })).toHaveCount(2);
 
   // Revisión: vincular la línea del cable y corregir la cantidad de breakers.
   await o.getByRole("link", { name: "Levantamientos" }).click();
@@ -80,13 +82,15 @@ test("cantidades: el técnico anota líneas; oficina importa el catálogo, vincu
   await expect(o.getByRole("combobox", { name: "Ítem del catálogo para la línea 1" })).toHaveValue(/.+/);
   await expect(o.getByText("materiales: 2 líneas → 2 líneas")).toBeVisible();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
+  await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
   await expect(tabla.getByRole("cell", { name: `${cable} · Cable THHN 12 AWG` })).toBeVisible();
 
   // Exportación de la visita: detalle y resumen para Excel en español.
   await o.getByRole("link", { name: "Visitas" }).click();
-  const fila = o.getByRole("listitem").filter({ has: o.getByRole("heading", { name: cliente }) });
-  await fila.getByRole("button", { name: `Exportar las cantidades de ${cliente}` }).click();
-  await expect(fila.getByText("2 líneas de 1 levantamiento · 1 sin vincular al catálogo")).toBeVisible();
+  const fila = o.getByRole("row").filter({ hasText: cliente });
+  await fila.getByRole("button", { name: `Más acciones para la visita de ${cliente}` }).click();
+  await o.getByRole("menuitem", { name: "Exportar cantidades" }).click();
+  await expect(o.getByRole("dialog").getByText("2 líneas de 1 levantamiento · 1 sin vincular al catálogo")).toBeVisible();
   const detalle = await contenido(await descargar(o, "Descargar el detalle (CSV)"));
   expect(detalle.startsWith("﻿Fecha de la visita;Cliente;")).toBe(true);
   expect(detalle).toContain(`;Cuarto técnico · Materiales;Cable 12 AWG;25,5;m;;${cable};Cable THHN 12 AWG\r\n`);

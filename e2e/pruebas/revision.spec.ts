@@ -35,7 +35,7 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await page.locator("input[type=file]").setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
-  await page.getByRole("button", { name: "Confirmar envío" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });
 
   // Ana toma la revisión, corrige la potencia con motivo y comenta ese dato.
@@ -63,7 +63,7 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   const b = await oficina(browser, luis);
   await abrirLevantamientoDe(b, tecnico, "En revisión");
   await b.getByRole("button", { name: `Tomar la revisión de ${ana.nombre}` }).click();
-  await b.getByRole("button", { name: "Sí, tomar la revisión" }).click();
+  await b.getByRole("dialog").getByRole("button", { name: "Tomar la revisión" }).click();
   await expect(b.getByText("Usted tiene la revisión.", { exact: false })).toBeVisible();
 
   await a.getByRole("textbox", { name: "Nuevo valor de descripción del sitio" }).fill("Cambio que no debe quedar");
@@ -75,6 +75,7 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
 
   // Luis la marca revisada.
   await b.getByRole("button", { name: "Marcar revisado" }).click();
+  await b.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
   await expect(b.getByText(`Revisado por ${luis.nombre}.`, { exact: false })).toBeVisible();
   await expect(b.getByRole("region", { name: "Historial de cambios" }).getByText(`que tenía ${ana.nombre}`, { exact: false })).toBeVisible();
 
