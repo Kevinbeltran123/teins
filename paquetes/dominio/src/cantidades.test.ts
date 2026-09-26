@@ -30,6 +30,13 @@ describe("cantidades (iteración 11, F9)", () => {
     expect(validarCampo(campo, "texto")).toBe("tipo_invalido");
   });
 
+  it("una línea puede llevar el ítem del catálogo que eligió el técnico, como id (iteración 17, ADR-0025)", () => {
+    const item = "0192f0e0-0000-7000-8000-000000000017";
+    expect(validarCampo(campo, [linea("a0000001", { item })])).toBeNull();
+    expect(validarCampo(campo, [linea("a0000001", { item: "CAB-6A" })])).toBe("cantidades_invalidas");
+    expect(validarCampo(campo, [{ ...linea("a0000001"), precio: "1000" }])).toBe("cantidades_invalidas");
+  });
+
   it("se describe por número de líneas, no son fotos, y oficina las corrige", () => {
     expect(describirValor(campo, [linea("a0000001"), linea("a0000002")])).toBe("2 líneas");
     expect(describirValor(campo, [linea("a0000001")])).toBe("1 línea");

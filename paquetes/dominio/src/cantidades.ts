@@ -1,6 +1,6 @@
 /**
- * Cantidades (F9, reglas 6 y 7): materiales y trabajos que anota el técnico, en texto libre y sin precio.
- * Oficina las vincula al catálogo, las suma por visita y las exporta. La cantidad es un decimal en texto,
+ * Cantidades (F9, reglas 6 y 7): materiales y trabajos que anota el técnico, sin precio: del catálogo o en
+ * texto libre (ADR-0025). Oficina confirma o completa el vínculo al catálogo, las suma por visita y las exporta. La cantidad es un decimal en texto,
  * como la medida (ADR-0006): nada de coma flotante en lo que después se cotiza.
  */
 import { LIMITES_CANTIDADES } from "./limites";
@@ -13,6 +13,11 @@ export interface LineaCantidad {
   cantidad: string;
   unidad: string;
   observacion?: string | undefined;
+  /**
+   * Ítem del catálogo que eligió el técnico (iteración 17, ADR-0025). La línea conserva su texto para leerse
+   * sin catálogo; el servidor proyecta el vínculo y oficina lo confirma o lo cambia.
+   */
+  item?: string | undefined;
 }
 
 export type ValorCantidades = readonly LineaCantidad[];
@@ -20,7 +25,11 @@ export type ValorCantidades = readonly LineaCantidad[];
 /** Primera versión de `campo` que captura cantidades (ADR-0015, punto 4). */
 export const VERSION_APP_CANTIDADES = 6;
 
+/** Primera versión de `campo` que recibe el catálogo en la bajada y elige ítems al anotar (ADR-0025). */
+export const VERSION_APP_CATALOGO = 8;
+
 export const ID_LINEA = /^[a-z0-9]{8}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DECIMAL = /^(0|[1-9]\d*)(\.\d+)?$/;
 
 /** Una tabla de cantidades: un arreglo de líneas (objetos), a diferencia de las fotos (huellas). */
@@ -32,14 +41,15 @@ export function lineasValidas(lineas: readonly unknown[], unidades: readonly str
   const ids = new Set<string>();
   for (const l of lineas) {
     if (typeof l !== "object" || l === null) return false;
-    const { id, descripcion, cantidad, unidad, observacion } = l as Record<string, unknown>;
+    const { id, descripcion, cantidad, unidad, observacion, item } = l as Record<string, unknown>;
     if (typeof id !== "string" || !ID_LINEA.test(id) || ids.has(id)) return false;
     ids.add(id);
     if (typeof descripcion !== "string" || descripcion.trim() === "" || descripcion.length > LIMITES_CANTIDADES.descripcion) return false;
     if (typeof cantidad !== "string" || !DECIMAL.test(cantidad) || /^0(\.0+)?$/.test(cantidad)) return false;
     if (typeof unidad !== "string" || !unidades.includes(unidad)) return false;
     if (observacion !== undefined && (typeof observacion !== "string" || observacion.length > LIMITES_CANTIDADES.observacion)) return false;
-    const extra = Object.keys(l).filter((k) => !["id", "descripcion", "cantidad", "unidad", "observacion"].includes(k));
+    if (item !== undefined && (typeof item !== "string" || !UUID.test(item))) return false;
+    const extra = Object.keys(l).filter((k) => !["id", "descripcion", "cantidad", "unidad", "observacion", "item"].includes(k));
     if (extra.length > 0) return false;
   }
   return true;
