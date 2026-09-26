@@ -14,3 +14,4 @@ Aplicación de oficina: bandeja, revisión, informes, administración.
 
  TanStack Query para el estado del servidor y TanStack Router para las rutas (ADR-0011). Sin service worker. Usa la escala de oficina de los tokens con `data-superficie="oficina"`.
 - Iteración 9: cada repetición de una sección repetible se ve como una sección con su nombre ("Tableros · Tablero 2"); se corrige y se comenta por separado, y el historial dice en cuál.
+- Iteración 10: los bocetos se ven en la revisión con el componente `Boceto` de `ui`, a partir del documento que entrega el servidor ya verificado (`bocetoDeArchivo`). No se corrigen.

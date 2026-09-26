@@ -6,6 +6,7 @@ import {
   campoDeRuta,
   crearMedida,
   describirValor,
+  esBoceto,
   esNoObtenido,
   nombreDeDato,
   rutaLegible,
@@ -16,7 +17,7 @@ import {
   type VersionFormato,
 } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
-import { Aviso, Boton, CampoFotos, CampoMedida, CampoTexto, CampoTextoLargo, claseBoton, MarcaNoObtenido, Marquilla, ValorLeido } from "@teins/ui";
+import { Aviso, Boceto, Boton, CampoFotos, CampoMedida, CampoTexto, CampoTextoLargo, claseBoton, MarcaNoObtenido, Marquilla, ValorLeido } from "@teins/ui";
 import { consultas } from "../api";
 import { aFechaHora } from "../formato";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
@@ -267,6 +268,8 @@ function FilaCampo({
     <div className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
       {campo.tipo === "foto" && Array.isArray(valor) ? (
         <Fotos etiqueta={campo.etiqueta} huellas={valor as readonly string[]} />
+      ) : campo.tipo === "boceto" && esBoceto(valor) ? (
+        <BocetoDeCampo etiqueta={campo.etiqueta} huella={valor.boceto} />
       ) : (
         <ValorLeido etiqueta={campo.etiqueta}>
           <span className={valor === undefined || esNoObtenido(valor) ? "text-texto-secundario" : ""}>{describirValor(campo, valor)}</span>
@@ -276,7 +279,7 @@ function FilaCampo({
         <EditorCorreccion l={l} seccion={seccion} campo={campo} valor={valor} cerrar={() => setCorrigiendo(false)} recargar={recargar} />
       ) : (
         <div className="flex flex-wrap gap-2">
-          {mia && campo.tipo !== "foto" && <Boton onClick={() => setCorrigiendo(true)}>Corregir {campo.etiqueta.toLowerCase()}</Boton>}
+          {mia && campo.tipo !== "foto" && campo.tipo !== "boceto" && <Boton onClick={() => setCorrigiendo(true)}>Corregir {campo.etiqueta.toLowerCase()}</Boton>}
           <Boton onClick={comentar}>Comentar {campo.etiqueta.toLowerCase()}</Boton>
         </div>
       )}
@@ -529,6 +532,30 @@ function Historial({ id, formato, repeticiones }: { id: string; formato: Version
         </ol>
       )}
     </section>
+  );
+}
+
+/** Boceto (ADR-0019): el servidor entrega el documento ya verificado y se dibuja con los tokens. */
+function BocetoDeCampo({ etiqueta, huella }: { etiqueta: string; huella: string }) {
+  const boceto = useQuery(consultas.boceto(huella));
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-cuerpo font-bold">{etiqueta}</span>
+      {boceto.isPending ? (
+        <div aria-busy="true" aria-label="Cargando el boceto" className="aspect-[4/3] max-w-xl animate-pulse rounded-control bg-fondo" />
+      ) : boceto.isError ? (
+        <Aviso tono="error">
+          <p>No se pudo cargar el boceto.</p>
+          <Boton className="mt-3" onClick={() => void boceto.refetch()}>
+            Reintentar
+          </Boton>
+        </Aviso>
+      ) : (
+        <div className="max-w-xl">
+          <Boceto ancho={boceto.data.ancho} alto={boceto.data.alto} cuadricula={boceto.data.cuadricula} elementos={boceto.data.elementos} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} className="rounded-control border border-division" />
+        </div>
+      )}
+    </div>
   );
 }
 
