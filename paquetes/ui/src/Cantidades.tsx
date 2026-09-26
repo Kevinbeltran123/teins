@@ -3,7 +3,7 @@ import { Boton, BotonIcono } from "./Boton";
 import { CampoSeleccion } from "./CampoSeleccion";
 import { CampoTexto } from "./CampoTexto";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
-import { Plus, Trash } from "./iconos";
+import { Plus, Search, Trash } from "./iconos";
 import { useNotificar } from "./Notificaciones";
 
 /**
@@ -17,7 +17,14 @@ export interface LineaEditable {
   cantidad: string;
   unidad: string;
   observacion: string;
+  /**
+   * Elegida del catálogo en campo (iteración 17, ADR-0025): la descripción y la unidad vienen del ítem y no se
+   * editan; si el ítem no sirve, se quita la línea.
+   */
+  catalogo?: { id: string; codigo: string } | undefined;
 }
+
+const lineaLibre = (id: string, unidades: readonly string[]): LineaEditable => ({ id, descripcion: "", cantidad: "", unidad: unidades[0] ?? "", observacion: "" });
 
 export function EditorCantidades({
   etiqueta,
@@ -27,6 +34,7 @@ export function EditorCantidades({
   nuevoId,
   obligatorio,
   error,
+  agregarDelCatalogo,
 }: {
   etiqueta: string;
   lineas: readonly LineaEditable[];
@@ -36,6 +44,8 @@ export function EditorCantidades({
   nuevoId: () => string;
   obligatorio?: boolean | undefined;
   error?: string | undefined;
+  /** Abre la búsqueda en el catálogo; sin ella (no hay catálogo, o es oficina) solo se agregan líneas libres. */
+  agregarDelCatalogo?: (() => void) | undefined;
 }) {
   const notificar = useNotificar();
   const cambiar = (i: number, cambio: Partial<LineaEditable>) => onCambio(lineas.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
@@ -58,20 +68,45 @@ export function EditorCantidades({
             <span className="text-ayuda font-bold text-texto-secundario">{`Línea ${i + 1}`}</span>
             <BotonIcono icono={Trash} etiqueta={`Quitar la línea ${i + 1}`} tamano="pequeno" onClick={() => quitar(i)} />
           </div>
-          <CampoTexto etiqueta={`Descripción de la línea ${i + 1}`} valorInicial={l.descripcion} onCambio={(descripcion) => cambiar(i, { descripcion })} />
+          {l.catalogo ? (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-cuerpo font-bold">{l.descripcion}</span>
+              <span className="text-ayuda text-texto-secundario">Del catálogo{l.catalogo.codigo ? ` · ${l.catalogo.codigo}` : ""}</span>
+            </div>
+          ) : (
+            <CampoTexto etiqueta={`Descripción de la línea ${i + 1}`} valorInicial={l.descripcion} onCambio={(descripcion) => cambiar(i, { descripcion })} />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <CampoTexto etiqueta={`Cantidad de la línea ${i + 1}`} modoEntrada="decimal" valorInicial={l.cantidad} onCambio={(cantidad) => cambiar(i, { cantidad })} />
-            <CampoSeleccion etiqueta={`Unidad de la línea ${i + 1}`} valor={l.unidad} onCambio={(unidad) => cambiar(i, { unidad })} opciones={unidades.map((u) => ({ valor: u, texto: u }))} />
+            {l.catalogo ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-cuerpo font-bold">Unidad</span>
+                <span className="flex min-h-control items-center text-cuerpo font-bold">{l.unidad}</span>
+              </div>
+            ) : (
+              <CampoSeleccion etiqueta={`Unidad de la línea ${i + 1}`} valor={l.unidad} onCambio={(unidad) => cambiar(i, { unidad })} opciones={unidades.map((u) => ({ valor: u, texto: u }))} />
+            )}
           </div>
           <CampoTexto etiqueta={`Observación de la línea ${i + 1} (opcional)`} valorInicial={l.observacion} onCambio={(observacion) => cambiar(i, { observacion })} />
         </div>
       ))}
       {error && <MensajeError id={errorId}>{error}</MensajeError>}
-      <div>
-        <Boton icono={Plus} onClick={() => onCambio([...lineas, { id: nuevoId(), descripcion: "", cantidad: "", unidad: unidades[0] ?? "", observacion: "" }])}>
-          Agregar línea
-        </Boton>
-      </div>
+      {agregarDelCatalogo ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Boton icono={Search} onClick={agregarDelCatalogo}>
+            Del catálogo
+          </Boton>
+          <Boton icono={Plus} onClick={() => onCambio([...lineas, lineaLibre(nuevoId(), unidades)])}>
+            Línea libre
+          </Boton>
+        </div>
+      ) : (
+        <div>
+          <Boton icono={Plus} onClick={() => onCambio([...lineas, lineaLibre(nuevoId(), unidades)])}>
+            Agregar línea
+          </Boton>
+        </div>
+      )}
     </fieldset>
   );
 }
