@@ -16,6 +16,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 7 | Gestión de visitas y clientes desde oficina | Operar el piloto sin comandos; cambios de agenda que llegan solos a los teléfonos | Terminada y desplegada en el entorno de pruebas; probada en iPhone el 2026-09-25 (el aviso de visita cancelada se corrigió y se confirmó ese día) |
 | Iteración 8 | Producción provisional (transferible), respaldos diarios y simulacro | Copias probadas y entorno recreable antes del piloto (QA-10, QA-18) | Terminada; producción sin datos reales hasta transferirla a TEINS (ADR-0021) |
 | Iteración 9 | Secciones repetibles (pisos, áreas, tableros) | Formatos reales de TEINS como datos, no código (F2, QA-11) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
+| Iteración 10 | Bocetos sobre cuadrícula (ADR-0019) | El croquis en papel pasa al teléfono, nítido en oficina y en el PDF (F3, P14) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -26,13 +27,15 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 1. **Verificación manual hecha por Kevin el 2026-09-25** en un iPhone 15 Pro con iOS 26.6.1 (fases 1 a 7 de [`verificacion-manual.md`](verificacion-manual.md); producción quedó para después). Todo funcionó salvo dos avisos que no aparecían, corregidos con su prueba de extremo a extremo y confirmados por Kevin en el iPhone el mismo día: "Oficina canceló esta visita" en el bloque azul de campo y "Su sesión se cerró" en el portal. Falta la fase 8 (producción), que Kevin dejó para después.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
 
+**Iteración 10 terminada el 2026-09-25:** bocetos de campo al PDF, desplegados en el entorno de pruebas con el formato de prueba v5 ("Croquis del cuarto"). La prueba en iPhone de las iteraciones 9 y 10 está en espera (fases 9 y 10 de la guía).
+
 **Iteración 9 terminada el 2026-09-25:** secciones repetibles de campo al PDF, desplegadas en el entorno de pruebas con el formato de prueba v4 ("Tableros"). Falta probarlas en el iPhone (fase 9 de la guía). Producción sigue con la versión anterior.
 
 **Iteración 8 terminada el 2026-09-25:** producción provisional montada en `teins-produccion` con dominios gratuitos, recreable desde el repositorio, con respaldo diario y simulacro verificado; sin datos reales hasta transferirla a TEINS (ADR-0021, [`produccion.md`](produccion.md)). La rama está en GitHub (pull request #1, en borrador) con la integración continua en verde.
 
 **Iteraciones 6 (administración) y 7 (visitas y clientes) terminadas el 2026-09-25** y desplegadas. Con ellas, TEINS opera el piloto desde las pantallas: solo la primera persona administradora y la publicación de formatos siguen por comando. En el entorno de pruebas, `oficina.prueba` tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
 
-Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8) y el formato del informe (P22, P23, P26). Mientras llegan, **bocetos** (ADR-0019): el dibujo sobre cuadrícula que hoy hacen en papel, que sus formatos casi seguro necesitan; las secciones repetibles ya están. Después: cantidades con catálogo, passkeys y cifrado local.
+Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8) y el formato del informe (P22, P23, P26). Mientras llegan, **cantidades con catálogo** (F9: la tabla de materiales en texto libre que oficina vincula a un catálogo y exporta a Excel); las secciones repetibles y los bocetos ya están. Antes del piloto conviene hacer la prueba en iPhone pendiente (fases 9 y 10) y actualizar producción. Después: cantidades con catálogo, passkeys y cifrado local.
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
 
@@ -701,7 +704,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteración 10 · Bocetos
 
-**Estado:** en construcción desde el 2026-09-25 (Kevin: "We can have the validation on stand by. Continue with the next step"; la prueba en iPhone de la iteración 9 queda en espera).
+**Estado:** terminada y desplegada en el entorno de pruebas el 2026-09-25 (Kevin: "We can have the validation on stand by. Continue with the next step"); la prueba en iPhone, de esta y de la iteración 9, queda en espera. Producción sigue con la versión anterior.
 
 **Para qué:** que el técnico dibuje en el teléfono, sobre cuadrícula, el croquis que hoy hace en papel (P14, F3), y que llegue nítido a oficina y al PDF. Las decisiones grandes ya están en ADR-0019: trazos vectoriales propios con perfect-freehand, seis herramientas, y subida al enviar.
 
@@ -725,11 +728,11 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 | Criterio | Estado |
 |---|---|
-| 1. Extremo a extremo: el técnico dibuja un trazo, una línea y un texto, deshace y rehace, envía; oficina ve el boceto y el PDF lo incluye | Pendiente |
-| 2. El boceto no sube mientras es borrador; sube al enviar y el envío espera a que esté verificado | Pendiente |
-| 3. El servidor rechaza un boceto con estructura inválida y un formato con bocetos sin `appMinima` 5 | Pendiente |
-| 4. Lo anterior sigue igual: toda la suite en verde y el presupuesto de campo respetado | Pendiente |
-| 5. Probado en el iPhone (y con lápiz, si hay una tableta) | Pendiente |
+| 1. Extremo a extremo: el técnico dibuja un trazo, una línea y un texto, deshace y rehace, envía; oficina ve el boceto y el PDF lo incluye | Cumplido el 2026-09-25 en Chromium y WebKit en local y en Chromium contra el entorno (`e2e/pruebas/bocetos.spec.ts`, hasta publicar el informe) |
+| 2. El boceto no sube mientras es borrador; sube al enviar y el envío espera a que esté verificado | Cumplido en campo (`repositorio.test.ts`, `motor.test.ts`) y en integración (`pruebas/bocetos.test.ts`) |
+| 3. El servidor rechaza un boceto con estructura inválida y un formato con bocetos sin `appMinima` 5 | Cumplido en integración |
+| 4. Lo anterior sigue igual: toda la suite en verde y el presupuesto de campo respetado | Cumplido: 19 de 19 en el extremo a extremo (más el salto conocido); campo en 114,1 KB de 120 |
+| 5. Probado en el iPhone (y con lápiz, si hay una tableta) | Pendiente: fase 10 de [`verificacion-manual.md`](verificacion-manual.md), en espera por decisión de Kevin |
 
 ### Decisiones tomadas al construirlo
 
