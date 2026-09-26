@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import type { EstadoRevision } from "@teins/dominio";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
@@ -21,6 +21,11 @@ const escribirCursor = (recibidoEn: Date, id: string) => Buffer.from(JSON.string
 
 export async function paginaPorEstado(tx: TxOrganizacion, estado: EstadoRevision, cursor: string | undefined, limite: number) {
   const desde = leerCursor(cursor);
+  // Por revisar y en revisión: el que más lleva esperando primero (DESIGN.md, punto focal de oficina). Los
+  // revisados ya no esperan a nadie: se buscan los últimos, para abrir su informe.
+  const recientesPrimero = estado === "revisado";
+  const despues = recientesPrimero ? lt : gt;
+  const orden = recientesPrimero ? desc : asc;
   const filas = await tx
     .select({
       id: levantamientos.id,
@@ -38,12 +43,11 @@ export async function paginaPorEstado(tx: TxOrganizacion, estado: EstadoRevision
       and(
         eq(levantamientos.estado, estado),
         desde
-          ? or(gt(levantamientos.recibidoEn, desde.recibidoEn), and(eq(levantamientos.recibidoEn, desde.recibidoEn), gt(levantamientos.id, desde.id)))
+          ? or(despues(levantamientos.recibidoEn, desde.recibidoEn), and(eq(levantamientos.recibidoEn, desde.recibidoEn), despues(levantamientos.id, desde.id)))
           : undefined,
       ),
     )
-    // El que más lleva esperando primero (DESIGN.md, punto focal de oficina).
-    .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id))
+    .orderBy(orden(levantamientos.recibidoEn), orden(levantamientos.id))
     .limit(limite + 1);
   const [{ total } = { total: 0 }] = await tx.select({ total: count() }).from(levantamientos).where(eq(levantamientos.estado, estado));
   const hayMas = filas.length > limite;

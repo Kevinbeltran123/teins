@@ -307,6 +307,27 @@ describe("envío de levantamientos (ADR-0003, ADR-0005)", () => {
     expect((await app.inject({ method: "GET", url: "/api/levantamientos?limite=2", headers: { cookie: oficina.cookie } })).json().total).toBe(5);
     expect((await app.inject({ method: "GET", url: "/api/levantamientos?cursor=basura", headers: { cookie: oficina.cookie } })).statusCode).toBe(400);
   });
+
+  it("los revisados paginan del más reciente al más antiguo, sin repetir ni saltar", async () => {
+    const { tecnico, oficina } = await s.nuevaOrganizacionConUsuarios();
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const id = randomUUID();
+      ids.push(id);
+      await enviar(tecnico.cookie, comando(id, { cuarto_tecnico: {} }, 1));
+    }
+    // El orden es lo que se prueba, no la revisión: se marcan revisados directo en la base.
+    await s.propietario.pool.query("update levantamientos.levantamientos set estado = 'revisado' where id = any($1)", [ids]);
+    const vistos: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const url: string = `/api/levantamientos?estado=revisado&limite=2${cursor ? `&cursor=${cursor}` : ""}`;
+      const pagina = (await app.inject({ method: "GET", url, headers: { cookie: oficina.cookie } })).json();
+      vistos.push(...pagina.elementos.map((e: { id: string }) => e.id));
+      cursor = pagina.siguienteCursor;
+    } while (cursor);
+    expect(vistos).toEqual([...ids].reverse());
+  });
 });
 
 export type { FastifyInstance };
