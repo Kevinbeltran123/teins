@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed, IDENTIFICADOR_ACCESO } from "@teins/protocolo";
 import { Aviso, Boton, CampoTexto } from "@teins/ui";
@@ -20,7 +20,7 @@ const accesoDelQr = () => {
   return IDENTIFICADOR_ACCESO.test(valor) ? valor : "";
 };
 
-export function Ingreso({ sesionCerrada = false }: { sesionCerrada?: boolean }) {
+export function Ingreso({ sesionCerrada = false, aviso }: { sesionCerrada?: boolean; aviso?: ReactNode }) {
   const consultasCliente = useQueryClient();
   const [delQr] = useState(accesoDelQr);
   const [identificador, setIdentificador] = useState(delQr);
@@ -43,17 +43,21 @@ export function Ingreso({ sesionCerrada = false }: { sesionCerrada?: boolean }) 
   }
 
   return (
-    <div className="min-h-dvh bg-fondo">
-      <header className="mx-3 mt-3 rounded-panel bg-superficie px-5 py-6 text-sobre-superficie">
-        <p className="text-ayuda text-sobre-superficie-suave">TEINS · [LOGO]</p>
-        <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">Sus informes técnicos</h1>
-        <p className="mt-2 text-cuerpo text-sobre-superficie-suave">Ingrese con la clave que le entregó TEINS para ver y descargar sus informes.</p>
-      </header>
-      <main className="mx-auto flex max-w-md flex-col gap-4 px-4 py-6">
+    <div className="flex min-h-dvh flex-col items-center bg-fondo px-4 py-10">
+      <main className="flex w-full max-w-md flex-col gap-4">
+        {/* La marca, más pequeña que el título: el logo en vector sigue pendiente (DESIGN.md, logo). */}
+        <p className="text-subtitulo font-extrabold tracking-wide text-superficie">TEINS</p>
+        {aviso}
         {sesionCerrada && (
           <Aviso tono="alerta">Su sesión se cerró: pasaron 30 minutos sin usarla o TEINS le entregó una clave nueva. Ingrese de nuevo con la clave vigente.</Aviso>
         )}
-        <form onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel bg-panel p-5">
+        <form onSubmit={enviar} noValidate aria-labelledby="titulo-ingreso" className="flex flex-col gap-5 rounded-panel border border-division bg-panel p-6">
+          <div className="flex flex-col gap-1.5">
+            <h1 id="titulo-ingreso" className="text-titulo leading-tight font-extrabold tracking-tight">
+              Sus informes técnicos
+            </h1>
+            <p className="text-cuerpo text-texto-secundario">Con la clave que le entregó TEINS puede ver y descargar los informes de sus visitas.</p>
+          </div>
           {delQr ? (
             <p className="text-ayuda text-texto-secundario">Código de acceso tomado del QR.</p>
           ) : (
@@ -61,8 +65,8 @@ export function Ingreso({ sesionCerrada = false }: { sesionCerrada?: boolean }) 
           )}
           <CampoTexto etiqueta="Clave" nombre="clave" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setClave} />
           {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
-          <Boton type="submit" variante="principal" disabled={estado.tipo === "enviando"}>
-            {estado.tipo === "enviando" ? "Ingresando…" : "Ver mis informes"}
+          <Boton type="submit" variante="principal" className="w-full" cargando={estado.tipo === "enviando"}>
+            Ver mis informes
           </Boton>
         </form>
         <p className="text-ayuda text-texto-secundario">¿Perdió la clave? Pídale a TEINS un acceso nuevo; el anterior dejará de funcionar.</p>

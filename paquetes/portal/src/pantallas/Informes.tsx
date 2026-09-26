@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi } from "@teins/protocolo";
-import { Aviso, Boton, Marquilla } from "@teins/ui";
+import { Aviso, Boton, Download, EsqueletoBloques, EstadoVacio, FileText, LogOut } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { olvidarSesion } from "../sesion";
 
@@ -10,7 +10,7 @@ const sesionVencida = (error: unknown) => error instanceof ErrorApi && error.cod
 const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
 const fecha = (iso: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long" }).format(new Date(iso));
 
-export function Informes({ cliente: nombre }: { cliente: string }) {
+export function Informes({ cliente: nombre, aviso }: { cliente: string; aviso?: ReactNode }) {
   const informes = useQuery(consultas.informes());
   const consultasCliente = useQueryClient();
   const [descargando, setDescargando] = useState<string | null>(null);
@@ -26,6 +26,7 @@ export function Informes({ cliente: nombre }: { cliente: string }) {
     setErrorDescarga(false);
     try {
       const { url } = await cliente.llamar("pdfDelPortal", { parametros: { id } });
+      // El servidor firma la descarga como adjunto: el navegador guarda el PDF y el portal sigue a la vista.
       window.location.assign(url);
     } catch (error) {
       if (sesionVencida(error)) void volverAlIngreso();
@@ -44,26 +45,21 @@ export function Informes({ cliente: nombre }: { cliente: string }) {
 
   return (
     <div className="min-h-dvh bg-fondo">
-      <header className="mx-3 mt-3 rounded-panel bg-superficie px-5 pt-4 pb-5 text-sobre-superficie">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="text-ayuda text-sobre-superficie-suave">TEINS · [LOGO]</p>
-          <button
-            type="button"
-            onClick={() => void salir()}
-            className="min-h-tactil rounded-control px-2 text-ayuda font-bold text-sobre-superficie-suave underline focus-visible:outline-3 focus-visible:outline-acento"
-          >
+      <header className="border-b border-division bg-panel">
+        <div className="mx-auto flex min-h-16 max-w-3xl items-center justify-between gap-4 px-4">
+          <p className="text-cuerpo font-extrabold tracking-wide text-superficie">TEINS</p>
+          {/* En un equipo compartido, salir evita que otra persona vea los informes. */}
+          <Boton variante="fantasma" tamano="pequeno" icono={LogOut} onClick={() => void salir()}>
             Salir
-          </button>
+          </Boton>
         </div>
-        <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">Informes de {nombre}</h1>
       </header>
 
-      <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 py-6">
+      <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-8">
+        <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Informes de {nombre}</h1>
+        {aviso}
         {informes.isPending ? (
-          <div aria-busy="true" aria-label="Cargando sus informes" className="flex flex-col gap-3">
-            <div className="h-[140px] animate-pulse rounded-panel bg-panel" />
-            <div className="h-[140px] animate-pulse rounded-panel bg-panel" />
-          </div>
+          <EsqueletoBloques etiqueta="Cargando sus informes" altos={["medio", "medio"]} />
         ) : informes.isError ? (
           <Aviso tono="error">
             <p>No se pudieron cargar sus informes.</p>
@@ -72,25 +68,37 @@ export function Informes({ cliente: nombre }: { cliente: string }) {
             </Boton>
           </Aviso>
         ) : informes.data.informes.length === 0 ? (
-          <p className="text-cuerpo text-texto-secundario">Todavía no hay informes publicados. Cuando TEINS publique uno, aparece aquí.</p>
+          <EstadoVacio icono={FileText} titulo="Todavía no hay informes publicados.">
+            Cuando TEINS publique uno, aparece aquí.
+          </EstadoVacio>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <ul aria-label="Informes" className="flex flex-col divide-y divide-division rounded-panel border border-division bg-panel">
             {informes.data.informes.map((i, n) => (
-              <li key={i.id}>
-                <article className="flex flex-col gap-2 rounded-panel bg-panel p-5">
-                  <div>
-                    <Marquilla tono="superficie">{`Versión ${i.numero}`}</Marquilla>
-                  </div>
-                  <h2 className="text-subtitulo font-extrabold">{i.sitio}</h2>
+              <li key={i.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+                <span className="hidden size-10 shrink-0 items-center justify-center rounded-control bg-superficie-suave text-superficie sm:flex [&_svg]:size-5">
+                  <FileText aria-hidden />
+                </span>
+                <div className="flex min-w-0 grow flex-col gap-0.5">
+                  <h2 className="text-cuerpo font-bold">{i.sitio}</h2>
                   <p className="text-ayuda text-texto-secundario">
-                    {i.direccion} · {i.motivo} · visita del {dia(i.programadaPara)}
+                    Visita del {dia(i.programadaPara)} · {i.motivo}
                   </p>
-                  <p className="text-ayuda text-texto-secundario">Publicado el {fecha(i.publicadaEn)}</p>
-                  {/* Una sola acción amarilla: el informe más reciente. */}
-                  <Boton variante={n === 0 ? "principal" : "secundaria"} className="mt-2" disabled={descargando === i.id} onClick={() => void descargar(i.id)}>
-                    {descargando === i.id ? "Preparando…" : `Descargar el informe de ${i.sitio}`}
-                  </Boton>
-                </article>
+                  {/* La versión deja saber si lo que tiene impreso es lo último que publicó TEINS. */}
+                  <p className="text-ayuda text-texto-secundario">
+                    Versión {i.numero} · publicada el {fecha(i.publicadaEn)}
+                  </p>
+                </div>
+                {/* Una sola acción principal: el informe más reciente, el que se viene a buscar. */}
+                <Boton
+                  variante={n === 0 ? "principal" : "secundaria"}
+                  icono={Download}
+                  className="w-full sm:w-auto"
+                  aria-label={`Descargar el informe de ${i.sitio}`}
+                  cargando={descargando === i.id}
+                  onClick={() => void descargar(i.id)}
+                >
+                  Descargar
+                </Boton>
               </li>
             ))}
           </ul>
