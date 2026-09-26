@@ -165,6 +165,24 @@ Aquí **no se crean datos**: producción queda limpia hasta transferirla a TEINS
 
 5. Opcional: repita el simulacro (`docs/proceso/produccion.md`, sección "Simulacro").
 
+## Fase 9 · Secciones repetibles (iteración 9)
+
+Necesita la app 4: si campo avisa "Hay una versión nueva de la app", acéptela primero.
+
+1. En oficina, programe una visita para hoy a Técnico de prueba (fase 5, paso 2).
+2. En el iPhone (`tecnico.prueba`), inicie el levantamiento de esa visita. Debajo del cuarto técnico aparece la sección **Tableros**, con "Todavía no hay ninguno".
+3. Toque **Agregar tablero** dos veces. Llene en cada uno la ubicación y la corriente, y tómele una foto a uno.
+   - Debe: "Tablero 1" y "Tablero 2", cada uno con sus campos.
+4. Cambie el nombre del primero a "Tablero principal". Agregue un tercero y quítelo (**Quitar Tablero 3** → **Sí, quitar Tablero 3**).
+   - Debe: quedan dos, con los nombres que puso.
+5. Complete la potencia y las fotos del equipo y envíe.
+6. En oficina, abra el levantamiento.
+   - Debe: "Tableros · Tablero principal" y "Tableros · Tablero 2", cada uno con sus datos y su foto.
+7. Tómelo, corrija la ubicación del Tablero 2 y mire el historial.
+   - Debe: "Tableros · Tablero 2 · Ubicación del tablero: … → …".
+8. Opcional: márquelo revisado, publique el informe y abra el PDF.
+   - Debe: los dos tableros con su nombre, en orden.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.

@@ -15,6 +15,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 6 | Administración con segundo factor: usuarios, teléfonos, accesos de clientes, retiro de versiones | Cuenta de mayor impacto protegida (ADR-0009), operar el piloto sin comandos | Terminada y desplegada en el entorno de pruebas |
 | Iteración 7 | Gestión de visitas y clientes desde oficina | Operar el piloto sin comandos; cambios de agenda que llegan solos a los teléfonos | Terminada y desplegada en el entorno de pruebas; probada en iPhone el 2026-09-25 (el aviso de visita cancelada se corrigió y se confirmó ese día) |
 | Iteración 8 | Producción provisional (transferible), respaldos diarios y simulacro | Copias probadas y entorno recreable antes del piloto (QA-10, QA-18) | Terminada; producción sin datos reales hasta transferirla a TEINS (ADR-0021) |
+| Iteración 9 | Secciones repetibles (pisos, áreas, tableros) | Formatos reales de TEINS como datos, no código (F2, QA-11) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -25,11 +26,13 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 1. **Verificación manual hecha por Kevin el 2026-09-25** en un iPhone 15 Pro con iOS 26.6.1 (fases 1 a 7 de [`verificacion-manual.md`](verificacion-manual.md); producción quedó para después). Todo funcionó salvo dos avisos que no aparecían, corregidos con su prueba de extremo a extremo y confirmados por Kevin en el iPhone el mismo día: "Oficina canceló esta visita" en el bloque azul de campo y "Su sesión se cerró" en el portal. Falta la fase 8 (producción), que Kevin dejó para después.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
 
+**Iteración 9 terminada el 2026-09-25:** secciones repetibles de campo al PDF, desplegadas en el entorno de pruebas con el formato de prueba v4 ("Tableros"). Falta probarlas en el iPhone (fase 9 de la guía). Producción sigue con la versión anterior.
+
 **Iteración 8 terminada el 2026-09-25:** producción provisional montada en `teins-produccion` con dominios gratuitos, recreable desde el repositorio, con respaldo diario y simulacro verificado; sin datos reales hasta transferirla a TEINS (ADR-0021, [`produccion.md`](produccion.md)). La rama está en GitHub (pull request #1, en borrador) con la integración continua en verde.
 
 **Iteraciones 6 (administración) y 7 (visitas y clientes) terminadas el 2026-09-25** y desplegadas. Con ellas, TEINS opera el piloto desde las pantallas: solo la primera persona administradora y la publicación de formatos siguen por comando. En el entorno de pruebas, `oficina.prueba` tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
 
-Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8) y el formato del informe (P22, P23, P26). Mientras llegan, **secciones repetibles** y **bocetos** (ADR-0019), porque sus formatos casi seguro los necesitan; con el iPhone ya probado, campo puede seguir creciendo. Después: cantidades con catálogo, passkeys y cifrado local.
+Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8) y el formato del informe (P22, P23, P26). Mientras llegan, **bocetos** (ADR-0019): el dibujo sobre cuadrícula que hoy hacen en papel, que sus formatos casi seguro necesitan; las secciones repetibles ya están. Después: cantidades con catálogo, passkeys y cifrado local.
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
 
@@ -646,13 +649,14 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Organización de producción:** producción nunca se siembra, así que la crea el comando nuevo `crear-organizacion` (mismo identificador que en pruebas, nombre "TEINS").
 - **Copias programadas del volumen:** con el plan Hobby, Railway no deja programarlas; queda la recuperación a un punto en el tiempo, y `montar.sh` lo avisa sin detenerse.
 - **Correr un respaldo ya:** `infra/respaldos/ahora.sh` (la API de Railway ejecuta el servicio programado sin esperar a su hora).
+- **Pruebas del PDF bajo carga:** esperar los PDF por tiempo (hasta 90 s, procesando la cola) y no por 20 vueltas: un PDF que falla una vez bajo carga vuelve a la cola segundos después (`esperarPdf` en las pruebas del servidor).
 - **Integración continua:** el trabajo del servidor instala el Chromium de `playwright-core` (sin él no se generaban los PDF), y gitleaks recibió permiso para leer el pull request.
 
 ---
 
 ## Iteración 9 · Secciones repetibles
 
-**Estado:** en construcción desde el 2026-09-25 (Kevin: "Yes. start.", después de validar el iPhone).
+**Estado:** terminada y desplegada en el entorno de pruebas el 2026-09-25 (Kevin: "Yes. start.", después de validar el iPhone); falta la prueba en el iPhone. Producción sigue con la versión anterior hasta que Kevin decida actualizarla.
 
 **Para qué:** que un formato tenga secciones que el técnico repite cuantas veces haga falta (pisos, áreas, tableros), cada una con su nombre y los mismos campos (F2 en `01-impulsores.md`; ADR-0006 ya reserva `repetible` en el formato). Los formatos reales de TEINS casi seguro lo necesitan: con esto, llegan como datos y no como código (QA-11).
 
@@ -676,11 +680,11 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 | Criterio | Estado |
 |---|---|
-| 1. Extremo a extremo: el técnico agrega dos tableros, los llena y envía; oficina ve los dos con su nombre, corrige uno y el historial dice cuál; el PDF los muestra en orden | Pendiente |
-| 2. Un formato con sección repetible no llega a una app anterior, y una definición inválida no se publica | Pendiente |
-| 3. El servidor rechaza repeticiones de menos o de más, campos obligatorios vacíos en una repetición y claves de repetición que no existen | Pendiente |
-| 4. Los formatos y levantamientos sin secciones repetibles funcionan igual que antes | Pendiente |
-| 5. Probado en el iPhone | Pendiente |
+| 1. Extremo a extremo: el técnico agrega dos tableros, los llena y envía; oficina ve los dos con su nombre, corrige uno y el historial dice cuál; el PDF los muestra en orden | Cumplido el 2026-09-25 en Chromium y WebKit en local y en Chromium contra el entorno (`e2e/pruebas/repeticiones.spec.ts`); el orden en el PDF, en integración (`pruebas/repeticiones.test.ts`) |
+| 2. Un formato con sección repetible no llega a una app anterior, y una definición inválida no se publica | Cumplido en integración (la bajada con app 3 no lo trae; sin `appMinima` 4 no se publica) |
+| 3. El servidor rechaza repeticiones de menos o de más, campos obligatorios vacíos en una repetición y claves de repetición que no existen | Cumplido en integración y en `dominio` |
+| 4. Los formatos y levantamientos sin secciones repetibles funcionan igual que antes | Cumplido: toda la suite anterior en verde (17 de 17 en el extremo a extremo, más el salto conocido) |
+| 5. Probado en el iPhone | Pendiente: fase 9 de [`verificacion-manual.md`](verificacion-manual.md) |
 
 ### Decisiones tomadas al construirlo
 
