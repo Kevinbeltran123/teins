@@ -29,15 +29,17 @@ test("cantidades: el técnico anota líneas; oficina importa el catálogo, vincu
   await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Agregar línea" }).click();
+  // Con catálogo en el teléfono (iteración 17) el botón se llama "Línea libre"; sin él, "Agregar línea".
+  const lineaLibre = page.getByRole("button", { name: /^(Agregar línea|Línea libre)$/ });
+  await lineaLibre.click();
   await page.getByRole("textbox", { name: "Descripción de la línea 1" }).fill("Cable 12 AWG");
   await page.getByRole("textbox", { name: "Cantidad de la línea 1" }).fill("25,5");
   await page.getByRole("combobox", { name: "Unidad de la línea 1" }).selectOption("m");
-  await page.getByRole("button", { name: "Agregar línea" }).click();
+  await lineaLibre.click();
   await page.getByRole("textbox", { name: "Descripción de la línea 2" }).fill("Breaker 20 A");
   await page.getByRole("textbox", { name: "Cantidad de la línea 2" }).fill("2");
   await page.getByRole("textbox", { name: "Observación de la línea 2 (opcional)" }).fill("Uno de repuesto");
-  await page.getByRole("button", { name: "Agregar línea" }).click();
+  await lineaLibre.click();
   await page.getByRole("button", { name: "Quitar la línea 3" }).click();
   await expect(page.getByRole("group", { name: "Línea 3" })).toHaveCount(0);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
