@@ -6,8 +6,8 @@ import { bucket, defineRailway, postgres, preserve, project, service } from "rai
  * `railway config apply` sobre el proyecto enlazado (docs/proceso/produccion.md).
  *
  * Ningún secreto vive aquí: las conexiones se arman con referencias a las variables de Postgres y del
- * almacenamiento, y `AUTH_SECRETO` y las contraseñas de los roles las genera `infra/railway/montar.sh`
- * sin mostrarlas (`preserve()` las conserva).
+ * almacenamiento, y `AUTH_SECRETO`, las claves de los avisos y las contraseñas de los roles las genera
+ * `infra/railway/montar.sh` sin mostrarlas (`preserve()` las conserva).
  */
 const REGION = "us-east4-eqdc4a";
 const ref = (servicio: string, variable: string) => `\${{${servicio}.${variable}}}`;
@@ -62,22 +62,24 @@ export default defineRailway((ctx) => {
     // El SDK aplica este campo (railway config pull lo genera) pero todavía no lo tipa.
     // @ts-expect-error preDeployTimeoutSeconds falta en DeployConfig
     deploy: { preDeployTimeoutSeconds: 300, restartPolicyMaxRetries: 5 },
-    env: { ...comun, PORT: "3000", SUPERFICIE_CAMPO_HOST: ref("campo", "RAILWAY_PUBLIC_DOMAIN") },
+    env: { ...comun, PORT: "3000", SUPERFICIE_CAMPO_HOST: ref("campo", "RAILWAY_PUBLIC_DOMAIN"), AVISOS_VAPID_PUBLICA: ref("worker", "AVISOS_VAPID_PUBLICA") },
   });
   const oficina = service("oficina", {
     ...web,
-    env: { ...comun, PORT: "3000", SUPERFICIE_OFICINA_HOST: ref("oficina", "RAILWAY_PUBLIC_DOMAIN") },
+    env: { ...comun, PORT: "3000", SUPERFICIE_OFICINA_HOST: ref("oficina", "RAILWAY_PUBLIC_DOMAIN"), AVISOS_VAPID_PUBLICA: ref("worker", "AVISOS_VAPID_PUBLICA") },
   });
   // Solo el portal tiene la conexión con el rol `teins_portal` (ADR-0009, parte 3).
   const portal = service("portal", {
     ...web,
     env: { ...comun, PORT: "3000", SUPERFICIE_PORTAL_HOST: ref("portal", "RAILWAY_PUBLIC_DOMAIN"), DATABASE_URL_PORTAL: conexion("teins_portal", "TEINS_PORTAL_CONTRASENA") },
   });
+  // Avisos push (ADR-0023): el par VAPID vive en el worker, que es quien envía (lo genera montar.sh); campo y
+  // oficina solo leen la pública, por referencia. El contacto que va en cada envío es la dirección de oficina.
   const worker = service("worker", {
     start: "node --enable-source-maps dist/worker.js",
     replicas: { [REGION]: 1 },
     deploy: { restartPolicyMaxRetries: 5 },
-    env: comun,
+    env: { ...comun, AVISOS_VAPID_PUBLICA: preserve(), AVISOS_VAPID_PRIVADA: preserve(), AVISOS_CONTACTO: https("oficina") },
   });
 
   // Copia diaria fuera del proyecto (ADR-0016, nivel 2): volcado de la base y archivos, a las 02:00 de Colombia.

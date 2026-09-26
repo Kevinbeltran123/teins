@@ -49,6 +49,13 @@ paso "3. Secretos"
 AUTH=$(aleatorio 32)
 for servicio in campo oficina portal worker; do secreto "$servicio" AUTH_SECRETO "$AUTH"; done
 unset AUTH
+# Avisos push (ADR-0023): el par VAPID vive en el worker; campo y oficina leen la pública por referencia.
+if ! existe worker AVISOS_VAPID_PRIVADA; then
+  CLAVES=$(pnpm --silent --filter @teins/servidor generar-claves-avisos)
+  secreto worker AVISOS_VAPID_PUBLICA "$(printf '%s\n' "$CLAVES" | sed -n 's/^AVISOS_VAPID_PUBLICA=//p')"
+  secreto worker AVISOS_VAPID_PRIVADA "$(printf '%s\n' "$CLAVES" | sed -n 's/^AVISOS_VAPID_PRIVADA=//p')"
+  unset CLAVES
+fi
 secreto Postgres TEINS_APP_CONTRASENA "$(aleatorio 24 | tr '+/' '-_')"
 secreto Postgres TEINS_PORTAL_CONTRASENA "$(aleatorio 24 | tr '+/' '-_')"
 secreto respaldos DESTINO_BUCKET "$(campo_de bucketName)"
