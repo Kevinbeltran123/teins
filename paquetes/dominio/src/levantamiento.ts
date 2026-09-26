@@ -1,4 +1,5 @@
 import type { VersionFormato } from "./formato";
+import type { ValorCantidades } from "./cantidades";
 import { claveDeRepeticion, nombrePorDefecto, type Repeticiones } from "./repeticiones";
 import { LIMITES } from "./limites";
 
@@ -22,7 +23,7 @@ export interface ValorNoObtenido {
   motivo: string;
 }
 
-export type Valor = string | ValorMedida | ValorFotos | ValorBoceto | ValorNoObtenido;
+export type Valor = string | ValorMedida | ValorFotos | ValorBoceto | ValorCantidades | ValorNoObtenido;
 
 export const esBoceto = (valor: unknown): valor is ValorBoceto => typeof valor === "object" && valor !== null && !Array.isArray(valor) && "boceto" in valor;
 

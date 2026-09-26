@@ -16,3 +16,10 @@ export const LIMITES_BOCETO = {
   /** Tamaño máximo del archivo del boceto. */
   bytes: 2_000_000,
 } as const;
+
+/** Cantidades (F9): una tabla por campo, con líneas cortas. */
+export const LIMITES_CANTIDADES = {
+  lineas: 200,
+  descripcion: 200,
+  observacion: 500,
+} as const;

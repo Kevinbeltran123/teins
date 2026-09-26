@@ -13,7 +13,9 @@ export type {
 } from "./levantamiento";
 export type { DocumentoBoceto, ElementoBoceto, OpcionesSvg, Punto, PuntoConPresion } from "./boceto";
 export { bocetoASvg, bocetoVacio, LIENZO, leerBoceto, serializarBoceto, TIPO_ARCHIVO_BOCETO, validarBoceto, VERSION_APP_BOCETOS } from "./boceto";
-export { LIMITES_BOCETO } from "./limites";
+export { LIMITES_BOCETO, LIMITES_CANTIDADES } from "./limites";
+export type { FilaDeResumen, LineaCantidad, LineaParaResumir, ValorCantidades } from "./cantidades";
+export { aDecimalColombiano, esCantidades, ID_LINEA, lineasValidas, resumirCantidades, sumarDecimales, VERSION_APP_CANTIDADES } from "./cantidades";
 export { agregarFoto, agregarRepeticion, crearLevantamiento, esBoceto, esNoObtenido, LevantamientoNoEditable, quitarRepeticion, renombrarRepeticion, responder } from "./levantamiento";
 export { crearMedida, normalizarDecimal } from "./medida";
 export type { CodigoErrorValidacion, ErrorValidacion } from "./validacion";

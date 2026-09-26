@@ -2,6 +2,7 @@ import type { DefinicionCampo, VersionFormato } from "./formato";
 import { esBoceto, esNoObtenido, type Respuestas } from "./levantamiento";
 import { LIMITES } from "./limites";
 import { bloques, ID_REPETICION, leerClave, type Repeticiones } from "./repeticiones";
+import { lineasValidas } from "./cantidades";
 
 export { LIMITES };
 
@@ -28,6 +29,8 @@ export type CodigoErrorValidacion =
   | "nombre_de_repeticion_invalido"
   /** El valor de un boceto no es la huella de su archivo. */
   | "boceto_invalido"
+  /** Una línea de cantidad sin descripción, con cantidad no positiva o con una unidad no permitida (regla 6). */
+  | "cantidades_invalidas"
   /** Oficina no corrige este tipo de campo (hoy, fotos). */
   | "no_corregible";
 
@@ -139,6 +142,12 @@ export function validarCampo(campo: DefinicionCampo, valor: unknown): CodigoErro
       }
       if (valor.length < minimo) return valor.length === 0 && campo.obligatorio ? "campo_obligatorio" : "fotos_insuficientes";
       return null;
+    }
+    case "cantidades": {
+      if (valor === undefined) return campo.obligatorio ? "campo_obligatorio" : null;
+      if (!Array.isArray(valor)) return "tipo_invalido";
+      if (valor.length === 0) return campo.obligatorio ? "campo_obligatorio" : null;
+      return lineasValidas(valor, campo.unidades) ? null : "cantidades_invalidas";
     }
     case "boceto": {
       if (valor === undefined) return campo.obligatorio ? "campo_obligatorio" : null;

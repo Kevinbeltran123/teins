@@ -2,6 +2,7 @@ import type { VersionFormato } from "./formato";
 import { LIMITES } from "./limites";
 import { VERSION_APP_REPETIBLES } from "./repeticiones";
 import { VERSION_APP_BOCETOS } from "./boceto";
+import { VERSION_APP_CANTIDADES } from "./cantidades";
 
 /**
  * Reglas semánticas del meta-esquema (ADR-0006, regla 1): lo que la forma sola no garantiza.
@@ -25,13 +26,17 @@ export function validarDefinicionFormato(definicion: VersionFormato): string[] {
       const ruta = `${seccion.clave}.${campo.clave}`;
       if (campos.has(campo.clave)) errores.push(`Campo repetido: ${ruta}`);
       campos.add(campo.clave);
-      if (campo.tipo === "medida" && new Set(campo.unidades).size !== campo.unidades.length) errores.push(`Unidades repetidas en ${ruta}`);
+      if ((campo.tipo === "medida" || campo.tipo === "cantidades") && new Set(campo.unidades).size !== campo.unidades.length) errores.push(`Unidades repetidas en ${ruta}`);
+      if (campo.tipo === "cantidades" && campo.unidades.length === 0) errores.push(`Sin unidades en ${ruta}`);
       if (campo.tipo === "foto" && (campo.min ?? 0) > LIMITES.fotosPorCampo) errores.push(`Mínimo de fotos imposible en ${ruta}`);
     }
   }
   // Una app anterior no sabe capturarlas: la bajada no le entrega este formato (ADR-0015, punto 4).
   if (definicion.secciones.some((s) => s.repetible) && (definicion.appMinima ?? 0) < VERSION_APP_REPETIBLES) {
     errores.push(`Las secciones repetibles exigen appMinima ${VERSION_APP_REPETIBLES} o mayor`);
+  }
+  if (definicion.secciones.some((s) => s.campos.some((c) => c.tipo === "cantidades")) && (definicion.appMinima ?? 0) < VERSION_APP_CANTIDADES) {
+    errores.push(`Las cantidades exigen appMinima ${VERSION_APP_CANTIDADES} o mayor`);
   }
   if (definicion.secciones.some((s) => s.campos.some((c) => c.tipo === "boceto")) && (definicion.appMinima ?? 0) < VERSION_APP_BOCETOS) {
     errores.push(`Los bocetos exigen appMinima ${VERSION_APP_BOCETOS} o mayor`);

@@ -9,6 +9,7 @@ export function describirValor(campo: DefinicionCampo, valor: Valor | undefined)
   if (valor === undefined) return "Sin dato";
   if (esNoObtenido(valor)) return `No se pudo obtener: ${valor.motivo}`;
   if (typeof valor === "string") return valor;
+  if (campo.tipo === "cantidades" && Array.isArray(valor)) return valor.length === 1 ? "1 línea" : `${valor.length} líneas`;
   if (Array.isArray(valor)) return valor.length === 1 ? "1 foto" : `${valor.length} fotos`;
   if (esBoceto(valor)) return "Boceto";
   if (campo.tipo === "medida" && "valor" in valor) return `${valor.valor.replace(".", ",")} ${valor.unidad}`;

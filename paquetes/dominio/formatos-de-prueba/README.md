@@ -7,5 +7,6 @@ Definiciones **ficticias** (R5) para desarrollo y pruebas. El servidor las siemb
 - `v3`: igual a v2, con el nombre que ve el técnico. Las versiones anteriores no lo tienen y no se modifican.
 - `v4`: v3 más la sección repetible "Tableros" (iteración 9): cada tablero con su ubicación y corriente obligatorias y una foto opcional, de 0 a 10. Exige la app 4 (`appMinima`); una app anterior sigue con v3.
 - `v5`: v4 más el campo "Croquis del cuarto" (tipo `boceto`, opcional; iteración 10). Exige la app 5.
+- `v6`: v5 más el campo "Materiales" (tipo `cantidades` en unidades `und` y `m`, opcional; iteración 11). Exige la app 6.
 
 Una versión publicada no se modifica: un cambio es una versión nueva.
