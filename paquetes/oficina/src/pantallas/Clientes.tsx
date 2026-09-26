@@ -1,143 +1,231 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Aviso, Boton, CampoTexto } from "@teins/ui";
+import type { Respuesta } from "@teins/protocolo";
+import {
+  Aviso,
+  Boton,
+  Building,
+  CampoBusqueda,
+  CampoTexto,
+  CeldaTabla,
+  Dialogo,
+  EncabezadoPagina,
+  EsqueletoTabla,
+  EstadoVacio,
+  FilaTabla,
+  Plus,
+  RefreshCw,
+  Search,
+  Tabla,
+  useNotificar,
+} from "@teins/ui";
 import { cliente } from "../api";
 import { consultasDeProgramacion, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
 
+type Cliente = Respuesta<"listarClientes">["clientes"][number];
+
+const normalizar = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
 export function Clientes() {
   const consulta = useQuery(consultasDeProgramacion.clientes());
+  const notificar = useNotificar();
+  const [creando, setCreando] = useState(false);
+  const [agregandoA, setAgregandoA] = useState<Cliente | null>(null);
+  // Lo creado o cambiado en esta visita a la pantalla: va primero y resaltado (DESIGN.md, crear y editar).
+  const [recientes, setRecientes] = useState<string[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+  const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
+
+  const todos = consulta.data?.clientes ?? [];
+  const ordenados = [...recientes.map((id) => todos.find((c) => c.id === id)).filter((c): c is Cliente => Boolean(c)), ...todos.filter((c) => !recientes.includes(c.id))];
+  const b = normalizar(busqueda.trim());
+  const visibles = b === "" ? ordenados : ordenados.filter((c) => normalizar([c.nombre, ...c.sitios.map((s) => `${s.nombre} ${s.direccion}`)].join(" ")).includes(b));
 
   return (
-    <section aria-labelledby="titulo-clientes" className="flex flex-col gap-5 rounded-panel bg-panel p-6">
-      <h1 id="titulo-clientes" className="text-subtitulo font-extrabold">
-        Clientes
-      </h1>
-      <CrearCliente />
+    <>
+      <EncabezadoPagina
+        titulo="Clientes"
+        acciones={
+          <Boton variante="principal" icono={Plus} onClick={() => setCreando(true)}>
+            Nuevo cliente
+          </Boton>
+        }
+      />
       {consulta.isPending ? (
-        <div aria-busy="true" aria-label="Cargando clientes" className="h-[200px] animate-pulse rounded-panel bg-fondo" />
+        <EsqueletoTabla etiqueta="Cargando clientes" columnas={3} />
       ) : consulta.isError ? (
         <Aviso tono="error">
           <p>No se pudieron cargar los clientes.</p>
-          <Boton className="mt-3" onClick={() => void consulta.refetch()}>
+          <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
             Reintentar
           </Boton>
         </Aviso>
-      ) : consulta.data.clientes.length === 0 ? (
-        <p className="text-cuerpo text-texto-secundario">Todavía no hay clientes. Cree el primero con su sede principal; después podrá programarle visitas.</p>
+      ) : todos.length === 0 ? (
+        <EstadoVacio icono={Building} titulo="Todavía no hay clientes">
+          Cree el primero con "Nuevo cliente", con su sede principal. Después podrá programarle visitas.
+        </EstadoVacio>
       ) : (
-        <ul aria-label="Clientes" className="flex flex-col divide-y divide-division">
-          {consulta.data.clientes.map((c) => (
-            <li key={c.id} className="flex flex-col gap-2 py-3">
-              <h2 className="text-cuerpo font-extrabold">{c.nombre}</h2>
-              <ul aria-label={`Sitios de ${c.nombre}`} className="flex flex-col gap-1 pl-4">
-                {c.sitios.map((s) => (
-                  <li key={s.id} className="text-cuerpo">
-                    {s.nombre} <span className="text-ayuda text-texto-secundario">· {s.direccion}</span>
-                  </li>
-                ))}
-              </ul>
-              <AgregarSitio clienteId={c.id} nombreCliente={c.nombre} />
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col gap-4">
+          <CampoBusqueda etiqueta="Buscar cliente" ejemplo="Cliente, sitio o dirección" valor={busqueda} onCambio={setBusqueda} />
+          {visibles.length === 0 ? (
+            <EstadoVacio icono={Search} titulo="Ningún cliente coincide con la búsqueda">
+              Revise cómo lo escribió o busque por el nombre de uno de sus sitios.
+            </EstadoVacio>
+          ) : (
+            <Tabla etiqueta="Clientes y sus sitios" columnas={[{ titulo: "Cliente" }, { titulo: "Sitios" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
+              {visibles.map((c) => (
+                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)}>
+                  <CeldaTabla principal>{c.nombre}</CeldaTabla>
+                  <CeldaTabla>
+                    <ul aria-label={`Sitios de ${c.nombre}`} className="flex flex-col gap-0.5">
+                      {c.sitios.map((s) => (
+                        <li key={s.id}>
+                          {s.nombre} <span className="text-ayuda text-texto-secundario">· {s.direccion}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CeldaTabla>
+                  <CeldaTabla derecha>
+                    <Boton variante="fantasma" tamano="pequeno" icono={Plus} aria-label={`Agregar sitio a ${c.nombre}`} onClick={() => setAgregandoA(c)}>
+                      Agregar sitio
+                    </Boton>
+                  </CeldaTabla>
+                </FilaTabla>
+              ))}
+            </Tabla>
+          )}
+        </div>
       )}
-    </section>
+
+      {creando && (
+        <NuevoCliente
+          alCerrar={() => setCreando(false)}
+          alCrear={(c) => {
+            setCreando(false);
+            setBusqueda("");
+            destacar(c.id);
+            notificar({ texto: `Cliente creado: ${c.nombre}` });
+          }}
+        />
+      )}
+      {agregandoA && (
+        <AgregarSitio
+          c={agregandoA}
+          alCerrar={() => setAgregandoA(null)}
+          alAgregar={() => {
+            setAgregandoA(null);
+            destacar(agregandoA.id);
+            notificar({ texto: `Sitio agregado a ${agregandoA.nombre}` });
+          }}
+        />
+      )}
+    </>
   );
 }
 
-function CrearCliente() {
+function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c: Cliente) => void }) {
+  const formulario = useId();
   const [nombre, setNombre] = useState("");
   const [sitio, setSitio] = useState("");
   const [direccion, setDireccion] = useState("");
-  const [intento, setIntento] = useState(0);
+  const [errores, setErrores] = useState<{ nombre?: string; sitio?: string; direccion?: string }>({});
   const [error, setError] = useState<string | null>(null);
-  const [creado, setCreado] = useState<string | null>(null);
-  const crear = useAccionDeProgramacion(() => cliente.llamar("crearCliente", { cuerpo: { nombre, sitio: { nombre: sitio, direccion } } }));
+  const crear = useAccionDeProgramacion(() => cliente.llamar("crearCliente", { cuerpo: { nombre: nombre.trim(), sitio: { nombre: sitio.trim(), direccion: direccion.trim() } } }));
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    if ([nombre, sitio, direccion].some((v) => v.trim() === "")) return setError("Escriba el nombre del cliente, el de su sitio y la dirección.");
+    const faltan = {
+      ...(nombre.trim() === "" ? { nombre: "Escriba el nombre del cliente." } : {}),
+      ...(sitio.trim() === "" ? { sitio: "Escriba el nombre del sitio." } : {}),
+      ...(direccion.trim() === "" ? { direccion: "Escriba la dirección del sitio." } : {}),
+    };
+    setErrores(faltan);
+    if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
-      const c = await crear.mutateAsync(undefined);
-      setCreado(c.nombre);
-      setNombre("");
-      setSitio("");
-      setDireccion("");
-      setIntento((n) => n + 1);
+      alCrear(await crear.mutateAsync(undefined));
     } catch (e) {
       setError(mensajeDeProgramacion(e));
     }
   }
 
   return (
-    <form key={intento} onSubmit={enviar} noValidate aria-labelledby="titulo-crear-cliente" className="flex flex-col gap-4 rounded-panel border border-division p-5">
-      <h2 id="titulo-crear-cliente" className="text-cuerpo font-extrabold">
-        Crear cliente
-      </h2>
-      <div className="grid gap-4 md:grid-cols-3">
-        <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" valorInicial="" onCambio={setNombre} />
-        <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" valorInicial="" onCambio={setSitio} />
-        <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={setDireccion} />
-      </div>
-      {error && <Aviso tono="error">{error}</Aviso>}
-      {creado && !error && <Aviso tono="info">{`${creado} quedó creado. Ya le puede programar visitas.`}</Aviso>}
-      <div>
-        <Boton type="submit" variante="principal" disabled={crear.isPending}>
-          {crear.isPending ? "Creando…" : "Crear cliente"}
-        </Boton>
-      </div>
-    </form>
+    <Dialogo
+      forma="lateral"
+      titulo="Nuevo cliente"
+      cerrable={!crear.isPending}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={crear.isPending}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={crear.isPending}>
+            Crear cliente
+          </Boton>
+        </>
+      }
+    >
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
+        <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" valorInicial="" onCambio={setNombre} error={errores.nombre} />
+        <fieldset className="flex flex-col gap-4">
+          <legend className="pb-1 text-ayuda text-texto-secundario">La sede principal, donde se programan las visitas. Después puede agregar más sitios.</legend>
+          <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" valorInicial="" onCambio={setSitio} error={errores.sitio} />
+          <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={setDireccion} error={errores.direccion} />
+        </fieldset>
+        {error && <Aviso tono="error">{error}</Aviso>}
+      </form>
+    </Dialogo>
   );
 }
 
-function AgregarSitio({ clienteId, nombreCliente }: { clienteId: string; nombreCliente: string }) {
-  const [abierto, setAbierto] = useState(false);
+function AgregarSitio({ c, alCerrar, alAgregar }: { c: Cliente; alCerrar: () => void; alAgregar: () => void }) {
+  const formulario = useId();
   const [nombre, setNombre] = useState("");
   const [direccion, setDireccion] = useState("");
+  const [errores, setErrores] = useState<{ nombre?: string; direccion?: string }>({});
   const [error, setError] = useState<string | null>(null);
-  const agregar = useAccionDeProgramacion(() => cliente.llamar("agregarSitio", { parametros: { id: clienteId }, cuerpo: { nombre, direccion } }));
+  const agregar = useAccionDeProgramacion(() => cliente.llamar("agregarSitio", { parametros: { id: c.id }, cuerpo: { nombre: nombre.trim(), direccion: direccion.trim() } }));
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    if (nombre.trim() === "" || direccion.trim() === "") return setError("Escriba el nombre y la dirección del sitio.");
+    const faltan = {
+      ...(nombre.trim() === "" ? { nombre: "Escriba el nombre del sitio." } : {}),
+      ...(direccion.trim() === "" ? { direccion: "Escriba la dirección." } : {}),
+    };
+    setErrores(faltan);
+    if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
       await agregar.mutateAsync(undefined);
-      setAbierto(false);
-      setNombre("");
-      setDireccion("");
+      alAgregar();
     } catch (e) {
       setError(mensajeDeProgramacion(e));
     }
   }
 
-  if (!abierto) {
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() => setAbierto(true)}
-          className="min-h-tactil text-ayuda font-bold text-superficie underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie"
-        >
-          {`Agregar sitio a ${nombreCliente}`}
-        </button>
-      </div>
-    );
-  }
   return (
-    <form onSubmit={enviar} noValidate className="flex max-w-2xl flex-col gap-3 pl-4">
-      <div className="grid gap-3 md:grid-cols-2">
-        <CampoTexto etiqueta={`Nombre del sitio nuevo de ${nombreCliente}`} valorInicial="" onCambio={setNombre} />
-        <CampoTexto etiqueta="Dirección" valorInicial="" onCambio={setDireccion} />
-      </div>
-      {error && <Aviso tono="error">{error}</Aviso>}
-      <div className="flex flex-wrap gap-2">
-        <Boton type="submit" variante="principal" disabled={agregar.isPending}>
-          {agregar.isPending ? "Agregando…" : "Agregar sitio"}
-        </Boton>
-        <Boton onClick={() => setAbierto(false)}>Cancelar</Boton>
-      </div>
-    </form>
+    <Dialogo
+      titulo="Agregar sitio"
+      subtitulo={c.nombre}
+      cerrable={!agregar.isPending}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={agregar.isPending}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={agregar.isPending}>
+            Agregar sitio
+          </Boton>
+        </>
+      }
+    >
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        <CampoTexto etiqueta="Nombre del sitio" valorInicial="" onCambio={setNombre} error={errores.nombre} />
+        <CampoTexto etiqueta="Dirección" valorInicial="" onCambio={setDireccion} error={errores.direccion} />
+        {error && <Aviso tono="error">{error}</Aviso>}
+      </form>
+    </Dialogo>
   );
 }

@@ -22,17 +22,25 @@ import {
   Aviso,
   Boceto,
   Boton,
+  BotonIcono,
   CampoFotos,
   CampoMedida,
   CampoSeleccion,
   CampoTexto,
   CampoTextoLargo,
-  claseBoton,
+  Confirmacion,
   EditorCantidades,
+  EncabezadoPagina,
+  EsqueletoBloques,
+  FileText,
+  Insignia,
   MarcaNoObtenido,
-  Marquilla,
+  MessageSquare,
+  Pencil,
+  RefreshCw,
   TablaCantidades,
   ValorLeido,
+  X,
   type LineaEditable,
 } from "@teins/ui";
 import { consultas } from "../api";
@@ -55,34 +63,35 @@ const ESTADOS = {
   revisado: { texto: "Revisado", tono: "revisado" },
 } as const;
 
+const migas = (
+  <Link to="/" className="hover:text-texto hover:underline focus-visible:outline-3 focus-visible:outline-superficie">
+    Levantamientos
+  </Link>
+);
+
 export function Detalle({ id }: { id: string }) {
   const consulta = useQuery(consultas.levantamiento(id));
   const sesion = useQuery(consultas.sesion());
   const [comentandoSobre, setComentandoSobre] = useState<Destino | null>(null);
   const formularioComentario = useRef<HTMLTextAreaElement | null>(null);
-  const volver = (
-    <Link to="/" className={`${claseBoton()} self-start`}>
-      Volver a la bandeja
-    </Link>
-  );
 
   if (consulta.isPending) {
     return (
-      <div aria-busy="true" aria-label="Cargando el levantamiento" className="flex flex-col gap-6">
-        <div className="h-[160px] animate-pulse rounded-panel bg-panel" />
-        <div className="h-[260px] animate-pulse rounded-panel bg-panel" />
-      </div>
+      <>
+        <EncabezadoPagina migas={migas} titulo="Levantamiento" />
+        <EsqueletoBloques etiqueta="Cargando el levantamiento" altos={["bajo", "alto", "medio"]} />
+      </>
     );
   }
   if (consulta.isError) {
     const noExiste = consulta.error instanceof ErrorApi && consulta.error.codigo === "no_encontrado";
     return (
       <>
-        {volver}
+        <EncabezadoPagina migas={migas} titulo="Levantamiento" />
         <Aviso tono="error">
           <p>{noExiste ? "Este levantamiento no existe o no pertenece a su organización." : "No se pudo cargar el levantamiento."}</p>
           {!noExiste && (
-            <Boton className="mt-3" onClick={() => void consulta.refetch()}>
+            <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
               Reintentar
             </Boton>
           )}
@@ -98,63 +107,63 @@ export function Detalle({ id }: { id: string }) {
 
   function comentarSobre(destino: Destino) {
     setComentandoSobre(destino);
-    requestAnimationFrame(() => formularioComentario.current?.focus());
+    // El comentario se escribe en el panel lateral, que sigue a la vista: el foco va ahí sin mover la página.
+    requestAnimationFrame(() => formularioComentario.current?.focus({ preventScroll: true }));
   }
 
   return (
     <>
-      {volver}
-      <section aria-labelledby="titulo-levantamiento" className="flex flex-col gap-4 rounded-panel bg-panel p-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <Marquilla tono={estado.tono}>{estado.texto}</Marquilla>
-          <span className="text-ayuda text-texto-secundario">{l.formatoDefinicion.nombre ?? `${l.formato} v${l.versionFormato}`}</span>
-        </div>
-        <h1 id="titulo-levantamiento" className="text-titulo leading-tight font-extrabold tracking-tight">
-          Levantamiento de {l.tecnico.nombre}
-        </h1>
-        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-          <ValorLeido etiqueta="Visita">{l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : "Sin visita (capturado antes de las visitas)"}</ValorLeido>
-          <ValorLeido etiqueta="Recibido en oficina">{aFechaHora(l.recibidoEn)}</ValorLeido>
-          {/* La hora del teléfono es declarativa (regla 16): la oficial es la del servidor. */}
-          <ValorLeido etiqueta="Enviado desde el teléfono">{aFechaHora(l.enviadoEnDispositivo)}</ValorLeido>
-          <ValorLeido etiqueta="Fotos">{l.fotos}</ValorLeido>
-        </div>
-      </section>
-
-      <PanelRevision l={l} mia={mia} recargar={() => void consulta.refetch()} />
-
-      {/* Cada sección, y cada repetición de las repetibles con su nombre (iteración 9). */}
-      {bloques(l.formatoDefinicion, l.repeticiones).map(({ seccion, clave, titulo, repeticion }) => (
-        <section key={clave} aria-labelledby={`seccion-${clave}`} className="flex flex-col gap-5 rounded-panel bg-panel p-6">
-          <h2 id={`seccion-${clave}`} className="text-subtitulo font-extrabold">
-            {titulo}
-          </h2>
-          <div className="flex flex-col divide-y divide-division">
-            {seccion.campos.map((campo) => (
-              <FilaCampo
-                key={campo.clave}
-                l={l}
-                seccion={clave}
-                campo={campo}
-                mia={mia}
-                recargar={() => void consulta.refetch()}
-                comentar={() => comentarSobre({ seccion: clave, campo: campo.clave, etiqueta: repeticion ? `${repeticion.nombre} · ${campo.etiqueta}` : campo.etiqueta })}
-              />
+      <EncabezadoPagina
+        migas={migas}
+        titulo={`Levantamiento de ${l.tecnico.nombre}`}
+        estado={<Insignia tono={estado.tono}>{estado.texto}</Insignia>}
+        descripcion={`${l.formatoDefinicion.nombre ?? l.formato} · ${l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : "Sin visita (capturado antes de las visitas)"}`}
+      />
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* Cada sección, y cada repetición de las repetibles con su nombre (iteración 9). */}
+          {bloques(l.formatoDefinicion, l.repeticiones).map(({ seccion, clave, titulo, repeticion }) => (
+            <section key={clave} aria-labelledby={`seccion-${clave}`} className="flex flex-col gap-4 rounded-panel border border-division bg-panel p-6">
+              <h2 id={`seccion-${clave}`} className="text-subtitulo font-extrabold">
+                {titulo}
+              </h2>
+              <div className="flex flex-col divide-y divide-division">
+                {seccion.campos.map((campo) => (
+                  <FilaCampo
+                    key={campo.clave}
+                    l={l}
+                    seccion={clave}
+                    campo={campo}
+                    mia={mia}
+                    recargar={() => void consulta.refetch()}
+                    comentar={() => comentarSobre({ seccion: clave, campo: campo.clave, etiqueta: repeticion ? `${repeticion.nombre} · ${campo.etiqueta}` : campo.etiqueta })}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+          {l.formatoDefinicion.secciones
+            .filter((s) => s.repetible && (l.repeticiones[s.clave]?.length ?? 0) === 0)
+            .map((s) => (
+              <section key={s.clave} aria-label={s.titulo} className="rounded-panel border border-division bg-panel p-6">
+                <h2 className="text-subtitulo font-extrabold">{s.titulo}</h2>
+                <p className="mt-2 text-cuerpo text-texto-secundario">El técnico no agregó ninguno.</p>
+              </section>
             ))}
-          </div>
-        </section>
-      ))}
-      {l.formatoDefinicion.secciones
-        .filter((s) => s.repetible && (l.repeticiones[s.clave]?.length ?? 0) === 0)
-        .map((s) => (
-          <section key={s.clave} aria-label={s.titulo} className="rounded-panel bg-panel p-6">
-            <h2 className="text-subtitulo font-extrabold">{s.titulo}</h2>
-            <p className="mt-2 text-cuerpo text-texto-secundario">El técnico no agregó ninguno.</p>
+          <Historial l={l} />
+        </div>
+        <aside aria-label="Revisión y comentarios" className="flex flex-col gap-4 lg:sticky lg:top-8 lg:max-h-[calc(100dvh-4rem)] lg:overflow-y-auto">
+          <PanelRevision l={l} mia={mia} recargar={() => void consulta.refetch()} />
+          <section aria-label="Datos del levantamiento" className="rounded-panel border border-division bg-panel p-5">
+            <dl className="flex flex-col gap-3">
+              <ValorLeido etiqueta="Recibido en oficina">{aFechaHora(l.recibidoEn)}</ValorLeido>
+              {/* La hora del teléfono es declarativa (regla 16): la oficial es la del servidor. */}
+              <ValorLeido etiqueta="Enviado desde el teléfono">{aFechaHora(l.enviadoEnDispositivo)}</ValorLeido>
+            </dl>
           </section>
-        ))}
-
-      <Comentarios l={l} destino={comentandoSobre} quitarDestino={() => setComentandoSobre(null)} refCampo={formularioComentario} />
-      <Historial l={l} />
+          <Comentarios l={l} destino={comentandoSobre} quitarDestino={() => setComentandoSobre(null)} refCampo={formularioComentario} />
+        </aside>
+      </div>
     </>
   );
 }
@@ -162,18 +171,19 @@ export function Detalle({ id }: { id: string }) {
 function PanelRevision({ l, mia, recargar }: { l: Levantamiento; mia: boolean; recargar: () => void }) {
   const tomar = useTomar();
   const marcar = useMarcarRevisado(l.id);
-  const [confirmandoReasignar, setConfirmandoReasignar] = useState(false);
+  const [confirmando, setConfirmando] = useState<"revisado" | "reasignar" | null>(null);
   const error = tomar.error ?? marcar.error;
   const invalidos = marcar.error instanceof ErrorApi ? (marcar.error.problema.errores ?? []) : [];
   const etiqueta = (seccion: string, campo?: string) => (campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo) : rutaLegible(l.formatoDefinicion, l.repeticiones, seccion));
+  const nombre = l.revisor?.nombre ?? "otra persona";
 
   let contenido;
   if (l.estado === "enviado") {
     contenido = (
       <>
         <p className="text-cuerpo">Nadie ha tomado este levantamiento. Tómelo para corregirlo y marcarlo revisado.</p>
-        <Boton variante="principal" disabled={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version })}>
-          {tomar.isPending ? "Tomando…" : "Tomar para revisar"}
+        <Boton variante="principal" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version })}>
+          Tomar para revisar
         </Boton>
       </>
     );
@@ -191,57 +201,64 @@ function PanelRevision({ l, mia, recargar }: { l: Levantamiento; mia: boolean; r
     contenido = (
       <>
         <p className="text-cuerpo">Usted tiene la revisión. Corrija lo que haga falta y márquelo revisado cuando esté listo.</p>
-        <Boton variante="principal" disabled={marcar.isPending} onClick={() => marcar.mutate(l.version)}>
-          {marcar.isPending ? "Marcando…" : "Marcar revisado"}
+        <Boton variante="principal" onClick={() => setConfirmando("revisado")}>
+          Marcar revisado
         </Boton>
       </>
     );
   } else {
-    const nombre = l.revisor?.nombre ?? "otra persona";
-    contenido = confirmandoReasignar ? (
-      <Aviso tono="alerta">
-        <p>¿Quitarle la revisión a {nombre}? Si tiene cambios sin guardar, los perderá. El cambio de responsable queda registrado.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Boton
-            disabled={tomar.isPending}
-            onClick={() => tomar.mutate({ id: l.id, version: l.version, reasignar: true }, { onSettled: () => setConfirmandoReasignar(false) })}
-          >
-            Sí, tomar la revisión
-          </Boton>
-          <Boton onClick={() => setConfirmandoReasignar(false)}>Cancelar</Boton>
-        </div>
-      </Aviso>
-    ) : (
+    contenido = (
       <>
         <p className="text-cuerpo">La revisión la tiene {nombre}.</p>
-        <Boton onClick={() => setConfirmandoReasignar(true)}>Tomar la revisión de {nombre}</Boton>
+        <Boton onClick={() => setConfirmando("reasignar")}>Tomar la revisión de {nombre}</Boton>
       </>
     );
   }
 
   return (
-    <section aria-label="Revisión" className="flex flex-col gap-3 rounded-panel bg-panel p-6 md:flex-row md:flex-wrap md:items-center md:justify-between">
+    <section aria-label="Revisión" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-5 [&>button]:self-start">
+      <h2 className="text-subtitulo font-extrabold">Revisión</h2>
       {contenido}
       {error && (
-        <div className="w-full">
-          <Aviso tono="error">
-            <p>{mensajeDeError(error)}</p>
-            {invalidos.length > 0 && (
-              <ul className="mt-2 list-disc pl-5">
-                {invalidos.map((e) => (
-                  <li key={`${e.seccion}.${e.campo ?? ""}`}>
-                    {etiqueta(e.seccion, e.campo)}: {mensajeDeValidacion[e.codigo as keyof typeof mensajeDeValidacion] ?? e.codigo}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {pideRecargar(error) && (
-              <Boton className="mt-3" onClick={recargar}>
-                Recargar
-              </Boton>
-            )}
-          </Aviso>
-        </div>
+        <Aviso tono="error">
+          <p>{mensajeDeError(error)}</p>
+          {invalidos.length > 0 && (
+            <ul className="mt-2 list-disc pl-5">
+              {invalidos.map((e) => (
+                <li key={`${e.seccion}.${e.campo ?? ""}`}>
+                  {etiqueta(e.seccion, e.campo)}: {mensajeDeValidacion[e.codigo as keyof typeof mensajeDeValidacion] ?? e.codigo}
+                </li>
+              ))}
+            </ul>
+          )}
+          {pideRecargar(error) && (
+            <Boton className="mt-3" icono={RefreshCw} onClick={recargar}>
+              Recargar
+            </Boton>
+          )}
+        </Aviso>
+      )}
+      {confirmando === "revisado" && (
+        <Confirmacion
+          titulo="¿Marcar revisado?"
+          confirmar="Marcar revisado"
+          mensajeDeError={mensajeDeError}
+          alCerrar={() => setConfirmando(null)}
+          accion={() => marcar.mutateAsync(l.version)}
+        >
+          <p>Ya no se podrá corregir desde oficina, y queda listo para el informe de su visita.</p>
+        </Confirmacion>
+      )}
+      {confirmando === "reasignar" && (
+        <Confirmacion
+          titulo={`¿Quitarle la revisión a ${nombre}?`}
+          confirmar="Tomar la revisión"
+          mensajeDeError={mensajeDeError}
+          alCerrar={() => setConfirmando(null)}
+          accion={() => tomar.mutateAsync({ id: l.id, version: l.version, reasignar: true })}
+        >
+          <p>Si tiene cambios sin guardar, los perderá. El cambio de responsable queda registrado.</p>
+        </Confirmacion>
       )}
     </section>
   );
@@ -254,10 +271,12 @@ function AbrirInforme({ visitaId }: { visitaId: string }) {
     <div className="flex flex-col gap-2">
       <Boton
         variante="principal"
-        disabled={abrir.isPending}
+        icono={FileText}
+        className="self-start"
+        cargando={abrir.isPending}
         onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}
       >
-        {abrir.isPending ? "Abriendo…" : "Abrir el informe de esta visita"}
+        Abrir el informe de esta visita
       </Boton>
       {abrir.isError && <Aviso tono="error">{mensajeDeError(abrir.error)}</Aviso>}
     </div>
@@ -282,8 +301,23 @@ function FilaCampo({
   const [corrigiendo, setCorrigiendo] = useState(false);
   const valor = l.respuestas[seccion]?.[campo.clave];
 
+  const acciones = !corrigiendo && (
+    <div className="flex shrink-0 gap-1">
+      {mia && campo.tipo !== "foto" && campo.tipo !== "boceto" && (
+        <Boton variante="fantasma" tamano="pequeno" icono={Pencil} aria-label={`Corregir ${campo.etiqueta.toLowerCase()}`} onClick={() => setCorrigiendo(true)}>
+          Corregir
+        </Boton>
+      )}
+      <Boton variante="fantasma" tamano="pequeno" icono={MessageSquare} aria-label={`Comentar ${campo.etiqueta.toLowerCase()}`} onClick={comentar}>
+        Comentar
+      </Boton>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 grow">
       {campo.tipo === "foto" && Array.isArray(valor) ? (
         <Fotos etiqueta={campo.etiqueta} huellas={valor as readonly string[]} />
       ) : campo.tipo === "boceto" && esBoceto(valor) ? (
@@ -295,14 +329,10 @@ function FilaCampo({
           <span className={valor === undefined || esNoObtenido(valor) ? "text-texto-secundario" : ""}>{describirValor(campo, valor)}</span>
         </ValorLeido>
       )}
-      {corrigiendo ? (
-        <EditorCorreccion l={l} seccion={seccion} campo={campo} valor={valor} cerrar={() => setCorrigiendo(false)} recargar={recargar} />
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {mia && campo.tipo !== "foto" && campo.tipo !== "boceto" && <Boton onClick={() => setCorrigiendo(true)}>Corregir {campo.etiqueta.toLowerCase()}</Boton>}
-          <Boton onClick={comentar}>Comentar {campo.etiqueta.toLowerCase()}</Boton>
         </div>
-      )}
+        {acciones}
+      </div>
+      {corrigiendo && <EditorCorreccion l={l} seccion={seccion} campo={campo} valor={valor} cerrar={() => setCorrigiendo(false)} recargar={recargar} />}
     </div>
   );
 }
@@ -401,7 +431,7 @@ function EditorCorreccion({
   })();
 
   return (
-    <div className="flex flex-col gap-4 rounded-panel border-2 border-borde-activo p-4">
+    <div className="flex flex-col gap-4 rounded-panel border-2 border-borde-activo bg-panel-hundido p-4">
       {control}
       {campo.obligatorio && (
         <MarcaNoObtenido
@@ -417,17 +447,19 @@ function EditorCorreccion({
         <Aviso tono="error">
           <p>{mensajeDeError(corregir.error)}</p>
           {pideRecargar(corregir.error) && (
-            <Boton className="mt-3" onClick={recargar}>
+            <Boton className="mt-3" icono={RefreshCw} onClick={recargar}>
               Recargar
             </Boton>
           )}
         </Aviso>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Boton onClick={() => void guardar()} disabled={corregir.isPending || !valido}>
-          {corregir.isPending ? "Guardando…" : "Guardar corrección"}
+      <div className="flex flex-wrap justify-end gap-2">
+        <Boton onClick={cerrar} disabled={corregir.isPending}>
+          Cancelar
         </Boton>
-        <Boton onClick={cerrar}>Cancelar</Boton>
+        <Boton variante="principal" cargando={corregir.isPending} disabled={!valido} onClick={() => void guardar()}>
+          Guardar corrección
+        </Boton>
       </div>
     </div>
   );
@@ -461,16 +493,16 @@ function Comentarios({
   }
 
   return (
-    <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-4 rounded-panel bg-panel p-6">
+    <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-4 rounded-panel border border-division bg-panel p-5">
       <h2 id="titulo-comentarios" className="text-subtitulo font-extrabold">
         Comentarios al técnico
       </h2>
       {l.comentarios.length === 0 ? (
-        <p className="text-cuerpo text-texto-secundario">Sin comentarios. El técnico los ve en su teléfono en la siguiente sincronización.</p>
+        <p className="text-ayuda text-texto-secundario">Sin comentarios. El técnico los ve en su teléfono en la siguiente sincronización.</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {l.comentarios.map((c) => (
-            <li key={c.id} className="flex flex-col gap-1 border-l-[3px] border-division pl-3">
+            <li key={c.id} className="flex flex-col gap-1 rounded-control bg-panel-hundido px-3 py-2">
               <p className="text-ayuda text-texto-secundario">
                 {c.autor.nombre} · {aFechaHora(c.creadoEn)}
                 {c.campo && ` · Sobre ${etiqueta(c.seccion, c.campo) ?? c.campo}`}
@@ -482,17 +514,17 @@ function Comentarios({
       )}
       <div className="flex flex-col gap-3">
         {destino && (
-          <p className="text-ayuda">
-            Sobre <strong>{destino.etiqueta.toLowerCase()}</strong>.{" "}
-            <button type="button" onClick={quitarDestino} className="font-bold text-superficie underline focus-visible:outline-3 focus-visible:outline-superficie">
-              Comentar en general
-            </button>
+          <p className="flex items-center justify-between gap-2 rounded-control bg-superficie-suave py-1 pr-1 pl-3 text-ayuda">
+            <span>
+              Sobre <strong>{destino.etiqueta.toLowerCase()}</strong>
+            </span>
+            <BotonIcono icono={X} etiqueta="Comentar en general" tamano="pequeno" onClick={quitarDestino} />
           </p>
         )}
         <CampoTextoLargo ref={refCampo} etiqueta="Nuevo comentario" valor={texto} onCambio={setTexto} maximo={2000} />
         {comentar.isError && <Aviso tono="error">{mensajeDeError(comentar.error)}</Aviso>}
-        <Boton className="self-start" onClick={() => void enviar()} disabled={comentar.isPending || !texto.trim()}>
-          {comentar.isPending ? "Enviando…" : "Enviar comentario"}
+        <Boton className="self-start" icono={MessageSquare} cargando={comentar.isPending} disabled={!texto.trim()} onClick={() => void enviar()}>
+          Enviar comentario
         </Boton>
       </div>
     </section>
@@ -593,7 +625,7 @@ function LineasDeCantidad({
         <Aviso tono="error">
           <p>{mensajeDeError(vincular.error)}</p>
           {pideRecargar(vincular.error) && (
-            <Boton className="mt-3" onClick={recargar}>
+            <Boton className="mt-3" icono={RefreshCw} onClick={recargar}>
               Recargar
             </Boton>
           )}
@@ -630,23 +662,21 @@ function Historial({ l }: { l: Levantamiento }) {
     seccion ? nombreDeDato(formato, repeticiones, seccion, definicion.clave, true) : definicion.etiqueta.toLowerCase();
 
   return (
-    <section aria-labelledby="titulo-historial" className="flex flex-col gap-4 rounded-panel bg-panel p-6">
+    <section aria-labelledby="titulo-historial" className="flex flex-col gap-4 rounded-panel border border-division bg-panel p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="titulo-historial" className="text-subtitulo font-extrabold">
           Historial de cambios
         </h2>
         {historial.data && (
-          <span className={`text-ayuda font-bold ${historial.data.integra ? "text-sync-ok" : "text-error"}`}>
-            {historial.data.integra ? "Historial íntegro" : "El historial fue alterado fuera del sistema"}
-          </span>
+          <Insignia tono={historial.data.integra ? "exito" : "peligro"}>{historial.data.integra ? "Historial íntegro" : "El historial fue alterado fuera del sistema"}</Insignia>
         )}
       </div>
       {historial.isPending ? (
-        <div aria-busy="true" aria-label="Cargando el historial" className="h-[120px] animate-pulse rounded-panel bg-fondo" />
+        <div aria-busy="true" aria-label="Cargando el historial" className="h-28 rounded-panel bg-fondo motion-safe:animate-pulse" />
       ) : historial.isError ? (
         <Aviso tono="error">
           <p>No se pudo cargar el historial.</p>
-          <Boton className="mt-3" onClick={() => void historial.refetch()}>
+          <Boton className="mt-3" icono={RefreshCw} onClick={() => void historial.refetch()}>
             Reintentar
           </Boton>
         </Aviso>
@@ -692,11 +722,11 @@ function BocetoDeCampo({ etiqueta, huella }: { etiqueta: string; huella: string 
     <div className="flex flex-col gap-2">
       <span className="text-cuerpo font-bold">{etiqueta}</span>
       {boceto.isPending ? (
-        <div aria-busy="true" aria-label="Cargando el boceto" className="aspect-[4/3] max-w-xl animate-pulse rounded-control bg-fondo" />
+        <div aria-busy="true" aria-label="Cargando el boceto" className="aspect-[4/3] max-w-xl rounded-control bg-fondo motion-safe:animate-pulse" />
       ) : boceto.isError ? (
         <Aviso tono="error">
           <p>No se pudo cargar el boceto.</p>
-          <Boton className="mt-3" onClick={() => void boceto.refetch()}>
+          <Boton className="mt-3" icono={RefreshCw} onClick={() => void boceto.refetch()}>
             Reintentar
           </Boton>
         </Aviso>
@@ -723,7 +753,7 @@ function Fotos({ etiqueta, huellas }: { etiqueta: string; huellas: readonly stri
     return (
       <Aviso tono="error">
         <p>No se pudieron cargar las fotos de {etiqueta.toLowerCase()}.</p>
-        <Boton className="mt-3" onClick={() => urls.forEach((u) => void u.refetch())}>
+        <Boton className="mt-3" icono={RefreshCw} onClick={() => urls.forEach((u) => void u.refetch())}>
           Reintentar
         </Boton>
       </Aviso>

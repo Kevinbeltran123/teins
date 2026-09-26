@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed, esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Boton, CampoTexto } from "@teins/ui";
+import { Aviso, Boton, CampoTexto, KeyRound } from "@teins/ui";
 import { cliente, consultas } from "../api";
 
 /** En el computador también sirve la llave del celular (con un código QR): basta con que el navegador sepa de llaves. */
@@ -91,35 +91,37 @@ export function IniciarSesion({ aviso }: { aviso?: string }) {
   }
 
   return (
-    <div className="min-h-dvh bg-fondo">
-      <header className="mx-3 mt-3 rounded-panel bg-superficie px-6 py-5 text-sobre-superficie">
-        <p className="text-ayuda text-sobre-superficie-suave">TEINS Oficina</p>
-        <h1 className="mt-1 text-titulo leading-tight font-extrabold tracking-tight">{pideCodigo ? "Código de verificación" : "Iniciar sesión"}</h1>
-      </header>
-      <main className="mx-auto flex max-w-md flex-col gap-4 px-4 py-8">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-fondo px-4 py-12">
+      <p className="flex flex-col items-center">
+        <span className="text-titulo leading-none font-extrabold tracking-wide text-superficie">TEINS</span>
+        <span className="text-ayuda text-texto-secundario">Oficina</span>
+      </p>
+      <main className="flex w-full max-w-md flex-col gap-4">
         {aviso && <Aviso tono="alerta">{aviso}</Aviso>}
         {pideCodigo ? (
-          <form key="codigo" onSubmit={verificar} noValidate className="flex flex-col gap-5 rounded-panel bg-panel p-6">
-            <p className="text-cuerpo">Abra su app autenticadora y escriba los 6 dígitos de TEINS. Si no tiene el celular, use uno de sus códigos de respaldo.</p>
+          <form key="codigo" onSubmit={verificar} noValidate className="flex flex-col gap-5 rounded-panel border border-division bg-panel p-6">
+            <h1 className="text-subtitulo font-extrabold">Código de verificación</h1>
+            <p className="text-cuerpo text-texto-secundario">Abra su app autenticadora y escriba los 6 dígitos de TEINS. Si no tiene el celular, use uno de sus códigos de respaldo.</p>
             <CampoTexto etiqueta="Código" nombre="codigo" autoComplete="one-time-code" modoEntrada="numeric" valorInicial="" onCambio={setCodigo} />
             {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
-            <Boton type="submit" variante="principal" disabled={estado.tipo === "enviando"}>
-              {estado.tipo === "enviando" ? "Verificando…" : "Verificar código"}
+            <Boton type="submit" variante="principal" cargando={estado.tipo === "enviando"}>
+              Verificar código
             </Boton>
-            <Boton type="button" onClick={volverAEmpezar}>
+            <Boton type="button" variante="fantasma" onClick={volverAEmpezar}>
               Volver a la contraseña
             </Boton>
           </form>
         ) : (
-          <form key="contrasena" onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel bg-panel p-6">
+          <form key="contrasena" onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel border border-division bg-panel p-6">
+            <h1 className="text-subtitulo font-extrabold">Iniciar sesión</h1>
             <CampoTexto etiqueta="Usuario" nombre="usuario" autoComplete="username" valorInicial={usuario} onCambio={setUsuario} />
             <CampoTexto etiqueta="Contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setContrasena} />
             {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
-            <Boton type="submit" variante="principal" disabled={estado.tipo === "enviando"}>
-              {estado.tipo === "enviando" ? "Iniciando sesión…" : "Iniciar sesión"}
+            <Boton type="submit" variante="principal" cargando={estado.tipo === "enviando"}>
+              Iniciar sesión
             </Boton>
             {conLlaves && (
-              <Boton type="button" onClick={() => void entrarConLlave()} disabled={estado.tipo === "enviando"}>
+              <Boton type="button" icono={KeyRound} onClick={() => void entrarConLlave()} disabled={estado.tipo === "enviando"}>
                 Entrar con llave de acceso
               </Boton>
             )}

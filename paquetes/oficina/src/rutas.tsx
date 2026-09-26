@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router";
 import { ErrorApi } from "@teins/protocolo";
-import { Aviso, Boton } from "@teins/ui";
+import { Aviso, Boton, RefreshCw } from "@teins/ui";
 import { consultas } from "./api";
 import { Administracion } from "./pantallas/Administracion";
 import { Bandeja } from "./pantallas/Bandeja";
@@ -18,14 +18,20 @@ import { Visitas } from "./pantallas/Visitas";
 /** Toda pantalla de oficina exige una sesión de oficina; la autorización real la aplica el servidor. */
 function Raiz() {
   const sesion = useQuery(consultas.sesion());
-  if (sesion.isPending) return <div className="min-h-dvh bg-fondo" aria-busy="true" />;
+  if (sesion.isPending) {
+    return (
+      <div aria-busy="true" aria-label="Abriendo TEINS Oficina" className="grid min-h-dvh place-items-center bg-fondo">
+        <p className="text-subtitulo font-extrabold tracking-wide text-superficie">TEINS</p>
+      </div>
+    );
+  }
   if (sesion.isError) {
     if (sesion.error instanceof ErrorApi && sesion.error.codigo === "no_autenticado") return <IniciarSesion />;
     return (
-      <main className="mx-auto max-w-md px-4 py-8">
+      <main className="mx-auto max-w-md px-4 py-16">
         <Aviso tono="error">
           <p>No se pudo conectar con el servidor.</p>
-          <Boton className="mt-3" onClick={() => void sesion.refetch()}>
+          <Boton className="mt-3" icono={RefreshCw} onClick={() => void sesion.refetch()}>
             Reintentar
           </Boton>
         </Aviso>

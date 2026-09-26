@@ -1,8 +1,34 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
-import { Aviso, Boton, CampoSeleccion, CampoTexto, CampoTextoLargo, Casilla, GrupoDeOpciones, Marquilla, Pestanas } from "@teins/ui";
+import {
+  Aviso,
+  Boton,
+  CalendarDays,
+  CampoSeleccion,
+  CampoTexto,
+  CampoTextoLargo,
+  Casilla,
+  CeldaTabla,
+  Confirmacion,
+  Dialogo,
+  Download,
+  EncabezadoPagina,
+  EsqueletoTabla,
+  EstadoVacio,
+  FilaTabla,
+  FileText,
+  GrupoDeOpciones,
+  MenuAcciones,
+  Pencil,
+  Pestanas,
+  Plus,
+  RefreshCw,
+  Tabla,
+  Users,
+  useNotificar,
+} from "@teins/ui";
 import { cliente } from "../api";
 import { csvDetalle, csvResumen, descargar } from "../csv";
 import { aFechaHora } from "../formato";
@@ -19,74 +45,222 @@ const MOTIVOS = [
   { valor: "Modificación", texto: "Modificación" },
 ] as const;
 type Motivo = (typeof MOTIVOS)[number]["valor"];
-const motivoConocido = (m: string): Motivo => (MOTIVOS.find((x) => x.valor === m)?.valor ?? "Mantenimiento");
+const motivoConocido = (m: string): Motivo => MOTIVOS.find((x) => x.valor === m)?.valor ?? "Mantenimiento";
 
-const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
+/** "sáb, 26 sept"; con el año solo si no es el actual: en una agenda, el año casi nunca decide nada. */
+const dia = (aaaaMmDd: string) =>
+  new Intl.DateTimeFormat("es-CO", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    ...(aaaaMmDd.slice(0, 4) === hoyLocal().slice(0, 4) ? {} : { year: "numeric" }),
+    timeZone: "UTC",
+  }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
 
+/** Lo que oficina tiene que hacer con la visita: revisar lo recibido o armar el informe. */
 function avance(v: Visita): string {
   const { enviados, enRevision, revisados } = v.levantamientos;
   const partes = [enviados && `${enviados} por revisar`, enRevision && `${enRevision} en revisión`, revisados && `${revisados} revisado${revisados === 1 ? "" : "s"}`].filter(Boolean);
   return partes.length > 0 ? partes.join(" · ") : "Sin levantamientos recibidos";
 }
 
+const VACIO: Record<Vista, { titulo: string; texto: string }> = {
+  proximas: { titulo: "No hay visitas programadas desde hoy", texto: 'Programe la siguiente con "Programar visita".' },
+  anteriores: { titulo: "Todavía no hay visitas anteriores", texto: "Aquí quedan las visitas cuya fecha ya pasó." },
+  canceladas: { titulo: "No hay visitas canceladas", texto: "Aquí quedan las visitas canceladas, con quién y por qué." },
+};
+
+type Edicion = { tipo: "reasignar" | "reprogramar" | "cancelar" | "exportar"; v: Visita };
+
 export function Visitas() {
   const [vista, setVista] = useState<Vista>("proximas");
   const [programando, setProgramando] = useState(false);
+  const [edicion, setEdicion] = useState<Edicion | null>(null);
+  const [recientes, setRecientes] = useState<string[]>([]);
+  const notificar = useNotificar();
   const hoy = hoyLocal();
   const consulta = useQuery(consultasDeProgramacion.visitas(vista, hoy));
+  const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
+  const cerrarEdicion = () => setEdicion(null);
 
   return (
-    <section aria-labelledby="titulo-visitas" className="flex flex-col gap-4 rounded-panel bg-panel p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 id="titulo-visitas" className="text-subtitulo font-extrabold">
-          Visitas
-        </h1>
-        {!programando && (
-          <Boton variante="principal" onClick={() => setProgramando(true)}>
+    <>
+      <EncabezadoPagina
+        titulo="Visitas"
+        acciones={
+          <Boton variante="principal" icono={Plus} onClick={() => setProgramando(true)}>
             Programar visita
           </Boton>
-        )}
-      </div>
-      {programando && <ProgramarVisita hoy={hoy} alTerminar={() => setProgramando(false)} />}
-      <Pestanas
-        etiqueta="Qué visitas ver"
-        activa={vista}
-        onCambio={setVista}
-        pestanas={[
-          { valor: "proximas", etiqueta: "Próximas", cantidad: vista === "proximas" ? consulta.data?.visitas.length : undefined },
-          { valor: "anteriores", etiqueta: "Anteriores" },
-          { valor: "canceladas", etiqueta: "Canceladas" },
-        ]}
+        }
       />
-      <div role="tabpanel">
-        {consulta.isPending ? (
-          <div aria-busy="true" aria-label="Cargando visitas" className="h-[240px] animate-pulse rounded-panel bg-fondo" />
-        ) : consulta.isError ? (
-          <Aviso tono="error">
-            <p>No se pudieron cargar las visitas.</p>
-            <Boton className="mt-3" onClick={() => void consulta.refetch()}>
-              Reintentar
-            </Boton>
-          </Aviso>
-        ) : consulta.data.visitas.length === 0 ? (
-          <p className="py-4 text-cuerpo text-texto-secundario">
-            {vista === "proximas" ? "No hay visitas programadas desde hoy. Use \"Programar visita\"." : vista === "anteriores" ? "Todavía no hay visitas anteriores." : "No hay visitas canceladas."}
-          </p>
-        ) : (
-          <ul aria-label="Visitas" className="flex flex-col divide-y divide-division">
-            {consulta.data.visitas.map((v) => (
-              <FilaVisita key={v.id} visita={v} hoy={hoy} />
-            ))}
-          </ul>
-        )}
+      <div className="flex flex-col gap-5">
+        <Pestanas
+          etiqueta="Qué visitas ver"
+          activa={vista}
+          onCambio={setVista}
+          pestanas={[
+            { valor: "proximas", etiqueta: "Próximas", cantidad: vista === "proximas" ? consulta.data?.visitas.length : undefined },
+            { valor: "anteriores", etiqueta: "Anteriores" },
+            { valor: "canceladas", etiqueta: "Canceladas" },
+          ]}
+        />
+        <div role="tabpanel" aria-label={{ proximas: "Próximas", anteriores: "Anteriores", canceladas: "Canceladas" }[vista]}>
+          {consulta.isPending ? (
+            <EsqueletoTabla etiqueta="Cargando visitas" columnas={5} />
+          ) : consulta.isError ? (
+            <Aviso tono="error">
+              <p>No se pudieron cargar las visitas.</p>
+              <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
+                Reintentar
+              </Boton>
+            </Aviso>
+          ) : consulta.data.visitas.length === 0 ? (
+            <EstadoVacio icono={CalendarDays} titulo={VACIO[vista].titulo}>
+              {VACIO[vista].texto}
+            </EstadoVacio>
+          ) : (
+            <Tabla
+              etiqueta="Visitas"
+              columnas={[
+                { titulo: "Fecha" },
+                { titulo: "Cliente y sitio" },
+                { titulo: "Técnicos" },
+                { titulo: "Motivo" },
+                { titulo: vista === "canceladas" ? "Cancelación" : "Levantamientos" },
+                { titulo: "Acciones", oculto: true, derecha: true },
+              ]}
+            >
+              {consulta.data.visitas.map((v) => (
+                <FilaVisita key={v.id} visita={v} hoy={hoy} resaltada={recientes.includes(v.id)} editar={(tipo) => setEdicion({ tipo, v })} />
+              ))}
+            </Tabla>
+          )}
+        </div>
       </div>
-    </section>
+
+      {programando && (
+        <ProgramarVisita
+          hoy={hoy}
+          alCerrar={() => setProgramando(false)}
+          alProgramar={(v) => {
+            setProgramando(false);
+            destacar(v.id);
+            notificar({ texto: `Visita programada: ${v.cliente}, ${dia(v.programadaPara)}` });
+          }}
+        />
+      )}
+      {edicion?.tipo === "reasignar" && (
+        <Reasignar
+          v={edicion.v}
+          alCerrar={cerrarEdicion}
+          alGuardar={() => {
+            cerrarEdicion();
+            destacar(edicion.v.id);
+            notificar({ texto: `Técnicos reasignados: ${edicion.v.cliente.nombre}` });
+          }}
+        />
+      )}
+      {edicion?.tipo === "reprogramar" && (
+        <Reprogramar
+          v={edicion.v}
+          alCerrar={cerrarEdicion}
+          alGuardar={(fecha) => {
+            cerrarEdicion();
+            destacar(edicion.v.id);
+            notificar({ texto: `Visita reprogramada: ${edicion.v.cliente.nombre}, ${dia(fecha)}` });
+          }}
+        />
+      )}
+      {edicion?.tipo === "cancelar" && <Cancelar v={edicion.v} alCerrar={cerrarEdicion} alCancelar={() => notificar({ texto: `Visita cancelada: ${edicion.v.cliente.nombre}` })} />}
+      {edicion?.tipo === "exportar" && <ExportarCantidades v={edicion.v} alCerrar={cerrarEdicion} />}
+    </>
+  );
+}
+
+function FilaVisita({ visita: v, hoy, resaltada, editar }: { visita: Visita; hoy: string; resaltada: boolean; editar: (tipo: Edicion["tipo"]) => void }) {
+  const esHoy = v.programadaPara === hoy;
+  return (
+    <FilaTabla resaltada={resaltada}>
+      <CeldaTabla>
+        {/* Hoy primero y a la vista: es el punto focal de la pantalla (DESIGN.md). */}
+        <span className={`whitespace-nowrap ${esHoy ? "font-extrabold text-superficie" : ""}`}>{esHoy ? "Hoy" : dia(v.programadaPara)}</span>
+      </CeldaTabla>
+      <CeldaTabla>
+        <span className="block font-bold">{v.cliente.nombre}</span>
+        <span className="block text-ayuda text-texto-secundario">
+          {v.sitio.nombre} · {v.sitio.direccion}
+        </span>
+      </CeldaTabla>
+      <CeldaTabla>{v.tecnicos.map((t) => t.nombre).join(", ")}</CeldaTabla>
+      <CeldaTabla>{v.motivo}</CeldaTabla>
+      <CeldaTabla>
+        {v.cancelada ? (
+          <span className="text-ayuda">
+            {`${aFechaHora(v.cancelada.en)} por ${v.cancelada.por.nombre}: `}
+            <span className="text-texto-secundario">{v.cancelada.motivo}</span>
+          </span>
+        ) : (
+          <span className={v.levantamientos.enviados > 0 ? "font-bold" : "text-texto-secundario"}>{avance(v)}</span>
+        )}
+      </CeldaTabla>
+      <CeldaTabla derecha>
+        {!v.cancelada && (
+          <div className="flex items-center justify-end gap-1">
+            {v.levantamientos.revisados > 0 && <AbrirInforme visitaId={v.id} cliente={v.cliente.nombre} />}
+            <MenuAcciones
+              etiqueta={`Más acciones para la visita de ${v.cliente.nombre}`}
+              opciones={[
+                { texto: "Reasignar técnicos", icono: Users, alElegir: () => editar("reasignar") },
+                { texto: "Reprogramar", icono: Pencil, alElegir: () => editar("reprogramar") },
+                { texto: "Exportar cantidades", icono: Download, alElegir: () => editar("exportar") },
+                { texto: "Cancelar visita", peligro: true, alElegir: () => editar("cancelar") },
+              ]}
+            />
+          </div>
+        )}
+      </CeldaTabla>
+    </FilaTabla>
+  );
+}
+
+function AbrirInforme({ visitaId, cliente: nombre }: { visitaId: string; cliente: string }) {
+  const abrir = useAbrirInformeDeVisita();
+  const navegar = useNavigate();
+  return (
+    <Boton
+      variante="fantasma"
+      tamano="pequeno"
+      icono={FileText}
+      aria-label={`Abrir el informe de ${nombre}`}
+      cargando={abrir.isPending}
+      onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}
+    >
+      Abrir el informe
+    </Boton>
   );
 }
 
 // Programar -------------------------------------------------------------------------------------
 
-function ProgramarVisita({ hoy, alTerminar }: { hoy: string; alTerminar: () => void }) {
+function ElegirTecnicos({ tecnicos, elegidos, onCambio, error }: { tecnicos: Tecnico[]; elegidos: string[]; onCambio: (ids: string[]) => void; error?: string | undefined }) {
+  if (tecnicos.length === 0) return <Aviso tono="alerta">No hay técnicos activos. Quien administra los crea en Administración.</Aviso>;
+  return (
+    <fieldset className="flex flex-col gap-1">
+      <legend className="mb-1.5 text-cuerpo font-bold">Técnicos</legend>
+      <div className="flex flex-col">
+        {tecnicos.map((t) => (
+          <Casilla key={t.id} marcada={elegidos.includes(t.id)} onCambio={(m) => onCambio(m ? [...elegidos, t.id] : elegidos.filter((x) => x !== t.id))}>
+            {t.nombre}
+          </Casilla>
+        ))}
+      </div>
+      {error && <p className="text-ayuda font-bold text-error">{error}</p>}
+    </fieldset>
+  );
+}
+
+function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar: () => void; alProgramar: (v: { id: string; cliente: string; programadaPara: string }) => void }) {
+  const formulario = useId();
   const clientes = useQuery(consultasDeProgramacion.clientes());
   const tecnicos = useQuery(consultasDeProgramacion.tecnicos());
   const [clienteId, setClienteId] = useState("");
@@ -94,58 +268,61 @@ function ProgramarVisita({ hoy, alTerminar }: { hoy: string; alTerminar: () => v
   const [motivo, setMotivo] = useState<Motivo>("Mantenimiento");
   const [fecha, setFecha] = useState(hoy);
   const [elegidos, setElegidos] = useState<string[]>([]);
+  const [errores, setErrores] = useState<{ cliente?: string; sitio?: string; fecha?: string; tecnicos?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const programar = useAccionDeProgramacion(() => cliente.llamar("programarVisita", { cuerpo: { clienteId, sitioId, motivo, programadaPara: fecha, tecnicos: elegidos } }));
 
-  if (clientes.isPending || tecnicos.isPending) return <div aria-busy="true" aria-label="Preparando el formulario" className="h-[200px] animate-pulse rounded-panel bg-fondo" />;
-  if (clientes.isError || tecnicos.isError) {
-    return (
-      <Aviso tono="error">
-        <p>No se pudieron cargar los clientes o los técnicos.</p>
-        <Boton className="mt-3" onClick={() => void Promise.all([clientes.refetch(), tecnicos.refetch()])}>
-          Reintentar
-        </Boton>
-      </Aviso>
-    );
-  }
-  const lista = clientes.data.clientes;
-  if (lista.length === 0) {
-    return (
-      <Aviso tono="info">
-        Todavía no hay clientes.{" "}
-        <Link to="/clientes" className="font-bold underline">
-          Cree el cliente con su sitio
-        </Link>{" "}
-        y vuelva a programar.
-      </Aviso>
-    );
-  }
+  const lista = clientes.data?.clientes ?? [];
   const sitios = lista.find((c) => c.id === clienteId)?.sitios ?? [];
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    if (!clienteId || !sitioId) return setError("Elija el cliente y el sitio.");
-    if (!fecha) return setError("Elija la fecha.");
-    if (elegidos.length === 0) return setError("Asigne al menos un técnico.");
+    const faltan = {
+      ...(!clienteId ? { cliente: "Elija el cliente." } : {}),
+      ...(clienteId && !sitioId ? { sitio: "Elija el sitio." } : {}),
+      ...(!fecha ? { fecha: "Elija la fecha." } : {}),
+      ...(elegidos.length === 0 ? { tecnicos: "Asigne al menos un técnico." } : {}),
+    };
+    setErrores(faltan);
+    if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
-      await programar.mutateAsync(undefined);
-      alTerminar();
+      const v = await programar.mutateAsync(undefined);
+      alProgramar({ id: v.id, cliente: lista.find((c) => c.id === clienteId)?.nombre ?? "", programadaPara: fecha });
     } catch (e) {
       setError(mensajeDeProgramacion(e));
     }
   }
 
-  return (
-    <form onSubmit={enviar} noValidate aria-labelledby="titulo-programar" className="flex flex-col gap-4 rounded-panel border border-division p-5">
-      <h2 id="titulo-programar" className="text-cuerpo font-extrabold">
-        Programar visita
-      </h2>
-      <div className="grid gap-4 md:grid-cols-3">
+  let contenido;
+  if (clientes.isPending || tecnicos.isPending) contenido = <div aria-busy="true" aria-label="Preparando el formulario" className="h-64 rounded-panel bg-fondo motion-safe:animate-pulse" />;
+  else if (clientes.isError || tecnicos.isError) {
+    contenido = (
+      <Aviso tono="error">
+        <p>No se pudieron cargar los clientes o los técnicos.</p>
+        <Boton className="mt-3" icono={RefreshCw} onClick={() => void Promise.all([clientes.refetch(), tecnicos.refetch()])}>
+          Reintentar
+        </Boton>
+      </Aviso>
+    );
+  } else if (lista.length === 0) {
+    contenido = (
+      <Aviso tono="info">
+        Todavía no hay clientes.{" "}
+        <Link to="/clientes" className="font-bold text-superficie underline">
+          Cree el cliente con su sitio
+        </Link>{" "}
+        y vuelva a programar.
+      </Aviso>
+    );
+  } else {
+    contenido = (
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
         <CampoSeleccion
           etiqueta="Cliente"
           vacio="Elija un cliente"
           valor={clienteId}
+          error={errores.cliente}
           onCambio={(id) => {
             setClienteId(id);
             // Con un solo sitio, queda elegido.
@@ -158,95 +335,169 @@ function ProgramarVisita({ hoy, alTerminar }: { hoy: string; alTerminar: () => v
           etiqueta="Sitio"
           vacio={clienteId ? "Elija un sitio" : "Primero elija el cliente"}
           valor={sitioId}
+          error={errores.sitio}
           onCambio={setSitioId}
           deshabilitado={!clienteId}
           opciones={sitios.map((s) => ({ valor: s.id, texto: `${s.nombre} · ${s.direccion}` }))}
         />
-        <CampoTexto etiqueta="Fecha" tipo="date" nombre="fecha" valorInicial={hoy} onCambio={setFecha} />
-      </div>
-      <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
-      <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} />
-      {error && <Aviso tono="error">{error}</Aviso>}
-      <div className="flex flex-wrap gap-2">
-        <Boton type="submit" variante="principal" disabled={programar.isPending}>
-          {programar.isPending ? "Programando…" : "Programar la visita"}
-        </Boton>
-        <Boton onClick={alTerminar}>Cancelar</Boton>
-      </div>
-    </form>
-  );
-}
+        <CampoTexto etiqueta="Fecha" tipo="date" nombre="fecha" valorInicial={hoy} onCambio={setFecha} error={errores.fecha} />
+        <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+        <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} error={errores.tecnicos} />
+        {error && <Aviso tono="error">{error}</Aviso>}
+      </form>
+    );
+  }
 
-function ElegirTecnicos({ tecnicos, elegidos, onCambio }: { tecnicos: Tecnico[]; elegidos: string[]; onCambio: (ids: string[]) => void }) {
-  if (tecnicos.length === 0) return <Aviso tono="alerta">No hay técnicos activos. Quien administra los crea en Administración.</Aviso>;
   return (
-    <fieldset className="flex flex-col gap-1">
-      <legend className="mb-1.5 text-cuerpo font-bold">Técnicos</legend>
-      <div className="grid gap-x-6 md:grid-cols-3">
-        {tecnicos.map((t) => (
-          <Casilla key={t.id} marcada={elegidos.includes(t.id)} onCambio={(m) => onCambio(m ? [...elegidos, t.id] : elegidos.filter((x) => x !== t.id))}>
-            {t.nombre}
-          </Casilla>
-        ))}
-      </div>
-    </fieldset>
+    <Dialogo
+      forma="lateral"
+      titulo="Programar visita"
+      cerrable={!programar.isPending}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={programar.isPending}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={programar.isPending} disabled={lista.length === 0}>
+            Programar la visita
+          </Boton>
+        </>
+      }
+    >
+      {contenido}
+    </Dialogo>
   );
 }
 
 // Una visita -------------------------------------------------------------------------------------
 
-type Edicion = null | "reasignar" | "reprogramar" | "cancelar" | "exportar";
+const deLaVisita = (v: Visita) => `${v.cliente.nombre} · ${dia(v.programadaPara)}`;
 
-function FilaVisita({ visita: v, hoy }: { visita: Visita; hoy: string }) {
-  const [edicion, setEdicion] = useState<Edicion>(null);
-  const esHoy = v.programadaPara === hoy;
-  const botonEnlace =
-    "min-h-tactil rounded-control px-2 text-ayuda font-bold text-superficie underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie";
+function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void; alGuardar: () => void }) {
+  const formulario = useId();
+  const tecnicos = useQuery(consultasDeProgramacion.tecnicos());
+  const [elegidos, setElegidos] = useState(v.tecnicos.map((t) => t.id));
+  const [errorCampo, setErrorCampo] = useState<string | undefined>();
+  const [error, setError] = useState<string | null>(null);
+  const accion = useAccionDeProgramacion(() => cliente.llamar("reasignarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, tecnicos: elegidos } }));
+
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    if (elegidos.length === 0) return setErrorCampo("Asigne al menos un técnico.");
+    setErrorCampo(undefined);
+    setError(null);
+    try {
+      await accion.mutateAsync(undefined);
+      alGuardar();
+    } catch (e) {
+      // Tras un conflicto la lista ya se volvió a leer: el diálogo sigue abierto y reintenta con la versión nueva.
+      setError(mensajeDeProgramacion(e));
+    }
+  }
 
   return (
-    <li className="flex flex-col gap-3 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <p className="text-ayuda font-bold text-texto-secundario">
-            {esHoy ? `Hoy, ${dia(v.programadaPara)}` : dia(v.programadaPara)}
-          </p>
-          <h2 className="text-cuerpo font-extrabold">
-            {v.cliente.nombre} <span className="font-normal">· {v.sitio.nombre}</span>
-          </h2>
-          <p className="text-ayuda text-texto-secundario">{v.sitio.direccion}</p>
-          <p className="text-ayuda">{`Técnicos: ${v.tecnicos.map((t) => t.nombre).join(", ")}`}</p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <Marquilla tono={v.cancelada ? "borrador" : "superficie"}>{v.motivo}</Marquilla>
-          <span className="text-ayuda text-texto-secundario">{avance(v)}</span>
-        </div>
-      </div>
-      {v.cancelada ? (
-        <p className="text-ayuda text-texto-secundario">{`Cancelada el ${aFechaHora(v.cancelada.en)} por ${v.cancelada.por.nombre}: ${v.cancelada.motivo}`}</p>
-      ) : edicion === null ? (
-        <div className="flex flex-wrap gap-1">
-          <button type="button" className={botonEnlace} onClick={() => setEdicion("reasignar")}>{`Reasignar la visita de ${v.cliente.nombre}`}</button>
-          <button type="button" className={botonEnlace} onClick={() => setEdicion("reprogramar")}>{`Reprogramar la visita de ${v.cliente.nombre}`}</button>
-          <button type="button" className={botonEnlace} onClick={() => setEdicion("cancelar")}>{`Cancelar la visita de ${v.cliente.nombre}`}</button>
-          <button type="button" className={botonEnlace} onClick={() => setEdicion("exportar")}>{`Exportar las cantidades de ${v.cliente.nombre}`}</button>
-          {v.levantamientos.revisados > 0 && <AbrirInforme visitaId={v.id} />}
-        </div>
-      ) : edicion === "exportar" ? (
-        <ExportarCantidades visita={v} alTerminar={() => setEdicion(null)} />
-      ) : (
-        <Editar visita={v} edicion={edicion} alTerminar={() => setEdicion(null)} />
-      )}
-    </li>
+    <Dialogo
+      titulo="Reasignar técnicos"
+      subtitulo={deLaVisita(v)}
+      cerrable={!accion.isPending}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={accion.isPending}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={accion.isPending}>
+            Guardar técnicos
+          </Boton>
+        </>
+      }
+    >
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        {tecnicos.isPending ? (
+          <div aria-busy="true" aria-label="Cargando técnicos" className="h-24 rounded-panel bg-fondo motion-safe:animate-pulse" />
+        ) : tecnicos.isError ? (
+          <Aviso tono="error">No se pudieron cargar los técnicos.</Aviso>
+        ) : (
+          <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} error={errorCampo} />
+        )}
+        <p className="text-ayuda text-texto-secundario">Quien deja la visita la pierde de su teléfono; lo que ya empezó se conserva y lo puede enviar.</p>
+        {error && <Aviso tono="error">{error}</Aviso>}
+      </form>
+    </Dialogo>
   );
 }
 
-function AbrirInforme({ visitaId }: { visitaId: string }) {
-  const abrir = useAbrirInformeDeVisita();
-  const navegar = useNavigate();
+function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void; alGuardar: (fecha: string) => void }) {
+  const formulario = useId();
+  const [fecha, setFecha] = useState(v.programadaPara);
+  const [motivo, setMotivo] = useState<Motivo>(motivoConocido(v.motivo));
+  const [errorFecha, setErrorFecha] = useState<string | undefined>();
+  const [error, setError] = useState<string | null>(null);
+  const accion = useAccionDeProgramacion(() => cliente.llamar("reprogramarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, programadaPara: fecha, motivo } }));
+
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    if (!fecha) return setErrorFecha("Elija la fecha.");
+    setErrorFecha(undefined);
+    setError(null);
+    try {
+      await accion.mutateAsync(undefined);
+      alGuardar(fecha);
+    } catch (e) {
+      setError(mensajeDeProgramacion(e));
+    }
+  }
+
   return (
-    <Boton disabled={abrir.isPending} onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}>
-      {abrir.isPending ? "Abriendo…" : "Abrir el informe"}
-    </Boton>
+    <Dialogo
+      titulo="Reprogramar visita"
+      subtitulo={deLaVisita(v)}
+      cerrable={!accion.isPending}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={accion.isPending}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={accion.isPending}>
+            Reprogramar la visita
+          </Boton>
+        </>
+      }
+    >
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
+        <div className="max-w-xs">
+          <CampoTexto etiqueta="Fecha nueva" tipo="date" valorInicial={v.programadaPara} onCambio={setFecha} error={errorFecha} />
+        </div>
+        <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+        {error && <Aviso tono="error">{error}</Aviso>}
+      </form>
+    </Dialogo>
+  );
+}
+
+function Cancelar({ v, alCerrar, alCancelar }: { v: Visita; alCerrar: () => void; alCancelar: () => void }) {
+  const [motivo, setMotivo] = useState("");
+  const accion = useAccionDeProgramacion(() => cliente.llamar("cancelarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, motivo: motivo.trim() } }));
+  return (
+    <Confirmacion
+      titulo={`¿Cancelar la visita a ${v.cliente.nombre}?`}
+      confirmar="Cancelar visita"
+      descartar="Volver"
+      peligro
+      validar={() => (motivo.trim() === "" ? "Escriba por qué se cancela: queda en el registro." : null)}
+      mensajeDeError={mensajeDeProgramacion}
+      accion={() => accion.mutateAsync(undefined)}
+      alCerrar={alCerrar}
+      alTerminar={alCancelar}
+    >
+      <p>
+        La visita del {dia(v.programadaPara)} sale de los teléfonos de sus técnicos; lo que ya empezaron se conserva y lo pueden enviar. No se puede deshacer: si hace falta, programe
+        otra.
+      </p>
+      <CampoTextoLargo etiqueta="Motivo de la cancelación" valor={motivo} onCambio={setMotivo} maximo={500} />
+    </Confirmacion>
   );
 }
 
@@ -262,17 +513,17 @@ const paraArchivo = (t: string) =>
  * Cantidades de la visita en CSV para Excel (iteración 11): el detalle de cada línea y el resumen sumado
  * por ítem del catálogo. Se leen al abrir, así el archivo trae lo último que corrigió oficina.
  */
-function ExportarCantidades({ visita: v, alTerminar }: { visita: Visita; alTerminar: () => void }) {
+function ExportarCantidades({ v, alCerrar }: { v: Visita; alCerrar: () => void }) {
   const consulta = useQuery({ queryKey: ["cantidades", v.id], queryFn: () => cliente.llamar("cantidadesDeVisita", { parametros: { id: v.id } }), staleTime: 0 });
   const nombre = `cantidades-${paraArchivo(v.cliente.nombre)}-${v.programadaPara}`;
 
   let contenido;
-  if (consulta.isPending) contenido = <div aria-busy="true" aria-label="Cargando las cantidades" className="h-[60px] animate-pulse rounded-panel bg-fondo" />;
+  if (consulta.isPending) contenido = <div aria-busy="true" aria-label="Cargando las cantidades" className="h-16 rounded-panel bg-fondo motion-safe:animate-pulse" />;
   else if (consulta.isError) {
     contenido = (
       <Aviso tono="error">
         <p>No se pudieron cargar las cantidades de la visita.</p>
-        <Boton className="mt-3" onClick={() => void consulta.refetch()}>
+        <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
           Reintentar
         </Boton>
       </Aviso>
@@ -292,89 +543,20 @@ function ExportarCantidades({ visita: v, alTerminar }: { visita: Visita; alTermi
         </p>
         {porRevisar && <Aviso tono="alerta">Hay levantamientos sin revisar: sus cantidades todavía pueden cambiar.</Aviso>}
         <div className="flex flex-wrap gap-2">
-          <Boton variante="principal" onClick={() => descargar(`${nombre}-detalle.csv`, csvDetalle(consulta.data))}>
+          <Boton variante="principal" icono={Download} onClick={() => descargar(`${nombre}-detalle.csv`, csvDetalle(consulta.data))}>
             Descargar el detalle (CSV)
           </Boton>
-          <Boton onClick={() => descargar(`${nombre}-resumen.csv`, csvResumen(consulta.data))}>Descargar el resumen (CSV)</Boton>
+          <Boton icono={Download} onClick={() => descargar(`${nombre}-resumen.csv`, csvResumen(consulta.data))}>
+            Descargar el resumen (CSV)
+          </Boton>
         </div>
       </>
     );
   }
 
   return (
-    <div aria-label={`Cantidades de la visita de ${v.cliente.nombre}`} role="group" className="flex max-w-3xl flex-col gap-3 rounded-panel border border-division p-4">
+    <Dialogo titulo="Exportar cantidades" subtitulo={deLaVisita(v)} alCerrar={alCerrar}>
       {contenido}
-      <div>
-        <Boton onClick={alTerminar}>Volver</Boton>
-      </div>
-    </div>
-  );
-}
-
-function Editar({ visita: v, edicion, alTerminar }: { visita: Visita; edicion: Exclude<Edicion, null | "exportar">; alTerminar: () => void }) {
-  const tecnicos = useQuery({ ...consultasDeProgramacion.tecnicos(), enabled: edicion === "reasignar" });
-  const [elegidos, setElegidos] = useState(v.tecnicos.map((t) => t.id));
-  const [fecha, setFecha] = useState(v.programadaPara);
-  const [motivo, setMotivo] = useState<Motivo>(motivoConocido(v.motivo));
-  const [motivoCancelacion, setMotivoCancelacion] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const accion = useAccionDeProgramacion(async () => {
-    const parametros = { id: v.id };
-    if (edicion === "reasignar") return cliente.llamar("reasignarVisita", { parametros, cuerpo: { version: v.version, tecnicos: elegidos } });
-    if (edicion === "reprogramar") return cliente.llamar("reprogramarVisita", { parametros, cuerpo: { version: v.version, programadaPara: fecha, motivo } });
-    return cliente.llamar("cancelarVisita", { parametros, cuerpo: { version: v.version, motivo: motivoCancelacion } });
-  });
-
-  async function enviar(evento: FormEvent) {
-    evento.preventDefault();
-    if (edicion === "reasignar" && elegidos.length === 0) return setError("Asigne al menos un técnico.");
-    if (edicion === "reprogramar" && !fecha) return setError("Elija la fecha.");
-    if (edicion === "cancelar" && motivoCancelacion.trim() === "") return setError("Escriba por qué se cancela: queda en el registro.");
-    setError(null);
-    try {
-      await accion.mutateAsync(undefined);
-      alTerminar();
-    } catch (e) {
-      // Tras un conflicto la lista ya se volvió a leer: el formulario sigue abierto y reintenta con la versión nueva.
-      setError(mensajeDeProgramacion(e));
-    }
-  }
-
-  const titulo = { reasignar: "Reasignar", reprogramar: "Reprogramar", cancelar: "Cancelar" }[edicion];
-  return (
-    <form onSubmit={enviar} noValidate aria-label={`${titulo} la visita de ${v.cliente.nombre}`} className="flex max-w-3xl flex-col gap-4 rounded-panel border border-division p-4">
-      {edicion === "reasignar" &&
-        (tecnicos.isPending ? (
-          <div aria-busy="true" aria-label="Cargando técnicos" className="h-[80px] animate-pulse rounded-panel bg-fondo" />
-        ) : tecnicos.isError ? (
-          <Aviso tono="error">No se pudieron cargar los técnicos.</Aviso>
-        ) : (
-          <>
-            <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} />
-            <p className="text-ayuda text-texto-secundario">Quien deja la visita la pierde de su teléfono; lo que ya empezó se conserva y lo puede enviar.</p>
-          </>
-        ))}
-      {edicion === "reprogramar" && (
-        <>
-          <div className="max-w-xs">
-            <CampoTexto etiqueta="Fecha nueva" tipo="date" valorInicial={v.programadaPara} onCambio={setFecha} />
-          </div>
-          <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
-        </>
-      )}
-      {edicion === "cancelar" && (
-        <>
-          <p className="text-ayuda">Sale de los teléfonos de sus técnicos; lo que ya empezaron se conserva y lo pueden enviar. No se puede deshacer: si se necesita, programe otra.</p>
-          <CampoTextoLargo etiqueta="Motivo de la cancelación" valor={motivoCancelacion} onCambio={setMotivoCancelacion} maximo={500} />
-        </>
-      )}
-      {error && <Aviso tono="error">{error}</Aviso>}
-      <div className="flex flex-wrap gap-2">
-        <Boton type="submit" variante="principal" disabled={accion.isPending}>
-          {accion.isPending ? "Guardando…" : edicion === "cancelar" ? "Sí, cancelar la visita" : `${titulo} la visita`}
-        </Boton>
-        <Boton onClick={alTerminar}>Volver</Boton>
-      </div>
-    </form>
+    </Dialogo>
   );
 }
