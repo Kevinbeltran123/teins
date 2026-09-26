@@ -3,6 +3,8 @@ export { Boceto, ElementoDeBoceto } from "./Boceto";
 export type { ElementoDibujable } from "./Boceto";
 export { Boton, claseBoton } from "./Boton";
 export { CampoFotos } from "./CampoFotos";
+export { EditorCantidades, TablaCantidades } from "./Cantidades";
+export type { LineaEditable } from "./Cantidades";
 export { Casilla } from "./Casilla";
 export { CampoMedida } from "./CampoMedida";
 export { CampoSeleccion } from "./CampoSeleccion";

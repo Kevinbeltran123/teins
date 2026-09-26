@@ -10,6 +10,7 @@ export function CampoSeleccion({
   onCambio,
   vacio,
   deshabilitado,
+  etiquetaOculta,
 }: {
   etiqueta: string;
   opciones: readonly { valor: string; texto: string }[];
@@ -18,11 +19,19 @@ export function CampoSeleccion({
   /** Texto de la opción vacía, cuando todavía no se ha elegido nada. */
   vacio?: string;
   deshabilitado?: boolean;
+  /** Dentro de una tabla, donde el encabezado de la columna ya dice qué es: la etiqueta queda para el lector de pantalla. */
+  etiquetaOculta?: boolean;
 }) {
   const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
-      <EtiquetaCampo htmlFor={id}>{etiqueta}</EtiquetaCampo>
+      {etiquetaOculta ? (
+        <label htmlFor={id} className="sr-only">
+          {etiqueta}
+        </label>
+      ) : (
+        <EtiquetaCampo htmlFor={id}>{etiqueta}</EtiquetaCampo>
+      )}
       <select id={id} className={claseControl} value={valor} disabled={deshabilitado} onChange={(e) => onCambio(e.target.value)}>
         {vacio !== undefined && <option value="">{vacio}</option>}
         {opciones.map((o) => (

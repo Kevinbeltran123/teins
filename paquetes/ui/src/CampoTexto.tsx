@@ -12,7 +12,7 @@ interface Props {
   autoComplete?: string;
   nombre?: string;
   /** Teclado del celular: "numeric" para códigos de verificación. */
-  modoEntrada?: "text" | "numeric";
+  modoEntrada?: "text" | "numeric" | "decimal";
 }
 
 export const claseControl =
