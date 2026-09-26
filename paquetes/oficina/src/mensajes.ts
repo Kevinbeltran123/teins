@@ -20,6 +20,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   nombre_de_repeticion_invalido: "Una repetición no tiene nombre",
   boceto_invalido: "El boceto no tiene la forma esperada",
   cantidades_invalidas: "Cada línea necesita descripción, una cantidad mayor que cero y una unidad permitida",
+  firma_invalida: "La firma no tiene sus trazos, el nombre de quien firmó, la fecha o la constancia",
 };
 
 /** Lo que una persona de oficina necesita saber de un error al guardar. */

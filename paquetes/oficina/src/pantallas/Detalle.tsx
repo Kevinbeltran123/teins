@@ -8,6 +8,7 @@ import {
   describirValor,
   esBoceto,
   esCantidades,
+  esFirma,
   esNoObtenido,
   nombreDeDato,
   normalizarDecimal,
@@ -15,6 +16,7 @@ import {
   type DefinicionCampo,
   type LineaCantidad,
   type Valor,
+  type ValorFirma,
   type ValorMedida,
 } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
@@ -33,6 +35,7 @@ import {
   EncabezadoPagina,
   EsqueletoBloques,
   FileText,
+  Firma,
   Insignia,
   MarcaNoObtenido,
   MessageSquare,
@@ -303,7 +306,8 @@ function FilaCampo({
 
   const acciones = !corrigiendo && (
     <div className="flex shrink-0 gap-1">
-      {mia && campo.tipo !== "foto" && campo.tipo !== "boceto" && (
+      {/* Fotos, bocetos y firmas son de campo: oficina no los corrige (la firma, de quien recibió la visita). */}
+      {mia && campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "firma" && (
         <Boton variante="fantasma" tamano="pequeno" icono={Pencil} aria-label={`Corregir ${campo.etiqueta.toLowerCase()}`} onClick={() => setCorrigiendo(true)}>
           Corregir
         </Boton>
@@ -322,6 +326,8 @@ function FilaCampo({
         <Fotos etiqueta={campo.etiqueta} huellas={valor as readonly string[]} />
       ) : campo.tipo === "boceto" && esBoceto(valor) ? (
         <BocetoDeCampo etiqueta={campo.etiqueta} huella={valor.boceto} />
+      ) : campo.tipo === "firma" && esFirma(valor) ? (
+        <FirmaDeCampo etiqueta={campo.etiqueta} valor={valor} tecnico={l.tecnico.nombre} />
       ) : campo.tipo === "cantidades" && esCantidades(valor) ? (
         <LineasDeCantidad l={l} seccion={seccion} campo={campo} lineas={valor} mia={mia} recargar={recargar} />
       ) : (
@@ -735,6 +741,40 @@ function BocetoDeCampo({ etiqueta, huella }: { etiqueta: string; huella: string 
           <Boceto ancho={boceto.data.ancho} alto={boceto.data.alto} cuadricula={boceto.data.cuadricula} elementos={boceto.data.elementos} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} className="rounded-control border border-division" />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Firma de quien recibe la visita (ADR-0024): la firma, quién y cuándo, y la constancia que leyó. */
+function FirmaDeCampo({ etiqueta, valor, tecnico }: { etiqueta: string; valor: ValorFirma; tecnico: string }) {
+  const trazos = useQuery(consultas.boceto(valor.firma));
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="text-ayuda text-texto-secundario">{etiqueta}</span>
+      {trazos.isPending ? (
+        <div aria-busy="true" aria-label="Cargando la firma" className="h-28 max-w-sm rounded-control bg-fondo motion-safe:animate-pulse" />
+      ) : trazos.isError ? (
+        <Aviso tono="error">
+          <p>No se pudo cargar la firma.</p>
+          <Boton className="mt-3" icono={RefreshCw} onClick={() => void trazos.refetch()}>
+            Reintentar
+          </Boton>
+        </Aviso>
+      ) : (
+        <div className="max-w-sm rounded-control border border-division p-2">
+          <Firma ancho={trazos.data.ancho} alto={trazos.data.alto} elementos={trazos.data.elementos} etiqueta={`Firma de ${valor.nombre}`} className="max-h-28" />
+        </div>
+      )}
+      <div className="flex flex-col gap-0.5 text-cuerpo">
+        <strong>
+          {valor.nombre}
+          {valor.cargo ? ` · ${valor.cargo}` : ""}
+        </strong>
+        <span className="text-texto-secundario">
+          Firmó el {aFechaHora(valor.firmadoEn)}, en el teléfono de {tecnico}.
+        </span>
+        <span className="text-texto-secundario">“{valor.declaracion}”</span>
+      </div>
     </div>
   );
 }
