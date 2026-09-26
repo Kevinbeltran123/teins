@@ -6,7 +6,7 @@ Instrucciones para cualquier agente de programación que trabaje en este reposit
 
 Sistema de levantamientos técnicos para TEINS: los técnicos capturan información en campo (con o sin conexión) desde una PWA, oficina la revisa y corrige con trazabilidad, y el cliente descarga el informe PDF desde un portal. Monolito modular en TypeScript sobre PostgreSQL.
 
-**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-25: recorrido delgado completo (cortes 0 a 5: captura, envío, bajada, revisión, informe con PDF y portal del cliente), más las iteraciones 6 (administración con segundo factor) y 7 (visitas y clientes desde oficina), y producción provisional montada y respaldada (iteración 8, `docs/proceso/produccion.md`; sin datos reales hasta transferirla a TEINS, ADR-0021), desplegado en el entorno de pruebas de Railway (`docs/proceso/entorno-de-pruebas.md`). Pendientes: prueba en iPhone (aplazada por Kevin) y respuestas de TEINS para ajustar el informe. Iteraciones 9 (secciones repetibles), 10 (bocetos), 11 (cantidades con catálogo), 12 (cifrado local, ADR-0022) y 13 (llaves de acceso) terminadas en el entorno de pruebas, con la prueba en iPhone en espera. Siguiente recomendada: prueba en iPhone de las fases 9 a 13, actualizar producción y la instalación guiada de la PWA en iPhone, mientras TEINS responde P7, P8, P28 y P29 y crea su cuenta.
+**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-25: recorrido delgado completo (cortes 0 a 5: captura, envío, bajada, revisión, informe con PDF y portal del cliente), más las iteraciones 6 (administración con segundo factor) y 7 (visitas y clientes desde oficina), y producción provisional montada y respaldada (iteración 8, `docs/proceso/produccion.md`; sin datos reales hasta transferirla a TEINS, ADR-0021), desplegado en el entorno de pruebas de Railway (`docs/proceso/entorno-de-pruebas.md`). Pendientes: prueba en iPhone (aplazada por Kevin) y respuestas de TEINS para ajustar el informe. Iteraciones 9 (secciones repetibles), 10 (bocetos), 11 (cantidades con catálogo), 12 (cifrado local, ADR-0022) y 13 (llaves de acceso) terminadas en el entorno de pruebas, con la prueba en iPhone en espera. Iteración 14 (interfaz rehecha con la dirección Consola, `DESIGN.md`) terminada y verificada en local; falta desplegarla en el entorno de pruebas. Siguiente recomendada: desplegar la iteración 14, prueba en iPhone de las fases 9 a 14, actualizar producción y la instalación guiada de la PWA en iPhone, mientras TEINS responde P7, P8, P28 y P29 y crea su cuenta.
 
 ## Antes de tocar cualquier cosa, lee en este orden
 
@@ -24,7 +24,7 @@ Si una tarea contradice un ADR aceptado, **no lo ignores ni lo edites**: detente
 ## Retomar el trabajo en una sesión nueva
 
 1. Lee el plan de entrega: el corte en curso, su tabla "Terminado cuando", sus "Decisiones tomadas al construirlo" y la sección "Próximo paso".
-2. Revisa la rama y los commits: `git log --oneline -15`. El trabajo de los cortes 0 a 5 y las iteraciones 6 a 13 vive en la rama `corte-0`, con commits por área; está en GitHub con el pull request #1 en borrador y la integración continua en verde.
+2. Revisa la rama y los commits: `git log --oneline -15`. El trabajo de los cortes 0 a 5 y las iteraciones 6 a 14 vive en la rama `corte-0`, con commits por área; está en GitHub con el pull request #1 en borrador y la integración continua en verde.
 3. Levanta el entorno local y corre la verificación completa (sección "Comandos"). Si algo no pasa en verde, eso es lo primero.
 4. No repitas decisiones ya tomadas: están en los ADR y en "Decisiones tomadas al construirlo". Si una no convence, propón un ADR nuevo.
 
@@ -76,7 +76,9 @@ Dentro de `servidor`, un módulo **nunca** lee tablas de otro ni importa sus par
 
 ## Trabajo de interfaz
 
-- La dirección está en `DESIGN.md`. Respeta el punto focal definido para cada pantalla.
+- La dirección está en `DESIGN.md` (Consola desde la iteración 14). Respeta el punto focal definido para cada pantalla y la jerarquía: el título es la sección del menú, las subsecciones son pestañas.
+- **Todo se justifica:** cada dato, texto, filtro o acción en pantalla responde a qué decisión o acción de la persona ayuda (`DESIGN.md`, "La regla"). Lo que no tiene respuesta no va.
+- Confirmar o deshacer según las consecuencias (tabla de `DESIGN.md`); crear en hoja lateral y lo nuevo primero y resaltado.
 - Aplica el filtro **antislop** durante el trabajo. Lo instala el desarrollador con `npx antislop-ai` en la raíz; **un agente nunca descarga ni instala skills por su cuenta**.
 - Toda vista con datos diseña los estados vacío, cargando, error y sin conexión.
 - Textos en español de Colombia, con el vocabulario de TEINS, sin raya larga (—).

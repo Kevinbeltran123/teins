@@ -20,6 +20,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 11 | Cantidades con catálogo y exportación a Excel | Los materiales anotados en campo no se vuelven a digitar para cotizar (F9, P27 a P29) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 12 | Cifrado local en campo (ADR-0022) | Un teléfono perdido no entrega datos de clientes y el borrado por revocación es instantáneo (QA-5, I-15) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 13 | Llaves de acceso (passkeys) | Entrar con Face ID, huella o PIN, sin contraseñas que se puedan suplantar (ADR-0009) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
+| Iteración 14 | Interfaz rehecha con la dirección Consola (`DESIGN.md`) | Una herramienta que la gente quiera usar: jerarquía clara, confirmaciones donde hay consecuencias, resultados junto a la acción | Terminada y verificada en local; falta desplegarla en el entorno de pruebas y la prueba en iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -29,6 +30,8 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 1. **Verificación manual hecha por Kevin el 2026-09-25** en un iPhone 15 Pro con iOS 26.6.1 (fases 1 a 7 de [`verificacion-manual.md`](verificacion-manual.md); producción quedó para después). Todo funcionó salvo dos avisos que no aparecían, corregidos con su prueba de extremo a extremo y confirmados por Kevin en el iPhone el mismo día: "Oficina canceló esta visita" en el bloque azul de campo y "Su sesión se cerró" en el portal. Falta la fase 8 (producción), que Kevin dejó para después.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
+
+**Iteración 14 terminada el 2026-09-26 (en local):** la interfaz de campo, oficina y portal rehecha con la dirección Consola, elegida por Kevin entre tres comparadas en el lienzo. Falta desplegarla en el entorno de pruebas (con el visto bueno de Kevin) y probarla en el iPhone junto con las fases 9 a 13.
 
 **Iteración 13 terminada el 2026-09-25:** llaves de acceso en campo y oficina, desplegadas en el entorno de pruebas y verificadas allí con `llaves.spec.ts` (cada superficie con su dominio). Con ella se completa la lista de iteraciones por riesgo que se trazó al cerrar el corte 5. La prueba en iPhone (fase 13 de la guía) queda en espera con las de las iteraciones 9 a 12.
 
@@ -898,3 +901,50 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **La biblioteca del navegador (`@simplewebauthn/browser`, MIT) se carga solo al usar una llave:** 2,8 KB comprimidos fuera del JavaScript inicial de campo. La propuesta de crearla también se carga aparte.
 - **Pruebas sin navegador:** un autenticador WebAuthn de software (`servidor/pruebas/autenticador.ts`, clave P-256 y el CBOR mínimo) prueba las reglas de seguridad en el servidor. WebKit no tiene autenticador virtual: esa parte se prueba en Chromium y en el iPhone.
 
+## Iteración 14 · Interfaz con la dirección Consola
+
+**Estado:** terminada el 2026-09-26 y verificada en local (verificación completa en el orden de la integración continua, en verde). Falta desplegarla en el entorno de pruebas y probarla en el iPhone.
+
+**Para qué:** Kevin encontró la interfaz "básica y fea": botones de tamaños distintos, confirmaciones metidas en filas, resultados que aparecían lejos de la acción (el QR de un acceso salía arriba de la tabla), lo creado se perdía en el orden alfabético y no había diálogos, menús ni notificaciones. Se auditó el código pantalla por pantalla, se investigó cómo resuelven lo mismo Google, Microsoft, Apple, AWS, GitHub, Shopify e IBM (segundo factor, credenciales que se muestran una vez, QR, confirmaciones, creación, tablas, formularios de campo), se compararon tres direcciones en el lienzo (página "v0.3 · Direcciones") y Kevin eligió la A, Consola, con dos reglas: la jerarquía (el título es la sección del menú; las subsecciones, pestañas) y que todo lo que se muestra esté justificado.
+
+### Alcance
+
+- **`DESIGN.md` reescrito:** la regla de justificación, la jerarquía, los tokens de Consola, cuándo usar cada componente, qué se confirma y qué se deshace, crear en hoja lateral y lo nuevo primero y resaltado, lo que se entrega una sola vez y el flujo del segundo factor.
+- **`paquetes/ui`:** juego de componentes nuevo (botones con variantes, tamaños, icono y estado de carga; diálogo sobre `<dialog>` centrado, lateral e inferior; confirmación; notificaciones; tabla; menú de acciones sobre el popover del navegador; encabezado de pantalla; insignias; estado vacío; esqueletos; búsqueda; copiar; visor de fotos) e iconos de Lucide. `Marquilla` se retiró.
+- **Oficina:** menú lateral con iconos y la cuenta de lo que espera revisión; cada pantalla con su encabezado; tablas con "Más acciones"; crear y editar en hoja lateral con errores por campo; confirmaciones en diálogo; credenciales en un diálogo que no se cierra por accidente; segundo factor en pasos numerados con los códigos de respaldo después de verificar; revisión e informe en dos columnas con el panel de acción fijo; aviso al salir del informe con cambios sin guardar.
+- **Campo:** barra superior con el estado de sincronización; la siguiente visita como tarjeta focal; barra de envío fija con lo que falta y resumen con enlaces; confirmaciones en hoja inferior; fotos a pantalla completa que se quitan con deshacer (`quitarFoto`); sin la línea "Datos de prueba" que se habría visto en producción; diagnóstico plegado.
+- **Portal:** ingreso y lista de informes en la dirección nueva, sin el marcador `[LOGO]` a la vista del cliente.
+- **Servidor:** el PDF se descarga como archivo con un nombre legible (`Content-Disposition: attachment`), en oficina y en el portal; "Revisados" va del más reciente al más antiguo.
+
+### Fuera de la iteración 14
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Columna "Visita" (cliente y sitio) en la bandeja de levantamientos | Siguiente cambio de oficina: requiere agregar la visita al resumen del levantamiento en `protocolo` y en la consulta (`docs/diseno/pendientes.md`) |
+| Las demás pantallas de Consola en el lienzo, para revisarlas con TEINS | `docs/diseno/pendientes.md` |
+| Borrar del almacenamiento una foto que ya había subido y el técnico quitó antes de enviar | Tarea de limpieza del worker, cuando el volumen lo justifique: hoy queda huérfana y no se entrega |
+| Instalación guiada de la PWA en iPhone | Siguiente en código mientras TEINS responde |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Kevin aprueba una dirección en el lienzo antes de programar | Hecho: dirección A, página "v0.3 · Direcciones" |
+| 2. Ninguna pantalla define estilos propios; todas usan el juego de `ui` | Hecho: `Marquilla` retirada, tipos verificados en los siete paquetes |
+| 3. Lo que tiene consecuencias se confirma; lo que se deshace ofrece "Deshacer" | Hecho: pruebas de extremo a extremo actualizadas a los diálogos (envío, revisión, publicación, retiro, cancelación, llaves, repeticiones) |
+| 4. Lo creado aparece primero y resaltado, con notificación | Hecho: `programacion.spec.ts` y `administracion.spec.ts` lo comprueban |
+| 5. El PDF se descarga sin salir de la pantalla | Hecho: `informe.spec.ts` y `portal.spec.ts` esperan la descarga; pruebas del servidor del encabezado |
+| 6. Quitar una foto no rompe la sincronización ni pierde otra | Hecho: 4 pruebas nuevas de `quitarFoto` en `campo` |
+| 7. Lo anterior sigue igual y el presupuesto de campo se respeta | Hecho: tipos, reglas de arquitectura, licencias y auditoría en verde; dominio 73, protocolo 18, oficina 4, campo 51, servidor 95; extremo a extremo 24 y 2 omitidas (Chromium y WebKit); campo 116,0 de 120 KB |
+| 8. Desplegada en el entorno de pruebas y probada en el iPhone | Pendiente |
+
+### Decisiones tomadas al construirlo
+
+- **Componentes propios sobre el navegador, sin shadcn ni Radix:** `<dialog>` da el foco atrapado, el velo, Esc y el fondo inerte; el popover da los menús encima de todo, sin que una tabla con desplazamiento los recorte. Cero dependencias nuevas salvo Lucide, y el movimiento sigue en CSS (regla 10).
+- **El amarillo dejó de pintar botones:** la acción principal va en el azul de la marca; el amarillo marca el foco y lo recién creado. Con un solo acento, el amarillo sigue llamando la atención donde importa.
+- **El borde de los campos de texto es más oscuro que el de los botones** (`borde-control`, 3:1): el campo no tiene otra forma de verse, el botón tiene su texto.
+- **Los avisos llevan el texto en negro y el tono en el icono:** el texto de color sobre fondo teñido no llegaba a 7:1.
+- **Una acción principal por fila, el resto en "Más acciones":** los botones con el nombre del cliente o del usuario en cada fila (que variaban de ancho) pasaron a un texto corto con el nombre accesible completo, así las pruebas y el lector de pantalla siguen encontrando cada uno.
+- **La captura de campo se carga aparte:** el juego de componentes nuevo llevaba el JavaScript inicial a 124 KB; con la captura fuera del arranque quedó en 116 KB (el service worker la guarda igual y abre sin conexión). `ui` declara `sideEffects` para que cada superficie empaquete solo lo que usa.
+- **Quitar una foto borra el archivo solo si nada más lo usa:** las fotos se direccionan por contenido, así que otro campo u otro levantamiento pueden compartirla. Una subida en curso de la foto quitada termina sin efecto.
+- **Las visitas siguen en orden de fecha al programar una nueva:** la agenda es cronológica, así que la nueva se resalta y se lleva a la vista en su lugar en vez de subir al principio; clientes, usuarios e ítems nuevos sí van primero.
