@@ -2,12 +2,13 @@ import { lazy, Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, BotonIcono, CalendarDays, CloudOff, Confirmacion, EsqueletoBloques, EstadoVacio, Insignia, LogOut } from "@teins/ui";
+import { Aviso, Boton, BotonIcono, CalendarDays, CloudOff, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, Insignia, LogOut } from "@teins/ui";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
 import { estadosDe, visitasDe } from "../datos/lecturas";
 import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal, UsuarioLocal, VisitaLocal } from "../datos/modelo";
 import { estaInstalada } from "../dispositivo/almacenamiento";
+import { plataforma } from "../dispositivo/instalacion";
 import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/useConexion";
 import { fechaHora } from "../formato";
 import { nombreDeFormato, useFormatos, vigentes } from "../formatos";
@@ -15,8 +16,10 @@ import { claseDeTono, comentariosDeOficina, estadoDeEnvio, estadoSegunServidor }
 import { fechaDeVisita, hoyLocal, ordenarVisitas } from "../visitas";
 import { Diagnostico } from "./Diagnostico";
 
-// Secundaria: no entra en el JavaScript inicial (ADR-0011).
+// Secundarias: no entran en el JavaScript inicial (ADR-0011).
 const SugerirLlave = lazy(() => import("./SugerirLlave"));
+const TarjetaAvisos = lazy(() => import("./TarjetaAvisos"));
+const GuiaDeInstalacion = lazy(() => import("./InstalarApp").then((m) => ({ default: m.GuiaDeInstalacion })));
 
 interface Props {
   usuario: UsuarioLocal;
@@ -59,6 +62,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   const enLinea = useConexionDelNavegador();
   const alcanzable = useServidorAlcanzable();
   const [confirmandoSalida, setConfirmandoSalida] = useState(false);
+  const [guiaAbierta, setGuiaAbierta] = useState(false);
 
   const deEnvios = [...(envios?.values() ?? [])];
   const porEnviar = deEnvios.filter((e) => e.estado !== "recibido").length;
@@ -123,7 +127,16 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
           )}
           {esperanActualizacion && <Aviso tono="alerta">Esta versión de la app ya no puede enviar. Actualízala para enviar lo pendiente; nada se pierde.</Aviso>}
           {!estaInstalada() && (
-            <Aviso tono="alerta">Instala la app para que el teléfono no borre los datos: en Safari, toca Compartir y luego “Agregar a inicio”. Después ábrela desde ese ícono.</Aviso>
+            <Aviso tono="alerta">
+              <p>
+                Instala la app para que el teléfono no borre los datos y te lleguen los avisos.
+                {/* En iPhone la app instalada no comparte datos con Safari (ADR-0023). */}
+                {plataforma() === "iphone" && " Antes, envía lo que tengas: lo de Safari no pasa a la app instalada."}
+              </p>
+              <Boton className="mt-3 w-full" onClick={() => setGuiaAbierta(true)}>
+                Cómo instalarla
+              </Boton>
+            </Aviso>
           )}
           {actualizacion.disponible && (
             <Aviso>
@@ -162,6 +175,11 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
               </EstadoVacio>
             )}
 
+            {/* Bajo la siguiente visita: la acción principal de la pantalla sigue siendo la de la visita. */}
+            <Suspense fallback={null}>
+              <TarjetaAvisos usuarioId={usuario.id} enLinea={alcanzable} />
+            </Suspense>
+
             {otras.length > 0 && (
               <section aria-labelledby="titulo-otras" className="flex flex-col gap-3">
                 <h2 id="titulo-otras" className="text-subtitulo font-extrabold">
@@ -196,6 +214,14 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
 
         <Diagnostico />
       </main>
+
+      {guiaAbierta && (
+        <Dialogo forma="inferior" titulo="Instala la app" alCerrar={() => setGuiaAbierta(false)}>
+          <Suspense fallback={null}>
+            <GuiaDeInstalacion />
+          </Suspense>
+        </Dialogo>
+      )}
 
       {confirmandoSalida && (
         <Confirmacion

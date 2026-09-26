@@ -1,4 +1,5 @@
 import { db, repositorio, sellarEnSegundoPlano } from "../datos/instancia";
+import { quitarSuscripcion } from "../dispositivo/avisos";
 import { almacen, cliente, sincronizarEnSegundoPlano } from "../sincronizacion/instancia";
 import { VERSION_APP } from "../version";
 
@@ -44,6 +45,8 @@ async function prepararSesion(): Promise<void> {
 
 /** Cierra la sesión. Nunca borra datos del teléfono: lo pendiente espera a que su responsable vuelva. */
 export async function cerrarSesion(): Promise<void> {
+  // Con la sesión todavía abierta: el servidor solo deja quitar la suscripción propia (ADR-0023).
+  await quitarSuscripcion().catch(() => undefined);
   await cliente.cerrarSesion().catch(() => undefined);
   await db.ajustes.delete("usuario");
 }

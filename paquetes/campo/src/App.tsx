@@ -1,12 +1,15 @@
 import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { Aviso } from "@teins/ui";
+import { debeGuiarInstalacion } from "./dispositivo/instalacion";
 import { Inicio } from "./pantallas/Inicio";
 import { useUsuario } from "./sesion/usuario";
 import { programarSincronizacion } from "./sincronizacion/disparar";
 
 // Solo hace falta la primera vez o cuando la sesión vence: se carga aparte.
 const IniciarSesion = lazy(() => import("./pantallas/IniciarSesion").then((m) => ({ default: m.IniciarSesion })));
+// Solo en un teléfono sin la app instalada, antes de iniciar sesión (ADR-0023, parte 3).
+const InstalarApp = lazy(() => import("./pantallas/InstalarApp"));
 // La captura no hace falta para abrir la app: se carga al abrir un levantamiento. El service worker la guarda
 // con todo lo demás, así que abre igual sin conexión (ADR-0011).
 const Captura = lazy(() => import("./pantallas/Captura").then((m) => ({ default: m.Captura })));
@@ -43,6 +46,7 @@ export function App() {
   const usuario = useUsuario();
   const [abierto, setAbierto] = useState<string>();
   const [pidiendoSesion, setPidiendoSesion] = useState(false);
+  const [guiarInstalacion, setGuiarInstalacion] = useState(debeGuiarInstalacion);
   const {
     needRefresh: [actualizacionDisponible],
     updateServiceWorker,
@@ -55,11 +59,15 @@ export function App() {
 
   const conSesion = Boolean(usuario);
   useEffect(() => (conSesion ? programarSincronizacion() : undefined), [conSesion]);
+  // Con el permiso ya dado, la suscripción se renueva al abrir: sin preguntar nada (ADR-0023).
+  useEffect(() => {
+    if (conSesion) void import("./dispositivo/avisos").then((m) => m.renovarSuscripcion()).catch(() => undefined);
+  }, [conSesion]);
 
   let pantalla: ReactNode;
   if (usuario === undefined) pantalla = <Abriendo />;
   // La primera instalación requiere iniciar sesión (ADR-0015, sección 5).
-  else if (usuario === null) pantalla = <IniciarSesion />;
+  else if (usuario === null) pantalla = guiarInstalacion ? <InstalarApp alSeguir={() => setGuiarInstalacion(false)} /> : <IniciarSesion />;
   else if (pidiendoSesion) pantalla = <IniciarSesion alCancelar={() => setPidiendoSesion(false)} />;
   else if (abierto) pantalla = <Captura id={abierto} volver={() => setAbierto(undefined)} />;
   else

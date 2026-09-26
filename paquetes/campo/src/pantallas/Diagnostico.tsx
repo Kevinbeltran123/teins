@@ -4,6 +4,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db, repositorio } from "../datos/instancia";
 import { contarPorSellar } from "../datos/registros";
 import { estadoAlmacenamiento, estaInstalada, type EstadoAlmacenamiento } from "../dispositivo/almacenamiento";
+import { estadoAvisos, type EstadoAvisos } from "../dispositivo/estadoAvisos";
+import { plataforma } from "../dispositivo/instalacion";
 import { huella } from "../fotos/procesar";
 import { megabytes } from "../formato";
 
@@ -29,8 +31,18 @@ async function verificarFotos(): Promise<Verificacion> {
 }
 
 /** Evidencia para la prueba de durabilidad del corte 0 (docs/proceso/plan-de-entrega.md). */
+const ESTADO_AVISOS: Record<EstadoAvisos, string> = {
+  activos: "Activos",
+  bloqueados: "Bloqueados",
+  sin_activar: "Sin activar",
+  no_disponibles: "No disponibles en este navegador",
+  requiere_instalar: "Solo con la app instalada",
+};
+
 export function Diagnostico() {
   const [estado, setEstado] = useState<EstadoAlmacenamiento>();
+  // Se relee al abrir el panel: los avisos pueden haberse activado desde el inicio después de dibujarlo.
+  const [avisos, setAvisos] = useState(estadoAvisos);
   const [verificacion, setVerificacion] = useState<Verificacion | "verificando" | "error">();
   const porCifrar = useLiveQuery(() => contarPorSellar(db));
 
@@ -53,9 +65,9 @@ export function Diagnostico() {
     <>
       {/* Sin instalar, el aviso de instalación de Inicio ya lo explica. */}
       {estado && !estado.persistente && estaInstalada() && <Aviso tono="alerta">El teléfono no garantiza conservar los datos. Avísale a soporte antes de capturar.</Aviso>}
-      <details className="group rounded-panel border border-division bg-panel">
+      <details className="group rounded-panel border border-division bg-panel" onToggle={() => setAvisos(estadoAvisos())}>
         <summary className="flex min-h-tactil cursor-pointer items-center justify-between gap-3 rounded-panel px-4 text-cuerpo font-bold focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie [&::-webkit-details-marker]:hidden">
-          Diagnóstico del almacenamiento
+          Diagnóstico del teléfono
           <ChevronRight aria-hidden className="size-5 shrink-0 text-texto-secundario transition-transform group-open:rotate-90" />
         </summary>
         <div className="flex flex-col gap-3 px-4 pb-4">
@@ -71,7 +83,17 @@ export function Diagnostico() {
                 ? "No disponible"
                 : `${megabytes(estado.usoBytes)}${estado.cuotaBytes ? ` de ${megabytes(estado.cuotaBytes)}` : ""}`}
             </dd>
+            <dt className="text-texto-secundario">Avisos</dt>
+            <dd className="font-bold">{ESTADO_AVISOS[avisos]}</dd>
           </dl>
+          {/* Bloqueados, la app ya no puede volver a preguntar: solo la persona los permite desde los ajustes. */}
+          {avisos === "bloqueados" && (
+            <p className="text-ayuda text-texto-secundario">
+              {plataforma() === "iphone"
+                ? "Para recibirlos: Ajustes › Notificaciones › TEINS › Permitir notificaciones."
+                : "Para recibirlos, permite las notificaciones de TEINS en los ajustes del teléfono."}
+            </p>
+          )}
           <Boton onClick={() => void verificar()} cargando={verificacion === "verificando"}>
             Verificar fotos
           </Boton>

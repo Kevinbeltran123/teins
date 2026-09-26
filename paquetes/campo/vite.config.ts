@@ -15,10 +15,13 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,woff2,png}"],
         // La API nunca pasa por el service worker ni por su caché.
         navigateFallbackDenylist: [/^\/api\//],
+        // Avisos push (ADR-0023): el manejador vive en public/ y se suma al service worker generado.
+        importScripts: ["avisos-sw.js"],
       },
       manifest: {
-        name: "TEINS Campo",
-        short_name: "TEINS Campo",
+        // Así se llama bajo el ícono y en los avisos (Kevin, 2026-09-26).
+        name: "TEINS",
+        short_name: "TEINS",
         lang: "es-CO",
         display: "standalone",
         orientation: "portrait",
