@@ -217,6 +217,8 @@ const ResumenLevantamiento = z.object({
   revisor: Persona.nullable(),
   recibidoEn: Fecha,
   fotos: z.int(),
+  /** De qué cliente y sitio es (iteración 14): lo primero que oficina busca en la bandeja. Nulo antes de las visitas. */
+  visita: z.object({ id: Uuid, cliente: z.string(), sitio: z.string() }).nullable(),
   /** Concurrencia optimista (ADR-0005): cada guardado lleva la versión que la persona tenía abierta. */
   version: z.int().positive(),
 });
