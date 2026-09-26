@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Boton, BotonIcono, Confirmacion, EncabezadoPagina, KeyRound, Plus, RefreshCw, Trash, useNotificar } from "@teins/ui";
+import { Aviso, Bell, Boton, BotonIcono, Confirmacion, EncabezadoPagina, Insignia, KeyRound, Plus, RefreshCw, Trash, useNotificar } from "@teins/ui";
 import { cliente } from "../api";
+import { activarAvisos, desactivarAvisos, estadoAvisos, type EstadoAvisos } from "../avisos";
 import { aFechaHora } from "../formato";
 import { mensajeDeError } from "../mensajes";
 
@@ -76,6 +77,8 @@ export function MiCuenta({ nombre }: { nombre: string }) {
         )}
       </section>
 
+      <AvisosDelNavegador />
+
       {quitando && (
         <Confirmacion
           titulo={`¿Quitar ${quitando.nombre}?`}
@@ -90,5 +93,63 @@ export function MiCuenta({ nombre }: { nombre: string }) {
         </Confirmacion>
       )}
     </>
+  );
+}
+
+/**
+ * Avisos push en este navegador (ADR-0023): quien revisa sabe de un levantamiento nuevo con la pestaña
+ * cerrada. No aparece si el entorno los tiene apagados o si el navegador no los admite.
+ */
+function AvisosDelNavegador() {
+  const notificar = useNotificar();
+  const configuracion = useQuery({ queryKey: ["avisos", "configuracion"], queryFn: () => cliente.llamar("configuracionAvisos"), staleTime: Infinity });
+  const [estado, setEstado] = useState<EstadoAvisos>();
+  const [trabajando, setTrabajando] = useState(false);
+  const [error, setError] = useState(false);
+  useEffect(() => void estadoAvisos().then(setEstado), []);
+
+  const clave = configuracion.data?.clavePublica;
+  if (!clave || !estado || estado === "no_disponibles") return null;
+
+  // El permiso se pide directo en el clic: algunos navegadores solo preguntan si viene de un gesto.
+  async function cambiar(activar: boolean) {
+    setTrabajando(true);
+    setError(false);
+    try {
+      const nuevo = activar ? await activarAvisos(clave!) : (await desactivarAvisos(), "sin_activar" as const);
+      setEstado(nuevo);
+      if (nuevo === "activos") notificar({ texto: "Avisos activados en este navegador" });
+      else if (!activar) notificar({ texto: "Avisos desactivados en este navegador" });
+    } catch {
+      setError(true);
+    } finally {
+      setTrabajando(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="titulo-avisos" className="flex max-w-3xl flex-col gap-4 rounded-panel border border-division bg-panel p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex max-w-xl flex-col gap-1">
+          <h2 id="titulo-avisos" className="flex items-center gap-2.5 text-subtitulo font-extrabold">
+            Avisos en este navegador
+            {estado === "activos" && <Insignia tono="exito">Activos</Insignia>}
+          </h2>
+          <p className="text-cuerpo text-texto-secundario">Le avisamos cuando un técnico envía un levantamiento, aunque la pestaña de TEINS esté cerrada.</p>
+        </div>
+        {estado === "activos" ? (
+          <Boton variante="fantasma" cargando={trabajando} onClick={() => void cambiar(false)}>
+            Desactivar
+          </Boton>
+        ) : estado === "sin_activar" ? (
+          <Boton icono={Bell} cargando={trabajando} onClick={() => void cambiar(true)}>
+            Activar avisos
+          </Boton>
+        ) : null}
+      </div>
+      {/* Bloqueados, la página ya no puede volver a preguntar: solo la persona los permite. */}
+      {estado === "bloqueados" && <Aviso tono="alerta">Los bloqueó en este navegador. Para recibirlos, permita las notificaciones de este sitio desde el candado junto a la dirección.</Aviso>}
+      {error && <Aviso tono="error">No se pudieron cambiar los avisos. Intente de nuevo.</Aviso>}
+    </section>
   );
 }

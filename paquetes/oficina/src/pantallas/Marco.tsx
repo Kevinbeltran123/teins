@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Aviso, BotonIcono, Building, CalendarDays, ClipboardCheck, FileText, LogOut, Package, ShieldCheck, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
+import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useConexion } from "../conexion";
 import { useBandeja } from "../revision";
 
@@ -44,7 +45,12 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
   // En Levantamientos la cifra ya es el punto focal: repetirla en el menú no agrega nada.
   const enLevantamientos = useRouterState({ select: (e) => e.location.pathname === "/" });
 
+  // Si ya estaban activos, la suscripción se renueva al abrir (ADR-0023): el navegador puede rotarla.
+  useEffect(() => void renovarSuscripcion().catch(() => undefined), []);
+
   async function cerrarSesion() {
+    // Con la sesión todavía abierta: este navegador deja de recibir los avisos de la persona.
+    await desactivarAvisos().catch(() => undefined);
     await cliente.cerrarSesion().catch(() => undefined);
     // Reinicia todo: la sesión se vuelve a consultar (401) y nada del usuario anterior queda en memoria.
     await consultasCliente.resetQueries();
