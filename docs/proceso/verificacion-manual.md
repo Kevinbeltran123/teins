@@ -204,6 +204,27 @@ Necesita la app 5: si campo avisa "Hay una versión nueva de la app", acéptela 
 
 **Anotar:** si el trazo se siente lento o se corta, y en qué pantalla.
 
+## Fase 11 · Cantidades con catálogo (iteración 11)
+
+Necesita la app 6: si campo avisa "Hay una versión nueva de la app", acéptela primero. Datos ficticios (R5): nada de la lista real de TEINS en el entorno de pruebas.
+
+1. En el computador, arme en Excel una hoja con las columnas **Código**, **Descripción** y **Unidad** y dos o tres filas inventadas (por ejemplo `C-12 · Cable 12 AWG · m`). Guárdela como **CSV (delimitado por comas)**.
+2. En oficina, **Catálogo** → **Elegir archivo CSV** → el archivo.
+   - Debe: "N ítems listos para importar" y, al importar, "Importado: N ítems nuevos y 0 actualizados". Los ítems aparecen en la lista y la búsqueda los encuentra.
+3. En el teléfono, inicie un levantamiento (fase 9, pasos 1 y 2). Al final del cuarto técnico está **Materiales**, con "Todavía no hay líneas".
+4. Toque **Agregar línea** dos veces. Escriba una descripción en cada una, una cantidad con coma ("25,5") y elija la unidad. Quite una tercera línea con **Quitar la línea 3**.
+   - Debe: el teclado de la cantidad es numérico con coma.
+5. Envíe y, en oficina, abra el levantamiento y tómelo.
+   - Debe: la tabla Materiales con la columna **Catálogo**, cada línea con una lista para elegir el ítem.
+6. Vincule una línea a un ítem. Corrija la otra con **Corregir materiales** (cambie la cantidad) y guarde.
+   - Debe: el historial dice "vinculó al catálogo “…”: sin vincular → C-12" y la corrección "materiales: 2 líneas → 2 líneas"; el vínculo sigue ahí después de corregir.
+7. Márquelo revisado. En **Visitas**, en la visita, **Exportar las cantidades** → **Descargar el detalle (CSV)** y **Descargar el resumen (CSV)**. Abra los dos en Excel.
+   - Debe: Excel abre las columnas separadas, con tildes y coma decimal; el resumen suma por código del catálogo.
+8. Opcional: publique el informe y abra el PDF.
+   - Debe: la tabla de materiales con coma decimal.
+
+**Anotar:** si las columnas de Excel no son las que usa TEINS (P29): son supuestas mientras responden.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.

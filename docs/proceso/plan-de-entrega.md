@@ -17,6 +17,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 8 | Producción provisional (transferible), respaldos diarios y simulacro | Copias probadas y entorno recreable antes del piloto (QA-10, QA-18) | Terminada; producción sin datos reales hasta transferirla a TEINS (ADR-0021) |
 | Iteración 9 | Secciones repetibles (pisos, áreas, tableros) | Formatos reales de TEINS como datos, no código (F2, QA-11) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 10 | Bocetos sobre cuadrícula (ADR-0019) | El croquis en papel pasa al teléfono, nítido en oficina y en el PDF (F3, P14) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
+| Iteración 11 | Cantidades con catálogo y exportación a Excel | Los materiales anotados en campo no se vuelven a digitar para cotizar (F9, P27 a P29) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -27,6 +28,8 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 1. **Verificación manual hecha por Kevin el 2026-09-25** en un iPhone 15 Pro con iOS 26.6.1 (fases 1 a 7 de [`verificacion-manual.md`](verificacion-manual.md); producción quedó para después). Todo funcionó salvo dos avisos que no aparecían, corregidos con su prueba de extremo a extremo y confirmados por Kevin en el iPhone el mismo día: "Oficina canceló esta visita" en el bloque azul de campo y "Su sesión se cerró" en el portal. Falta la fase 8 (producción), que Kevin dejó para después.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
 
+**Iteración 11 terminada el 2026-09-25:** cantidades con catálogo de campo a Excel, desplegadas en el entorno de pruebas con el formato de prueba v6 ("Materiales"). Las columnas del catálogo y de los CSV son supuestas (P28, P29) hasta que TEINS responda. La prueba en iPhone de las iteraciones 9 a 11 está en espera (fases 9 a 11 de la guía).
+
 **Iteración 10 terminada el 2026-09-25:** bocetos de campo al PDF, desplegados en el entorno de pruebas con el formato de prueba v5 ("Croquis del cuarto"). La prueba en iPhone de las iteraciones 9 y 10 está en espera (fases 9 y 10 de la guía).
 
 **Iteración 9 terminada el 2026-09-25:** secciones repetibles de campo al PDF, desplegadas en el entorno de pruebas con el formato de prueba v4 ("Tableros"). Falta probarlas en el iPhone (fase 9 de la guía). Producción sigue con la versión anterior.
@@ -35,7 +38,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 **Iteraciones 6 (administración) y 7 (visitas y clientes) terminadas el 2026-09-25** y desplegadas. Con ellas, TEINS opera el piloto desde las pantallas: solo la primera persona administradora y la publicación de formatos siguen por comando. En el entorno de pruebas, `oficina.prueba` tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
 
-Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8) y el formato del informe (P22, P23, P26). Mientras llegan, **cantidades con catálogo** (F9: la tabla de materiales en texto libre que oficina vincula a un catálogo y exporta a Excel); las secciones repetibles y los bocetos ya están. Antes del piloto conviene hacer la prueba en iPhone pendiente (fases 9 y 10) y actualizar producción. Después: passkeys y cifrado local.
+Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8), el formato del informe (P22, P23, P26) y su catálogo y columnas de Excel (P28, P29). Secciones repetibles, bocetos y cantidades ya están. Antes del piloto conviene hacer la prueba en iPhone pendiente (fases 9 a 11) y actualizar producción. Mientras TEINS responde: **cifrado local de los borradores** (un teléfono perdido no expone datos de clientes) y después passkeys.
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
 
@@ -745,3 +748,59 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Entrada:** trazo, línea, texto (se toca la hoja y se escribe), borrador por elemento (toque o arrastre), deshacer y rehacer (en memoria, durante la edición), zoom de 1× a 4× y desplazamiento con dos dedos. Rechazo de la palma: desde que aparece un lápiz, el dedo no dibuja.
 - **App 5:** `campo` sube a `VERSION_APP = 5` y el meta-esquema exige `appMinima` 5 a un formato con bocetos. Formato de prueba v5: v4 más "Croquis del cuarto" (opcional).
 - **Un error encontrado al probar:** el motor de sincronización pedía subir todo archivo como `image/jpeg`; el worker rechazaba el boceto (con razón) y el envío quedaba esperando. Ahora cada archivo sube con su tipo; lo cubre una prueba del motor.
+
+---
+
+## Iteración 11 · Cantidades con catálogo
+
+**Estado:** terminada el 2026-09-25 y desplegada en el entorno de pruebas (formato de prueba v6 sembrado). Falta la prueba en iPhone (fase 11 de la guía), en espera con las de las iteraciones 9 y 10.
+
+**Para qué:** que los materiales y trabajos que el técnico anota en campo no se vuelvan a digitar para cotizar: oficina los vincula al catálogo de TEINS, los suma por visita y los exporta a Excel (F9, P27, P28; reglas 6 y 7 del modelo de dominio).
+
+### Alcance
+
+- **Formato:** tipo de campo `cantidades` con sus unidades permitidas (`unidades`, como la medida). Exige app 6.
+- **Campo (app 6):** tabla de líneas: descripción, cantidad (decimal, mayor que cero), unidad y observación opcional; agregar y quitar líneas. Texto libre: el técnico no elige del catálogo (regla 6).
+- **Servidor:** al recibir el levantamiento, y después de cada corrección, las líneas se proyectan a una tabla relacional en la misma transacción (ADR-0006, parte 2). Allí vive el vínculo al catálogo. Una línea que desaparece se marca como quitada, nunca se borra (regla 14).
+- **Catálogo:** pantalla de oficina para crear, editar y desactivar ítems (código, descripción, unidad) e importarlos en bloque desde CSV (TEINS ya tiene su lista, P28).
+- **Revisión:** quien tiene la revisión corrige las líneas (con historial) y vincula cada una a un ítem del catálogo (queda en la auditoría).
+- **Exportación:** por visita, dos CSV que Excel en español abre directo: el detalle de líneas y el resumen sumado por ítem de catálogo (o por descripción y unidad si no está vinculado). Sin precios (regla 7).
+- **Informe:** la tabla de cantidades en el PDF.
+
+### Supuestos mientras TEINS responde
+
+| Pregunta | Supuesto |
+|---|---|
+| P28: ¿qué columnas tiene su catálogo? | Código, descripción y unidad |
+| P29: ¿qué columnas necesita el Excel? | Visita, cliente, sitio, levantamiento, técnico, sección, descripción, cantidad, unidad, observación, código y descripción del catálogo; el resumen suma por ítem y unidad |
+
+### Fuera de la iteración 11
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Sugerencias del catálogo en campo mientras se escribe | Cuando TEINS lo pida: exige bajar el catálogo al teléfono |
+| Precios y presupuestos | Módulo futuro (QA-12); nunca en la línea de cantidad (regla 7) |
+| Archivo .xlsx con formato | Cuando TEINS responda P29; mientras, CSV |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Extremo a extremo: el técnico anota líneas y envía; oficina importa un catálogo, vincula una línea, corrige otra y exporta el detalle y el resumen de la visita; el PDF trae la tabla | Hecho: `e2e/pruebas/cantidades.spec.ts` en Chromium y WebKit en local, y en Chromium contra el entorno de pruebas; la tabla del PDF, en `servidor/pruebas/cantidades.test.ts` |
+| 2. El servidor rechaza líneas sin descripción, con cantidad cero o con una unidad no permitida | Hecho: `cantidades_invalidas` en `dominio/src/cantidades.test.ts` y en el envío (`servidor/pruebas/cantidades.test.ts`) |
+| 3. La tabla relacional sigue al documento: corregir agrega, cambia o marca quitadas las líneas y conserva los vínculos | Hecho: `servidor/pruebas/cantidades.test.ts` (proyección, corrección y exportación) |
+| 4. Vincular solo lo hace quien tiene la revisión, y queda en la auditoría | Hecho: sin revisión responde `estado_invalido`, un ítem desactivado `entrada_invalida`, el técnico no ve el catálogo (403); `linea_vinculada` en la auditoría con el ítem anterior y el nuevo |
+| 5. Lo anterior sigue igual y el presupuesto de campo se respeta | Hecho: verificación completa en el orden de la integración continua (dominio 73, protocolo 18, oficina 4, campo 41, servidor 89, extremo a extremo 21 y 1 omitida); campo 115,4 de 120 KB |
+
+### Decisiones tomadas al construirlo
+
+- **La cantidad es un decimal en texto** ("12.5"), mayor que cero, como la medida (ADR-0006): nada de coma flotante en lo que se cotiza. Campo y oficina aceptan "12,5" y guardan el canónico; lo que no se puede leer se guarda tal cual y la validación del envío lo marca (`cantidades_invalidas`).
+- **Cada línea tiene un id de 8 caracteres** que genera quien la crea. El vínculo al catálogo y las correcciones siguen la línea por su id, no por su posición: reordenar o quitar otra línea no cambia a qué ítem está vinculada.
+- **El vínculo no está en las respuestas, está en la proyección** (`levantamientos.lineas_cantidad`, clave levantamiento, sección, campo y línea). Lo que escribió el técnico no cambia al vincular; la proyección se actualiza en la misma transacción que el envío y que cada corrección, y una línea que desaparece queda marcada `quitada_en` con su vínculo (regla 14).
+- **Vincular es una acción de revisión:** solo quien tiene la revisión, sube la versión del levantamiento (dos pestañas no se pisan, QA-25) y queda en la auditoría como `linea_vinculada` con el ítem anterior y el nuevo. Un ítem desactivado no se vincula, pero las líneas que ya lo tenían lo conservan.
+- **Módulo `catalogo` propio** (esquema `catalogo`, RLS por organización), con interfaz pública `items(ids)`: levantamientos no lee su tabla. Un ítem nunca se borra; se desactiva. La importación actualiza por código (el último del archivo manda) y reactiva lo que estaba desactivado.
+- **El CSV lo arma el navegador;** el servidor entrega los datos (`cantidadesDeVisita`). Punto y coma, coma decimal, BOM y CRLF para que Excel en español lo abra con doble clic. Una celda de texto libre que empieza por `=`, `+`, `-` o `@` lleva un apóstrofo delante: Excel no la ejecuta como fórmula.
+- **La exportación incluye levantamientos sin revisar,** con un aviso: oficina puede querer cotizar antes de cerrar la revisión. El resumen suma por ítem y unidad; lo no vinculado, por descripción (sin distinguir mayúsculas ni espacios) y unidad.
+- **Elegir el ítem es una lista nativa** con todos los activos ("C-12 · Cable THHN 12 AWG (m)"), sin filtrar por la unidad de la línea: el técnico puede escribir "und" donde el catálogo dice "UN". Si el catálogo real es de miles de ítems y la lista se vuelve lenta, se cambia por un buscador.
+- **Contra el entorno de pruebas, un navegador y una prueba a la vez:** tres pruebas seguidas chocan con el límite de 5 inicios de sesión por minuto (QA-7) y la de repeticiones venció esperando la bandeja; sola pasó en 28 s.
+- **oficina estrena pruebas unitarias** (`src/csv.test.ts`): la lectura del catálogo y la escritura de los CSV no se prueban bien solo de punta a punta.

@@ -6,7 +6,7 @@ Instrucciones para cualquier agente de programación que trabaje en este reposit
 
 Sistema de levantamientos técnicos para TEINS: los técnicos capturan información en campo (con o sin conexión) desde una PWA, oficina la revisa y corrige con trazabilidad, y el cliente descarga el informe PDF desde un portal. Monolito modular en TypeScript sobre PostgreSQL.
 
-**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-25: recorrido delgado completo (cortes 0 a 5: captura, envío, bajada, revisión, informe con PDF y portal del cliente), más las iteraciones 6 (administración con segundo factor) y 7 (visitas y clientes desde oficina), y producción provisional montada y respaldada (iteración 8, `docs/proceso/produccion.md`; sin datos reales hasta transferirla a TEINS, ADR-0021), desplegado en el entorno de pruebas de Railway (`docs/proceso/entorno-de-pruebas.md`). Pendientes: prueba en iPhone (aplazada por Kevin) y respuestas de TEINS para ajustar el informe. Iteraciones 9 (secciones repetibles) y 10 (bocetos) terminadas en el entorno de pruebas, con la prueba en iPhone en espera. Siguiente recomendada: cantidades con catálogo mientras TEINS responde P7, P8 y crea su cuenta.
+**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-25: recorrido delgado completo (cortes 0 a 5: captura, envío, bajada, revisión, informe con PDF y portal del cliente), más las iteraciones 6 (administración con segundo factor) y 7 (visitas y clientes desde oficina), y producción provisional montada y respaldada (iteración 8, `docs/proceso/produccion.md`; sin datos reales hasta transferirla a TEINS, ADR-0021), desplegado en el entorno de pruebas de Railway (`docs/proceso/entorno-de-pruebas.md`). Pendientes: prueba en iPhone (aplazada por Kevin) y respuestas de TEINS para ajustar el informe. Iteraciones 9 (secciones repetibles), 10 (bocetos) y 11 (cantidades con catálogo) terminadas en el entorno de pruebas, con la prueba en iPhone en espera. Siguiente recomendada: cifrado local de los borradores mientras TEINS responde P7, P8, P28 y P29 y crea su cuenta.
 
 ## Antes de tocar cualquier cosa, lee en este orden
 
@@ -116,6 +116,6 @@ Verificación, en el orden de la integración continua (ADR-0018):
 - `pnpm arquitectura`: fronteras entre paquetes y módulos (`.dependency-cruiser.cjs`).
 - `pnpm licencias`: sin AGPL ni licencias sin revisar (`scripts/verificar-licencias.mjs`).
 - `pnpm audit --prod --audit-level high`
-- `pnpm test`: dominio, contrato, campo y servidor (este último levanta PostgreSQL y S3 con Testcontainers).
+- `pnpm test`: dominio, contrato, campo, oficina (CSV) y servidor (este último levanta PostgreSQL y S3 con Testcontainers).
 - `pnpm presupuesto`: JavaScript inicial de campo (compile campo antes).
 - `pnpm --filter @teins/e2e test`: extremo a extremo en Chromium y WebKit (requiere `docker compose up`). Contra el entorno de pruebas: `E2E_CAMPO_URL`, `E2E_OFICINA_URL` y `E2E_PORTAL_URL` (ver `docs/proceso/entorno-de-pruebas.md`).
