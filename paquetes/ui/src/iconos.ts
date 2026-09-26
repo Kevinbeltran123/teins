@@ -7,6 +7,7 @@ export type { LucideIcon } from "lucide-react";
 export {
   ArrowDown,
   ArrowUp,
+  Bell,
   Building,
   CalendarDays,
   Camera,
@@ -38,8 +39,10 @@ export {
   RefreshCw,
   Search,
   Send,
+  Share,
   ShieldCheck,
   Smartphone,
+  SquarePlus,
   Trash,
   TriangleAlert,
   Undo2,
