@@ -6,7 +6,7 @@ La dirección cambió a **Consola** en la iteración 14 (`DESIGN.md`); el lienzo
 
 1. **Instalación guiada de la PWA en iPhone:** hoy es un aviso con los pasos.
 2. **Lienzo con el juego completo de Consola:** el lienzo tiene la dirección elegida en dos pantallas (accesos de clientes y captura); falta pasar al lienzo las demás tal como quedaron en código, para revisar con TEINS.
-3. **Columna "Visita" en la bandeja de levantamientos:** hoy la lista dice técnico, formato y fotos; quién es el cliente solo se ve al abrir el detalle. Requiere agregar la visita al resumen del levantamiento en `protocolo` y en la consulta del servidor.
+3. **Nombre del formato en la bandeja:** la columna "Formato" muestra la clave (`prueba-ups`), no el nombre que ve el técnico; el nombre solo viaja en el detalle.
 4. **Logo en vector** (insumo de TEINS): con todas las superficies claras sirve la versión a color.
 5. **Plantilla del PDF** (ADR-0013) con los mismos tokens, cuando TEINS responda P22, P23 y P26.
 

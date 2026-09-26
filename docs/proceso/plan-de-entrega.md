@@ -914,13 +914,14 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Oficina:** menú lateral con iconos y la cuenta de lo que espera revisión; cada pantalla con su encabezado; tablas con "Más acciones"; crear y editar en hoja lateral con errores por campo; confirmaciones en diálogo; credenciales en un diálogo que no se cierra por accidente; segundo factor en pasos numerados con los códigos de respaldo después de verificar; revisión e informe en dos columnas con el panel de acción fijo; aviso al salir del informe con cambios sin guardar.
 - **Campo:** barra superior con el estado de sincronización; la siguiente visita como tarjeta focal; barra de envío fija con lo que falta y resumen con enlaces; confirmaciones en hoja inferior; fotos a pantalla completa que se quitan con deshacer (`quitarFoto`); sin la línea "Datos de prueba" que se habría visto en producción; diagnóstico plegado.
 - **Portal:** ingreso y lista de informes en la dirección nueva, sin el marcador `[LOGO]` a la vista del cliente.
-- **Servidor:** el PDF se descarga como archivo con un nombre legible (`Content-Disposition: attachment`), en oficina y en el portal; "Revisados" va del más reciente al más antiguo.
+- **Servidor:** el PDF se descarga como archivo con un nombre legible (`Content-Disposition: attachment`), en oficina y en el portal; "Revisados" va del más reciente al más antiguo; en Administración, los usuarios activos primero.
+- **Columna "Visita" en la bandeja:** cada levantamiento dice de qué cliente y sitio es sin abrirlo. El resumen del levantamiento en `protocolo` trae la visita (nula para los de antes de las visitas); el servidor la lee por la interfaz del módulo de visitas (`resumenes`), en una consulta por página.
 
 ### Fuera de la iteración 14
 
 | Qué | Dónde se resuelve |
 |---|---|
-| Columna "Visita" (cliente y sitio) en la bandeja de levantamientos | Siguiente cambio de oficina: requiere agregar la visita al resumen del levantamiento en `protocolo` y en la consulta (`docs/diseno/pendientes.md`) |
+| Nombre del formato en la bandeja (hoy muestra la clave) | `docs/diseno/pendientes.md` |
 | Las demás pantallas de Consola en el lienzo, para revisarlas con TEINS | `docs/diseno/pendientes.md` |
 | Borrar del almacenamiento una foto que ya había subido y el técnico quitó antes de enviar | Tarea de limpieza del worker, cuando el volumen lo justifique: hoy queda huérfana y no se entrega |
 | Instalación guiada de la PWA en iPhone | Siguiente en código mientras TEINS responde |
@@ -935,7 +936,8 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 | 4. Lo creado aparece primero y resaltado, con notificación | Hecho: `programacion.spec.ts` y `administracion.spec.ts` lo comprueban |
 | 5. El PDF se descarga sin salir de la pantalla | Hecho: `informe.spec.ts` y `portal.spec.ts` esperan la descarga; pruebas del servidor del encabezado |
 | 6. Quitar una foto no rompe la sincronización ni pierde otra | Hecho: 4 pruebas nuevas de `quitarFoto` en `campo` |
-| 7. Lo anterior sigue igual y el presupuesto de campo se respeta | Hecho: tipos, reglas de arquitectura, licencias y auditoría en verde; dominio 73, protocolo 18, oficina 4, campo 51, servidor 95; extremo a extremo 24 y 2 omitidas (Chromium y WebKit); campo 116,0 de 120 KB |
+| 6b. La bandeja dice de qué cliente y sitio es cada levantamiento | Hecho: `informes.test.ts` ("bandeja", en cualquier pestaña), `api.test.ts` (nulo sin visita) y `envio.spec.ts` |
+| 7. Lo anterior sigue igual y el presupuesto de campo se respeta | Hecho: tipos, reglas de arquitectura, licencias y auditoría en verde; dominio 73, protocolo 18, oficina 4, campo 51, servidor 96; extremo a extremo 24 y 2 omitidas (Chromium y WebKit); campo 116,0 de 120 KB |
 | 8. Desplegada en el entorno de pruebas y probada en el iPhone | Pendiente |
 
 ### Decisiones tomadas al construirlo
