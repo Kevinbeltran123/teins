@@ -45,6 +45,7 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0019](0019-bocetos.md) | Bocetos vectoriales con perfect-freehand | Aceptada |
 | [0020](0020-marca-por-organizacion.md) | Marca por organización con tokens de diseño | Aceptada |
 | [0021](0021-produccion-provisional-transferible.md) | Producción provisional en un proyecto transferible, sin datos reales hasta que pase a TEINS | Aceptada |
+| [0022](0022-cifrado-local-en-campo.md) | Cifrado local en campo: qué se sella, cómo se escribe y cómo se migra | Aceptada |
 
 ### Estados
 
