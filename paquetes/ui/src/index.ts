@@ -1,5 +1,6 @@
 export { Aviso } from "./Aviso";
 export { Boceto, ElementoDeBoceto } from "./Boceto";
+export { Firma } from "./Firma";
 export type { ElementoDibujable } from "./Boceto";
 export { Boton, BotonIcono, claseBoton } from "./Boton";
 export type { TamanoBoton, VarianteBoton } from "./Boton";
