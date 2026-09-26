@@ -96,9 +96,12 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
       registrarOperacion(app, "listarLevantamientos", {
         politica: politicas.oficina,
         manejar: async ({ consulta, actor }) => {
-          const { filas, siguienteCursor, total } = await enOrganizacion(bd, actor.organizacionId, (tx) =>
-            paginaPorEstado(tx, consulta.estado, consulta.cursor, consulta.limite),
-          );
+          const { filas, siguienteCursor, total, visitasDe } = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const pagina = await paginaPorEstado(tx, consulta.estado, consulta.cursor, consulta.limite);
+            // Cliente y sitio de toda la página en una consulta, por la interfaz del módulo de visitas.
+            const ids = [...new Set(pagina.filas.flatMap((f) => (f.visitaId ? [f.visitaId] : [])))];
+            return { ...pagina, visitasDe: await visitas.resumenes(tx, ids) };
+          });
           const persona = await personas(actor.organizacionId, filas.flatMap((f) => [f.tecnicoId, f.revisorId]));
           return {
             elementos: filas.map((f) => ({
@@ -110,6 +113,10 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
               revisor: persona(f.revisorId),
               recibidoEn: f.recibidoEn.toISOString(),
               fotos: f.cantidadFotos,
+              visita: (() => {
+                const v = f.visitaId ? visitasDe.get(f.visitaId) : undefined;
+                return v ? { id: v.id, cliente: v.cliente.nombre, sitio: v.sitio.nombre } : null;
+              })(),
               version: f.version,
             })),
             siguienteCursor,

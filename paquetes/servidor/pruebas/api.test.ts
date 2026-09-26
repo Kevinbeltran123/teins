@@ -327,6 +327,9 @@ describe("envío de levantamientos (ADR-0003, ADR-0005)", () => {
       cursor = pagina.siguienteCursor;
     } while (cursor);
     expect(vistos).toEqual([...ids].reverse());
+    // Enviados sin visita (como los de los cortes 0 y 1): la bandeja lo dice con un nulo, no con un error.
+    const primera = (await app.inject({ method: "GET", url: "/api/levantamientos?estado=revisado&limite=1", headers: { cookie: oficina.cookie } })).json();
+    expect(primera.elementos[0].visita).toBeNull();
   });
 });
 

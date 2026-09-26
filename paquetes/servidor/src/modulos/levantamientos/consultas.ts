@@ -37,6 +37,7 @@ export async function paginaPorEstado(tx: TxOrganizacion, estado: EstadoRevision
       version: levantamientos.version,
       recibidoEn: levantamientos.recibidoEn,
       cantidadFotos: levantamientos.cantidadFotos,
+      visitaId: levantamientos.visitaId,
     })
     .from(levantamientos)
     .where(

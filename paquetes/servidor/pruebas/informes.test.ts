@@ -83,6 +83,17 @@ async function descargar(cookie: string, informeId: string, numero: number) {
   return Buffer.from(await archivo.arrayBuffer());
 }
 
+describe("bandeja (iteración 14)", () => {
+  it("cada levantamiento dice de qué cliente y sitio es, en cualquier pestaña", async () => {
+    const { oficina, visitaId, revisado, enviado } = await visitaConRevisado();
+    const deLaPestana = async (estado: string, id: string) =>
+      (await get(oficina.cookie, `/api/levantamientos?estado=${estado}`)).json().elementos.find((e: { id: string }) => e.id === id);
+    const visita = { id: visitaId, cliente: "Cliente <ficticio>", sitio: "Sede" };
+    expect((await deLaPestana("enviado", enviado)).visita).toEqual(visita);
+    expect((await deLaPestana("revisado", revisado)).visita).toEqual(visita);
+  });
+});
+
 describe("informe (corte 4)", () => {
   it("compone, publica y genera en segundo plano un PDF con los datos y el plano anexo, que no se vuelve a generar (QA-17)", async () => {
     const { oficina, visitaId, revisado, enviado, informeId } = await visitaConRevisado();
