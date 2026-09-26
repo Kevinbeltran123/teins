@@ -21,12 +21,26 @@ export interface LevantamientoRecibido {
   recibidoEn: Date;
 }
 
+/** Lo que se proyecta a la tabla de líneas de cantidad (ADR-0006, parte 2; iteración 11). */
+export interface DatosDeProyeccion {
+  organizacionId: string;
+  levantamientoId: string;
+  formato: VersionFormato;
+  respuestas: Respuestas;
+  repeticiones: Repeticiones;
+}
+
+/** Proyección de las cantidades: al recibir y al corregir, en la misma transacción. */
+export interface ProyeccionDeCantidades {
+  proyectarCantidades(tx: TxOrganizacion, datos: DatosDeProyeccion): Promise<void>;
+}
+
 export interface ComandoReservado {
   usuarioId: string;
   resultado: ResultadoComando | null;
 }
 
-export interface RepositorioLevantamientos {
+export interface RepositorioLevantamientos extends ProyeccionDeCantidades {
   /** Inserta la llave; un duplicado en vuelo queda bloqueado por el índice único hasta que el primero confirme. */
   reservarLlave(tx: TxOrganizacion, datos: { llave: string; organizacionId: string; usuarioId: string; tipo: string }): Promise<void>;
   guardarResultado(tx: TxOrganizacion, llave: string, resultado: ResultadoComando): Promise<void>;
@@ -66,7 +80,7 @@ export interface NuevoComentario {
   creadoEn: Date;
 }
 
-export interface RepositorioRevision {
+export interface RepositorioRevision extends ProyeccionDeCantidades {
   obtener(tx: TxOrganizacion, id: string): Promise<LevantamientoEnRevision | undefined>;
   /**
    * Concurrencia optimista (ADR-0005, patrón 2): actualiza solo si nadie guardó desde `versionEsperada`
@@ -74,6 +88,15 @@ export interface RepositorioRevision {
    */
   actualizar(tx: TxOrganizacion, id: string, versionEsperada: number, cambios: CambiosDeRevision): Promise<boolean>;
   agregarComentario(tx: TxOrganizacion, comentario: NuevoComentario): Promise<void>;
+  /**
+   * Vincula (o desvincula, con `null`) una línea vigente al catálogo. Devuelve el ítem que tenía antes,
+   * o `undefined` si la línea no existe.
+   */
+  vincularLinea(tx: TxOrganizacion, datos: { levantamientoId: string; seccion: string; campo: string; linea: string; itemId: string | null; autorId: string }): Promise<string | null | undefined>;
+}
+
+export interface PuertoCatalogo {
+  items(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, { id: string; activo: boolean }>>;
 }
 
 export interface PuertoFormatos {

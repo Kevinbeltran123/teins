@@ -97,6 +97,14 @@ export async function recibirEnvio(
         enviadoEnDispositivo: new Date(datos.enviadoEn),
         recibidoEn,
       });
+      // Las líneas de cantidad, a su tabla, en la misma transacción (ADR-0006, parte 2).
+      await deps.repositorio.proyectarCantidades(tx, {
+        organizacionId: actor.organizacionId,
+        levantamientoId: datos.id,
+        formato,
+        respuestas: datos.respuestas,
+        repeticiones: datos.repeticiones ?? {},
+      });
 
       const comun = {
         organizacionId: actor.organizacionId,

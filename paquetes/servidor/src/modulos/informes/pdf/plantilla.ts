@@ -1,4 +1,4 @@
-import { bloques, describirValor, esBoceto, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
+import { aDecimalColombiano, bloques, describirValor, esBoceto, esCantidades, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
 
 /**
  * Plantilla del informe (ADR-0013): HTML y CSS con la dirección de DESIGN.md. Se arma solo desde la
@@ -45,7 +45,7 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
       const secciones = bloques(l.formato, l.repeticiones ?? {})
         .map(({ seccion: s, clave, titulo }) => {
           const datos = s.campos
-            .filter((campo) => campo.tipo !== "foto" && campo.tipo !== "boceto")
+            .filter((campo) => campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "cantidades")
             .map((campo) => {
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
               const vacio = valor === undefined || esNoObtenido(valor);
@@ -76,7 +76,19 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
               return `<h4>${escapar(campo.etiqueta)}</h4><figure class="boceto">${svg ?? '<div class="falta">[BOCETO]</div>'}</figure>`;
             })
             .join("");
-          return `<section class="seccion"><h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${galerias}${croquis}</section>`;
+          // Cantidades (F9): una tabla por campo, sin precios (regla 7).
+          const cantidades = s.campos
+            .filter((campo) => campo.tipo === "cantidades")
+            .map((campo) => {
+              const valor = l.respuestas[clave]?.[campo.clave];
+              if (!esCantidades(valor) || valor.length === 0) return "";
+              const filas = valor
+                .map((linea) => `<tr><td>${escapar(linea.descripcion)}</td><td class="numero">${aDecimalColombiano(linea.cantidad)}</td><td>${escapar(linea.unidad)}</td><td>${escapar(linea.observacion ?? "")}</td></tr>`)
+                .join("");
+              return `<h4>${escapar(campo.etiqueta)}</h4><table class="cantidades"><thead><tr><th>Descripción</th><th class="numero">Cantidad</th><th>Unidad</th><th>Observación</th></tr></thead><tbody>${filas}</tbody></table>`;
+            })
+            .join("");
+          return `<section class="seccion"><h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${cantidades}${galerias}${croquis}</section>`;
         })
         .join("");
       return `<article class="capitulo">
@@ -125,6 +137,11 @@ table.datos th, table.datos td { text-align: left; vertical-align: top; padding:
 table.datos th { width: 38%; font-weight: 400; color: ${MARCA.secundario}; }
 table.datos td { font-weight: 700; }
 table.datos tr { break-inside: avoid; }
+table.cantidades { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+table.cantidades th { text-align: left; font-weight: 400; color: ${MARCA.secundario}; border-bottom: 1px solid ${MARCA.division}; padding: 4pt 6pt 4pt 0; }
+table.cantidades td { padding: 4pt 6pt 4pt 0; border-bottom: 1px solid ${MARCA.division}; vertical-align: top; }
+table.cantidades tr { break-inside: avoid; }
+table.cantidades .numero { text-align: right; font-variant-numeric: tabular-nums; }
 .tenue { color: ${MARCA.secundario}; font-weight: 400 !important; }
 .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
 figure { margin: 0; break-inside: avoid; }

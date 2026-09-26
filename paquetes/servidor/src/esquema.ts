@@ -10,3 +10,4 @@ export * from "./modulos/clientes/esquema";
 export * from "./modulos/visitas/esquema";
 export * from "./modulos/informes/esquema";
 export * from "./modulos/portal/esquema";
+export * from "./modulos/catalogo/esquema";

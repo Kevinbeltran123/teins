@@ -14,6 +14,10 @@ export type TipoEvento =
   | "visita_cancelada"
   | "cliente_creado"
   | "sitio_agregado"
+  | "item_catalogo_creado"
+  | "item_catalogo_actualizado"
+  | "catalogo_importado"
+  | "linea_vinculada"
   | "usuario_desactivado"
   | "usuario_creado"
   | "contrasena_restablecida"
@@ -32,7 +36,7 @@ export type TipoEvento =
   | "acceso_cliente_regenerado"
   | "ingreso_portal"
   | "descarga_portal";
-export type TipoAgregado = "levantamiento" | "organizacion" | "visita" | "usuario" | "informe" | "acceso_cliente" | "cliente";
+export type TipoAgregado = "levantamiento" | "organizacion" | "visita" | "usuario" | "informe" | "acceso_cliente" | "cliente" | "item_catalogo";
 
 export interface EntradaAuditoria {
   organizacionId: string;

@@ -1,19 +1,20 @@
 import type { FastifyInstance } from "fastify";
-import type { EstadoRevision, Repeticiones, Respuestas } from "@teins/dominio";
+import { rutaLegible, type EstadoRevision, type Repeticiones, type Respuestas } from "@teins/dominio";
 import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { enOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Archivos } from "../archivos";
+import type { Catalogo } from "../catalogo";
 import { leerCadena, registrar, verificarCadena } from "../auditoria";
 import { registrarCambios } from "../cambios";
 import type { Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Visitas } from "../visitas";
 import { recibirEnvio, type DependenciasEnvio } from "./aplicacion/recibir-envio";
-import { comentar, corregirCampos, marcar, tomar, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
-import { comentariosDe, conteosPorVisita, detalle, deVisita, estadosDe, paginaPorEstado, type ConteoDeVisita } from "./consultas";
+import { comentar, corregirCampos, marcar, tomar, vincular, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
+import { comentariosDe, conteosPorVisita, detalle, deVisita, estadosDe, lineasDeVisita, paginaPorEstado, vinculosDe, type ConteoDeVisita } from "./consultas";
 import { repositorioDrizzle, repositorioRevision } from "./repositorio";
 
 export interface ComentarioParaElTecnico {
@@ -61,14 +62,15 @@ interface Dependencias {
   archivos: Archivos;
   visitas: Pick<Visitas, "existe" | "resumenes">;
   identidad: Pick<Identidad, "nombres">;
+  catalogo: Pick<Catalogo, "items">;
 }
 
 const SIN_NOMBRE = "[Usuario no disponible]";
 
 /** Interfaz pública del módulo de levantamientos: núcleo del sistema. */
-export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad }: Dependencias): Levantamientos {
+export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad, catalogo }: Dependencias): Levantamientos {
   const envio: DependenciasEnvio = { bd, repositorio: repositorioDrizzle, formatos, archivos, visitas, registrarAuditoria: registrar, registrarCambios };
-  const revision: DependenciasRevision = { bd, repositorio: repositorioRevision, formatos, registrarAuditoria: registrar, registrarCambios, nombres: identidad.nombres };
+  const revision: DependenciasRevision = { bd, repositorio: repositorioRevision, formatos, registrarAuditoria: registrar, registrarCambios, nombres: identidad.nombres, catalogo };
 
   async function personas(organizacionId: string, ids: readonly (string | null)[]) {
     const nombres = await identidad.nombres(organizacionId, [...new Set(ids.filter((i): i is string => i !== null))]);
@@ -125,10 +127,16 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             const definicion = await formatos.obtener(tx, fila.formato, fila.versionFormato);
             if (!definicion) return null;
             const visita = fila.visitaId ? (await visitas.resumenes(tx, [fila.visitaId])).get(fila.visitaId) : undefined;
-            return { fila, definicion, visita, comentarios: await comentariosDe(tx, [fila.id]) };
+            const lineasVinculadas = await vinculosDe(tx, fila.id);
+            const items = await catalogo.items(tx, lineasVinculadas.map((v) => v.itemId!));
+            const vinculos = lineasVinculadas.flatMap((v) => {
+              const item = items.get(v.itemId!);
+              return item ? [{ seccion: v.seccion, campo: v.campo, linea: v.linea, item: { id: item.id, codigo: item.codigo, descripcion: item.descripcion, unidad: item.unidad } }] : [];
+            });
+            return { fila, definicion, visita, comentarios: await comentariosDe(tx, [fila.id]), vinculos };
           });
           if (!resultado) throw problema("no_encontrado");
-          const { fila, definicion, visita, comentarios } = resultado;
+          const { fila, definicion, visita, comentarios, vinculos } = resultado;
           const persona = await personas(actor.organizacionId, [fila.tecnicoId, fila.revisorId, ...comentarios.map((c) => c.autorId)]);
           return {
             id: fila.id,
@@ -142,6 +150,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             version: fila.version,
             respuestas: fila.respuestas,
             repeticiones: fila.repeticiones,
+            vinculos,
             formatoDefinicion: definicion,
             creadoEnDispositivo: fila.creadoEnDispositivo.toISOString(),
             enviadoEnDispositivo: fila.enviadoEnDispositivo.toISOString(),
@@ -169,6 +178,49 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
       registrarOperacion(app, "corregirLevantamiento", {
         politica: politicas.oficina,
         manejar: ({ parametros: { id }, cuerpo, actor, correlacion }) => corregirCampos(revision, actor, id, cuerpo.version, cuerpo.correcciones, cuerpo.motivo, correlacion),
+      });
+
+      registrarOperacion(app, "vincularLinea", {
+        politica: politicas.oficina,
+        manejar: ({ parametros: { id }, cuerpo, actor, correlacion }) => vincular(revision, actor, id, cuerpo, correlacion),
+      });
+
+      registrarOperacion(app, "cantidadesDeVisita", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { id }, actor }) => {
+          const r = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const visita = (await visitas.resumenes(tx, [id])).get(id);
+            if (!visita) return null;
+            const filas = await lineasDeVisita(tx, id);
+            const items = await catalogo.items(tx, [...new Set(filas.flatMap((f) => (f.itemId ? [f.itemId] : [])))]);
+            const definiciones = new Map<string, Awaited<ReturnType<typeof formatos.obtener>>>();
+            for (const f of filas) {
+              const k = `${f.formato}@${f.versionFormato}`;
+              if (!definiciones.has(k)) definiciones.set(k, await formatos.obtener(tx, f.formato, f.versionFormato));
+            }
+            return { visita, filas, items, definiciones };
+          });
+          if (!r) throw problema("no_encontrado", "La visita no existe");
+          const persona = await personas(actor.organizacionId, r.filas.map((f) => f.tecnicoId));
+          return {
+            visita: { cliente: r.visita.cliente.nombre, sitio: r.visita.sitio.nombre, programadaPara: r.visita.programadaPara },
+            lineas: r.filas.map((f) => {
+              const definicion = r.definiciones.get(`${f.formato}@${f.versionFormato}`);
+              const item = f.itemId ? r.items.get(f.itemId) : undefined;
+              return {
+                levantamientoId: f.levantamientoId,
+                tecnico: persona(f.tecnicoId)!.nombre,
+                estado: f.estado as EstadoRevision,
+                ubicacion: definicion ? rutaLegible(definicion, f.repeticiones, f.seccion, f.campo) : `${f.seccion} · ${f.campo}`,
+                descripcion: f.descripcion,
+                cantidad: f.cantidad,
+                unidad: f.unidad,
+                observacion: f.observacion,
+                item: item ? { codigo: item.codigo, descripcion: item.descripcion } : null,
+              };
+            }),
+          };
+        },
       });
 
       registrarOperacion(app, "marcarRevisado", {

@@ -3,7 +3,7 @@ import { bloqueDe, corregir, marcarRevisado, puedeEditar, tomarRevision, type Es
 import type { Actor } from "../../../plataforma/actor";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../../plataforma/base-de-datos";
 import { problema } from "../../../plataforma/errores";
-import type { LevantamientoEnRevision, PuertoFormatos, RegistrarAuditoria, RegistrarCambios, RepositorioRevision } from "./puertos";
+import type { LevantamientoEnRevision, PuertoCatalogo, PuertoFormatos, RegistrarAuditoria, RegistrarCambios, RepositorioRevision } from "./puertos";
 
 export interface DependenciasRevision {
   bd: BaseDeDatos;
@@ -11,6 +11,7 @@ export interface DependenciasRevision {
   formatos: PuertoFormatos;
   registrarAuditoria: RegistrarAuditoria;
   registrarCambios: RegistrarCambios;
+  catalogo: PuertoCatalogo;
   /** Para decir quién tiene la revisión cuando otra persona intenta tomarla. */
   nombres: (organizacionId: string, ids: readonly string[]) => Promise<Map<string, string>>;
   reloj?: () => Date;
@@ -112,6 +113,13 @@ export function corregirCampos(
     if (r.cambios.length === 0) return { version: actual.version, cambios: 0 };
 
     const version = await guardar(deps, tx, actual, { respuestas: r.respuestas });
+    await deps.repositorio.proyectarCantidades(tx, {
+      organizacionId: actor.organizacionId,
+      levantamientoId: id,
+      formato,
+      respuestas: r.respuestas,
+      repeticiones: actual.repeticiones,
+    });
     // Un registro por campo, todos con la misma correlación: "estos cambios fueron un solo guardado" (ADR-0008).
     await deps.registrarAuditoria(
       tx,
@@ -194,5 +202,41 @@ export function comentar(
     ]);
     await avisarAlTecnico(deps, tx, actor, actual);
     return comentario;
+  });
+}
+
+/**
+ * Vincula una línea de cantidad al catálogo (regla 6: lo completa oficina). Solo quien tiene la revisión,
+ * con la versión vista (QA-25); queda en la auditoría como un cambio posterior al envío (regla 8).
+ */
+export function vincular(
+  deps: DependenciasRevision,
+  actor: Actor,
+  id: string,
+  datos: { version: number; seccion: string; campo: string; linea: string; itemId: string | null },
+  correlacion: string,
+): Promise<{ version: number }> {
+  return conVersion(deps, actor, id, datos.version, async (tx, actual) => {
+    const sinPermiso = puedeEditar({ estado: actual.estado, revisorId: actual.revisorId }, actor.usuarioId);
+    if (sinPermiso === "no_tomado") throw problema("no_tomado", "Solo quien tomó la revisión vincula las cantidades");
+    if (sinPermiso) throw problema("estado_invalido", "Solo se vincula en un levantamiento en revisión");
+    if (datos.itemId) {
+      const item = (await deps.catalogo.items(tx, [datos.itemId])).get(datos.itemId);
+      if (!item?.activo) throw problema("entrada_invalida", "El ítem no existe en el catálogo o está desactivado");
+    }
+    const anterior = await deps.repositorio.vincularLinea(tx, { levantamientoId: id, ...datos, autorId: actor.usuarioId });
+    if (anterior === undefined) throw problema("no_encontrado", "La línea no existe en este levantamiento");
+    if (anterior === datos.itemId) return { version: actual.version };
+    const version = await guardar(deps, tx, actual, {});
+    await deps.registrarAuditoria(tx, [
+      {
+        ...comun(actor, id, correlacion),
+        tipoEvento: "linea_vinculada" as const,
+        rutaCampo: `${datos.seccion}.${datos.campo}`,
+        valorAnterior: { linea: datos.linea, item: anterior },
+        valorNuevo: { linea: datos.linea, item: datos.itemId },
+      },
+    ]);
+    return { version };
   });
 }

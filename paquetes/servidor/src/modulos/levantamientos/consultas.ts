@@ -1,8 +1,8 @@
-import { and, asc, count, eq, gt, inArray, or } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import type { EstadoRevision } from "@teins/dominio";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
-import { comentarios, levantamientos } from "./esquema";
+import { comentarios, levantamientos, lineasCantidad } from "./esquema";
 
 /** Cursor opaco de paginación por llave (ADR-0014): estable aunque lleguen envíos nuevos. */
 function leerCursor(cursor: string | undefined): { recibidoEn: Date; id: string } | null {
@@ -130,4 +130,36 @@ export async function conteosPorVisita(tx: TxOrganizacion, visitaIds: readonly s
     resultado.set(f.visitaId, c);
   }
   return resultado;
+}
+
+/** Líneas vigentes vinculadas al catálogo de un levantamiento (para la revisión). */
+export async function vinculosDe(tx: TxOrganizacion, levantamientoId: string) {
+  return tx
+    .select({ seccion: lineasCantidad.seccion, campo: lineasCantidad.campo, linea: lineasCantidad.linea, itemId: lineasCantidad.itemCatalogoId })
+    .from(lineasCantidad)
+    .where(and(eq(lineasCantidad.levantamientoId, levantamientoId), isNull(lineasCantidad.quitadaEn), isNotNull(lineasCantidad.itemCatalogoId)));
+}
+
+/** Líneas vigentes de todos los levantamientos de una visita, en orden, con lo necesario para exportarlas. */
+export async function lineasDeVisita(tx: TxOrganizacion, visitaId: string) {
+  return tx
+    .select({
+      levantamientoId: levantamientos.id,
+      tecnicoId: levantamientos.tecnicoId,
+      estado: levantamientos.estado,
+      formato: levantamientos.formato,
+      versionFormato: levantamientos.versionFormato,
+      repeticiones: levantamientos.repeticiones,
+      seccion: lineasCantidad.seccion,
+      campo: lineasCantidad.campo,
+      descripcion: lineasCantidad.descripcion,
+      cantidad: lineasCantidad.cantidad,
+      unidad: lineasCantidad.unidad,
+      observacion: lineasCantidad.observacion,
+      itemId: lineasCantidad.itemCatalogoId,
+    })
+    .from(lineasCantidad)
+    .innerJoin(levantamientos, eq(levantamientos.id, lineasCantidad.levantamientoId))
+    .where(and(eq(levantamientos.visitaId, visitaId), isNull(lineasCantidad.quitadaEn)))
+    .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id), asc(lineasCantidad.seccion), asc(lineasCantidad.campo), asc(lineasCantidad.orden));
 }

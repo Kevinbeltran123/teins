@@ -106,6 +106,20 @@
       "when": 1790382155799,
       "tag": "0014_repeticiones",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790385775044,
+      "tag": "0015_cantidades",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790385775505,
+      "tag": "0016_permisos_cantidades",
+      "breakpoints": true
     }
   ]
 }

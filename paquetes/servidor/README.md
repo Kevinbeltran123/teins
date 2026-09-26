@@ -22,6 +22,8 @@ src/
     clientes/        Clientes y sitios, datos mínimos.
     visitas/         Visitas programadas y técnicos asignados.
     levantamientos/  Recepción idempotente del envío (núcleo hexagonal) y bandeja de oficina.
+                     Proyecta las líneas de cantidad a `lineas_cantidad`, donde vive su vínculo al catálogo.
+    catalogo/        Ítems del catálogo (código, descripción, unidad), importación en bloque por código.
     sincronizacion/  Bajada: compone los cambios del técnico con las interfaces de los demás módulos.
     informes/        Informe por visita, versiones publicadas inmutables y su PDF (plantilla HTML,
                      Chromium y pdf-lib en el worker, ADR-0013).

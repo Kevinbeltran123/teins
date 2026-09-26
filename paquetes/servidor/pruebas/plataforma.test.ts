@@ -50,7 +50,7 @@ describe("permisos del rol de la aplicación", () => {
       select n.nspname || '.' || c.relname as tabla, c.relrowsecurity as rls,
              has_table_privilege('teins_app', c.oid, 'DELETE') as borrar
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
-      where c.relkind = 'r' and n.nspname in ('formatos', 'archivos', 'auditoria', 'levantamientos', 'cambios', 'clientes', 'visitas')
+      where c.relkind = 'r' and n.nspname in ('formatos', 'archivos', 'auditoria', 'levantamientos', 'cambios', 'clientes', 'visitas', 'catalogo')
       order by 1`);
     expect(rows.length).toBeGreaterThan(0);
     for (const fila of rows) {

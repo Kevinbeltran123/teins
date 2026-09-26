@@ -19,6 +19,7 @@ import { crearSincronizacion } from "./modulos/sincronizacion";
 import { crearVisitas } from "./modulos/visitas";
 import { crearInformes } from "./modulos/informes";
 import { crearAccesosDeClientes, crearPortal } from "./modulos/portal";
+import { crearCatalogo } from "./modulos/catalogo";
 
 export interface Dependencias {
   config: Config;
@@ -130,7 +131,8 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   const formatos = crearFormatos();
   const archivos = crearArchivos({ bd, almacenamiento, config });
   const visitas = crearVisitas(clientesYSitios);
-  const levantamientos = crearLevantamientos({ bd, formatos, archivos, visitas, identidad });
+  const catalogo = crearCatalogo(bd);
+  const levantamientos = crearLevantamientos({ bd, formatos, archivos, visitas, identidad, catalogo });
   const sincronizacion = crearSincronizacion({ bd, formatos, visitas, levantamientos, identidad });
   const informes = crearInformes({ bd, almacenamiento, config, archivos, levantamientos, visitas, identidad, formatos });
 
@@ -158,6 +160,7 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   sincronizacion.registrarRutas(app);
   informes.registrarRutas(app);
   registrarRutasDeClientes(app, bd);
+  catalogo.registrarRutas(app);
   visitas.registrarRutas(app, { bd, identidad, conteos: levantamientos.conteosPorVisita });
   crearAccesosDeClientes(bd).registrarRutas(app, config);
   if (bdPortal) crearPortal({ bdPortal, almacenamiento, config }).registrarRutas(app);

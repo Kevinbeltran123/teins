@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, jsonb, pgSchema, text, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, jsonb, pgSchema, primaryKey, text, uuid } from "drizzle-orm/pg-core";
 import type { Repeticiones, Respuestas } from "@teins/dominio";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
@@ -78,4 +78,39 @@ export const comentarios = esquemaLevantamientos.table(
     creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
   },
   (t) => [index("comentarios_levantamiento_idx").on(t.levantamientoId, t.creadoEn), aislamientoPorOrganizacion("comentarios")],
+).enableRLS();
+
+/**
+ * Líneas de cantidad (ADR-0006, parte 2; iteración 11): proyección relacional de los campos `cantidades`
+ * del documento, escrita en la misma transacción al recibir y al corregir. Aquí vive el vínculo al
+ * catálogo, que pone oficina (regla 6). Una línea que desaparece del documento se marca como quitada:
+ * nada se borra (regla 14).
+ */
+export const lineasCantidad = esquemaLevantamientos.table(
+  "lineas_cantidad",
+  {
+    organizacionId: organizacionId(),
+    levantamientoId: uuid("levantamiento_id")
+      .notNull()
+      .references(() => levantamientos.id),
+    /** Clave de la sección en las respuestas (`seccion` o `seccion~id` en una repetible). */
+    seccion: text("seccion").notNull(),
+    campo: text("campo").notNull(),
+    linea: text("linea").notNull(),
+    orden: integer("orden").notNull(),
+    descripcion: text("descripcion").notNull(),
+    /** Decimal canónico, como en el documento: se suma con `sumarDecimales`, sin coma flotante. */
+    cantidad: text("cantidad").notNull(),
+    unidad: text("unidad").notNull(),
+    observacion: text("observacion"),
+    itemCatalogoId: uuid("item_catalogo_id"),
+    vinculadaPor: text("vinculada_por"),
+    vinculadaEn: marcaDeTiempo("vinculada_en"),
+    quitadaEn: marcaDeTiempo("quitada_en"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.levantamientoId, t.seccion, t.campo, t.linea] }),
+    index("lineas_cantidad_item_idx").on(t.organizacionId, t.itemCatalogoId),
+    aislamientoPorOrganizacion("lineas_cantidad"),
+  ],
 ).enableRLS();
