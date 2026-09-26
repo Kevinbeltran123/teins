@@ -16,6 +16,16 @@ export class RolNoPermitido extends Error {
  */
 export async function iniciarSesion(usuario: string, contrasena: string): Promise<void> {
   await cliente.iniciarSesion(usuario, contrasena);
+  await prepararSesion();
+}
+
+/** Con la llave de acceso del teléfono (Face ID, huella o PIN; iteración 13): sin escribir nada. */
+export async function iniciarSesionConLlave(): Promise<void> {
+  await cliente.iniciarSesionConLlave();
+  await prepararSesion();
+}
+
+async function prepararSesion(): Promise<void> {
   const { usuario: datos, permisoLocalHasta } = await cliente.llamar("obtenerSesion");
   if (datos.rol !== "tecnico") {
     await cliente.cerrarSesion().catch(() => undefined);

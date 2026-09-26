@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
@@ -13,6 +14,9 @@ import { nombreDeFormato, useFormatos, vigentes } from "../formatos";
 import { claseDeTono, comentariosDeOficina, estadoDeEnvio, estadoSegunServidor } from "../mensajes";
 import { fechaDeVisita, hoyLocal, ordenarVisitas } from "../visitas";
 import { Diagnostico } from "./Diagnostico";
+
+// Secundaria: no entra en el JavaScript inicial (ADR-0011).
+const SugerirLlave = lazy(() => import("./SugerirLlave"));
 
 interface Props {
   usuario: UsuarioLocal;
@@ -196,6 +200,10 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
             Hay {deOtros === 1 ? "1 levantamiento" : `${deOtros} levantamientos`} de otra persona en este teléfono. Se conservan y se envían cuando esa persona inicie sesión.
           </p>
         )}
+
+        <Suspense fallback={null}>
+          <SugerirLlave usuarioId={usuario.id} enLinea={alcanzable} />
+        </Suspense>
 
         <Diagnostico />
       </main>
