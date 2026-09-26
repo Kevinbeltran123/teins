@@ -4,7 +4,8 @@ import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
 import { Aviso, Boton, Marquilla } from "@teins/ui";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
-import type { EnvioLocal, EstadoServidor, LevantamientoLocal, UsuarioLocal, VisitaLocal } from "../datos/modelo";
+import { estadosDe, visitasDe } from "../datos/lecturas";
+import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal, UsuarioLocal, VisitaLocal } from "../datos/modelo";
 import { estaInstalada } from "../dispositivo/almacenamiento";
 import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/useConexion";
 import { fechaHora } from "../formato";
@@ -31,7 +32,7 @@ function contarFotos(l: LevantamientoLocal): number {
 /** Lo que la pantalla necesita para mostrar y crear levantamientos. */
 interface Contexto {
   formatos: VersionFormato[];
-  envios: Map<string, EnvioLocal>;
+  envios: Map<string, EstadoDeEnvio>;
   servidor: Map<string, EstadoServidor>;
   enLinea: boolean;
   /** Vencido el permiso de trabajo local, no se crea ni se edita nada (ADR-0009, parte 2). */
@@ -43,8 +44,8 @@ interface Contexto {
 export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   const levantamientos = useLiveQuery(() => repositorio.listar(usuario.id), [usuario.id]);
   const envios = useLiveQuery(async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
-  const servidor = useLiveQuery(async () => new Map((await db.estadosServidor.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.id, e])), [usuario.id]);
-  const visitas = useLiveQuery(() => db.visitas.where("tecnicoId").equals(usuario.id).toArray(), [usuario.id]);
+  const servidor = useLiveQuery(async () => new Map((await estadosDe(db, usuario.id)).map((e) => [e.id, e])), [usuario.id]);
+  const visitas = useLiveQuery(() => visitasDe(db, usuario.id), [usuario.id]);
   const bajada = useLiveQuery(async () => (await db.bajadas.get(usuario.id)) ?? null, [usuario.id]);
   const formatos = useFormatos();
   const deOtros = useLiveQuery(() => repositorio.contarDeOtros(usuario.id), [usuario.id]);

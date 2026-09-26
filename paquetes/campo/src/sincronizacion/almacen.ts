@@ -1,7 +1,7 @@
-import { archivosReferenciados, fotosReferenciadas } from "@teins/dominio";
 import type { Bajada, SaludDispositivo } from "@teins/protocolo";
 import type { BaseCampo } from "../datos/base";
-import type { ArchivoLocal, BajadaLocal, DispositivoLocal, EnvioLocal } from "../datos/modelo";
+import type { ArchivoLocal, BajadaLocal, DispositivoLocal, EnvioLocal, EstadoServidorGuardado, VisitaGuardada } from "../datos/modelo";
+import { abrirArchivo, abrirEnvio, referencias, sellarArchivo, sellarEstado, sellarVisita } from "../datos/registros";
 import { estadoAlmacenamiento } from "../dispositivo/almacenamiento";
 
 /** Operaciones del motor sobre la base local. */
@@ -14,7 +14,8 @@ export interface AlmacenSincronizacion {
   enviosListos(ahora: number, tecnicoId: string): Promise<EnvioLocal[]>;
   /** Cuándo toca el próximo intento pendiente de este técnico, o null si no hay nada que esperar. */
   proximoIntento(tecnicoId: string): Promise<number | null>;
-  actualizarEnvio(levantamientoId: string, cambios: Partial<EnvioLocal>): Promise<void>;
+  /** Estado, intentos y errores: el comando es inmutable y va sellado. */
+  actualizarEnvio(levantamientoId: string, cambios: Partial<Omit<EnvioLocal, "comando">>): Promise<void>;
   /** Un envío que quedó "enviando" porque la app se cerró en medio vuelve a pendiente. */
   recuperarInterrumpidos(): Promise<void>;
   /** Registra si el servidor respondió, para mostrar "sin conexión" aunque el navegador diga lo contrario. */
@@ -32,10 +33,13 @@ export interface AlmacenSincronizacion {
   renovarPermiso(tecnicoId: string, permisoLocalHasta: string, versionApp: number): Promise<void>;
   marcarSesionVencida(tecnicoId: string): Promise<void>;
   /**
-   * Orden de borrado (ADR-0009, QA-5): borra todo lo del usuario revocado en una transacción, sin tocar
-   * lo de otro usuario del mismo teléfono, y deja pendiente avisarle al servidor.
+   * Orden de borrado (ADR-0009, QA-5; ADR-0022): primero destruye la clave del usuario revocado, con lo
+   * que todo lo suyo queda ilegible al instante; después borra sus datos, sin tocar lo de otro usuario
+   * del mismo teléfono, y deja pendiente avisarle al servidor.
    */
   borrarDatosDe(tecnicoId: string, ahora: string): Promise<void>;
+  /** Termina un borrado que se interrumpió después de destruir la clave. Se puede repetir. */
+  completarBorrados(): Promise<void>;
   borradosPorConfirmar(): Promise<string[]>;
   quitarConfirmados(ids: readonly string[]): Promise<void>;
 }
@@ -47,13 +51,31 @@ function secretoAleatorio(): string {
 }
 
 export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
+  function borrarRegistrosDe(tecnicoId: string) {
+    const tablas = [db.levantamientos, db.archivos, db.envios, db.visitas, db.estadosServidor, db.bajadas];
+    return db.transaction("rw", tablas, async () => {
+      const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
+      const deOtros = await db.levantamientos.filter((l) => l.tecnicoId !== tecnicoId).toArray();
+      // Los archivos se direccionan por contenido: uno que también usa otra persona se conserva.
+      const enUso = new Set(deOtros.flatMap((l) => referencias(l).archivos));
+      await db.archivos.bulkDelete(propios.flatMap((l) => referencias(l).archivos).filter((h) => !enUso.has(h)));
+      await db.levantamientos.bulkDelete(propios.map((l) => l.id));
+      await db.envios.where("tecnicoId").equals(tecnicoId).delete();
+      await db.visitas.where("tecnicoId").equals(tecnicoId).delete();
+      await db.estadosServidor.where("tecnicoId").equals(tecnicoId).delete();
+      await db.bajadas.delete(tecnicoId);
+    });
+  }
+
   return {
     async archivosPorSubir(tecnicoId) {
       const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
       // Las fotos suben por adelantado; los bocetos, solo del levantamiento ya enviado (ADR-0019, parte 3).
-      const huellas = new Set(propios.flatMap((l) => (l.estado === "borrador" ? fotosReferenciadas(l.respuestas) : archivosReferenciados(l.respuestas))));
-      const pendientes = await db.archivos.where("subida").equals("pendiente").toArray();
-      return pendientes.filter((a) => huellas.has(a.id));
+      const huellas = new Set(propios.flatMap((l) => (l.estado === "borrador" ? referencias(l).fotos : referencias(l).archivos)));
+      const pendientes = (await db.archivos.where("subida").equals("pendiente").primaryKeys()).filter((h) => huellas.has(h));
+      // Se abren al subir: al servidor llegan los bytes originales, con la huella que los nombra.
+      const archivos = (await db.archivos.bulkGet(pendientes)).filter((a) => a !== undefined);
+      return Promise.all(archivos.map((a) => abrirArchivo(db, a)));
     },
     async marcarSubida(huella) {
       await db.archivos.update(huella, { subida: "subida", ultimoErrorDeSubida: undefined });
@@ -66,7 +88,8 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
     },
     async enviosListos(ahora, tecnicoId) {
       const pendientes = await db.envios.where("estado").equals("pendiente").filter((e) => e.tecnicoId === tecnicoId).toArray();
-      return pendientes.filter((e) => e.proximoIntentoEn <= ahora).sort((a, b) => a.creadoEn.localeCompare(b.creadoEn));
+      const listos = pendientes.filter((e) => e.proximoIntentoEn <= ahora).sort((a, b) => a.creadoEn.localeCompare(b.creadoEn));
+      return Promise.all(listos.map((e) => abrirEnvio(db, e)));
     },
     async proximoIntento(tecnicoId) {
       const pendientes = await db.envios.where("estado").equals("pendiente").filter((e) => e.tecnicoId === tecnicoId).toArray();
@@ -117,15 +140,23 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
 
     estadoBajada: (tecnicoId) => db.bajadas.get(tecnicoId),
 
-    aplicarBajada(tecnicoId, bajada, versionApp, ahora) {
+    async aplicarBajada(tecnicoId, bajada, versionApp, ahora) {
+      // Visitas y comentarios se sellan antes: dentro de la transacción no cabe WebCrypto (ADR-0022).
+      const sellados = new Map<number, VisitaGuardada | EstadoServidorGuardado>();
+      for (const [i, cambio] of bajada.cambios.entries()) {
+        if (cambio.tipo === "visita") sellados.set(i, await sellarVisita(db, { ...cambio.visita, tecnicoId }));
+        if (cambio.tipo === "levantamiento") {
+          sellados.set(i, await sellarEstado(db, { id: cambio.id, tecnicoId, estado: cambio.estado, recibidoEn: cambio.recibidoEn, comentarios: cambio.comentarios }));
+        }
+      }
       return db.transaction("rw", [db.formatos, db.visitas, db.estadosServidor, db.bajadas, db.levantamientos], async () => {
-        for (const cambio of bajada.cambios) {
+        for (const [i, cambio] of bajada.cambios.entries()) {
           switch (cambio.tipo) {
             case "formato":
               await db.formatos.put(cambio.definicion);
               break;
             case "visita":
-              await db.visitas.put({ ...cambio.visita, tecnicoId });
+              await db.visitas.put(sellados.get(i) as VisitaGuardada);
               break;
             case "fuera_de_alcance": {
               const empezados = await db.levantamientos.where("tecnicoId").equals(tecnicoId).filter((l) => l.visitaId === cambio.id).count();
@@ -134,7 +165,7 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
               break;
             }
             case "levantamiento":
-              await db.estadosServidor.put({ id: cambio.id, tecnicoId, estado: cambio.estado, recibidoEn: cambio.recibidoEn, comentarios: cambio.comentarios });
+              await db.estadosServidor.put(sellados.get(i) as EstadoServidorGuardado);
               break;
           }
         }
@@ -153,20 +184,25 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
       await db.bajadas.update(tecnicoId, { sesionVencida: true });
     },
 
-    borrarDatosDe(tecnicoId, ahora) {
-      const tablas = [db.levantamientos, db.archivos, db.envios, db.visitas, db.estadosServidor, db.bajadas, db.ajustes];
-      return db.transaction("rw", tablas, async () => {
-        const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
-        const deOtros = await db.levantamientos.filter((l) => l.tecnicoId !== tecnicoId).toArray();
-        // Los archivos se direccionan por contenido: uno que también usa otra persona se conserva.
-        const enUso = new Set(deOtros.flatMap((l) => archivosReferenciados(l.respuestas)));
-        await db.archivos.bulkDelete(propios.flatMap((l) => archivosReferenciados(l.respuestas)).filter((h) => !enUso.has(h)));
-        await db.levantamientos.bulkDelete(propios.map((l) => l.id));
-        await db.envios.where("tecnicoId").equals(tecnicoId).delete();
-        await db.visitas.where("tecnicoId").equals(tecnicoId).delete();
-        await db.estadosServidor.where("tecnicoId").equals(tecnicoId).delete();
-        await db.bajadas.delete(tecnicoId);
+    async borrarDatosDe(tecnicoId, ahora) {
+      // Un archivo con la clave del revocado que también usa otra persona pasa a la clave de esa persona
+      // antes de destruir la suya: el borrado de uno nunca le quita una foto al otro.
+      const deOtros = await db.levantamientos.filter((l) => l.tecnicoId !== undefined && l.tecnicoId !== tecnicoId).toArray();
+      const usadosPorOtros = new Map<string, string>();
+      for (const l of deOtros) for (const h of referencias(l).archivos) if (!usadosPorOtros.has(h)) usadosPorOtros.set(h, l.tecnicoId!);
+      for (const [huella, otro] of usadosPorOtros) {
+        const archivo = await db.archivos.get(huella);
+        if (archivo?.tecnicoId !== tecnicoId) continue;
+        const resellado = await sellarArchivo(db, await abrirArchivo(db, archivo), otro);
+        await db.transaction("rw", db.archivos, async () => {
+          const actual = await db.archivos.get(huella);
+          if (actual?.tecnicoId === tecnicoId) await db.archivos.put({ ...resellado, subida: actual.subida, ultimoErrorDeSubida: actual.ultimoErrorDeSubida });
+        });
+      }
 
+      // 1. La clave, la sesión y la marca de borrado pendiente, juntas: desde aquí nada de lo suyo se lee.
+      await db.transaction("rw", [db.claves, db.ajustes], async () => {
+        await db.claves.delete(tecnicoId);
         const usuario = await db.ajustes.get("usuario");
         if (usuario?.clave === "usuario" && usuario.valor.id === tecnicoId) {
           await db.ajustes.delete("usuario");
@@ -176,6 +212,13 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
         const lista = pendientes?.clave === "borrados_por_confirmar" ? pendientes.valor : [];
         if (!lista.includes(tecnicoId)) await db.ajustes.put({ clave: "borrados_por_confirmar", valor: [...lista, tecnicoId] });
       });
+      // 2. Los datos. Si esto se interrumpe, lo que quede es ilegible y `completarBorrados` lo termina.
+      await borrarRegistrosDe(tecnicoId);
+    },
+
+    async completarBorrados() {
+      const ajuste = await db.ajustes.get("borrados_por_confirmar");
+      for (const tecnicoId of ajuste?.clave === "borrados_por_confirmar" ? ajuste.valor : []) await borrarRegistrosDe(tecnicoId);
     },
 
     async borradosPorConfirmar() {

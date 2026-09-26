@@ -1,11 +1,40 @@
-import type { Levantamiento, VersionFormato } from "@teins/dominio";
+import type { Levantamiento, Repeticiones, Respuestas, VersionFormato } from "@teins/dominio";
 import type { EnviarLevantamiento, VisitaAsignada } from "@teins/protocolo";
+
+/** Un valor cifrado con AES-GCM (ADR-0022): el vector de inicio y el texto cifrado con su etiqueta. */
+export interface Sellado {
+  iv: Uint8Array;
+  datos: ArrayBuffer;
+}
+
+/** Clave de un técnico en este teléfono: no extraíble, nunca sale del navegador (ADR-0009, parte 5). */
+export interface ClaveLocal {
+  tecnicoId: string;
+  clave: CryptoKey;
+  creadaEn: string;
+}
 
 /**
  * Levantamiento en el dispositivo, con su responsable (regla 1). Un teléfono puede compartirse:
  * solo se envía con la sesión de quien lo creó. Los del corte 0 no tienen responsable hasta el primer inicio de sesión.
  */
 export type LevantamientoLocal = Levantamiento & { tecnicoId?: string | undefined };
+
+/**
+ * Como se guarda (ADR-0022): respuestas y repeticiones van selladas; a la vista queda lo que necesitan
+ * los índices y las transacciones (ids, estado, fechas, responsable y las huellas de sus archivos).
+ * Sin `sellado`, es un registro de antes del cifrado o sin responsable todavía: se sella al conocerlo.
+ */
+export type LevantamientoGuardado = Omit<LevantamientoLocal, "respuestas" | "repeticiones"> & {
+  respuestas?: Respuestas | undefined;
+  repeticiones?: Repeticiones | undefined;
+  sellado?: Sellado | undefined;
+  /** Huellas de todos sus archivos y solo de sus fotos: para subir y borrar sin abrir el sellado. */
+  archivos?: string[] | undefined;
+  fotos?: string[] | undefined;
+  /** Sube con cada escritura: la escritura optimista fuera de la transacción la compara. */
+  rev?: number | undefined;
+};
 
 /** Archivo guardado en el dispositivo. El identificador es su huella SHA-256 (ADR-0007). */
 export interface ArchivoLocal {
@@ -18,6 +47,14 @@ export interface ArchivoLocal {
   subida: "pendiente" | "subida";
   ultimoErrorDeSubida?: string | undefined;
 }
+
+/** Como se guarda: con `iv`, `datos` va cifrado con la clave de `tecnicoId`. */
+export type ArchivoGuardado = ArchivoLocal & {
+  iv?: Uint8Array | undefined;
+  tecnicoId?: string | undefined;
+  /** Índice de los sellados: encontrar los que faltan sin leer los bytes de cada foto. */
+  cifrado?: 1 | undefined;
+};
 
 /**
  * Estado de sincronización de un envío. Es distinto del estado de negocio del levantamiento
@@ -48,6 +85,12 @@ export interface EnvioLocal {
   creadoEn: string;
 }
 
+/** Lo que muestran las pantallas de un envío: su estado, sin el comando. */
+export type EstadoDeEnvio = Omit<EnvioLocal, "comando">;
+
+/** Como se guarda: el comando (con las respuestas) va sellado. */
+export type EnvioGuardado = Omit<EnvioLocal, "comando"> & { comando?: EnviarLevantamiento | undefined; sellado?: Sellado | undefined };
+
 export interface UsuarioLocal {
   id: string;
   nombre: string;
@@ -77,6 +120,10 @@ export type VisitaLocal = VisitaAsignada & {
   motivoSalida?: "reasignada" | "cancelada";
 };
 
+/** Como se guarda: cliente, sitio, dirección y motivo van sellados. */
+export type VisitaGuardada = Pick<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida"> &
+  Partial<Omit<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida">> & { sellado?: Sellado | undefined };
+
 /** Nota de oficina sobre un levantamiento enviado (corte 3). No modifica datos. */
 export interface ComentarioDeOficina {
   id: string;
@@ -96,6 +143,9 @@ export interface EstadoServidor {
   /** Sin índice: agregar el campo no exige una versión nueva de la base local. */
   comentarios?: ComentarioDeOficina[] | undefined;
 }
+
+/** Como se guarda: los comentarios de oficina van sellados. */
+export type EstadoServidorGuardado = EstadoServidor & { sellado?: Sellado | undefined };
 
 /** Avance de la bajada de un técnico y su permiso de trabajo sin conexión (ADR-0009, parte 2). */
 export interface BajadaLocal {

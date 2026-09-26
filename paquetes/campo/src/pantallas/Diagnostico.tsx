@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Aviso, Boton } from "@teins/ui";
-import { repositorio } from "../datos/instancia";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db, repositorio } from "../datos/instancia";
+import { contarPorSellar } from "../datos/registros";
 import { estadoAlmacenamiento, estaInstalada, type EstadoAlmacenamiento } from "../dispositivo/almacenamiento";
 import { huella } from "../fotos/procesar";
 import { megabytes } from "../formato";
@@ -30,6 +32,7 @@ async function verificarFotos(): Promise<Verificacion> {
 export function Diagnostico() {
   const [estado, setEstado] = useState<EstadoAlmacenamiento>();
   const [verificacion, setVerificacion] = useState<Verificacion | "verificando" | "error">();
+  const porCifrar = useLiveQuery(() => contarPorSellar(db));
 
   useEffect(() => {
     estadoAlmacenamiento().then(setEstado, () => setEstado(undefined));
@@ -52,6 +55,9 @@ export function Diagnostico() {
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-cuerpo">
         <dt className="text-texto-secundario">Persistente</dt>
         <dd className="font-bold">{estado === undefined ? "…" : estado.persistente ? "Sí" : "No"}</dd>
+        {/* ADR-0022: lo de antes de la iteración 12 se cifra en segundo plano; lo nuevo nace cifrado. */}
+        <dt className="text-texto-secundario">Datos cifrados</dt>
+        <dd className="font-bold">{porCifrar === undefined ? "…" : porCifrar === 0 ? "Todos" : `Faltan ${porCifrar}`}</dd>
         <dt className="text-texto-secundario">Espacio usado</dt>
         <dd className="font-bold">
           {estado?.usoBytes === undefined

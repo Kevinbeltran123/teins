@@ -42,7 +42,8 @@ describe("repositorio de levantamientos en Dexie", () => {
     const sinObligatorios: VersionFormato = { ...formato, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "t", etiqueta: "T", tipo: "texto" }] }] };
     await repo.crear(crearLevantamiento(sinObligatorios, id, ahora, visitaId), "t1");
     expect((await repo.enviar(id, sinObligatorios, despues)).ok).toBe(true);
-    expect((await db.envios.get(id))?.comando.levantamiento.visitaId).toBe(visitaId);
+    const [envio] = await almacenDexie(db).enviosListos(Number.MAX_SAFE_INTEGER, "t1");
+    expect(envio?.comando.levantamiento.visitaId).toBe(visitaId);
   });
 
   it("agrega, renombra y quita repeticiones, y el envío las lleva (iteración 9)", async () => {
@@ -66,7 +67,7 @@ describe("repositorio de levantamientos en Dexie", () => {
     await repo.quitarRepeticion(id, "tableros", primera!.id, despues);
 
     expect((await repo.enviar(id, conTableros, despues)).ok).toBe(true);
-    const enviado = (await db.envios.get(id))!.comando.levantamiento;
+    const enviado = (await almacenDexie(db).enviosListos(Number.MAX_SAFE_INTEGER, "t1"))[0]!.comando.levantamiento;
     expect(enviado.repeticiones).toEqual({ tableros: [{ id: segunda!.id, nombre: "Tablero del sótano" }] });
     expect(enviado.respuestas).toEqual({ [`tableros~${segunda!.id}`]: { t: "Sótano" } });
   });
@@ -151,7 +152,7 @@ describe("enviar", () => {
     const r = await repo.enviar("0192f0e0-0000-7000-8000-000000000001", formato, despues);
     expect(r.ok).toBe(true);
     expect((await repo.obtener("0192f0e0-0000-7000-8000-000000000001"))?.estado).toBe("enviado");
-    const [envio] = await db.envios.toArray();
+    const [envio] = await almacenDexie(db).enviosListos(Number.MAX_SAFE_INTEGER, "t1");
     expect(envio).toMatchObject({
       estado: "pendiente",
       intentos: 0,
@@ -219,7 +220,7 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
 
     const v2 = abrirBase(nombre);
     bases.push(v2);
-    expect(v2.verno).toBe(3);
+    expect(v2.verno).toBe(4);
     expect(await v2.levantamientos.get("l1")).toEqual(borrador);
     const archivos = await v2.archivos.toArray();
     expect(archivos.map((a) => [a.id, a.subida, new Uint8Array(a.datos)[0]])).toEqual([
@@ -244,7 +245,7 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
 
     const v3 = abrirBase(nombre);
     bases.push(v3);
-    expect(v3.verno).toBe(3);
+    expect(v3.verno).toBe(4);
     expect(await v3.levantamientos.get("l1")).toEqual(borrador);
     expect(await v3.envios.get("l2")).toEqual(envio);
     expect((await v3.formatos.toArray()).map((f) => `${f.formato}@${f.version}`)).toEqual(["prueba-ups@1", "prueba-ups@2"]);

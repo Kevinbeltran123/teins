@@ -5,6 +5,7 @@ import fc from "fast-check";
 import { bocetoVacio, crearLevantamiento, TIPO_ARCHIVO_BOCETO, type VersionFormato } from "@teins/dominio";
 import { abrirBase, repositorioDexie } from "../datos/dexie";
 import type { BaseCampo } from "../datos/base";
+import { estadoDe, estadosDe, visitasDe } from "../datos/lecturas";
 import { almacenDexie } from "./almacen";
 import { crearMotor, espera, ESPERA_MAXIMA_MS, INTERVALO_BAJADA_MS } from "./motor";
 import { servidorFalso, type Falla } from "./pruebas/servidor-falso";
@@ -261,9 +262,9 @@ describe("bajada (ADR-0003)", () => {
     await motorDe(db, s, reloj).sincronizar();
 
     expect(await db.formatos.toArray()).toEqual([{ ...formato, version: 2, nombre: "Formato de prueba" }]);
-    expect(await db.visitas.toArray()).toEqual([{ ...visita(idVisita(1)), tecnicoId: "t1" }]);
+    expect(await visitasDe(db, "t1")).toEqual([{ ...visita(idVisita(1)), tecnicoId: "t1" }]);
     // El envío de esta misma sincronización baja con su estado según el servidor.
-    expect((await db.estadosServidor.toArray()).map((e) => [e.id, e.estado])).toEqual([[ids[0], "enviado"]]);
+    expect((await estadosDe(db, "t1")).map((e) => [e.id, e.estado])).toEqual([[ids[0], "enviado"]]);
     expect(await db.bajadas.get("t1")).toMatchObject({ puntoDeControl: 3, versionApp: 2, permisoLocalHasta: "2026-10-01T00:00:00.000Z" });
   });
 
@@ -274,7 +275,7 @@ describe("bajada (ADR-0003)", () => {
     const comentario = { id: "0192f0e0-0000-7000-8000-000000000555", texto: "Revisa la placa", seccion: "s", campo: "t", autor: "Oficina", creadoEn: "2026-09-25T10:00:00.000Z" };
     s.publicar({ tipo: "levantamiento", id: ids[0]!, estado: "revisado", recibidoEn: "2026-09-24T00:00:00.000Z", comentarios: [comentario] });
     await motorDe(db, s, reloj, 3).sincronizar({ bajar: true });
-    expect(await db.estadosServidor.get(ids[0]!)).toMatchObject({ estado: "revisado", comentarios: [comentario] });
+    expect(await estadoDe(db, ids[0]!)).toMatchObject({ estado: "revisado", comentarios: [comentario] });
   });
 
   it("baja al pedirla o cada 5 minutos, no en cada ciclo de 30 segundos", async () => {
@@ -318,7 +319,7 @@ describe("bajada (ADR-0003)", () => {
 
     s.publicar({ tipo: "fuera_de_alcance", entidad: "visita", id: idVisita(1) }, { tipo: "fuera_de_alcance", entidad: "visita", id: idVisita(2) });
     await motorDe(db, s, reloj).sincronizar({ bajar: true });
-    expect(await db.visitas.toArray()).toEqual([{ ...visita(idVisita(2)), tecnicoId: "t1", fueraDeAlcance: true }]);
+    expect(await visitasDe(db, "t1")).toEqual([{ ...visita(idVisita(2)), tecnicoId: "t1", fueraDeAlcance: true }]);
   });
 
   it("una visita cancelada con algo empezado se queda con el motivo, para avisarle al técnico (iteración 7)", async () => {
@@ -332,7 +333,7 @@ describe("bajada (ADR-0003)", () => {
 
     s.publicar({ tipo: "fuera_de_alcance", entidad: "visita", id: idVisita(3), motivo: "cancelada" });
     await motorDe(db, s, reloj).sincronizar({ bajar: true });
-    expect(await db.visitas.toArray()).toEqual([{ ...visita(idVisita(3)), tecnicoId: "t1", fueraDeAlcance: true, motivoSalida: "cancelada" }]);
+    expect(await visitasDe(db, "t1")).toEqual([{ ...visita(idVisita(3)), tecnicoId: "t1", fueraDeAlcance: true, motivoSalida: "cancelada" }]);
   });
 
   it("informa la salud del dispositivo con cada bajada, sin contenido de levantamientos (ADR-0017)", async () => {
@@ -342,7 +343,7 @@ describe("bajada (ADR-0003)", () => {
     await motorDe(db, s, reloj).sincronizar({ bajar: true });
     const [informe] = s.informes;
     expect(informe!.secreto).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(informe!.salud).toMatchObject({ versionApp: 2, versionEsquemaLocal: 3, pendientes: 1, pendienteMasAntiguo: "2026-09-24T11:00:00.000Z", ultimoError: "error_interno" });
+    expect(informe!.salud).toMatchObject({ versionApp: 2, versionEsquemaLocal: 4, pendientes: 1, pendienteMasAntiguo: "2026-09-24T11:00:00.000Z", ultimoError: "error_interno" });
     // El mismo dispositivo en cada informe.
     await motorDe(db, s, reloj).sincronizar({ bajar: true });
     expect(new Set(s.informes.map((i) => i.id)).size).toBe(1);

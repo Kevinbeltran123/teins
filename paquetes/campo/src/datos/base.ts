@@ -3,17 +3,18 @@ import type { VersionFormato } from "@teins/dominio";
 import v1 from "@teins/dominio/formatos-de-prueba/prueba-ups.v1.json";
 import v2 from "@teins/dominio/formatos-de-prueba/prueba-ups.v2.json";
 import { VERSION_APP } from "../version";
-import type { Ajuste, ArchivoLocal, BajadaLocal, EnvioLocal, EstadoServidor, FormatoLocal, LevantamientoLocal, UsuarioLocal, VisitaLocal } from "./modelo";
+import type { Ajuste, ClaveLocal, ArchivoGuardado, BajadaLocal, EnvioGuardado, EstadoServidorGuardado, FormatoLocal, LevantamientoGuardado, UsuarioLocal, VisitaGuardada } from "./modelo";
 
 export type BaseCampo = Dexie & {
-  levantamientos: EntityTable<LevantamientoLocal, "id">;
-  archivos: EntityTable<ArchivoLocal, "id">;
-  envios: EntityTable<EnvioLocal, "levantamientoId">;
+  levantamientos: EntityTable<LevantamientoGuardado, "id">;
+  archivos: EntityTable<ArchivoGuardado, "id">;
+  envios: EntityTable<EnvioGuardado, "levantamientoId">;
   ajustes: EntityTable<Ajuste, "clave">;
   formatos: Table<FormatoLocal, [string, number]>;
-  visitas: Table<VisitaLocal, [string, string]>;
-  estadosServidor: EntityTable<EstadoServidor, "id">;
+  visitas: Table<VisitaGuardada, [string, string]>;
+  estadosServidor: EntityTable<EstadoServidorGuardado, "id">;
   bajadas: EntityTable<BajadaLocal, "tecnicoId">;
+  claves: EntityTable<ClaveLocal, "tecnicoId">;
 };
 
 /** Los formatos que los cortes 0 y 1 traían en el código. Solo los usa la migración a la versión 3. */
@@ -52,7 +53,7 @@ export function abrirBase(nombre = "teins-campo"): BaseCampo {
     .upgrade((tx) =>
       // Ninguna foto del corte 0 se subió todavía.
       tx
-        .table<ArchivoLocal>("archivos")
+        .table<ArchivoGuardado>("archivos")
         .toCollection()
         .modify((archivo) => {
           archivo.subida = "pendiente";
@@ -77,6 +78,10 @@ export function abrirBase(nombre = "teins-campo"): BaseCampo {
         await tx.table<BajadaLocal>("bajadas").put({ tecnicoId: usuario.valor.id, puntoDeControl: 0, versionApp: VERSION_APP, permisoLocalHasta: hasta });
       }
     });
+
+  // Iteración 12: una clave por técnico (ADR-0022). Sin `upgrade`: WebCrypto no cabe en la transacción
+  // de la migración, así que lo de antes se sella después, registro por registro, sin borrar nada (regla 5).
+  db.version(4).stores({ claves: "tecnicoId", archivos: "id, subida, cifrado" });
 
   return db;
 }

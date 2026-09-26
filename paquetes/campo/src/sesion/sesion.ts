@@ -1,4 +1,4 @@
-import { db, repositorio } from "../datos/instancia";
+import { db, repositorio, sellarEnSegundoPlano } from "../datos/instancia";
 import { almacen, cliente, sincronizarEnSegundoPlano } from "../sincronizacion/instancia";
 import { VERSION_APP } from "../version";
 
@@ -25,6 +25,8 @@ export async function iniciarSesion(usuario: string, contrasena: string): Promis
   await db.ajustes.put({ clave: "usuario", valor: datos });
   await db.ajustes.delete("acceso_cerrado");
   await repositorio.asignarSinResponsable(datos.id);
+  // Lo que no tenía responsable ya lo tiene: se cifra con su clave.
+  void sellarEnSegundoPlano();
   await almacen.reanudar("requiere_sesion");
   // La primera instalación descarga visitas y formatos de inmediato (ADR-0015, sección 5).
   sincronizarEnSegundoPlano({ bajar: true });

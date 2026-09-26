@@ -1,5 +1,5 @@
 import type { CodigoErrorValidacion } from "@teins/dominio";
-import type { EnvioLocal, EstadoServidor } from "./datos/modelo";
+import type { EstadoDeEnvio, EstadoServidor } from "./datos/modelo";
 
 /** Textos en español de Colombia, con el vocabulario de TEINS (AGENTS.md). */
 export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
@@ -25,7 +25,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
 export type Tono = "ok" | "pendiente" | "error";
 
 /** Estado de sincronización en palabras: el color nunca es la única señal (DESIGN.md). */
-export function estadoDeEnvio(envio: EnvioLocal, enLinea: boolean): { texto: string; tono: Tono } {
+export function estadoDeEnvio(envio: EstadoDeEnvio, enLinea: boolean): { texto: string; tono: Tono } {
   switch (envio.estado) {
     case "recibido":
       return { texto: "Recibido en oficina", tono: "ok" };

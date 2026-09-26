@@ -37,7 +37,8 @@ import {
 } from "@teins/ui";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
-import type { EnvioLocal, EstadoServidor, LevantamientoLocal } from "../datos/modelo";
+import { estadoDe, visitaDe } from "../datos/lecturas";
+import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal } from "../datos/modelo";
 import { procesarFoto } from "../fotos/procesar";
 import { fechaHora, horaExacta } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos } from "../formatos";
@@ -54,11 +55,11 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   // `null` distingue "no existe" de `undefined` (cargando).
   const levantamiento = useLiveQuery(async () => (await repositorio.obtener(id)) ?? null, [id]);
   const envio = useLiveQuery(async () => (await db.envios.get(id)) ?? null, [id]);
-  const servidor = useLiveQuery(async () => (await db.estadosServidor.get(id)) ?? null, [id]);
+  const servidor = useLiveQuery(() => estadoDe(db, id), [id]);
   const formatos = useFormatos();
   const visita = useLiveQuery(async () => {
     const l = await repositorio.obtener(id);
-    return l?.visitaId && l.tecnicoId ? ((await db.visitas.get([l.tecnicoId, l.visitaId])) ?? null) : null;
+    return l?.visitaId && l.tecnicoId ? visitaDe(db, l.tecnicoId, l.visitaId) : null;
   }, [id]);
   // Vencido el permiso de trabajo local, el borrador se ve pero no se edita (ADR-0009, parte 2).
   const bloqueado = useLiveQuery(async () => {
@@ -547,7 +548,7 @@ function Enviado({
 }: {
   levantamiento: LevantamientoLocal;
   formato: VersionFormato;
-  envio: EnvioLocal | null;
+  envio: EstadoDeEnvio | null;
   servidor: EstadoServidor | null;
 }) {
   const enLinea = useServidorAlcanzable();

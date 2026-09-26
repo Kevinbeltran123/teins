@@ -194,6 +194,8 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
    */
   async function atenderOrdenes(): Promise<void> {
     for (let vuelta = 0; vuelta < 2; vuelta++) {
+      // Un borrado se confirma solo cuando no queda nada: si se interrumpió tras destruir la clave, se termina.
+      await almacen.completarBorrados();
       const confirmados = await almacen.borradosPorConfirmar();
       let ordenes: { borrar: string[] };
       try {
