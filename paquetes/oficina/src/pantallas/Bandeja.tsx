@@ -85,7 +85,7 @@ export function Bandeja() {
               </div>
               <Tabla
                 etiqueta={PESTANAS[estado].etiqueta}
-                columnas={[{ titulo: "Recibido" }, { titulo: "Técnico" }, { titulo: "Formato" }, { titulo: "Fotos" }, ...(estado !== "enviado" ? [{ titulo: "Revisión" }] : [])]}
+                columnas={[{ titulo: "Recibido" }, { titulo: "Visita" }, { titulo: "Técnico" }, { titulo: "Formato" }, { titulo: "Fotos" }, ...(estado !== "enviado" ? [{ titulo: "Revisión" }] : [])]}
               >
                 {activa.data.pages
                   .flatMap((p) => p.elementos)
@@ -99,6 +99,17 @@ export function Bandeja() {
                         >
                           {aFechaHora(e.recibidoEn)}
                         </Link>
+                      </CeldaTabla>
+                      {/* De qué cliente es: lo primero que oficina busca para saber qué revisar (iteración 14). */}
+                      <CeldaTabla>
+                        {e.visita ? (
+                          <>
+                            <span className="block font-bold">{e.visita.cliente}</span>
+                            <span className="block text-ayuda text-texto-secundario">{e.visita.sitio}</span>
+                          </>
+                        ) : (
+                          <span className="text-texto-secundario">Sin visita</span>
+                        )}
                       </CeldaTabla>
                       <CeldaTabla>{e.tecnico.nombre}</CeldaTabla>
                       <CeldaTabla>{e.formato}</CeldaTabla>
