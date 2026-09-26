@@ -225,6 +225,24 @@ Necesita la app 6: si campo avisa "Hay una versión nueva de la app", acéptela 
 
 **Anotar:** si las columnas de Excel no son las que usa TEINS (P29): son supuestas mientras responden.
 
+## Fase 12 · Cifrado local (iteración 12)
+
+Hágala **antes de aceptar la actualización**, con un borrador a medias y al menos una foto: es lo que prueba que la actualización no pierde nada.
+
+1. Con la app todavía en la versión anterior, deje un borrador con texto y dos fotos, sin enviar.
+2. Acepte "Hay una versión nueva de la app". Abra Inicio y baje al diagnóstico.
+   - Debe: **Datos cifrados: Todos** (si dice "Faltan N", espere unos segundos: se cifra en segundo plano).
+3. Abra el borrador.
+   - Debe: el texto y las dos fotos, iguales. Toque **Verificar fotos** en el diagnóstico: "Íntegras" igual a "Guardadas".
+4. Escriba rápido en un campo de texto, salga y vuelva a entrar.
+   - Debe: el texto completo, con la última letra.
+5. Envíelo con señal.
+   - Debe: "Recibido en oficina", y en oficina el texto y las fotos.
+6. Repita la fase 2 (revocación) con `tecnico.revocable`.
+   - Debe: lo mismo que en la fase 2: sus datos se borran y la pantalla de inicio de sesión lo explica.
+
+**Anotar:** si capturar una foto se siente más lento que antes.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.

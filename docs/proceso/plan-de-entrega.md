@@ -18,6 +18,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 9 | Secciones repetibles (pisos, áreas, tableros) | Formatos reales de TEINS como datos, no código (F2, QA-11) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 10 | Bocetos sobre cuadrícula (ADR-0019) | El croquis en papel pasa al teléfono, nítido en oficina y en el PDF (F3, P14) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 11 | Cantidades con catálogo y exportación a Excel | Los materiales anotados en campo no se vuelven a digitar para cotizar (F9, P27 a P29) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
+| Iteración 12 | Cifrado local en campo (ADR-0022) | Un teléfono perdido no entrega datos de clientes y el borrado por revocación es instantáneo (QA-5, I-15) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -27,6 +28,8 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 1. **Verificación manual hecha por Kevin el 2026-09-25** en un iPhone 15 Pro con iOS 26.6.1 (fases 1 a 7 de [`verificacion-manual.md`](verificacion-manual.md); producción quedó para después). Todo funcionó salvo dos avisos que no aparecían, corregidos con su prueba de extremo a extremo y confirmados por Kevin en el iPhone el mismo día: "Oficina canceló esta visita" en el bloque azul de campo y "Su sesión se cerró" en el portal. Falta la fase 8 (producción), que Kevin dejó para después.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
+
+**Iteración 12 terminada el 2026-09-25:** cifrado local en campo (ADR-0022), desplegado en el entorno de pruebas y verificado allí con `cifrado.spec.ts`. Lo guardado antes se cifra solo al abrir la app nueva, sin perder nada. La prueba en iPhone (fase 12 de la guía, antes de aceptar la actualización) queda en espera con las de las iteraciones 9 a 11.
 
 **Iteración 11 terminada el 2026-09-25:** cantidades con catálogo de campo a Excel, desplegadas en el entorno de pruebas con el formato de prueba v6 ("Materiales"). Las columnas del catálogo y de los CSV son supuestas (P28, P29) hasta que TEINS responda. La prueba en iPhone de las iteraciones 9 a 11 está en espera (fases 9 a 11 de la guía).
 
@@ -38,7 +41,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 **Iteraciones 6 (administración) y 7 (visitas y clientes) terminadas el 2026-09-25** y desplegadas. Con ellas, TEINS opera el piloto desde las pantallas: solo la primera persona administradora y la publicación de formatos siguen por comando. En el entorno de pruebas, `oficina.prueba` tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
 
-Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8), el formato del informe (P22, P23, P26) y su catálogo y columnas de Excel (P28, P29). Secciones repetibles, bocetos y cantidades ya están. Antes del piloto conviene hacer la prueba en iPhone pendiente (fases 9 a 11) y actualizar producción. Mientras TEINS responde: **cifrado local de los borradores** (un teléfono perdido no expone datos de clientes) y después passkeys.
+Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8), el formato del informe (P22, P23, P26) y su catálogo y columnas de Excel (P28, P29). Secciones repetibles, bocetos y cantidades ya están. Secciones repetibles, bocetos, cantidades y cifrado local ya están. Antes del piloto conviene hacer la prueba en iPhone pendiente (fases 9 a 12) y actualizar producción. Mientras TEINS responde: **passkeys** para técnicos y oficina (ingresar con la huella o la cara en lugar de la contraseña), empezando por liberar espacio en el presupuesto de campo (quedan 2,8 KB).
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
 
@@ -165,7 +168,7 @@ Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para e
 | Bajada: formatos desde el servidor, visitas, estado de mis levantamientos | Corte 2. Mientras tanto, el formato ficticio se siembra en el servidor y `campo` lo trae incluido, con la misma versión |
 | Permiso de trabajo local y borrado por revocación | Corte 2 (viajan con la bajada) |
 | Passkeys y segundo factor | Iteración posterior; el administrador aún no tiene acciones en el sistema |
-| Cifrado local (ADR-0009, parte 5) | Iteración posterior |
+| Cifrado local (ADR-0009, parte 5) | Iteración 12 (ADR-0022) |
 | Miniaturas | Corte 4, cuando el PDF las necesite |
 | Informe de salud del dispositivo | Corte 2, con la bajada (ADR-0017) |
 | Seguimiento de errores con servicio externo | Antes del piloto, con la decisión de TEINS sobre terceros |
@@ -264,12 +267,12 @@ Revocar borra las sesiones, así que el siguiente contacto responde "no autentic
 | Visita no programada creada en campo | Solo si TEINS responde P2 distinto al supuesto |
 | Pantallas de oficina para clientes, sitios y visitas | Iteración de gestión de visitas y clientes |
 | Panel de salud de dispositivos | Iteración de administración de usuarios y dispositivos; en este corte se guarda y se prueba |
-| Cifrado local: el borrado por revocación elimina los registros, no destruye una clave | Iteración de cifrado local (ADR-0009, parte 5) |
+| Cifrado local: el borrado por revocación elimina los registros, no destruye una clave | Resuelto en la iteración 12: primero se destruye la clave (ADR-0022) |
 | Aviso push de visitas nuevas | Después del piloto (ADR-0014) |
 | Cancelar una visita | Iteración de gestión de visitas y clientes |
 | Oficina ve la visita (cliente y sitio) de cada levantamiento | Corte 3 (revisión) o corte 4 (el informe es por visita) |
 | Crear un levantamiento sin visita | Solo si P2 lo pide; los que ya existían sin visita se siguen enviando |
-| Un teléfono que se revoca antes de registrarse (nunca bajó después de actualizar) no recibe la orden: sus datos quedan bloqueados al vencer el permiso | Riesgo residual declarado en ADR-0009; se reduce con el cifrado local |
+| Un teléfono que se revoca antes de registrarse (nunca bajó después de actualizar) no recibe la orden: sus datos quedan bloqueados al vencer el permiso | Riesgo residual declarado en ADR-0009. Desde la iteración 12 están cifrados, pero la clave sigue en ese teléfono: protege contra la copia de los archivos del navegador, no contra quien lo tenga desbloqueado |
 
 ### Preguntas a TEINS
 
@@ -804,3 +807,48 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Elegir el ítem es una lista nativa** con todos los activos ("C-12 · Cable THHN 12 AWG (m)"), sin filtrar por la unidad de la línea: el técnico puede escribir "und" donde el catálogo dice "UN". Si el catálogo real es de miles de ítems y la lista se vuelve lenta, se cambia por un buscador.
 - **Contra el entorno de pruebas, un navegador y una prueba a la vez:** tres pruebas seguidas chocan con el límite de 5 inicios de sesión por minuto (QA-7) y la de repeticiones venció esperando la bandeja; sola pasó en 28 s.
 - **oficina estrena pruebas unitarias** (`src/csv.test.ts`): la lectura del catálogo y la escritura de los CSV no se prueban bien solo de punta a punta.
+
+## Iteración 12 · Cifrado local en campo
+
+**Estado:** terminada el 2026-09-25 y desplegada en el entorno de pruebas (`cifrado.spec.ts` en Chromium contra el entorno, verde). Falta la prueba en iPhone (fase 12 de la guía), en espera con las de las iteraciones 9 a 11.
+
+**Para qué:** que un teléfono perdido o copiado no entregue datos de clientes, y que la orden de borrado de un técnico revocado vuelva ilegible todo lo suyo al instante, aunque borrar cientos de fotos se interrumpa (ADR-0009, parte 5; QA-5; I-15).
+
+### Alcance
+
+- **Clave:** AES-GCM de 256 bits, no extraíble, una por técnico en el teléfono.
+- **Sellado:** respuestas y repeticiones, fotos y bocetos, el comando del outbox, las visitas y los comentarios de oficina (ADR-0022, punto 1).
+- **Migración sin pérdida:** lo guardado antes del cifrado se sella en segundo plano, registro por registro (regla 5).
+- **Borrado por revocación:** primero la clave, después los registros; si se interrumpe, se termina antes de confirmarlo al servidor.
+- **Diagnóstico:** "Datos cifrados: Todos" o cuántos faltan.
+
+### Fuera de la iteración 12
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Cifrado en `oficina` y en el portal | No aplica: no guardan datos en el dispositivo |
+| Clave ligada a la biometría del teléfono | Cuando la web lo permita (ADR-0022, "Cuándo revisarla") |
+| Passkeys | Iteración siguiente |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. En la base del teléfono no se lee nada de lo capturado ni de la visita, en Chromium y WebKit, y todo se lee igual al volver a abrir y se envía | Hecho: `e2e/pruebas/cifrado.spec.ts` lee IndexedDB directamente; `campo/src/datos/cifrado.test.ts` recorre todas las tablas |
+| 2. La clave no se puede exportar y un sellado copiado a otro registro no abre | Hecho: `cifrado.test.ts` |
+| 3. Un teléfono con datos de la iteración 11 conserva todo: se cifra lo que tiene responsable, con su estado de subida y su envío; lo del corte 0 espera a su responsable | Hecho: `cifrado.test.ts`, migración de la versión 3 a la 4 |
+| 4. La orden de borrado destruye primero la clave; interrumpida, deja todo ilegible y se termina; no le quita a otro técnico una foto compartida | Hecho: `cifrado.test.ts` y las pruebas de revocación del motor |
+| 5. Escrituras seguidas o desde dos pestañas no se pisan y la última tecla es la que queda | Hecho: `cifrado.test.ts` |
+| 6. Lo anterior sigue igual y el presupuesto de campo se respeta | Hecho: verificación completa en el orden de la integración continua (dominio 73, protocolo 18, oficina 4, campo 47, servidor 89, extremo a extremo 23 y 1 omitida); campo 117,2 de 120 KB |
+
+### Decisiones tomadas al construirlo
+
+- **Sellar fuera de la transacción y escribir con comprobación optimista** (ADR-0022): WebCrypto no cabe en una transacción de IndexedDB. Se descartaron `Dexie.waitFor` (consultas de relleno, frágil en Safari) y el cifrado síncrono en JavaScript (la clave quedaría legible en la base).
+- **Las escrituras de un levantamiento van en fila dentro de la pestaña.** Solo con la comprobación optimista, ocho escrituras a la vez se estorbaban hasta agotar los reintentos, y una tecla vieja podía guardarse después de una nueva. La fila las pone en orden; entre pestañas decide la comprobación.
+- **Las huellas de los archivos de cada levantamiento quedan a la vista**, junto al sellado: subir, borrar y decidir si otro usa una foto no exige abrir nada, y eso sí cabe en una transacción.
+- **Índice `cifrado` en los archivos:** saber qué fotos faltan por sellar sin cargar los bytes de todas en memoria.
+- **La migración no está en `upgrade` de Dexie** (no admite WebCrypto): la versión 4 solo agrega la tabla y el índice, y el sellado corre al abrir la app y al iniciar sesión. Se puede interrumpir y repetir.
+- **Una foto compartida por dos técnicos pasa a la clave del otro** antes de destruir la del revocado: el borrado de uno nunca le quita datos al otro, como antes del cifrado.
+- **Quedan 2,8 KB del presupuesto de campo** (117,2 de 120): la próxima iteración que toque campo empieza por revisar qué se puede cargar aparte, como ya se hizo con el editor de bocetos.
+- **Las pantallas no saben del cifrado:** leen por el repositorio y por `datos/lecturas.ts`, que abren lo sellado dentro de `useLiveQuery`.
+
