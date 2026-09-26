@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
+import { bocetoVacio, crearLevantamiento, TIPO_ARCHIVO_BOCETO, type VersionFormato } from "@teins/dominio";
 import { abrirBase, repositorioDexie } from "../datos/dexie";
 import type { BaseCampo } from "../datos/base";
 import { almacenDexie } from "./almacen";
@@ -408,5 +408,29 @@ describe("revocación (ADR-0009, QA-5)", () => {
     expect(await db.levantamientos.count()).toBe(2);
     expect(await db.bajadas.get("t1")).toMatchObject({ sesionVencida: true });
     expect(await db.ajustes.get("usuario")).toBeDefined();
+  });
+});
+
+describe("bocetos (iteración 10, ADR-0019)", () => {
+  it("el boceto no sube mientras es borrador; al enviar sube con su tipo y el envío llega", async () => {
+    const db = abrirBase(`motor-${Math.random()}`);
+    bases.push(db);
+    const repo = repositorioDexie(db);
+    const s = servidorFalso();
+    const reloj = Date.parse("2026-09-25T11:00:00Z");
+    const motor = () => crearMotor({ versionApp: 5, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: () => reloj });
+    const conCroquis: VersionFormato = { formato: "prueba", version: 1, appMinima: 5, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "croquis", etiqueta: "Croquis", tipo: "boceto", obligatorio: true }] }] };
+    const id = "0192f0e0-0000-7000-8000-000000000600";
+    await repo.crear(crearLevantamiento(conCroquis, id, new Date(reloj)), "t1");
+    await repo.guardarBoceto(id, "s", "croquis", { ...bocetoVacio(), elementos: [{ tipo: "linea", grosor: 3, desde: [0, 0], hasta: [50, 50] }] }, new Date(reloj));
+    const huella = ((await repo.obtener(id))!.respuestas.s!.croquis as { boceto: string }).boceto;
+
+    await motor().sincronizar();
+    expect(s.tipos.has(huella)).toBe(false);
+
+    expect((await repo.enviar(id, conCroquis, new Date(reloj))).ok).toBe(true);
+    await motor().sincronizar();
+    expect(s.tipos.get(huella)).toBe(TIPO_ARCHIVO_BOCETO);
+    expect((await db.envios.get(id))?.estado).toBe("recibido");
   });
 });

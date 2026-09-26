@@ -1,3 +1,4 @@
+import { TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
 import type { EnvioLocal } from "../datos/modelo";
 import type { AlmacenSincronizacion } from "./almacen";
@@ -76,10 +77,12 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
   /** Se recibió un envío: su estado según el servidor baja en la misma sincronización. */
   let huboRecibidos = false;
 
-  async function subirFotos(tecnicoId: string) {
+  async function subirArchivos(tecnicoId: string) {
     for (const archivo of await almacen.archivosPorSubir(tecnicoId)) {
       try {
-        const autorizacion = await transporte.autorizarSubida({ huella: archivo.id, bytes: archivo.datos.byteLength, tipo: "image/jpeg" });
+        // Fotos (JPEG) o bocetos: cada archivo sube con el tipo con que se guardó (iteración 10).
+        const tipo = archivo.tipo === TIPO_ARCHIVO_BOCETO ? TIPO_ARCHIVO_BOCETO : "image/jpeg";
+        const autorizacion = await transporte.autorizarSubida({ huella: archivo.id, bytes: archivo.datos.byteLength, tipo });
         if (autorizacion.estado === "autorizada") {
           await transporte.subir(autorizacion.url, autorizacion.cabeceras, archivo.datos);
           await transporte.confirmarSubida(archivo.id);
@@ -217,7 +220,7 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
       if (!tecnicoId) return "completa";
 
       for (let pasada = 0; pasada < PASADAS_MAXIMAS; pasada++) {
-        await subirFotos(tecnicoId);
+        await subirArchivos(tecnicoId);
         let otraPasada = false;
         for (const envio of await almacen.enviosListos(reloj(), tecnicoId)) {
           if (await procesar(envio)) otraPasada = true;

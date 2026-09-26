@@ -27,6 +27,7 @@
     "@teins/ui": "workspace:*",
     "dexie": "^4.4.6",
     "dexie-react-hooks": "^4.4.0",
+    "perfect-freehand": "^1.2.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "uuid": "^14.0.2"

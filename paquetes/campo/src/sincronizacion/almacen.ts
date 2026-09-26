@@ -1,4 +1,4 @@
-import { fotosReferenciadas } from "@teins/dominio";
+import { archivosReferenciados, fotosReferenciadas } from "@teins/dominio";
 import type { Bajada, SaludDispositivo } from "@teins/protocolo";
 import type { BaseCampo } from "../datos/base";
 import type { ArchivoLocal, BajadaLocal, DispositivoLocal, EnvioLocal } from "../datos/modelo";
@@ -50,7 +50,8 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
   return {
     async archivosPorSubir(tecnicoId) {
       const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
-      const huellas = new Set(propios.flatMap((l) => fotosReferenciadas(l.respuestas)));
+      // Las fotos suben por adelantado; los bocetos, solo del levantamiento ya enviado (ADR-0019, parte 3).
+      const huellas = new Set(propios.flatMap((l) => (l.estado === "borrador" ? fotosReferenciadas(l.respuestas) : archivosReferenciados(l.respuestas))));
       const pendientes = await db.archivos.where("subida").equals("pendiente").toArray();
       return pendientes.filter((a) => huellas.has(a.id));
     },
@@ -158,8 +159,8 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
         const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
         const deOtros = await db.levantamientos.filter((l) => l.tecnicoId !== tecnicoId).toArray();
         // Los archivos se direccionan por contenido: uno que también usa otra persona se conserva.
-        const enUso = new Set(deOtros.flatMap((l) => fotosReferenciadas(l.respuestas)));
-        await db.archivos.bulkDelete(propios.flatMap((l) => fotosReferenciadas(l.respuestas)).filter((h) => !enUso.has(h)));
+        const enUso = new Set(deOtros.flatMap((l) => archivosReferenciados(l.respuestas)));
+        await db.archivos.bulkDelete(propios.flatMap((l) => archivosReferenciados(l.respuestas)).filter((h) => !enUso.has(h)));
         await db.levantamientos.bulkDelete(propios.map((l) => l.id));
         await db.envios.where("tecnicoId").equals(tecnicoId).delete();
         await db.visitas.where("tecnicoId").equals(tecnicoId).delete();

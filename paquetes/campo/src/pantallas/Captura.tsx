@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   bloques,
   claveDeRepeticion,
   crearMedida,
   describirValor,
+  esBoceto,
   esNoObtenido,
+  LIENZO,
   LIMITES,
   nombreDeDato,
   type CodigoErrorValidacion,
@@ -15,7 +17,7 @@ import {
   type ValorMedida,
   type VersionFormato,
 } from "@teins/dominio";
-import { Aviso, Boton, CampoFotos, CampoMedida, CampoTexto, MarcaNoObtenido, Marquilla, ValorLeido } from "@teins/ui";
+import { Aviso, Boceto, Boton, CampoFotos, CampoMedida, CampoTexto, EtiquetaCampo, MarcaNoObtenido, Marquilla, MensajeError, ValorLeido } from "@teins/ui";
 import { db, repositorio } from "../datos/instancia";
 import type { EnvioLocal, EstadoServidor, LevantamientoLocal } from "../datos/modelo";
 import { procesarFoto } from "../fotos/procesar";
@@ -26,6 +28,8 @@ import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 
 type Errores = ReadonlyMap<string, CodigoErrorValidacion>;
+// El editor de bocetos pesa (perfect-freehand y la lógica del lienzo): se carga solo al dibujar (ADR-0011).
+const EditorBoceto = lazy(() => import("./EditorBoceto"));
 const claveDeError = (seccion: string, campo: string) => `${seccion}.${campo}`;
 
 export function Captura({ id, volver }: { id: string; volver: () => void }) {
@@ -104,9 +108,11 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
 /** Panel por grupo (DESIGN.md, Placa): campos de datos seguidos juntos; cada campo de fotos aparte. */
 function agrupar(campos: readonly DefinicionCampo[]): DefinicionCampo[][] {
   const grupos: DefinicionCampo[][] = [];
+  // Fotos y bocetos van solos en su panel; los demás campos se agrupan.
+  const solo = (c: DefinicionCampo) => c.tipo === "foto" || c.tipo === "boceto";
   for (const campo of campos) {
     const ultimo = grupos.at(-1);
-    if (campo.tipo !== "foto" && ultimo && ultimo[0]!.tipo !== "foto") ultimo.push(campo);
+    if (!solo(campo) && ultimo && !solo(ultimo[0]!)) ultimo.push(campo);
     else grupos.push([campo]);
   }
   return grupos;
@@ -364,6 +370,8 @@ function Campo({ id, seccion, campo, inicial, actual, error, alGuardar }: PropsC
       }
       case "foto":
         return <Fotos id={id} seccion={seccion} campo={campo} ids={noObtenido ? [] : actual} error={noObtenido ? undefined : errorDelCampo} alGuardar={alGuardar} />;
+      case "boceto":
+        return <CampoBoceto id={id} seccion={seccion} campo={campo} actual={noObtenido ? undefined : actual} error={noObtenido ? undefined : errorDelCampo} alGuardar={alGuardar} />;
     }
   })();
 
@@ -379,6 +387,57 @@ function Campo({ id, seccion, campo, inicial, actual, error, alGuardar }: PropsC
         // Marcar reemplaza el dato; desmarcar lo deja vacío para capturarlo (regla 3).
         onCambio={(marcado, motivo) => void guardar(marcado ? { noObtenido: true, motivo } : undefined)}
       />
+    </div>
+  );
+}
+
+/** Boceto (ADR-0019): miniatura y editor a pantalla completa. El documento vive en el archivo local. */
+function useBoceto(valor: Valor | undefined) {
+  const huella = esBoceto(valor) ? valor.boceto : undefined;
+  return useLiveQuery(async () => (huella ? repositorio.obtenerBoceto(huella) : null), [huella]);
+}
+
+function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: string; seccion: string; campo: DefinicionCampo; actual: Valor | undefined; error: string | undefined; alGuardar: () => void }) {
+  const documento = useBoceto(actual);
+  const [editando, setEditando] = useState(false);
+  const hayDibujo = Boolean(documento && documento.elementos.length > 0);
+  return (
+    <div className="flex flex-col gap-2">
+      <EtiquetaCampo obligatorio={campo.obligatorio}>{campo.etiqueta}</EtiquetaCampo>
+      {hayDibujo ? (
+        <Boceto ancho={LIENZO.ancho} alto={LIENZO.alto} cuadricula={LIENZO.cuadricula} elementos={documento!.elementos} etiqueta={`Boceto de ${campo.etiqueta.toLowerCase()}`} className="rounded-control border border-division" />
+      ) : (
+        <p className="text-ayuda text-texto-secundario">Todavía no hay boceto.</p>
+      )}
+      {error && <MensajeError id={`error-${seccion}-${campo.clave}`}>{error}</MensajeError>}
+      <Boton onClick={() => setEditando(true)}>{hayDibujo ? "Editar boceto" : "Dibujar boceto"}</Boton>
+      {editando && (
+        <Suspense fallback={<div aria-busy="true" aria-label="Abriendo el editor" className="fixed inset-0 z-50 bg-fondo" />}>
+          <EditorBoceto
+            etiqueta={campo.etiqueta}
+            inicial={documento ?? null}
+            guardar={async (d) => {
+              await repositorio.guardarBoceto(id, seccion, campo.clave, d, new Date());
+              alGuardar();
+            }}
+            cerrar={() => setEditando(false)}
+          />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+
+function BocetoLeido({ etiqueta, valor }: { etiqueta: string; valor: Valor | undefined }) {
+  const documento = useBoceto(valor);
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-cuerpo font-bold">{etiqueta}</span>
+      {documento ? (
+        <Boceto ancho={LIENZO.ancho} alto={LIENZO.alto} cuadricula={LIENZO.cuadricula} elementos={documento.elementos} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} className="rounded-control border border-division" />
+      ) : (
+        <p className="text-ayuda text-texto-secundario">{describirValor({ clave: "", etiqueta, tipo: "boceto" }, valor)}</p>
+      )}
     </div>
   );
 }
@@ -490,6 +549,8 @@ function Enviado({
               const valor = levantamiento.respuestas[clave]?.[campo.clave];
               return campo.tipo === "foto" && !esNoObtenido(valor) ? (
                 <FotosLeidas key={campo.clave} etiqueta={campo.etiqueta} ids={Array.isArray(valor) ? (valor as string[]) : []} />
+              ) : campo.tipo === "boceto" && !esNoObtenido(valor) ? (
+                <BocetoLeido key={campo.clave} etiqueta={campo.etiqueta} valor={valor} />
               ) : (
                 <ValorLeido key={campo.clave} etiqueta={campo.etiqueta}>
                   {describirValor(campo, valor)}

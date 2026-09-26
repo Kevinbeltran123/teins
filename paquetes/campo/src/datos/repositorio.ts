@@ -1,4 +1,4 @@
-import type { Levantamiento, ResultadoEnvio, Valor, VersionFormato } from "@teins/dominio";
+import type { DocumentoBoceto, Levantamiento, ResultadoEnvio, Valor, VersionFormato } from "@teins/dominio";
 import type { ArchivoLocal, LevantamientoLocal } from "./modelo";
 
 export type { ArchivoLocal, LevantamientoLocal } from "./modelo";
@@ -23,6 +23,12 @@ export interface RepositorioLevantamientos {
   renombrarRepeticion(id: string, seccion: string, repeticion: string, nombre: string, ahora: Date): Promise<void>;
   /** Quita la repetición con sus respuestas. */
   quitarRepeticion(id: string, seccion: string, repeticion: string, ahora: Date): Promise<void>;
+  /**
+   * Bocetos (iteración 10): el documento se guarda como archivo por su huella y la respuesta apunta a él,
+   * en una transacción. La versión anterior se borra si nada más la usa. No sube hasta enviar (ADR-0019).
+   */
+  guardarBoceto(id: string, seccion: string, campo: string, documento: DocumentoBoceto, ahora: Date): Promise<void>;
+  obtenerBoceto(huella: string): Promise<DocumentoBoceto | null>;
   /** Guarda el archivo y su referencia en la misma transacción: nunca queda una foto sin referencia. */
   agregarFoto(id: string, seccion: string, campo: string, archivo: ArchivoNuevo, ahora: Date): Promise<void>;
   obtenerArchivos(ids: readonly string[]): Promise<ArchivoLocal[]>;

@@ -1,8 +1,10 @@
+import type { TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
 import { ErrorDeRed, type ClienteApi, type CuerpoEntrada, type EnviarLevantamiento, type Respuesta } from "@teins/protocolo";
 
 /** Lo que el motor necesita del servidor. En las pruebas se reemplaza por un servidor falso con fallas inducidas. */
 export interface Transporte {
-  autorizarSubida(archivo: { huella: string; bytes: number; tipo: "image/jpeg" }): Promise<Respuesta<"autorizarSubida">>;
+  /** Campo sube fotos (JPEG) y bocetos (iteración 10). */
+  autorizarSubida(archivo: { huella: string; bytes: number; tipo: "image/jpeg" | typeof TIPO_ARCHIVO_BOCETO }): Promise<Respuesta<"autorizarSubida">>;
   /** Carga directa al almacenamiento (ADR-0007). Un rechazo del almacenamiento lanza ErrorDeSubida. */
   subir(url: string, cabeceras: Record<string, string>, datos: ArrayBuffer): Promise<void>;
   confirmarSubida(huella: string): Promise<Respuesta<"confirmarSubida">>;

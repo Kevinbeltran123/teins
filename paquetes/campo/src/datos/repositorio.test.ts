@@ -1,7 +1,8 @@
 import "fake-indexeddb/auto";
 import Dexie from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
-import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
+import { bocetoVacio, crearLevantamiento, type VersionFormato } from "@teins/dominio";
+import { almacenDexie } from "../sincronizacion/almacen";
 import { abrirBase, nuevoIdDeRepeticion, repositorioDexie } from "./dexie";
 import type { ArchivoNuevo } from "./repositorio";
 
@@ -68,6 +69,31 @@ describe("repositorio de levantamientos en Dexie", () => {
     const enviado = (await db.envios.get(id))!.comando.levantamiento;
     expect(enviado.repeticiones).toEqual({ tableros: [{ id: segunda!.id, nombre: "Tablero del sótano" }] });
     expect(enviado.respuestas).toEqual({ [`tableros~${segunda!.id}`]: { t: "Sótano" } });
+  });
+
+  it("guarda el boceto como archivo por huella, reemplaza el anterior y no lo sube hasta enviar (iteración 10)", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const almacen = almacenDexie(db);
+    const conCroquis: VersionFormato = { ...formato, appMinima: 5, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "croquis", etiqueta: "Croquis", tipo: "boceto", obligatorio: true }] }] };
+    const id = "0192f0e0-0000-7000-8000-000000000500";
+    await repo.crear(crearLevantamiento(conCroquis, id, ahora), "t1");
+    const linea = (x: number) => ({ ...bocetoVacio(), elementos: [{ tipo: "linea" as const, grosor: 3, desde: [0, 0] as const, hasta: [x, 0] as const }] });
+
+    await repo.guardarBoceto(id, "s", "croquis", linea(100), despues);
+    const primero = ((await repo.obtener(id))!.respuestas.s!.croquis as { boceto: string }).boceto;
+    expect(await repo.obtenerBoceto(primero)).toEqual(linea(100));
+    await repo.guardarBoceto(id, "s", "croquis", linea(200), despues);
+    const segundo = ((await repo.obtener(id))!.respuestas.s!.croquis as { boceto: string }).boceto;
+    expect(segundo).not.toBe(primero);
+    // La versión anterior no la usa nadie: no queda en el teléfono.
+    expect(await db.archivos.get(primero)).toBeUndefined();
+    expect((await db.archivos.get(segundo))?.tipo).toBe("application/vnd.teins.boceto+json");
+
+    // Borrador: no sube. Enviado: sube (ADR-0019, parte 3).
+    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).not.toContain(segundo);
+    expect((await repo.enviar(id, conCroquis, despues)).ok).toBe(true);
+    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).toContain(segundo);
   });
 
   it("guarda y borra respuestas, y actualiza la hora de modificación", async () => {

@@ -17,3 +17,4 @@ PWA de campo: captura sin conexión, outbox, sincronización, editor de bocetos.
 - Presupuesto de JavaScript inicial: `pnpm presupuesto` desde la raíz (ADR-0011).
 - En desarrollo, `/api` se reenvía al servidor en `localhost:3000`; para abrirla desde un celular en la red local, agregue ese origen a `ORIGENES_CONFIABLES` del servidor.
 - Iteración 9 (app 4): secciones repetibles en la captura. "Agregar tablero", cada repetición con su nombre editable y "Quitar" con confirmación; el levantamiento nace con las que pide el formato. Solo los formatos con `appMinima` 4 las traen.
+- Iteración 10 (app 5): bocetos. El campo muestra la miniatura y abre el editor (`pantallas/EditorBoceto.tsx`, cargado aparte): trazo libre con perfect-freehand, línea, texto, borrador, deshacer y rehacer, zoom con dos dedos y rechazo de la palma. Cada cambio se guarda como archivo por su huella (`guardarBoceto`); sube solo al enviar.

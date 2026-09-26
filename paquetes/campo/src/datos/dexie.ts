@@ -1,4 +1,17 @@
-import { agregarFoto, agregarRepeticion, enviarLevantamiento, quitarRepeticion, renombrarRepeticion, responder, type Levantamiento } from "@teins/dominio";
+import {
+  agregarFoto,
+  agregarRepeticion,
+  archivosReferenciados,
+  enviarLevantamiento,
+  esBoceto,
+  leerBoceto,
+  quitarRepeticion,
+  renombrarRepeticion,
+  responder,
+  serializarBoceto,
+  TIPO_ARCHIVO_BOCETO,
+  type Levantamiento,
+} from "@teins/dominio";
 import { llaveDeEnvio } from "@teins/protocolo/llaves";
 import type { BaseCampo } from "./base";
 import type { RepositorioLevantamientos } from "./repositorio";
@@ -37,6 +50,28 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
 
     guardarRespuesta(id, seccion, campo, valor, ahora) {
       return db.transaction("rw", db.levantamientos, () => modificar(id, (l) => responder(l, seccion, campo, valor, ahora)));
+    },
+
+    async guardarBoceto(id, seccion, campo, documento, ahora) {
+      // La huella se calcula antes: una transacción de IndexedDB no puede esperar otra cosa que a sí misma.
+      const datos = new TextEncoder().encode(serializarBoceto(documento));
+      const huella = [...new Uint8Array(await crypto.subtle.digest("SHA-256", datos))].map((b) => b.toString(16).padStart(2, "0")).join("");
+      await db.transaction("rw", db.levantamientos, db.archivos, async () => {
+        const anterior = (await db.levantamientos.get(id))?.respuestas[seccion]?.[campo];
+        if (!(await db.archivos.get(huella))) {
+          await db.archivos.add({ id: huella, datos: datos.buffer as ArrayBuffer, tipo: TIPO_ARCHIVO_BOCETO, creadoEn: ahora.toISOString(), subida: "pendiente" });
+        }
+        await modificar(id, (l) => responder(l, seccion, campo, { boceto: huella }, ahora));
+        if (esBoceto(anterior) && anterior.boceto !== huella) {
+          const enUso = (await db.levantamientos.toArray()).some((l) => archivosReferenciados(l.respuestas).includes(anterior.boceto));
+          if (!enUso) await db.archivos.delete(anterior.boceto);
+        }
+      });
+    },
+
+    async obtenerBoceto(huella) {
+      const archivo = await db.archivos.get(huella);
+      return archivo ? leerBoceto(new TextDecoder().decode(archivo.datos)) : null;
     },
 
     agregarRepeticion(id, formato, seccion, ahora) {

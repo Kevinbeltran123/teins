@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { EnviarLevantamiento, ErrorApi, ErrorDeRed, tipoDeProblema, type Cambio, type CodigoProblema, type Problema, type SaludDispositivo } from "@teins/protocolo";
-import { fotosReferenciadas } from "@teins/dominio";
+import { archivosReferenciados } from "@teins/dominio";
 import { ErrorDeSubida, type Transporte } from "../transporte";
 
 /** Falla que se aplica a la próxima llamada de una operación. */
@@ -25,6 +25,7 @@ const error = (codigo: CodigoProblema, estado: number, extra: Partial<Problema> 
  */
 export function servidorFalso(opciones: { verificacionesPendientes?: number } = {}) {
   const almacenamiento = new Map<string, Buffer>();
+  const tipos = new Map<string, string>();
   const archivos = new Map<string, "pendiente" | "subido" | "verificado">();
   const recibidos = new Map<string, { resultado: { resultado: "aceptado"; levantamientoId: string; recibidoEn: string }; veces: number }>();
   const fallas = new Map<Operacion, Falla[]>();
@@ -53,8 +54,9 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
   }
 
   const transporte: Transporte = {
-    async autorizarSubida({ huella }) {
+    async autorizarSubida({ huella, tipo }) {
       return aplicarFalla("autorizarSubida", () => {
+        tipos.set(huella, tipo);
         const estado = archivos.get(huella);
         if (estado === "subido" || estado === "verificado") return { estado: "existente" as const, archivo: estado };
         archivos.set(huella, "pendiente");
@@ -85,7 +87,8 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
           previo.veces++;
           return previo.resultado;
         }
-        const huellas = fotosReferenciadas(valido.levantamiento.respuestas);
+        // Como el servidor real: fotos y bocetos deben haber llegado (QA-2).
+        const huellas = archivosReferenciados(valido.levantamiento.respuestas);
         const faltantes = huellas.filter((h) => !archivos.has(h) || archivos.get(h) === "pendiente");
         if (faltantes.length > 0) throw error("archivos_faltantes", 409, { faltantes });
         if (huellas.some((h) => archivos.get(h) === "subido")) {
@@ -134,6 +137,8 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     },
     recibidos,
     almacenamiento,
+    /** Con qué tipo pidió subir cada archivo el teléfono. */
+    tipos,
     llamadas,
     cambios,
     informes,

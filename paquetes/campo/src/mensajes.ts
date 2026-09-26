@@ -18,6 +18,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   repeticiones_insuficientes: "Faltan repeticiones: agrega las que pide el formato",
   repeticiones_excedidas: "Hay más repeticiones de las que permite el formato: quita alguna",
   nombre_de_repeticion_invalido: "Cada una necesita un nombre",
+  boceto_invalido: "El boceto está dañado. Vuelve a dibujarlo.",
 };
 
 export type Tono = "ok" | "pendiente" | "error";
