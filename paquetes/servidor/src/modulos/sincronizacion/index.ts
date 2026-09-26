@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import { VERSION_APP_CATALOGO } from "@teins/dominio";
 import type { Cambio } from "@teins/protocolo";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
+import type { Catalogo } from "../catalogo";
 import { leerCambios, type CambioLeido } from "../cambios";
 import { leerIdDeVersion, type Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
@@ -15,6 +17,7 @@ interface Dependencias {
   visitas: Pick<Visitas, "asignadas" | "canceladas">;
   levantamientos: Pick<Levantamientos, "estados">;
   identidad: Pick<Identidad, "permisoLocalHasta" | "nombres">;
+  catalogo: Pick<Catalogo, "items">;
 }
 
 interface Pedido {
@@ -86,6 +89,13 @@ export async function armarBajada(tx: TxOrganizacion, deps: Omit<Dependencias, "
         })),
       });
     }
+  }
+
+  // Catálogo (ADR-0025): una app anterior no conoce este tipo de cambio y rechazaría toda la bajada. Al
+  // actualizarse baja todo de nuevo, así que no pierde ningún ítem.
+  if (app >= VERSION_APP_CATALOGO) {
+    const items = await deps.catalogo.items(tx, de("item_catalogo"));
+    for (const item of items.values()) cambios.push({ tipo: "item_catalogo", item });
   }
 
   return { cambios, puntoDeControl, hayMas };

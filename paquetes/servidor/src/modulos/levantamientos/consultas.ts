@@ -140,7 +140,7 @@ export async function conteosPorVisita(tx: TxOrganizacion, visitaIds: readonly s
 /** Líneas vigentes vinculadas al catálogo de un levantamiento (para la revisión). */
 export async function vinculosDe(tx: TxOrganizacion, levantamientoId: string) {
   return tx
-    .select({ seccion: lineasCantidad.seccion, campo: lineasCantidad.campo, linea: lineasCantidad.linea, itemId: lineasCantidad.itemCatalogoId })
+    .select({ seccion: lineasCantidad.seccion, campo: lineasCantidad.campo, linea: lineasCantidad.linea, itemId: lineasCantidad.itemCatalogoId, vinculadaPor: lineasCantidad.vinculadaPor })
     .from(lineasCantidad)
     .where(and(eq(lineasCantidad.levantamientoId, levantamientoId), isNull(lineasCantidad.quitadaEn), isNotNull(lineasCantidad.itemCatalogoId)));
 }

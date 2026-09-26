@@ -134,7 +134,7 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   const visitas = crearVisitas(clientesYSitios);
   const catalogo = crearCatalogo(bd);
   const levantamientos = crearLevantamientos({ bd, formatos, archivos, visitas, identidad, catalogo });
-  const sincronizacion = crearSincronizacion({ bd, formatos, visitas, levantamientos, identidad });
+  const sincronizacion = crearSincronizacion({ bd, formatos, visitas, levantamientos, identidad, catalogo });
   const informes = crearInformes({ bd, almacenamiento, config, archivos, levantamientos, visitas, identidad, formatos });
 
   registrarRutaPublica(app, {

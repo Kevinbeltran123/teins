@@ -148,6 +148,13 @@
       "when": 1790450919145,
       "tag": "0020_permisos_avisos",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790462532434,
+      "tag": "0021_catalogo_en_la_bajada",
+      "breakpoints": true
     }
   ]
 }

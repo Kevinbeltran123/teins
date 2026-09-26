@@ -1,4 +1,4 @@
-import { archivosReferenciados, enviarLevantamiento, fotosReferenciadas, type Levantamiento } from "@teins/dominio";
+import { archivosReferenciados, enviarLevantamiento, esCantidades, fotosReferenciadas, type Levantamiento } from "@teins/dominio";
 import type { EnviarLevantamiento, ResultadoComando } from "@teins/protocolo";
 import type { Actor } from "../../../plataforma/actor";
 import { enOrganizacion, esViolacionUnica, type BaseDeDatos } from "../../../plataforma/base-de-datos";
@@ -8,6 +8,7 @@ import {
   RESTRICCION_LLAVE,
   type Avisar,
   type PuertoArchivos,
+  type PuertoCatalogo,
   type PuertoFormatos,
   type PuertoVisitas,
   type RegistrarAuditoria,
@@ -24,6 +25,7 @@ export interface DependenciasEnvio {
   registrarAuditoria: RegistrarAuditoria;
   registrarCambios: RegistrarCambios;
   avisar: Avisar;
+  catalogo: PuertoCatalogo;
   /** El aviso a oficina dice quién envió (ADR-0023). */
   nombres: (organizacionId: string, ids: readonly string[]) => Promise<Map<string, string>>;
   reloj?: () => Date;
@@ -104,13 +106,18 @@ export async function recibirEnvio(
         enviadoEnDispositivo: new Date(datos.enviadoEn),
         recibidoEn,
       });
-      // Las líneas de cantidad, a su tabla, en la misma transacción (ADR-0006, parte 2).
+      // Las líneas de cantidad, a su tabla, en la misma transacción (ADR-0006, parte 2). Las que el técnico
+      // eligió del catálogo entran vinculadas si el ítem existe; si no (catálogo viejo en el teléfono), sin
+      // vínculo: el envío nunca se rechaza por eso (ADR-0025).
+      const elegidos = Object.values(datos.respuestas).flatMap((s) => Object.values(s).flatMap((v) => (esCantidades(v) ? v.flatMap((l) => (l.item ? [l.item] : [])) : [])));
+      const existentes = elegidos.length > 0 ? await deps.catalogo.items(tx, [...new Set(elegidos)]) : new Map();
       await deps.repositorio.proyectarCantidades(tx, {
         organizacionId: actor.organizacionId,
         levantamientoId: datos.id,
         formato,
         respuestas: datos.respuestas,
         repeticiones: datos.repeticiones ?? {},
+        elegidosEnCampo: { tecnicoId: actor.usuarioId, en: recibidoEn, items: new Set(existentes.keys()) },
       });
 
       const comun = {

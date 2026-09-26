@@ -96,7 +96,7 @@ describe("cantidades con catálogo en el servidor (iteración 11)", () => {
     const vinculada = await vincular(2, cable.id);
     expect(vinculada.json()).toEqual({ version: 3 });
     expect((await oficina("GET", `/api/levantamientos/${id}`)).json().vinculos).toEqual([
-      { seccion: "obra", campo: "materiales", linea: "a0000001", item: { id: cable.id, codigo: "C-12", descripcion: "Cable THHN 12 AWG negro", unidad: "m" } },
+      { seccion: "obra", campo: "materiales", linea: "a0000001", item: { id: cable.id, codigo: "C-12", descripcion: "Cable THHN 12 AWG negro", unidad: "m" }, elegidoEnCampo: false },
     ]);
     const { rows: eventos } = await s.propietario.pool.query("select tipo_evento, valor_nuevo from auditoria.registros where agregado_id = $1 and tipo_evento = 'linea_vinculada'", [id]);
     expect(eventos).toEqual([{ tipo_evento: "linea_vinculada", valor_nuevo: { linea: "a0000001", item: cable.id } }]);

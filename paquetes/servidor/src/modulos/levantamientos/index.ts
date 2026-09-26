@@ -70,7 +70,7 @@ const SIN_NOMBRE = "[Usuario no disponible]";
 
 /** Interfaz pública del módulo de levantamientos: núcleo del sistema. */
 export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad, catalogo }: Dependencias): Levantamientos {
-  const envio: DependenciasEnvio = { bd, repositorio: repositorioDrizzle, formatos, archivos, visitas, registrarAuditoria: registrar, registrarCambios, avisar, nombres: identidad.nombres };
+  const envio: DependenciasEnvio = { bd, repositorio: repositorioDrizzle, formatos, archivos, visitas, registrarAuditoria: registrar, registrarCambios, avisar, catalogo, nombres: identidad.nombres };
   const revision: DependenciasRevision = { bd, repositorio: repositorioRevision, formatos, registrarAuditoria: registrar, registrarCambios, avisar, nombres: identidad.nombres, catalogo };
 
   async function personas(organizacionId: string, ids: readonly (string | null)[]) {
@@ -139,7 +139,9 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             const items = await catalogo.items(tx, lineasVinculadas.map((v) => v.itemId!));
             const vinculos = lineasVinculadas.flatMap((v) => {
               const item = items.get(v.itemId!);
-              return item ? [{ seccion: v.seccion, campo: v.campo, linea: v.linea, item: { id: item.id, codigo: item.codigo, descripcion: item.descripcion, unidad: item.unidad } }] : [];
+              // Lo eligió el técnico y nadie de oficina lo ha cambiado (ADR-0025).
+              const elegidoEnCampo = v.vinculadaPor === fila.tecnicoId;
+              return item ? [{ seccion: v.seccion, campo: v.campo, linea: v.linea, item: { id: item.id, codigo: item.codigo, descripcion: item.descripcion, unidad: item.unidad }, elegidoEnCampo }] : [];
             });
             return { fila, definicion, visita, comentarios: await comentariosDe(tx, [fila.id]), vinculos };
           });

@@ -8,14 +8,15 @@ import { comandosProcesados, comentarios, levantamientos, lineasCantidad } from 
  * La tabla de líneas sigue al documento (ADR-0006, parte 2): inserta las nuevas, actualiza las que
  * cambian (conservando su vínculo al catálogo) y marca como quitadas las que ya no están (regla 14).
  */
-async function proyectarCantidades(tx: TxOrganizacion, { organizacionId, levantamientoId, formato, respuestas, repeticiones }: DatosDeProyeccion) {
+async function proyectarCantidades(tx: TxOrganizacion, { organizacionId, levantamientoId, formato, respuestas, repeticiones, elegidosEnCampo }: DatosDeProyeccion) {
   const actuales: (typeof lineasCantidad.$inferInsert)[] = [];
   for (const bloque of bloques(formato, repeticiones)) {
     for (const campo of bloque.seccion.campos) {
       if (campo.tipo !== "cantidades") continue;
       const valor = respuestas[bloque.clave]?.[campo.clave];
       if (!esCantidades(valor)) continue;
-      valor.forEach((l, orden) =>
+      valor.forEach((l, orden) => {
+        const elegido = elegidosEnCampo && l.item && elegidosEnCampo.items.has(l.item) ? { itemCatalogoId: l.item, vinculadaPor: elegidosEnCampo.tecnicoId, vinculadaEn: elegidosEnCampo.en } : {};
         actuales.push({
           organizacionId,
           levantamientoId,
@@ -27,8 +28,10 @@ async function proyectarCantidades(tx: TxOrganizacion, { organizacionId, levanta
           cantidad: l.cantidad,
           unidad: l.unidad,
           observacion: l.observacion?.trim() || null,
-        }),
-      );
+          // Solo cuenta al insertar: al corregir, el vínculo que ya tiene la tabla se conserva.
+          ...elegido,
+        });
+      });
     }
   }
   const llave = (l: { seccion: string; campo: string; linea: string }) => `${l.seccion}\u0000${l.campo}\u0000${l.linea}`;

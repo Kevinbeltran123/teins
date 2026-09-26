@@ -29,6 +29,11 @@ export interface DatosDeProyeccion {
   formato: VersionFormato;
   respuestas: Respuestas;
   repeticiones: Repeticiones;
+  /**
+   * Solo al recibir (ADR-0025): los ítems que eligió el técnico y existen en la organización. Esas líneas
+   * entran vinculadas, a nombre del técnico; las demás, sin vínculo.
+   */
+  elegidosEnCampo?: { tecnicoId: string; en: Date; items: ReadonlySet<string> };
 }
 
 /** Proyección de las cantidades: al recibir y al corregir, en la misma transacción. */

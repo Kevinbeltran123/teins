@@ -6,6 +6,7 @@ import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
+import { registrarCambios } from "../cambios";
 import { itemsCatalogo } from "./esquema";
 
 export interface ItemDeCatalogo {
@@ -15,6 +16,10 @@ export interface ItemDeCatalogo {
   unidad: string;
   activo: boolean;
 }
+
+/** El catálogo baja a los teléfonos (ADR-0025): cada ítem creado o cambiado se registra para toda la organización. */
+const paraLosTelefonos = (tx: TxOrganizacion, organizacionId: string, ids: readonly string[]) =>
+  registrarCambios(tx, ids.map((entidadId) => ({ organizacionId, entidad: "item_catalogo" as const, entidadId, operacion: "cambio" as const })));
 
 /** Interfaz pública del módulo de catálogo (iteración 11; modelo de dominio, "Formatos y catálogos"). */
 export interface Catalogo {
@@ -55,6 +60,7 @@ export function crearCatalogo(bd: BaseDeDatos): Catalogo {
           try {
             return await enOrganizacion(bd, actor.organizacionId, async (tx) => {
               const [fila] = await tx.insert(itemsCatalogo).values({ id: randomUUID(), organizacionId: actor.organizacionId, ...cuerpo }).returning();
+              await paraLosTelefonos(tx, actor.organizacionId, [fila!.id]);
               await registrar(tx, [
                 { organizacionId: actor.organizacionId, agregadoTipo: "item_catalogo", agregadoId: fila!.id, tipoEvento: "item_catalogo_creado", autorId: actor.usuarioId, correlacion, valorNuevo: cuerpo },
               ]);
@@ -74,6 +80,7 @@ export function crearCatalogo(bd: BaseDeDatos): Catalogo {
             const [antes] = await tx.select().from(itemsCatalogo).where(eq(itemsCatalogo.id, id));
             if (!antes) throw problema("no_encontrado", "El ítem no existe");
             const [fila] = await tx.update(itemsCatalogo).set({ ...cuerpo, actualizadoEn: new Date() }).where(eq(itemsCatalogo.id, id)).returning();
+            await paraLosTelefonos(tx, actor.organizacionId, [id]);
             await registrar(tx, [
               {
                 organizacionId: actor.organizacionId,
@@ -99,15 +106,19 @@ export function crearCatalogo(bd: BaseDeDatos): Catalogo {
             const existentes = new Set(
               (await tx.select({ codigo: itemsCatalogo.codigo }).from(itemsCatalogo).where(inArray(itemsCatalogo.codigo, [...porCodigo.keys()]))).map((f) => f.codigo),
             );
+            const tocados: string[] = [];
             for (const lote of dividir([...porCodigo.values()], 500)) {
-              await tx
+              const filas = await tx
                 .insert(itemsCatalogo)
                 .values(lote.map((i) => ({ id: randomUUID(), organizacionId: actor.organizacionId, ...i })))
                 .onConflictDoUpdate({
                   target: [itemsCatalogo.organizacionId, itemsCatalogo.codigo],
                   set: { descripcion: sql`excluded.descripcion`, unidad: sql`excluded.unidad`, activo: true, actualizadoEn: new Date() },
-                });
+                })
+                .returning({ id: itemsCatalogo.id });
+              tocados.push(...filas.map((f) => f.id));
             }
+            await paraLosTelefonos(tx, actor.organizacionId, tocados);
             const creados = porCodigo.size - existentes.size;
             await registrar(tx, [
               {
