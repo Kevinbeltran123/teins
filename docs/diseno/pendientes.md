@@ -7,7 +7,7 @@ En orden de prioridad. Todas parten de `DESIGN.md`.
 1. **Oficina · Revisión:** detalle del levantamiento, corrección por campo, historial de cambios, comentarios al técnico, toma de revisión.
 2. **Estados de las pantallas existentes:** hechos en el corte 1 para la lista y la captura de campo, el ingreso y la bandeja y el detalle de oficina. Cada pantalla nueva los trae desde el principio.
 3. **Campo · Editor de bocetos** (ADR-0019).
-4. **Ingreso:** con usuario y contraseña, hecho en el corte 1. Faltan la passkey (ADR-0009) y la instalación guiada de la PWA en iPhone (hoy es un aviso con los pasos).
+4. **Ingreso:** con usuario y contraseña, hecho en el corte 1; con llave de acceso (passkey, ADR-0009), en la iteración 13. Falta la instalación guiada de la PWA en iPhone (hoy es un aviso con los pasos).
 5. **Portal del cliente:** acceso con QR y clave, lista y descarga de informes.
 6. **Plantilla del PDF** (ADR-0013), con los mismos tokens.
 7. **Oficina · Composición y publicación del informe.**

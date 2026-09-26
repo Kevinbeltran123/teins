@@ -19,6 +19,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 10 | Bocetos sobre cuadrícula (ADR-0019) | El croquis en papel pasa al teléfono, nítido en oficina y en el PDF (F3, P14) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 11 | Cantidades con catálogo y exportación a Excel | Los materiales anotados en campo no se vuelven a digitar para cotizar (F9, P27 a P29) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 12 | Cifrado local en campo (ADR-0022) | Un teléfono perdido no entrega datos de clientes y el borrado por revocación es instantáneo (QA-5, I-15) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
+| Iteración 13 | Llaves de acceso (passkeys) | Entrar con Face ID, huella o PIN, sin contraseñas que se puedan suplantar (ADR-0009) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -28,6 +29,8 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 1. **Verificación manual hecha por Kevin el 2026-09-25** en un iPhone 15 Pro con iOS 26.6.1 (fases 1 a 7 de [`verificacion-manual.md`](verificacion-manual.md); producción quedó para después). Todo funcionó salvo dos avisos que no aparecían, corregidos con su prueba de extremo a extremo y confirmados por Kevin en el iPhone el mismo día: "Oficina canceló esta visita" en el bloque azul de campo y "Su sesión se cerró" en el portal. Falta la fase 8 (producción), que Kevin dejó para después.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
+
+**Iteración 13 terminada el 2026-09-25:** llaves de acceso en campo y oficina, desplegadas en el entorno de pruebas y verificadas allí con `llaves.spec.ts` (cada superficie con su dominio). Con ella se completa la lista de iteraciones por riesgo que se trazó al cerrar el corte 5. La prueba en iPhone (fase 13 de la guía) queda en espera con las de las iteraciones 9 a 12.
 
 **Iteración 12 terminada el 2026-09-25:** cifrado local en campo (ADR-0022), desplegado en el entorno de pruebas y verificado allí con `cifrado.spec.ts`. Lo guardado antes se cifra solo al abrir la app nueva, sin perder nada. La prueba en iPhone (fase 12 de la guía, antes de aceptar la actualización) queda en espera con las de las iteraciones 9 a 11.
 
@@ -41,7 +44,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 **Iteraciones 6 (administración) y 7 (visitas y clientes) terminadas el 2026-09-25** y desplegadas. Con ellas, TEINS opera el piloto desde las pantallas: solo la primera persona administradora y la publicación de formatos siguen por comando. En el entorno de pruebas, `oficina.prueba` tiene la marca de administrador (activa su segundo factor la primera vez que abre "Administración").
 
-Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8), el formato del informe (P22, P23, P26) y su catálogo y columnas de Excel (P28, P29). Secciones repetibles, bocetos y cantidades ya están. Secciones repetibles, bocetos, cantidades y cifrado local ya están. Antes del piloto conviene hacer la prueba en iPhone pendiente (fases 9 a 12) y actualizar producción. Mientras TEINS responde: **passkeys** para técnicos y oficina (ingresar con la huella o la cara en lugar de la contraseña), empezando por liberar espacio en el presupuesto de campo (quedan 2,8 KB).
+Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para el piloto no es código sino TEINS: su cuenta en Railway (para transferir producción), sus formatos reales (P7, P8), el formato del informe (P22, P23, P26) y su catálogo y columnas de Excel (P28, P29). Secciones repetibles, bocetos y cantidades ya están. Las iteraciones por riesgo que se trazaron están completas (6 a 13). Lo que más reduce el riesgo ahora no es código nuevo: **la prueba en iPhone de las fases 9 a 13** (en espera por Kevin) y **actualizar producción** a esta versión (también en espera). Mientras TEINS responde, lo siguiente en código es la **instalación guiada de la PWA en iPhone** (`docs/diseno/pendientes.md`, punto 4): hoy es un aviso con pasos, y es lo primero que ve un técnico nuevo.
 
 **Entorno local, tal como quedó:** Docker Compose con PostgreSQL y S3Mock (`docker compose up -d --wait`); `paquetes/servidor/.env` creado a partir de `.env.example` (no versionado); base migrada y sembrada con la organización de desarrollo, los formatos de prueba v1, v2 y v3, los usuarios `tecnico.prueba` y `oficina.prueba`, y un cliente de prueba con una visita para `tecnico.prueba`. Las fotos subidas antes del 2026-09-24 se perdieron en local (S3Mock no guardaba en su volumen; ver decisiones del corte 2): la base las da por verificadas, así que esos levantamientos viejos muestran fotos rotas en oficina. Sus contraseñas no están en el repositorio: se fijan con `TEINS_CONTRASENA=... pnpm --filter @teins/servidor restablecer-contrasena --usuario <usuario>`. Docker corre sobre Colima; si las pruebas del servidor dicen "Could not find a working container runtime strategy", ejecutar `colima start`.
 
@@ -167,7 +170,7 @@ Siguiente, por riesgo (recomendación, a decidir con Kevin): lo que falta para e
 |---|---|
 | Bajada: formatos desde el servidor, visitas, estado de mis levantamientos | Corte 2. Mientras tanto, el formato ficticio se siembra en el servidor y `campo` lo trae incluido, con la misma versión |
 | Permiso de trabajo local y borrado por revocación | Corte 2 (viajan con la bajada) |
-| Passkeys y segundo factor | Iteración posterior; el administrador aún no tiene acciones en el sistema |
+| Passkeys y segundo factor | Segundo factor en la iteración 6; passkeys en la iteración 13 |
 | Cifrado local (ADR-0009, parte 5) | Iteración 12 (ADR-0022) |
 | Miniaturas | Corte 4, cuando el PDF las necesite |
 | Informe de salud del dispositivo | Corte 2, con la bajada (ADR-0017) |
@@ -534,7 +537,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 |---|---|
 | Crear y programar clientes, sitios y visitas desde oficina | Iteración de gestión de visitas y clientes (la siguiente recomendada) |
 | Editar formatos y catálogo | Cuando TEINS lo pida (P10) |
-| Passkeys | Iteración de passkeys |
+| Passkeys | Iteración 13 |
 | Rol supervisor | Cuando TEINS defina qué hace |
 
 ### Terminado cuando
@@ -828,7 +831,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 |---|---|
 | Cifrado en `oficina` y en el portal | No aplica: no guardan datos en el dispositivo |
 | Clave ligada a la biometría del teléfono | Cuando la web lo permita (ADR-0022, "Cuándo revisarla") |
-| Passkeys | Iteración siguiente |
+| Passkeys | Iteración 13 |
 
 ### Terminado cuando
 
@@ -851,4 +854,47 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Una foto compartida por dos técnicos pasa a la clave del otro** antes de destruir la del revocado: el borrado de uno nunca le quita datos al otro, como antes del cifrado.
 - **Quedan 2,8 KB del presupuesto de campo** (117,2 de 120): la próxima iteración que toque campo empieza por revisar qué se puede cargar aparte, como ya se hizo con el editor de bocetos.
 - **Las pantallas no saben del cifrado:** leen por el repositorio y por `datos/lecturas.ts`, que abren lo sellado dentro de `useLiveQuery`.
+
+## Iteración 13 · Llaves de acceso (passkeys)
+
+**Estado:** terminada el 2026-09-25 y desplegada en el entorno de pruebas (`llaves.spec.ts` en Chromium contra el entorno, verde). Falta la prueba en iPhone (fase 13 de la guía), en espera con las de las iteraciones 9 a 12.
+
+**Para qué:** que el técnico entre con Face ID, huella o el PIN del teléfono en lugar de escribir una contraseña en campo, y que oficina pueda hacer lo mismo. Una llave de acceso no se puede suplantar desde otro sitio web (ADR-0009, parte 1: "passkey recomendada" para técnicos, opcional para oficina).
+
+### Alcance
+
+- **Servidor:** plugin de llaves de acceso de Better Auth (`@better-auth/passkey`, MIT) con la tabla `identidad.llaves_de_acceso`. Crear y quitar una llave queda en la auditoría.
+- **Campo:** "Entrar con llave de acceso" en el inicio de sesión. Después de entrar con la contraseña, la app propone crear la llave ("Ahora no" la oculta en ese teléfono).
+- **Oficina:** "Entrar con llave de acceso" y "Mi cuenta" (el nombre en el encabezado) para crear y quitar llaves.
+- **Administración:** restablecer el acceso de una persona también quita sus llaves (teléfono perdido).
+
+### Fuera de la iteración 13
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Autocompletar la llave en el campo de usuario (mediación condicional) | Cuando se vea en el iPhone si hace falta: el botón ya evita escribir |
+| Llave como segundo factor sin TOTP para administrar | Se revisa si TEINS lo pide: hoy administrar exige el TOTP activo (respaldo si se pierde el teléfono) |
+| Llave compartida entre campo y oficina | Con el dominio propio de TEINS (un solo `rpID` padre); hoy cada superficie tiene su dominio gratuito |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Técnico y oficina crean una llave y entran sin contraseña | Hecho: `e2e/pruebas/llaves.spec.ts` (Chromium con autenticador virtual) y `servidor/pruebas/llaves-de-acceso.test.ts` (autenticador de software) |
+| 2. Sin verificar a la persona (solo un toque) no se entra | Hecho: `llaves-de-acceso.test.ts` |
+| 3. Un usuario desactivado no entra con su llave; restablecer el acceso invalida la llave del teléfono perdido | Hecho: `llaves-de-acceso.test.ts` |
+| 4. Nadie quita la llave de otra persona; crear y quitar quedan en la auditoría | Hecho: `llaves-de-acceso.test.ts` |
+| 5. Lo anterior sigue igual y el presupuesto de campo se respeta | Hecho: verificación completa en el orden de la integración continua (dominio 73, protocolo 18, oficina 4, campo 47, servidor 93, extremo a extremo 24 y 2 omitidas); campo 117,3 de 120 KB |
+
+### Decisiones tomadas al construirlo
+
+- **Una instancia de Better Auth por dominio de superficie.** Una llave queda ligada al dominio donde se creó (`rpID`), y el plugin solo lo toma de una URL base fija; la nuestra sale del host de cada solicitud (ADR-0016). Cada superficie tiene su instancia con su `rpID`; todas comparten la base, el secreto y las sesiones, y la solicitud va a la de su host. Consecuencia: la llave de campo no sirve en oficina y viceversa, hasta tener un dominio propio.
+- **Siempre con verificación de la persona** (Face ID, huella o PIN): se exige al crearla y al entrar (el plugin solo la prefería). Así la llave vale por dos factores, como pide ADR-0009 para quien administra.
+- **Detectable (`residentKey: required`):** se entra sin escribir el usuario.
+- **El nombre que muestra el teléfono es el usuario** (`tecnico.prueba`), no el correo interno `usuario@<organización>.invalid`. Lo pone el servidor.
+- **Un usuario desactivado no entra con su llave:** la regla ya vivía en la creación de la sesión (regla 13), por donde pasa también la llave.
+- **Restablecer el acceso quita todas las llaves** de la persona y lo registra (`llavesQuitadas`): es lo que hace quien administra cuando alguien pierde el teléfono.
+- **Administrar sigue exigiendo el TOTP activo.** Entrar con la llave cuenta como segundo factor (ADR-0009), pero el TOTP es el respaldo si se pierde el dispositivo con la llave.
+- **La biblioteca del navegador (`@simplewebauthn/browser`, MIT) se carga solo al usar una llave:** 2,8 KB comprimidos fuera del JavaScript inicial de campo. La propuesta de crearla también se carga aparte.
+- **Pruebas sin navegador:** un autenticador WebAuthn de software (`servidor/pruebas/autenticador.ts`, clave P-256 y el CBOR mínimo) prueba las reglas de seguridad en el servidor. WebKit no tiene autenticador virtual: esa parte se prueba en Chromium y en el iPhone.
 

@@ -243,6 +243,24 @@ Hágala **antes de aceptar la actualización**, con un borrador a medias y al me
 
 **Anotar:** si capturar una foto se siente más lento que antes.
 
+## Fase 13 · Llaves de acceso (iteración 13)
+
+1. En el iPhone, entre a campo con `tecnico.prueba` y su contraseña.
+   - Debe: en Inicio, "Entra sin escribir la contraseña" con **Crear llave de acceso**.
+2. Toque **Crear llave de acceso** y confirme con Face ID.
+   - Debe: "Listo. La próxima vez entra con…", y la propuesta desaparece.
+3. **Cerrar sesión** → **Entrar con llave de acceso** → Face ID.
+   - Debe: entra sin escribir nada y ve sus visitas.
+4. En Ajustes → Contraseñas del iPhone, busque la llave.
+   - Debe: aparece con el usuario `tecnico.prueba` y el dominio de campo.
+5. En el computador, entre a oficina, toque su nombre en el encabezado (**Mi cuenta**) y **Crear llave de acceso** (con la huella o el rostro del computador, o con el iPhone por código QR).
+6. **Cerrar sesión** → **Entrar con llave de acceso**.
+   - Debe: entra sin contraseña.
+7. En Administración, **Restablecer contraseña** de `tecnico.prueba` y anote la contraseña temporal en `privado/entorno-de-pruebas.txt` (reemplaza la anterior). En el iPhone, **Cerrar sesión** → **Entrar con llave de acceso**.
+   - Debe: "Esa llave de acceso no sirve. Entra con tu usuario y contraseña."
+
+**Anotar:** si el iPhone ofreció la llave sin tener que tocar el botón, o si el botón se ve fuera de lugar.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.
