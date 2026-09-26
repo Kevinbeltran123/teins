@@ -20,6 +20,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   nombre_de_repeticion_invalido: "Cada una necesita un nombre",
   boceto_invalido: "El boceto está dañado. Vuelve a dibujarlo.",
   cantidades_invalidas: "Revisa las líneas: cada una necesita descripción, una cantidad mayor que cero y una unidad.",
+  firma_invalida: "La firma quedó incompleta. Pide que vuelvan a firmar.",
 };
 
 export type Tono = "ok" | "pendiente" | "error";

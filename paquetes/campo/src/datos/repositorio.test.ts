@@ -97,6 +97,32 @@ describe("repositorio de levantamientos en Dexie", () => {
     expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).toContain(segundo);
   });
 
+  it("guarda la firma con quién, cuándo y qué leyó; volver a firmar reemplaza los trazos, que suben al enviar (iteración 16)", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const almacen = almacenDexie(db);
+    const conFirma: VersionFormato = { ...formato, appMinima: 7, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "firma", etiqueta: "Firma", tipo: "firma", obligatorio: true }] }] };
+    const id = "0192f0e0-0000-7000-8000-000000000600";
+    await repo.crear(crearLevantamiento(conFirma, id, ahora), "t1");
+    const trazo = (x: number) => ({ ...bocetoVacio(), elementos: [{ tipo: "trazo" as const, grosor: 6, puntos: [[x, 300, 0.5]] as const, contorno: [[x, 290], [x + 50, 310], [x, 320]] as const }] });
+    const declaracion = "Confirmo que Técnico de prueba visitó Cliente · Sede el viernes, 26 de septiembre de 2026.";
+
+    await repo.guardarFirma(id, "s", "firma", trazo(100), { nombre: "  Martha Gómez ", cargo: " ", declaracion }, despues);
+    const primera = (await repo.obtener(id))!.respuestas.s!.firma as { firma: string };
+    // El cargo vacío no se guarda; el nombre, sin espacios de sobra.
+    expect(primera).toEqual({ firma: primera.firma, nombre: "Martha Gómez", firmadoEn: despues.toISOString(), declaracion });
+    expect(await repo.obtenerBoceto(primera.firma)).toEqual(trazo(100));
+
+    await repo.guardarFirma(id, "s", "firma", trazo(200), { nombre: "Martha Gómez", cargo: "Jefe de mantenimiento", declaracion }, despues);
+    const segunda = (await repo.obtener(id))!.respuestas.s!.firma as { firma: string; cargo: string };
+    expect(segunda.cargo).toBe("Jefe de mantenimiento");
+    expect(await db.archivos.get(primera.firma)).toBeUndefined();
+
+    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).not.toContain(segunda.firma);
+    expect((await repo.enviar(id, conFirma, despues)).ok).toBe(true);
+    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).toContain(segunda.firma);
+  });
+
   it("guarda y borra respuestas, y actualiza la hora de modificación", async () => {
     const repo = repositorioDexie(nuevaBase());
     await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");

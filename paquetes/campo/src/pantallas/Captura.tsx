@@ -7,8 +7,10 @@ import {
   describirValor,
   esBoceto,
   esCantidades,
+  esFirma,
   esNoObtenido,
   leerClave,
+  llenarDeclaracion,
   LIENZO,
   normalizarDecimal,
   LIMITES,
@@ -18,8 +20,10 @@ import {
   type CodigoErrorValidacion,
   type DefinicionCampo,
   type DefinicionSeccion,
+  type DocumentoBoceto,
   type ErrorValidacion,
   type Valor,
+  type ValorFirma,
   type ValorMedida,
   type VersionFormato,
 } from "@teins/dominio";
@@ -36,6 +40,7 @@ import {
   EditorCantidades,
   EsqueletoBloques,
   EtiquetaCampo,
+  Firma,
   Insignia,
   MarcaNoObtenido,
   MensajeError,
@@ -51,6 +56,7 @@ import {
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
 import { estadoDe, visitaDe } from "../datos/lecturas";
+import { useUsuario } from "../sesion/usuario";
 import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal } from "../datos/modelo";
 import type { ArchivoNuevo } from "../datos/repositorio";
 import { procesarFoto } from "../fotos/procesar";
@@ -62,6 +68,8 @@ import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 
 // El editor de bocetos pesa (perfect-freehand y la lógica del lienzo): se carga solo al dibujar (ADR-0011).
 const EditorBoceto = lazy(() => import("./EditorBoceto"));
+// La constancia que firma el cliente (ADR-0024): se carga al pedir la firma.
+const HojaDeFirma = lazy(() => import("./HojaDeFirma"));
 const claveDeError = (seccion: string, campo: string) => `${seccion}.${campo}`;
 /** Ancla de un dato en la pantalla: el resumen de errores lleva hasta él. */
 const anclaDeDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`;
@@ -147,7 +155,7 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
 /** Panel por grupo (DESIGN.md): campos de datos seguidos juntos; cada campo de fotos, bocetos o cantidades aparte. */
 function agrupar(campos: readonly DefinicionCampo[]): DefinicionCampo[][] {
   const grupos: DefinicionCampo[][] = [];
-  const solo = (c: DefinicionCampo) => c.tipo === "foto" || c.tipo === "boceto" || c.tipo === "cantidades";
+  const solo = (c: DefinicionCampo) => c.tipo === "foto" || c.tipo === "boceto" || c.tipo === "cantidades" || c.tipo === "firma";
   for (const campo of campos) {
     const ultimo = grupos.at(-1);
     if (!solo(campo) && ultimo && !solo(ultimo[0]!)) ultimo.push(campo);
@@ -512,6 +520,8 @@ function ContenidoDeCampo({ id, seccion, campo, inicial, actual, error, alGuarda
         );
       case "boceto":
         return <CampoBoceto id={id} seccion={seccion} campo={campo} actual={noObtenido ? undefined : actual} error={noObtenido ? undefined : errorDelCampo} alGuardar={alGuardar} />;
+      case "firma":
+        return <CampoFirma id={id} seccion={seccion} campo={campo} actual={noObtenido ? undefined : actual} error={noObtenido ? undefined : errorDelCampo} alGuardar={alGuardar} />;
     }
   })();
 
@@ -591,6 +601,106 @@ function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: str
           />
         </Suspense>
       )}
+    </div>
+  );
+}
+
+const diaLargo = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const soloHora = new Intl.DateTimeFormat("es-CO", { timeStyle: "short" });
+/** "hoy a las 3:40 p. m." o la fecha completa si no fue hoy. */
+const cuandoFirmo = (iso: string) => (new Date(iso).toDateString() === new Date().toDateString() ? `hoy a las ${soloHora.format(new Date(iso))}` : `el ${fechaHora(iso)}`);
+
+function FirmaTomada({ valor, documento }: { valor: ValorFirma; documento: DocumentoBoceto | null | undefined }) {
+  return (
+    <>
+      {documento && (
+        <div className="rounded-control border border-division bg-panel p-2">
+          <Firma ancho={LIENZO.ancho} alto={LIENZO.alto} elementos={documento.elementos} etiqueta={`Firma de ${valor.nombre}`} className="max-h-32" />
+        </div>
+      )}
+      <div className="flex flex-col gap-0.5">
+        <span className="text-cuerpo font-bold">
+          {valor.nombre}
+          {valor.cargo ? ` · ${valor.cargo}` : ""}
+        </span>
+        <span className="text-ayuda text-texto-secundario">Firmó {cuandoFirmo(valor.firmadoEn)}</span>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Firma de quien recibe la visita (ADR-0024). El técnico entrega el teléfono: la constancia se llena con su
+ * nombre, el sitio de la visita y el día, y queda guardada tal como se leyó.
+ */
+function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: string; seccion: string; campo: DefinicionCampo; actual: Valor | undefined; error: string | undefined; alGuardar: () => void }) {
+  const [firmando, setFirmando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
+  const usuario = useUsuario();
+  const visita = useLiveQuery(async () => {
+    const l = await repositorio.obtener(id);
+    return l?.visitaId && l.tecnicoId ? visitaDe(db, l.tecnicoId, l.visitaId) : null;
+  }, [id]);
+  const firma = esFirma(actual) ? actual : undefined;
+  const documento = useLiveQuery(async () => (firma ? repositorio.obtenerBoceto(firma.firma) : null), [firma?.firma]);
+  const declaracion = llenarDeclaracion(campo.tipo === "firma" ? campo.declaracion : undefined, {
+    tecnico: usuario?.nombre ?? "el técnico",
+    sitio: visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : "este sitio",
+    fecha: diaLargo.format(new Date()),
+  });
+
+  return (
+    <div className="flex flex-col gap-3">
+      <EtiquetaCampo obligatorio={campo.obligatorio}>{campo.etiqueta}</EtiquetaCampo>
+      {firma ? (
+        <FirmaTomada valor={firma} documento={documento} />
+      ) : (
+        <p className="text-ayuda text-texto-secundario">Entrégale el teléfono a quien recibió la visita: firma una constancia de que estuviste en el sitio.</p>
+      )}
+      {error && <MensajeError id={`error-${seccion}-${campo.clave}`}>{error}</MensajeError>}
+      {firma ? (
+        <Boton variante="fantasma" className="self-start" onClick={() => setConfirmando(true)}>
+          Volver a firmar
+        </Boton>
+      ) : (
+        <Boton icono={Pencil} onClick={() => setFirmando(true)}>
+          Pedir la firma
+        </Boton>
+      )}
+      {confirmando && firma && (
+        <Confirmacion
+          forma="inferior"
+          titulo="¿Volver a firmar?"
+          confirmar="Volver a firmar"
+          accion={async () => setFirmando(true)}
+          mensajeDeError={() => "No se pudo abrir la firma. Intenta de nuevo."}
+          alCerrar={() => setConfirmando(false)}
+        >
+          <p>La firma de {firma.nombre} se reemplaza por la nueva.</p>
+        </Confirmacion>
+      )}
+      {firmando && (
+        <Suspense fallback={<div aria-busy="true" aria-label="Abriendo la constancia" className="fixed inset-0 z-50 bg-panel" />}>
+          <HojaDeFirma
+            declaracion={declaracion}
+            guardar={async (d, datos) => {
+              await repositorio.guardarFirma(id, seccion, campo.clave, d, { ...datos, declaracion }, new Date());
+              alGuardar();
+            }}
+            cerrar={() => setFirmando(false)}
+          />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+
+function FirmaLeida({ etiqueta, valor }: { etiqueta: string; valor: ValorFirma }) {
+  const documento = useLiveQuery(() => repositorio.obtenerBoceto(valor.firma), [valor.firma]);
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-cuerpo font-bold">{etiqueta}</span>
+      <FirmaTomada valor={valor} documento={documento} />
     </div>
   );
 }
@@ -756,6 +866,8 @@ function Enviado({
                 <TablaCantidades key={campo.clave} etiqueta={campo.etiqueta} lineas={valor} />
               ) : campo.tipo === "boceto" && !esNoObtenido(valor) ? (
                 <BocetoLeido key={campo.clave} etiqueta={campo.etiqueta} valor={valor} />
+              ) : campo.tipo === "firma" && esFirma(valor) ? (
+                <FirmaLeida key={campo.clave} etiqueta={campo.etiqueta} valor={valor} />
               ) : (
                 <ValorLeido key={campo.clave} etiqueta={campo.etiqueta}>
                   {describirValor(campo, valor)}

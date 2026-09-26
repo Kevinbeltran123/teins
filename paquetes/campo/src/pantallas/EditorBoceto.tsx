@@ -1,7 +1,7 @@
 import { useRef, useState, type PointerEvent as EventoPuntero } from "react";
-import { getStroke } from "perfect-freehand";
 import { bocetoVacio, LIENZO, LIMITES_BOCETO, type DocumentoBoceto, type ElementoBoceto, type Punto, type PuntoConPresion } from "@teins/dominio";
 import { Aviso, Boceto, Boton, CampoTexto, Check, ElementoDeBoceto, GrupoDeOpciones, Redo2, Undo2 } from "@teins/ui";
+import { contornoDe as contornoDelTrazo } from "../dibujo/trazo";
 
 /**
  * Editor de bocetos (ADR-0019): trazo libre, línea recta, texto, borrador por trazo, deshacer y rehacer,
@@ -34,14 +34,7 @@ interface Vista {
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
-
-/** Contorno del trazo con perfect-freehand; con lápiz usa su presión, con el dedo la simula. */
-function contornoDe(puntos: readonly PuntoConPresion[], lapiz: boolean): Punto[] {
-  const contorno = getStroke(puntos.map(([x, y, presion]) => [x, y, presion]), { size: GROSOR_TRAZO, thinning: 0.55, smoothing: 0.5, streamline: 0.45, simulatePressure: !lapiz });
-  const redondeado = contorno.map(([x, y]) => [r1(x!), r1(y!)] as const);
-  // Un toque es un punto: el contorno necesita al menos tres vértices.
-  return redondeado.length >= 3 ? redondeado : [[puntos[0]![0] - 2, puntos[0]![1] - 2], [puntos[0]![0] + 2, puntos[0]![1] - 2], [puntos[0]![0], puntos[0]![1] + 2]];
-}
+const contornoDe = (puntos: readonly PuntoConPresion[], lapiz: boolean) => contornoDelTrazo(puntos, lapiz, GROSOR_TRAZO);
 
 function distanciaASegmento(p: Punto, a: Punto, b: Punto): number {
   const [dx, dy] = [b[0] - a[0], b[1] - a[1]];

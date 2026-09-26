@@ -28,6 +28,11 @@ export interface RepositorioLevantamientos {
    * en una transacción. La versión anterior se borra si nada más la usa. No sube hasta enviar (ADR-0019).
    */
   guardarBoceto(id: string, seccion: string, campo: string, documento: DocumentoBoceto, ahora: Date): Promise<void>;
+  /**
+   * Firma del cliente (iteración 16, ADR-0024): los trazos se guardan como un boceto y la respuesta lleva quién
+   * firmó, la hora del teléfono y la constancia que leyó. Volver a firmar la reemplaza; sube al enviar.
+   */
+  guardarFirma(id: string, seccion: string, campo: string, documento: DocumentoBoceto, datos: { nombre: string; cargo?: string | undefined; declaracion: string }, ahora: Date): Promise<void>;
   obtenerBoceto(huella: string): Promise<DocumentoBoceto | null>;
   /** Guarda el archivo y su referencia en la misma transacción: nunca queda una foto sin referencia. */
   agregarFoto(id: string, seccion: string, campo: string, archivo: ArchivoNuevo, ahora: Date): Promise<void>;

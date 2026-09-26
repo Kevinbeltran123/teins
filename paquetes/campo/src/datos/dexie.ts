@@ -4,14 +4,18 @@ import {
   archivosReferenciados,
   enviarLevantamiento,
   esBoceto,
+  esFirma,
   leerBoceto,
   quitarRepeticion,
   renombrarRepeticion,
   responder,
   serializarBoceto,
   TIPO_ARCHIVO_BOCETO,
+  type DocumentoBoceto,
   type Levantamiento,
   type ResultadoEnvio,
+  type Valor,
+  type ValorFirma,
 } from "@teins/dominio";
 import type { Table } from "dexie";
 import { llaveDeEnvio } from "@teins/protocolo/llaves";
@@ -100,6 +104,34 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
     return sellarArchivo(db, archivo, tecnicoId);
   }
 
+  /**
+   * Un documento de trazos (boceto o firma) como archivo por su huella, y la respuesta que apunta a él, en una
+   * transacción. El documento anterior se borra si nada más lo usa. No sube hasta enviar (ADR-0019, ADR-0024).
+   */
+  async function guardarTrazos(id: string, seccion: string, campo: string, documento: DocumentoBoceto, valorDe: (huella: string) => Valor, ahora: Date): Promise<void> {
+    // La huella se calcula antes: una transacción de IndexedDB no puede esperar otra cosa que a sí misma.
+    const datos = new TextEncoder().encode(serializarBoceto(documento));
+    const huella = [...new Uint8Array(await crypto.subtle.digest("SHA-256", datos))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    await escribir(id, async (actual) => {
+      const anterior = actual.respuestas[seccion]?.[campo];
+      const huellaAnterior = esBoceto(anterior) ? anterior.boceto : esFirma(anterior) ? anterior.firma : undefined;
+      const archivo = await archivoParaGuardar({ id: huella, datos: datos.buffer as ArrayBuffer, tipo: TIPO_ARCHIVO_BOCETO, creadoEn: ahora.toISOString(), subida: "pendiente" }, actual.tecnicoId);
+      return {
+        resultado: undefined,
+        levantamiento: { ...responder(actual, seccion, campo, valorDe(huella), ahora), tecnicoId: actual.tecnicoId },
+        tablas: [db.archivos],
+        async enTransaccion() {
+          if (!(await db.archivos.get(huella))) await db.archivos.add(archivo);
+          if (huellaAnterior && huellaAnterior !== huella) {
+            // Las huellas de cada levantamiento están a la vista: no hace falta abrir ninguno.
+            const enUso = (await db.levantamientos.toArray()).some((l) => l.id !== id && referencias(l).archivos.includes(huellaAnterior));
+            if (!enUso) await db.archivos.delete(huellaAnterior);
+          }
+        },
+      };
+    });
+  }
+
   return {
     async crear(levantamiento, tecnicoId) {
       await db.levantamientos.add(await sellarLevantamiento(db, { ...levantamiento, tecnicoId }, 0));
@@ -127,27 +159,13 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
       return modificar(id, (l) => responder(l, seccion, campo, valor, ahora));
     },
 
-    async guardarBoceto(id, seccion, campo, documento, ahora) {
-      // La huella se calcula antes: una transacción de IndexedDB no puede esperar otra cosa que a sí misma.
-      const datos = new TextEncoder().encode(serializarBoceto(documento));
-      const huella = [...new Uint8Array(await crypto.subtle.digest("SHA-256", datos))].map((b) => b.toString(16).padStart(2, "0")).join("");
-      await escribir(id, async (actual) => {
-        const anterior = actual.respuestas[seccion]?.[campo];
-        const archivo = await archivoParaGuardar({ id: huella, datos: datos.buffer as ArrayBuffer, tipo: TIPO_ARCHIVO_BOCETO, creadoEn: ahora.toISOString(), subida: "pendiente" }, actual.tecnicoId);
-        return {
-          resultado: undefined,
-          levantamiento: { ...responder(actual, seccion, campo, { boceto: huella }, ahora), tecnicoId: actual.tecnicoId },
-          tablas: [db.archivos],
-          async enTransaccion() {
-            if (!(await db.archivos.get(huella))) await db.archivos.add(archivo);
-            if (esBoceto(anterior) && anterior.boceto !== huella) {
-              // Las huellas de cada levantamiento están a la vista: no hace falta abrir ninguno.
-              const enUso = (await db.levantamientos.toArray()).some((l) => l.id !== id && referencias(l).archivos.includes(anterior.boceto));
-              if (!enUso) await db.archivos.delete(anterior.boceto);
-            }
-          },
-        };
-      });
+    guardarBoceto(id, seccion, campo, documento, ahora) {
+      return guardarTrazos(id, seccion, campo, documento, (huella) => ({ boceto: huella }), ahora);
+    },
+
+    guardarFirma(id, seccion, campo, documento, { nombre, cargo, declaracion }, ahora) {
+      const valor = (huella: string): ValorFirma => ({ firma: huella, nombre: nombre.trim(), ...(cargo?.trim() ? { cargo: cargo.trim() } : {}), firmadoEn: ahora.toISOString(), declaracion });
+      return guardarTrazos(id, seccion, campo, documento, valor, ahora);
     },
 
     async obtenerBoceto(huella) {
