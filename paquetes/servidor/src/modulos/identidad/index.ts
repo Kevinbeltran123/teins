@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Config } from "../../config";
@@ -358,7 +358,8 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
             .select(columnasAdministradas)
             .from(usuarios)
             .where(eq(usuarios.organizacionId, actor.organizacionId))
-            .orderBy(asc(usuarios.desactivadoEn), asc(usuarios.name));
+            // Primero los activos (sin fecha de desactivación): son los que se administran.
+            .orderBy(sql`${usuarios.desactivadoEn} asc nulls first`, asc(usuarios.name));
           return { usuarios: filas.map(comoAdministrado) };
         },
       });
