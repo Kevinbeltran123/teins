@@ -1,4 +1,6 @@
 export { Aviso } from "./Aviso";
+export { Boceto, ElementoDeBoceto } from "./Boceto";
+export type { ElementoDibujable } from "./Boceto";
 export { Boton, claseBoton } from "./Boton";
 export { CampoFotos } from "./CampoFotos";
 export { Casilla } from "./Casilla";
