@@ -1,5 +1,5 @@
 export { CABECERA_VERSION, VERSION_MINIMA_ACEPTADA, VERSION_PROTOCOLO } from "./version";
-export { DefinicionCampo, Fecha, Huella, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
+export { DefinicionCampo, DocumentoBoceto, Fecha, Huella, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
 export {
   CodigoProblema,
   ESTADO_POR_CODIGO,

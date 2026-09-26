@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { LIMITES } from "@teins/dominio";
-import { Fecha, Huella, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
+import { LIMITES, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
+import { DocumentoBoceto, Fecha, Huella, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
 import type { CodigoProblema } from "./problemas";
 
 /**
@@ -44,7 +44,8 @@ export const Sesion = z
 // Archivos (ADR-0007)
 
 /** Fotos desde campo; planos en PDF desde oficina (corte 4). */
-export const TIPOS_DE_ARCHIVO = ["image/jpeg", "application/pdf"] as const;
+/** Fotos (JPEG), planos (PDF) y bocetos (JSON propio, ADR-0019). */
+export const TIPOS_DE_ARCHIVO = ["image/jpeg", "application/pdf", TIPO_ARCHIVO_BOCETO] as const;
 
 const AutorizarSubida = z
   .object({
@@ -835,6 +836,15 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: VisitaProgramada,
     errores: [...erroresDeVisita],
+  },
+  bocetoDeArchivo: {
+    metodo: "GET",
+    ruta: "/api/archivos/{huella}/boceto",
+    resumen: "El documento de un boceto verificado, para dibujarlo en oficina (ADR-0019)",
+    parametros: z.object({ huella: Huella }),
+    estadoExito: 200,
+    respuesta: DocumentoBoceto,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
   },
   urlDeArchivo: {
     metodo: "GET",

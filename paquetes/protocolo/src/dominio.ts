@@ -15,6 +15,8 @@ export const Valor = z
     z.string().max(LIMITES.texto),
     z.object({ valor: z.string().regex(DECIMAL_CANONICO).max(40), unidad: z.string().min(1).max(20) }).strict(),
     z.array(Huella).max(LIMITES.fotosPorCampo).readonly(),
+    /** Boceto (iteración 10): la huella de su archivo. */
+    z.object({ boceto: Huella }).strict(),
     z.object({ noObtenido: z.literal(true), motivo: z.string().max(LIMITES.motivo) }).strict(),
   ])
   .meta({ id: "Valor" });
@@ -39,6 +41,7 @@ export const DefinicionCampo = z.discriminatedUnion("tipo", [
   z.object({ ...CampoBase, tipo: z.literal("texto") }),
   z.object({ ...CampoBase, tipo: z.literal("medida"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly() }),
   z.object({ ...CampoBase, tipo: z.literal("foto"), min: z.int().min(0).max(LIMITES.fotosPorCampo).optional() }),
+  z.object({ ...CampoBase, tipo: z.literal("boceto") }),
 ]);
 
 export const VersionFormato = z
@@ -66,10 +69,32 @@ export const VersionFormato = z
   })
   .meta({ id: "VersionFormato" });
 
+/** Documento de un boceto (ADR-0019), tal como lo entrega el servidor ya verificado. */
+const PuntoBoceto = z.tuple([z.number(), z.number()]).readonly();
+export const DocumentoBoceto = z
+  .object({
+    formato: z.literal("teins-boceto"),
+    version: z.literal(1),
+    ancho: z.number(),
+    alto: z.number(),
+    cuadricula: z.number(),
+    elementos: z
+      .array(
+        z.discriminatedUnion("tipo", [
+          z.object({ tipo: z.literal("trazo"), grosor: z.number(), puntos: z.array(z.tuple([z.number(), z.number(), z.number()]).readonly()).readonly(), contorno: z.array(PuntoBoceto).readonly() }),
+          z.object({ tipo: z.literal("linea"), grosor: z.number(), desde: PuntoBoceto, hasta: PuntoBoceto }),
+          z.object({ tipo: z.literal("texto"), en: PuntoBoceto, texto: z.string(), tamano: z.number() }),
+        ]),
+      )
+      .readonly(),
+  })
+  .meta({ id: "DocumentoBoceto" });
+
 // Comprobaciones en compilación: lo que la frontera acepta es exactamente lo que el dominio usa.
 type Asignable<A, B> = [A] extends [B] ? true : false;
 const _respuestas: Asignable<z.output<typeof Respuestas>, dominio.Respuestas> = true;
 const _repeticiones: Asignable<z.output<typeof Repeticiones>, dominio.Repeticiones> = true;
 const _formato: Asignable<z.output<typeof VersionFormato>, dominio.VersionFormato> = true;
 const _formatoInverso: Asignable<dominio.VersionFormato, z.input<typeof VersionFormato>> = true;
-void [_respuestas, _repeticiones, _formato, _formatoInverso];
+const _boceto: Asignable<z.output<typeof DocumentoBoceto>, dominio.DocumentoBoceto> = true;
+void [_respuestas, _repeticiones, _formato, _formatoInverso, _boceto];
