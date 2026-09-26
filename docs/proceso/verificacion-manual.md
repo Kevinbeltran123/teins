@@ -183,6 +183,27 @@ Necesita la app 4: si campo avisa "Hay una versión nueva de la app", acéptela 
 8. Opcional: márquelo revisado, publique el informe y abra el PDF.
    - Debe: los dos tableros con su nombre, en orden.
 
+## Fase 10 · Bocetos (iteración 10)
+
+Necesita la app 5: si campo avisa "Hay una versión nueva de la app", acéptela primero.
+
+1. Inicie un levantamiento (fase 9, pasos 1 y 2). Al final del cuarto técnico está **Croquis del cuarto**, con "Todavía no hay boceto".
+2. Toque **Dibujar boceto**. Se abre la hoja cuadriculada a pantalla completa.
+3. Dibuje con el dedo unos trazos. Elija **Línea** y trace una pared. Elija **Texto**, toque la hoja, escriba "Tablero" y toque **Poner texto**.
+   - Debe: el trazo sigue el dedo sin retraso; la línea sale recta; el texto queda donde tocó.
+4. Pruebe **Deshacer** y **Rehacer**, y el **Borrador** tocando un trazo.
+5. Con dos dedos, acerque y mueva la hoja; toque **Ver la hoja completa**.
+   - Debe: el zoom no dibuja nada por accidente.
+6. Toque **Listo**. En el formulario aparece la miniatura y el botón cambia a **Editar boceto**.
+7. Cierre la app desde el selector, ábrala de nuevo y abra el levantamiento.
+   - Debe: el boceto sigue ahí.
+8. Envíe y, en oficina, abra el levantamiento.
+   - Debe: el croquis, nítido, con el texto "Tablero".
+9. Si hay un iPad con lápiz: dibuje con el lápiz apoyando la palma en la pantalla.
+   - Debe: la palma no deja trazos y el lápiz cambia el grosor con la presión.
+
+**Anotar:** si el trazo se siente lento o se corta, y en qué pantalla.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.
