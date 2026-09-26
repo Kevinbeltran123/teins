@@ -229,9 +229,16 @@ export const PaginaLevantamientos = z
   .object({ elementos: z.array(ResumenLevantamiento), siguienteCursor: z.string().nullable(), total: z.int().min(0) })
   .meta({ id: "PaginaLevantamientos" });
 
+/** Vínculo de una línea de cantidad a un ítem del catálogo, que pone oficina (regla 6). */
+export const VinculoDeLinea = z
+  .object({ seccion: z.string(), campo: z.string(), linea: z.string(), item: z.object({ id: Uuid, codigo: z.string(), descripcion: z.string(), unidad: z.string() }) })
+  .meta({ id: "VinculoDeLinea" });
+
 export const DetalleLevantamiento = ResumenLevantamiento.extend({
   respuestas: Respuestas,
   repeticiones: Repeticiones.default({}),
+  /** Vínculos de las líneas de cantidad al catálogo (iteración 11). */
+  vinculos: z.array(VinculoDeLinea).default([]),
   formatoDefinicion: VersionFormato,
   creadoEnDispositivo: Fecha,
   enviadoEnDispositivo: Fecha,
@@ -402,6 +409,29 @@ export const VisitaProgramada = z
     cancelada: z.object({ en: Fecha, por: Persona, motivo: z.string() }).nullable(),
   })
   .meta({ id: "VisitaProgramada" });
+
+// Cantidades con catálogo (iteración 11).
+
+export const ItemCatalogo = z
+  .object({ id: Uuid, codigo: z.string(), descripcion: z.string(), unidad: z.string(), activo: z.boolean(), actualizadoEn: Fecha })
+  .meta({ id: "ItemCatalogo" });
+
+const DatosItemCatalogo = { codigo: Texto(40), descripcion: Texto(200), unidad: Texto(20) };
+
+export const LineaDeVisita = z
+  .object({
+    levantamientoId: Uuid,
+    tecnico: z.string(),
+    estado: z.enum(["enviado", "en_revision", "revisado"]),
+    /** "Tableros · Tablero 2 · Materiales". */
+    ubicacion: z.string(),
+    descripcion: z.string(),
+    cantidad: z.string(),
+    unidad: z.string(),
+    observacion: z.string().nullable(),
+    item: z.object({ codigo: z.string(), descripcion: z.string() }).nullable(),
+  })
+  .meta({ id: "LineaDeVisita" });
 
 const erroresDeVisita = ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "estado_invalido", "entrada_invalida"] as const;
 
@@ -753,6 +783,64 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: VersionPublicada,
     errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "estado_invalido"],
+  },
+  listarCatalogo: {
+    metodo: "GET",
+    ruta: "/api/catalogo",
+    resumen: "Ítems del catálogo de la organización, activos e inactivos",
+    estadoExito: 200,
+    respuesta: z.object({ items: z.array(ItemCatalogo) }),
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  crearItemCatalogo: {
+    metodo: "POST",
+    ruta: "/api/catalogo",
+    resumen: "Crea un ítem del catálogo",
+    cuerpo: z.object(DatosItemCatalogo),
+    estadoExito: 201,
+    respuesta: ItemCatalogo,
+    errores: ["no_autenticado", "sin_permiso", "conflicto", "entrada_invalida"],
+  },
+  actualizarItemCatalogo: {
+    metodo: "POST",
+    ruta: "/api/catalogo/{id}",
+    resumen: "Cambia la descripción o la unidad de un ítem, o lo desactiva (nunca se borra: hay líneas vinculadas)",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ descripcion: Texto(200), unidad: Texto(20), activo: z.boolean() }),
+    estadoExito: 200,
+    respuesta: ItemCatalogo,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
+  },
+  importarCatalogo: {
+    metodo: "POST",
+    ruta: "/api/catalogo/importar",
+    resumen: "Crea o actualiza ítems por código, en bloque (por ejemplo, desde un CSV)",
+    cuerpo: z.object({ items: z.array(z.object(DatosItemCatalogo)).min(1).max(5000) }),
+    estadoExito: 200,
+    respuesta: z.object({ creados: z.int().min(0), actualizados: z.int().min(0) }),
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
+  },
+  vincularLinea: {
+    metodo: "POST",
+    ruta: "/api/levantamientos/{id}/lineas/vincular",
+    resumen: "Vincula (o desvincula) una línea de cantidad a un ítem del catálogo; solo quien tiene la revisión",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ version: z.int().positive(), seccion: z.string().max(80), campo: z.string().max(64), linea: z.string().max(20), itemId: Uuid.nullable() }),
+    estadoExito: 200,
+    respuesta: z.object({ version: z.int().positive() }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "no_tomado", "estado_invalido", "entrada_invalida"],
+  },
+  cantidadesDeVisita: {
+    metodo: "GET",
+    ruta: "/api/visitas/{id}/cantidades",
+    resumen: "Líneas de cantidad de los levantamientos de una visita, con su vínculo al catálogo, para exportar",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: z.object({
+      visita: z.object({ cliente: z.string(), sitio: z.string(), programadaPara: z.iso.date() }),
+      lineas: z.array(LineaDeVisita),
+    }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
   },
   listarClientes: {
     metodo: "GET",

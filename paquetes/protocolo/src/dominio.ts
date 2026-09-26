@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DECIMAL_CANONICO, HUELLA_SHA256, ID_REPETICION, LIMITES } from "@teins/dominio";
+import { DECIMAL_CANONICO, HUELLA_SHA256, ID_LINEA, ID_REPETICION, LIMITES, LIMITES_CANTIDADES } from "@teins/dominio";
 import type * as dominio from "@teins/dominio";
 
 /**
@@ -10,6 +10,18 @@ export const Huella = z.string().regex(HUELLA_SHA256).meta({ id: "Huella", descr
 export const Uuid = z.uuid();
 export const Fecha = z.iso.datetime({ offset: true });
 
+/** Línea de cantidad (F9): la forma; la regla 6 (cantidad positiva, unidad permitida) la aplica `dominio`. */
+export const LineaCantidad = z
+  .object({
+    id: z.string().regex(ID_LINEA),
+    descripcion: z.string().max(LIMITES_CANTIDADES.descripcion),
+    cantidad: z.string().max(40),
+    unidad: z.string().max(20),
+    observacion: z.string().max(LIMITES_CANTIDADES.observacion).optional(),
+  })
+  .strict()
+  .meta({ id: "LineaCantidad" });
+
 export const Valor = z
   .union([
     z.string().max(LIMITES.texto),
@@ -17,6 +29,8 @@ export const Valor = z
     z.array(Huella).max(LIMITES.fotosPorCampo).readonly(),
     /** Boceto (iteración 10): la huella de su archivo. */
     z.object({ boceto: Huella }).strict(),
+    /** Cantidades (iteración 11): las líneas de la tabla. */
+    z.array(LineaCantidad).max(LIMITES_CANTIDADES.lineas).readonly(),
     z.object({ noObtenido: z.literal(true), motivo: z.string().max(LIMITES.motivo) }).strict(),
   ])
   .meta({ id: "Valor" });
@@ -42,6 +56,7 @@ export const DefinicionCampo = z.discriminatedUnion("tipo", [
   z.object({ ...CampoBase, tipo: z.literal("medida"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly() }),
   z.object({ ...CampoBase, tipo: z.literal("foto"), min: z.int().min(0).max(LIMITES.fotosPorCampo).optional() }),
   z.object({ ...CampoBase, tipo: z.literal("boceto") }),
+  z.object({ ...CampoBase, tipo: z.literal("cantidades"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly() }),
 ]);
 
 export const VersionFormato = z
