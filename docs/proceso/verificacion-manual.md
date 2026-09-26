@@ -284,6 +284,26 @@ Antes: en el iPhone, borre TEINS de la pantalla de inicio si ya estaba (los dato
 
 **Anotar:** cuánto tardó cada aviso, y si la guía de instalación coincide con lo que muestra Safari (el nombre de "Agregar a inicio" puede variar con la versión de iOS).
 
+## Fase 16 · Firma del cliente (iteración 16)
+
+1. En el iPhone, con la app actualizada (v7), inicie un levantamiento en la visita de hoy y vaya a "Cierre de la visita".
+   - Debe: "Firma de quien recibe la visita" con **Pedir la firma**.
+2. Toque **Pedir la firma**.
+   - Debe: a pantalla completa, "Constancia de visita" con su nombre, el cliente y el sitio de la visita y la fecha de hoy.
+3. Toque **Firmar** sin escribir nada.
+   - Debe: "Escriba su nombre." y "Firme en el recuadro."
+4. Escriba un nombre ficticio y un cargo, firme con el dedo y toque **Firmar**.
+   - Debe: vuelve al levantamiento con la firma, "Nombre · Cargo" y "Firmó hoy a las …". El trazo sigue al dedo sin retraso.
+5. Si hay una tableta con lápiz: firme con el lápiz apoyando la mano.
+   - Debe: la palma no dibuja.
+6. **Volver a firmar** → **Cancelar**: la firma sigue. Envíe el levantamiento.
+7. En oficina, abra el levantamiento.
+   - Debe: la firma, "Firmó el …, en el teléfono de …" y la constancia; hay **Comentar** pero no **Corregir**.
+8. Márquelo revisado, publique el informe y descargue el PDF.
+   - Debe: "Constancia de visita" con la firma nítida, recortada, el nombre, el cargo y la hora.
+
+**Anotar:** si firmar en el recuadro se sintió estrecho, y si el texto de la constancia se lee bien de un vistazo.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.

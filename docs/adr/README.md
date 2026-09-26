@@ -47,6 +47,7 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0021](0021-produccion-provisional-transferible.md) | Producción provisional en un proyecto transferible, sin datos reales hasta que pase a TEINS | Aceptada |
 | [0022](0022-cifrado-local-en-campo.md) | Cifrado local en campo: qué se sella, cómo se escribe y cómo se migra | Aceptada |
 | [0023](0023-avisos-push.md) | Avisos push con Web Push estándar, un trabajo por suscripción y texto sin datos del cliente | Aceptada |
+| [0024](0024-firma-del-cliente.md) | Firma del cliente como constancia de la visita, guardada con el formato de los bocetos | Aceptada |
 
 ### Estados
 
