@@ -1,4 +1,4 @@
-// Subconjunto del meta-esquema de ADR-0006: tipos texto, medida, foto, boceto y cantidades, y secciones repetibles.
+// Subconjunto del meta-esquema de ADR-0006: tipos texto, medida, foto, boceto, cantidades y firma, y secciones repetibles.
 
 interface CampoBase {
   clave: string;
@@ -13,7 +13,9 @@ export type DefinicionCampo =
   /** Croquis a mano sobre cuadrícula (ADR-0019). */
   | (CampoBase & { tipo: "boceto" })
   /** Tabla de materiales y trabajos (F9), con las unidades permitidas. */
-  | (CampoBase & { tipo: "cantidades"; unidades: readonly string[] });
+  | (CampoBase & { tipo: "cantidades"; unidades: readonly string[] })
+  /** Firma de quien recibe la visita (ADR-0024). `declaracion` admite {tecnico}, {sitio} y {fecha}. */
+  | (CampoBase & { tipo: "firma"; declaracion?: string | undefined });
 
 /** Sección que el técnico repite cuantas veces haga falta: "Tablero 1", "Tablero 2" (F2). */
 export interface Repetible {

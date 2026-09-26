@@ -1,3 +1,4 @@
+import { LIMITES_FIRMA, VERSION_APP_FIRMA } from "./firma";
 import type { VersionFormato } from "./formato";
 import { LIMITES } from "./limites";
 import { VERSION_APP_REPETIBLES } from "./repeticiones";
@@ -29,6 +30,9 @@ export function validarDefinicionFormato(definicion: VersionFormato): string[] {
       if ((campo.tipo === "medida" || campo.tipo === "cantidades") && new Set(campo.unidades).size !== campo.unidades.length) errores.push(`Unidades repetidas en ${ruta}`);
       if (campo.tipo === "cantidades" && campo.unidades.length === 0) errores.push(`Sin unidades en ${ruta}`);
       if (campo.tipo === "foto" && (campo.min ?? 0) > LIMITES.fotosPorCampo) errores.push(`Mínimo de fotos imposible en ${ruta}`);
+      if (campo.tipo === "firma" && campo.declaracion !== undefined && (campo.declaracion.trim() === "" || campo.declaracion.length > LIMITES_FIRMA.declaracion)) {
+        errores.push(`Constancia vacía o demasiado larga en ${ruta}`);
+      }
     }
   }
   // Una app anterior no sabe capturarlas: la bajada no le entrega este formato (ADR-0015, punto 4).
@@ -40,6 +44,9 @@ export function validarDefinicionFormato(definicion: VersionFormato): string[] {
   }
   if (definicion.secciones.some((s) => s.campos.some((c) => c.tipo === "boceto")) && (definicion.appMinima ?? 0) < VERSION_APP_BOCETOS) {
     errores.push(`Los bocetos exigen appMinima ${VERSION_APP_BOCETOS} o mayor`);
+  }
+  if (definicion.secciones.some((s) => s.campos.some((c) => c.tipo === "firma")) && (definicion.appMinima ?? 0) < VERSION_APP_FIRMA) {
+    errores.push(`Las firmas exigen appMinima ${VERSION_APP_FIRMA} o mayor`);
   }
   return errores;
 }

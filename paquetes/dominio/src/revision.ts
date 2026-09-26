@@ -73,8 +73,8 @@ export function corregir(formato: VersionFormato, respuestas: Respuestas, correc
       errores.push({ seccion, campo, codigo: "campo_desconocido" });
       continue;
     }
-    // Fotos y bocetos son captura de campo: oficina no los cambia.
-    if (definicion.tipo === "foto" || definicion.tipo === "boceto") {
+    // Fotos, bocetos y firmas son captura de campo: oficina no los cambia (la firma es de quien recibió la visita).
+    if (definicion.tipo === "foto" || definicion.tipo === "boceto" || definicion.tipo === "firma") {
       errores.push({ seccion, campo, codigo: "no_corregible" });
       continue;
     }

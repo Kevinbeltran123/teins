@@ -8,5 +8,6 @@ Definiciones **ficticias** (R5) para desarrollo y pruebas. El servidor las siemb
 - `v4`: v3 más la sección repetible "Tableros" (iteración 9): cada tablero con su ubicación y corriente obligatorias y una foto opcional, de 0 a 10. Exige la app 4 (`appMinima`); una app anterior sigue con v3.
 - `v5`: v4 más el campo "Croquis del cuarto" (tipo `boceto`, opcional; iteración 10). Exige la app 5.
 - `v6`: v5 más el campo "Materiales" (tipo `cantidades` en unidades `und` y `m`, opcional; iteración 11). Exige la app 6.
+- `v7`: v6 más la sección "Cierre de la visita" con "Firma de quien recibe la visita" (tipo `firma`, opcional para no obligar a firmar en cada prueba; iteración 16). Exige la app 7.
 
 Una versión publicada no se modifica: un cambio es una versión nueva.

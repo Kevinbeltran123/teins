@@ -17,15 +17,28 @@ export interface ValorBoceto {
   boceto: string;
 }
 
+/**
+ * Firma de quien recibe la visita (ADR-0024): la huella del documento con sus trazos, quién firmó, cuándo
+ * (hora del teléfono) y la constancia que leyó, ya llena. Certifica la visita, no el contenido técnico.
+ */
+export interface ValorFirma {
+  firma: string;
+  nombre: string;
+  cargo?: string | undefined;
+  firmadoEn: string;
+  declaracion: string;
+}
+
 /** Regla 3: un dato obligatorio que no se pudo obtener se marca con su motivo. */
 export interface ValorNoObtenido {
   noObtenido: true;
   motivo: string;
 }
 
-export type Valor = string | ValorMedida | ValorFotos | ValorBoceto | ValorCantidades | ValorNoObtenido;
+export type Valor = string | ValorMedida | ValorFotos | ValorBoceto | ValorCantidades | ValorFirma | ValorNoObtenido;
 
 export const esBoceto = (valor: unknown): valor is ValorBoceto => typeof valor === "object" && valor !== null && !Array.isArray(valor) && "boceto" in valor;
+export const esFirma = (valor: unknown): valor is ValorFirma => typeof valor === "object" && valor !== null && !Array.isArray(valor) && "firma" in valor;
 
 /** Respuestas por clave de sección y clave de campo. */
 export type Respuestas = Readonly<Record<string, Readonly<Record<string, Valor>>>>;

@@ -1,5 +1,6 @@
 import type { DefinicionCampo, VersionFormato } from "./formato";
-import { esBoceto, esNoObtenido, type Respuestas } from "./levantamiento";
+import { esBoceto, esFirma, esNoObtenido, type Respuestas } from "./levantamiento";
+import { LIMITES_FIRMA } from "./firma";
 import { LIMITES } from "./limites";
 import { bloques, ID_REPETICION, leerClave, type Repeticiones } from "./repeticiones";
 import { lineasValidas } from "./cantidades";
@@ -31,6 +32,8 @@ export type CodigoErrorValidacion =
   | "boceto_invalido"
   /** Una línea de cantidad sin descripción, con cantidad no positiva o con una unidad no permitida (regla 6). */
   | "cantidades_invalidas"
+  /** Una firma sin sus trazos, sin el nombre de quien firmó, sin fecha o sin la constancia (ADR-0024). */
+  | "firma_invalida"
   /** Oficina no corrige este tipo de campo (hoy, fotos). */
   | "no_corregible";
 
@@ -154,8 +157,23 @@ export function validarCampo(campo: DefinicionCampo, valor: unknown): CodigoErro
       if (!esBoceto(valor) || Object.keys(valor).length !== 1) return "tipo_invalido";
       return typeof valor.boceto === "string" && HUELLA_SHA256.test(valor.boceto) ? null : "boceto_invalido";
     }
+    case "firma": {
+      if (valor === undefined) return campo.obligatorio ? "campo_obligatorio" : null;
+      if (!esFirma(valor) || Object.keys(valor).some((k) => !CLAVES_FIRMA.has(k))) return "tipo_invalido";
+      const { firma, nombre, cargo, firmadoEn, declaracion } = valor;
+      const texto = (t: unknown, maximo: number) => typeof t === "string" && t.trim() !== "" && t.length <= maximo;
+      const valida =
+        typeof firma === "string" && HUELLA_SHA256.test(firma) &&
+        texto(nombre, LIMITES_FIRMA.nombre) &&
+        (cargo === undefined || texto(cargo, LIMITES_FIRMA.cargo)) &&
+        typeof firmadoEn === "string" && !Number.isNaN(Date.parse(firmadoEn)) &&
+        texto(declaracion, LIMITES_FIRMA.declaracion);
+      return valida ? null : "firma_invalida";
+    }
   }
 }
+
+const CLAVES_FIRMA = new Set(["firma", "nombre", "cargo", "firmadoEn", "declaracion"]);
 
 /** Huellas de todas las fotos referenciadas, sin repetir. */
 export function fotosReferenciadas(respuestas: Respuestas): string[] {
@@ -180,17 +198,24 @@ export function archivosReferenciados(respuestas: Respuestas): string[] {
     for (const valor of Object.values(valores)) {
       if (Array.isArray(valor)) for (const id of valor) if (typeof id === "string") huellas.add(id);
       if (esBoceto(valor) && typeof valor.boceto === "string") huellas.add(valor.boceto);
+      if (esFirma(valor) && typeof valor.firma === "string") huellas.add(valor.firma);
     }
   }
   return [...huellas];
 }
 
-/** Huellas de los bocetos solos: suben al enviar, no antes (ADR-0019, parte 3). */
+/**
+ * Huellas de los documentos de trazos (bocetos y firmas): suben al enviar, no antes, porque mientras es
+ * borrador se pueden reemplazar (ADR-0019, parte 3; ADR-0024).
+ */
 export function bocetosReferenciados(respuestas: Respuestas): string[] {
   const huellas = new Set<string>();
   for (const valores of Object.values(respuestas)) {
     if (typeof valores !== "object" || valores === null) continue;
-    for (const valor of Object.values(valores)) if (esBoceto(valor) && typeof valor.boceto === "string") huellas.add(valor.boceto);
+    for (const valor of Object.values(valores)) {
+      if (esBoceto(valor) && typeof valor.boceto === "string") huellas.add(valor.boceto);
+      if (esFirma(valor) && typeof valor.firma === "string") huellas.add(valor.firma);
+    }
   }
   return [...huellas];
 }
