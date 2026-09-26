@@ -26,4 +26,4 @@ Los tokens de tamaño son neutros (`texto-cuerpo`, `control`, `fondo`): cada sup
 | `CampoTexto`, `CampoTextoLargo`, `CampoSeleccion`, `CampoMedida`, `Casilla`, `GrupoDeOpciones`, `SelectorDeArchivo`, `MarcaNoObtenido` | Campos de formulario, con su mensaje de error por campo |
 | `CampoFotos`, `EditorCantidades`, `TablaCantidades`, `Boceto`, `Firma` | Tipos de campo de los formatos. `Firma` dibuja los trazos sin cuadrícula: recortada a la firma o, con `recortar={false}`, como el recuadro donde se firma |
 
-Historia: iteración 6 (`GrupoDeOpciones`, `modoEntrada="numeric"`), 7 (`CampoSeleccion`, `tipo="date"`), 10 (`Boceto`), 11 (`EditorCantidades`, `TablaCantidades`), 14 (el juego completo de la dirección Consola; `Marquilla` se retiró), 16 (`Firma`).
+Historia: iteración 6 (`GrupoDeOpciones`, `modoEntrada="numeric"`), 7 (`CampoSeleccion`, `tipo="date"`), 10 (`Boceto`), 11 (`EditorCantidades`, `TablaCantidades`), 14 (el juego completo de la dirección Consola; `Marquilla` se retiró), 16 (`Firma`), 17 (`EditorCantidades` con líneas del catálogo y "Del catálogo").

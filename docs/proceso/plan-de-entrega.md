@@ -23,7 +23,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 14 | Interfaz rehecha con la dirección Consola (`DESIGN.md`) | Una herramienta que la gente quiera usar: jerarquía clara, confirmaciones donde hay consecuencias, resultados junto a la acción | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 15 | Avisos push (técnicos y oficina) e instalación guiada de la app | El técnico se entera de su visita sin abrir la app; nadie captura en Safari lo que la app instalada no ve (ADR-0002) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 16 | Firma del cliente en sitio | Constancia de la visita firmada en el teléfono, íntegra (Ley 527) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
-| Iteración 17 | Catálogo en el teléfono al anotar cantidades | Líneas que llegan vinculadas: menos digitación y cotización casi automática (P28) | Planeada |
+| Iteración 17 | Catálogo en el teléfono al anotar cantidades | Líneas que llegan vinculadas: menos digitación y cotización casi automática (P28) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 18 | Bocetos: enderezar trazos, formas, mover, cotas | Croquis limpios sin dibujar lo mismo cada vez (F3) | Planeada |
 | Iteración 19 | Biblioteca de símbolos en los bocetos | Tableros, UPS, tomas y demás con un toque, iguales en todo croquis | Planeada |
 | Iteración 20 | Contactos del cliente e informe por correo y WhatsApp | El informe le llega al cliente por donde lo espera, con PDF adjunto (P17) | Planeada |
@@ -33,7 +33,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 ## Próximo paso
 
-**Plan acordado con Kevin el 2026-09-26: iteraciones 15 a 21** (sección "Iteraciones 15 a 21"). Kevin eligió siete funciones después de una investigación de producto (envío del informe por WhatsApp y correo, firma del cliente, símbolos y enderezado en los bocetos, ítems frecuentes en cantidades, avisos push y cotizaciones) y pidió terminar primero la PWA de campo. **Iteración 15 terminada y desplegada en el entorno de pruebas el 2026-09-26** (avisos push, ADR-0023, e instalación guiada; maquetas en el lienzo, página "v0.4 · Avisos e instalación"). Falta la prueba en iPhone (fase 15 de la guía, junto con las fases 9 a 14). **Iteración 16 (firma del cliente, ADR-0024) terminada y desplegada en el entorno de pruebas el 2026-09-26**, con el formato de prueba v7; falta la prueba en iPhone (fase 16 de la guía). Siguiente: iteración 17, catálogo en el teléfono.
+**Plan acordado con Kevin el 2026-09-26: iteraciones 15 a 21** (sección "Iteraciones 15 a 21"). Kevin eligió siete funciones después de una investigación de producto (envío del informe por WhatsApp y correo, firma del cliente, símbolos y enderezado en los bocetos, ítems frecuentes en cantidades, avisos push y cotizaciones) y pidió terminar primero la PWA de campo. **Iteración 15 terminada y desplegada en el entorno de pruebas el 2026-09-26** (avisos push, ADR-0023, e instalación guiada; maquetas en el lienzo, página "v0.4 · Avisos e instalación"). Falta la prueba en iPhone (fase 15 de la guía, junto con las fases 9 a 14). **Iteración 16 (firma del cliente, ADR-0024) terminada y desplegada en el entorno de pruebas el 2026-09-26**, con el formato de prueba v7; falta la prueba en iPhone (fase 16 de la guía). **Iteración 17 (catálogo en el teléfono, ADR-0025) terminada y desplegada en el entorno de pruebas el 2026-09-26**; falta la prueba en iPhone (fase 17 de la guía). Siguiente: iteración 18, bocetos con enderezado, formas, mover y cotas, empezando por sus maquetas.
 
 **El recorrido delgado está completo (cortes 0 a 5, 2026-09-25)** y desplegado en el entorno de pruebas. Antes de la primera demostración a TEINS:
 
@@ -940,6 +940,50 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **El AIU no aplica a la instalación ni al mantenimiento de redes eléctricas** según la doctrina de la DIAN: la cotización admite IVA sobre el subtotal o AIU con IVA sobre la utilidad, y el contador de TEINS decide en cada caso.
 - **En iPhone, la app instalada no comparte datos con Safari** y los avisos solo llegan a la app instalada: la instalación va antes de iniciar sesión.
 - **La biblioteca `web-push` es MPL-2.0,** que la verificación de licencias ya admite.
+
+## Iteración 17 · Catálogo en el teléfono
+
+**Estado:** terminada el 2026-09-26, verificada en local y desplegada en el entorno de pruebas (los cuatro servicios, la migración del catálogo aplicada y los 15 archivos del extremo a extremo en verde contra el entorno). Falta la prueba en iPhone. Maquetas aprobadas por Kevin en el lienzo (página "v0.6 · Catálogo en el teléfono", "yeah, i aprove").
+
+**Para qué:** que el técnico elija los materiales del catálogo al anotar cantidades, sin conexión, y que esas líneas lleguen a oficina ya vinculadas: menos escritura en campo, descripciones iguales entre técnicos y la base de la cotización (iteración 21).
+
+### Alcance
+
+- **Bajada (ADR-0025):** cambio `item_catalogo` para toda la organización (código, descripción, unidad y si está activo; sin precio), solo a la app 8 o posterior. El catálogo registra cada ítem creado, editado o importado; una migración registra los que ya existían.
+- **Línea de cantidad:** puede llevar `item` (el id del ítem) además de su texto. Al recibirla, el servidor la proyecta vinculada a nombre del técnico si el ítem existe; si no, sin vínculo y sin rechazar el envío. La regla 6 del modelo de dominio cambió: el técnico elige, oficina confirma, cambia o completa.
+- **Campo (app 8, base local versión 5):** "Del catálogo" abre la búsqueda (sin tildes ni mayúsculas, por comienzo de palabra o por código) con "Los que más usas"; elegir agrega la línea con descripción y unidad fijas y "Del catálogo · código". Lo que no está se agrega como línea libre con lo escrito. Sin ítems que sirvan para el campo, solo "Agregar línea".
+- **Oficina:** "Elegido en campo" bajo el vínculo que eligió el técnico; corregir la tabla conserva el ítem de cada línea.
+
+### Fuera de la iteración 17
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Catálogo real de TEINS y sus columnas de Excel | Cuando TEINS responda P28 y P29; se prueba con ítems ficticios |
+| Precios en el teléfono | Nunca en la línea (regla 7); la cotización es de oficina (iteración 21) |
+| Contar los símbolos de un boceto como cantidades | Iteración 19, si los símbolos llevan código de catálogo |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Kevin aprueba las maquetas | Hecho el 2026-09-26 |
+| 2. El catálogo baja solo a la app 8, sin precio; uno desactivado baja inactivo; otra organización no lo ve | Hecho: `servidor/pruebas/catalogo-en-campo.test.ts` |
+| 3. La línea elegida llega vinculada a nombre del técnico; un ítem desconocido no rechaza el envío; oficina lo cambia | Hecho: `catalogo-en-campo.test.ts` y `cantidades.test.ts` |
+| 4. Búsqueda y "los que más usas" sin conexión, solo con ítems activos y unidades del campo | Hecho: `campo/src/catalogo.test.ts` y `repositorio.test.ts` (catálogo en la bajada) |
+| 5. Extremo a extremo: oficina crea el ítem, el técnico lo busca y lo elige, agrega una línea libre desde la búsqueda y oficina ve "Elegido en campo" | Hecho en Chromium y WebKit (`e2e/pruebas/catalogo-campo.spec.ts`) |
+| 6. Lo anterior sigue igual y el presupuesto de campo se respeta | Hecho: tipos, arquitectura, licencias y auditoría en verde; dominio 82, protocolo 18, oficina 4, campo 58, servidor 114; extremo a extremo 31 y 3 omitidas (Chromium y WebKit); campo 117,4 de 120 KB |
+| 7. Desplegada en el entorno de pruebas | Hecho el 2026-09-26: los cuatro servicios en `SUCCESS`, salud en 200, `campo` aplicó la migración `0021` antes de arrancar y los 15 archivos del extremo a extremo contra el entorno en Chromium, 17 pruebas en verde |
+| 8. Probada en el iPhone | Pendiente: fase 17 de [`verificacion-manual.md`](verificacion-manual.md) |
+
+### Decisiones tomadas al construirlo
+
+- **La línea conserva su texto aunque venga del catálogo:** se lee igual en el PDF, en oficina y en una app sin catálogo, aunque el ítem cambie después.
+- **El vínculo se decide al recibir, contra el catálogo del servidor:** un teléfono con el catálogo de ayer puede elegir un ítem que ya no existe; la línea entra sin vínculo y oficina la vincula como siempre.
+- **"Elegido en campo" es `vinculada_por` = el técnico:** cuando oficina lo cambia, deja de decirlo. No hizo falta otra columna.
+- **"Los que más usas" se cuenta en el teléfono,** de las líneas de ese técnico, al abrir la búsqueda. No se sube nada nuevo.
+- **La hoja de búsqueda va dentro de la captura, no como carga aparte:** cargada aparte desde la captura, el empaquetador partió el JavaScript inicial en cinco archivos y subió de 117,4 a 119,2 KB; la captura ya se carga aparte, así que la hoja no pesa en el arranque (117,4 KB).
+- **El catálogo no se sella en el teléfono:** es la lista de materiales de la organización, como los formatos (ADR-0022 sella lo del cliente).
+- **La prueba de extremo a extremo de cantidades acepta "Agregar línea" o "Línea libre":** el catálogo es de la organización y las corridas lo comparten, así que el botón depende de si ya hay ítems.
 
 ## Iteración 16 · Firma del cliente
 

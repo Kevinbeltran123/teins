@@ -304,6 +304,24 @@ Antes: en el iPhone, borre TEINS de la pantalla de inicio si ya estaba (los dato
 
 **Anotar:** si firmar en el recuadro se sintió estrecho, y si el texto de la constancia se lee bien de un vistazo.
 
+## Fase 17 · Catálogo en el teléfono (iteración 17)
+
+Antes: en oficina, en **Catálogo**, cree dos ítems ficticios con unidad `m` (por ejemplo "Cable de prueba uno" y "Cable de prueba dos").
+
+1. En el iPhone, con la app 8, abra la app con señal un momento y después póngalo en modo avión.
+2. Inicie un levantamiento y vaya a "Materiales".
+   - Debe: **Del catálogo** y **Línea libre**.
+3. **Del catálogo** → escriba "cable prueba".
+   - Debe: los dos ítems, sin señal. Elija uno: la línea queda con la descripción fija, "Del catálogo · código" y la unidad `m`.
+4. **Del catálogo** otra vez, sin escribir nada.
+   - Debe: "Los que más usas" con el que ya eligió.
+5. Escriba algo que no exista y toque **No está: agregar … como línea libre**.
+   - Debe: una línea libre con ese texto.
+6. Llene lo obligatorio, quite el modo avión y envíe. En oficina, abra el levantamiento.
+   - Debe: la línea del catálogo vinculada con "Elegido en campo"; la libre, "Sin vincular".
+
+**Anotar:** si la búsqueda se sintió lenta, y si el teclado tapaba los resultados.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.
