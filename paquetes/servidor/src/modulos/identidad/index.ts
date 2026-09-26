@@ -9,8 +9,8 @@ import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion, registrarOperacionDeDispositivo, registrarRutaPublica } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
-import { crearAuth, type Auth } from "./auth";
-import { dispositivos, organizaciones, sesiones, usuarios } from "./esquema";
+import { crearAuth, type Auth, type EventosDeAuth } from "./auth";
+import { dispositivos, llavesDeAcceso, organizaciones, sesiones, usuarios } from "./esquema";
 
 const USUARIO_VALIDO = /^[a-z0-9._-]{3,30}$/;
 
@@ -88,10 +88,26 @@ const comoAdministrado = (f: FilaAdministrada) => ({
 
 /** Interfaz pública del módulo de identidad (ADR-0009). */
 export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
-  const auth = crearAuth(
-    bd,
-    config,
-    async (sesion) => {
+  /** Evento de seguridad del usuario en la cadena de su organización (ADR-0008). */
+  async function eventoDeUsuario(usuarioId: string, tipoEvento: "segundo_factor_activado" | "segundo_factor_desactivado" | "llave_de_acceso_creada" | "llave_de_acceso_quitada") {
+    const [usuario] = await bd.select({ organizacionId: usuarios.organizacionId }).from(usuarios).where(eq(usuarios.id, usuarioId));
+    if (!usuario) return;
+    await enOrganizacion(bd, usuario.organizacionId, (tx) =>
+      registrar(tx, [
+        {
+          organizacionId: usuario.organizacionId,
+          agregadoTipo: "usuario",
+          agregadoId: usuarioId,
+          tipoEvento,
+          autorId: usuarioId,
+          correlacion: `${tipoEvento}:${randomUUID()}`,
+        },
+      ]),
+    );
+  }
+
+  const eventos: EventosDeAuth = {
+    async alCrearSesion(sesion) {
       const [usuario] = await bd.select({ organizacionId: usuarios.organizacionId }).from(usuarios).where(eq(usuarios.id, sesion.userId));
       if (!usuario) return;
       // Evento de seguridad en la cadena de la organización (ADR-0008).
@@ -108,23 +124,14 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         ]),
       );
     },
-    async (usuarioId, activo) => {
-      const [usuario] = await bd.select({ organizacionId: usuarios.organizacionId }).from(usuarios).where(eq(usuarios.id, usuarioId));
-      if (!usuario) return;
-      await enOrganizacion(bd, usuario.organizacionId, (tx) =>
-        registrar(tx, [
-          {
-            organizacionId: usuario.organizacionId,
-            agregadoTipo: "usuario",
-            agregadoId: usuarioId,
-            tipoEvento: activo ? "segundo_factor_activado" : "segundo_factor_desactivado",
-            autorId: usuarioId,
-            correlacion: `segundo-factor:${randomUUID()}`,
-          },
-        ]),
-      );
-    },
-  );
+    alCambiarSegundoFactor: (usuarioId, activo) => eventoDeUsuario(usuarioId, activo ? "segundo_factor_activado" : "segundo_factor_desactivado"),
+    alCambiarLlaveDeAcceso: (usuarioId, cambio) => eventoDeUsuario(usuarioId, cambio === "creada" ? "llave_de_acceso_creada" : "llave_de_acceso_quitada"),
+  };
+
+  // Una instancia por dominio de superficie: cada llave de acceso queda ligada al suyo (rpID).
+  const dominios = [...new Set(config.ORIGENES_CONFIABLES.map((o) => new URL(o).hostname))];
+  const porDominio = new Map(dominios.map((d) => [d, crearAuth(bd, config, d, eventos)]));
+  const auth = porDominio.get(dominios[0]!)!;
 
   async function resolverActor(solicitud: FastifyRequest): Promise<Actor | null> {
     const sesion = await auth.api.getSession({ headers: fromNodeHeaders(solicitud.headers) });
@@ -155,10 +162,16 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
     return fila;
   }
 
-  async function restablecer(id: string, contrasena: string) {
+  /**
+   * Restablecer el acceso cambia la contraseña, cierra todas las sesiones y quita las llaves de acceso:
+   * si se restablece porque se perdió el teléfono, la llave de ese teléfono deja de servir.
+   */
+  async function restablecer(id: string, contrasena: string): Promise<{ llavesQuitadas: number }> {
     const contexto = await auth.$context;
     await contexto.internalAdapter.updatePassword(id, await contexto.password.hash(contrasena));
     await contexto.internalAdapter.deleteUserSessions(id);
+    const quitadas = await bd.delete(llavesDeAcceso).where(eq(llavesDeAcceso.userId, id)).returning({ id: llavesDeAcceso.id });
+    return { llavesQuitadas: quitadas.length };
   }
 
   async function desactivar(fila: FilaAdministrada, { autorId, correlacion }: { autorId: string; correlacion: string }) {
@@ -309,7 +322,7 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
             headers: fromNodeHeaders(solicitud.headers),
             ...(solicitud.body !== undefined && solicitud.method !== "GET" ? { body: JSON.stringify(solicitud.body) } : {}),
           });
-          const resultado = await auth.handler(peticion);
+          const resultado = await (porDominio.get(url.hostname) ?? auth).handler(peticion);
           respuesta.status(resultado.status);
           resultado.headers.forEach((valor, clave) => {
             if (clave !== "set-cookie") respuesta.header(clave, valor);
@@ -379,9 +392,11 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
           const fila = await administrado(actor.organizacionId, id);
           if (fila.desactivadoEn) throw problema("estado_invalido", "El usuario está desactivado");
           const contrasena = contrasenaTemporal();
-          await restablecer(fila.id, contrasena);
+          const { llavesQuitadas } = await restablecer(fila.id, contrasena);
           await enOrganizacion(bd, actor.organizacionId, (tx) =>
-            registrar(tx, [{ organizacionId: actor.organizacionId, agregadoTipo: "usuario", agregadoId: fila.id, tipoEvento: "contrasena_restablecida", autorId: actor.usuarioId, correlacion }]),
+            registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "usuario", agregadoId: fila.id, tipoEvento: "contrasena_restablecida", autorId: actor.usuarioId, correlacion, valorNuevo: { llavesQuitadas } },
+            ]),
           );
           return { contrasena };
         },

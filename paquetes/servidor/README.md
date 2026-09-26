@@ -14,7 +14,8 @@ src/
                 errores, rutas con política, cola, almacenamiento.
   modulos/
     identidad/       Usuarios, sesiones (Better Auth), resolución del actor, desactivación,
-                     dispositivos (secreto, informe de salud, orden de borrado).
+                     dispositivos (secreto, informe de salud, orden de borrado), llaves de acceso
+                     (una instancia de Better Auth por dominio de superficie: cada llave queda ligada al suyo).
     formatos/        Versiones de formato inmutables y meta-esquema.
     archivos/        Subida firmada, verificación en el worker, descarga firmada.
     auditoria/       Registro semántico con cadena de hashes.

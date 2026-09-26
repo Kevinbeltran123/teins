@@ -120,6 +120,20 @@
       "when": 1790385775505,
       "tag": "0016_permisos_cantidades",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790390509531,
+      "tag": "0017_llaves_de_acceso",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790390509976,
+      "tag": "0018_permisos_llaves_de_acceso",
+      "breakpoints": true
     }
   ]
 }

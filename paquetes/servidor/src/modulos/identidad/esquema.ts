@@ -139,6 +139,30 @@ export const segundosFactores = identidad.table(
   (t) => [index("segundos_factores_usuario_idx").on(t.userId)],
 );
 
+/**
+ * Llaves de acceso (passkeys, ADR-0009 e iteración 13): la clave pública y el contador de cada una.
+ * La privada nunca sale del teléfono o del computador. Las claves en inglés las exige Better Auth.
+ */
+export const llavesDeAcceso = identidad.table(
+  "llaves_de_acceso",
+  {
+    id: text("id").primaryKey(),
+    name: text("nombre"),
+    publicKey: text("clave_publica").notNull(),
+    userId: text("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    credentialID: text("credencial").notNull().unique(),
+    counter: integer("contador").notNull(),
+    deviceType: text("tipo_de_dispositivo").notNull(),
+    backedUp: boolean("respaldada").notNull(),
+    transports: text("transportes"),
+    createdAt: marcaDeTiempo("creada_en"),
+    aaguid: text("aaguid"),
+  },
+  (t) => [index("llaves_de_acceso_usuario_idx").on(t.userId)],
+);
+
 /** Límite de intentos compartido entre instancias (QA-7): vive en la base, no en memoria. */
 export const limitesDeTasa = identidad.table("limites_de_tasa", {
   id: text("id").primaryKey(),

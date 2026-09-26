@@ -27,6 +27,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1140.0",
     "@aws-sdk/s3-request-presigner": "^3.1140.0",
+    "@better-auth/passkey": "1.7.6",
     "@fastify/helmet": "^13.1.1",
     "@fastify/static": "^10.1.4",
     "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
