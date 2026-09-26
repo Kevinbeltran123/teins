@@ -30,6 +30,8 @@ src/
                      Chromium y pdf-lib en el worker, ADR-0013).
     portal/          Accesos de cliente (scrypt, límite de intentos, sesiones cortas) y rutas del portal,
                      siempre con la conexión del rol teins_portal (ADR-0009, partes 3 y 4).
+    avisos/          Avisos push (ADR-0023): suscripciones por persona y navegador, un trabajo por
+                     suscripción encolado en la transacción del hecho, envío con VAPID en el worker.
   app.ts        Composición del rol web.
   web.ts        Punto de entrada del rol web.
   worker.ts     Punto de entrada del rol worker.
@@ -74,6 +76,7 @@ Comandos de administración (uso en el encabezado de cada archivo de `src/cli/`)
 | `crear-usuario`, `restablecer-contrasena` | Usuarios internos y recuperación de acceso |
 | `desactivar-usuario` | Revoca: cierra sus sesiones, no vuelve a entrar y sus teléfonos borran sus datos al conectarse |
 | `crear-organizacion` | Crea la organización de un entorno que no se siembra (producción); si ya existe, no la toca |
+| `generar-claves-avisos` | Imprime un par de claves VAPID para `AVISOS_VAPID_PUBLICA` y `AVISOS_VAPID_PRIVADA` (ADR-0023). La privada es un secreto: va a las variables del entorno, nunca al repositorio. Sin claves, los avisos quedan apagados |
 | `verificar-integridad` | Verifica todas las cadenas de la auditoría de una base con la conexión del dueño (`DATABASE_URL`); lo usa el simulacro de restauración (`docs/proceso/produccion.md`) |
 | `marcar-administrador` | Marca (o con `--quitar`, desmarca) a una persona de oficina como administradora; para administrar debe activar además el segundo factor en oficina |
 | `crear-cliente` | Cliente con su primer sitio |

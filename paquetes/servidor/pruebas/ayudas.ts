@@ -51,6 +51,7 @@ import { construirApp } from "../src/app";
 import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { crearArchivos } from "../src/modulos/archivos";
+import { crearAvisos, type EnviadorDeAvisos } from "../src/modulos/avisos";
 import { crearFormatos } from "../src/modulos/formatos";
 import { crearIdentidad } from "../src/modulos/identidad";
 import { crearGeneradorPdf } from "../src/modulos/informes";
@@ -64,9 +65,12 @@ export const formatoDePrueba = (version: 1 | 2) =>
 export const ORIGEN = "http://localhost:5173";
 export const cabecerasSync = { [CABECERA_VERSION]: String(VERSION_PROTOCOLO) };
 
-/** Servidor completo sobre la base y el almacenamiento reales de la prueba. */
-export async function servidorDePrueba() {
-  const config = configDePrueba({ INICIOS_DE_SESION_POR_MINUTO: "1000" });
+/**
+ * Servidor completo sobre la base y el almacenamiento reales de la prueba. Con `enviadorDeAvisos`, este
+ * archivo también procesa los avisos push; sin él, no los toma de la cola compartida (son de otro archivo).
+ */
+export async function servidorDePrueba(opciones: { config?: Partial<Record<string, string>>; enviadorDeAvisos?: EnviadorDeAvisos } = {}) {
+  const config = configDePrueba({ INICIOS_DE_SESION_POR_MINUTO: "1000", ...opciones.config });
   const { app: conexionApp, propietario } = conexionesDePrueba();
   const almacenamiento = almacenamientoS3(config);
   const conexionPortal = conectar(inject("urlPortal"), 4);
@@ -98,6 +102,9 @@ export async function servidorDePrueba() {
   }
 
   const informes = crearGeneradorPdf({ bd: conexionApp.bd, almacenamiento, config });
+  const avisos = crearAvisos({ bd: conexionApp.bd, config, enviador: opciones.enviadorDeAvisos });
+  const tareas = definirTareas({ archivos, informes, avisos });
+  if (!opciones.enviadorDeAvisos) delete tareas["avisos.enviar"];
   /**
    * Ejecuta los trabajos pendientes, como lo haría el worker. Los archivos de pruebas corren en paralelo
    * y comparten la cola: una pasada puede terminar mientras otro archivo aún procesa un trabajo, así que
@@ -105,9 +112,10 @@ export async function servidorDePrueba() {
    */
   async function procesarCola() {
     for (let i = 0; i < 200; i++) {
-      await runOnce({ pgPool: propietario.pool, taskList: definirTareas({ archivos, informes }) });
+      await runOnce({ pgPool: propietario.pool, taskList: tareas });
       const { rows } = await propietario.pool.query(
-        "select count(*)::int as n from graphile_worker.jobs where locked_at is not null or (run_at <= now() and attempts < max_attempts)",
+        "select count(*)::int as n from graphile_worker.jobs where task_identifier = any($1) and (locked_at is not null or (run_at <= now() and attempts < max_attempts))",
+        [Object.keys(tareas)],
       );
       if (rows[0].n === 0) return;
       await new Promise((r) => setTimeout(r, 100));

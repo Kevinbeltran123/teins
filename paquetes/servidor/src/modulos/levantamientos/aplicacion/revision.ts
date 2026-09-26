@@ -3,7 +3,7 @@ import { bloqueDe, corregir, marcarRevisado, puedeEditar, tomarRevision, type Es
 import type { Actor } from "../../../plataforma/actor";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../../plataforma/base-de-datos";
 import { problema } from "../../../plataforma/errores";
-import type { LevantamientoEnRevision, PuertoCatalogo, PuertoFormatos, RegistrarAuditoria, RegistrarCambios, RepositorioRevision } from "./puertos";
+import type { Avisar, LevantamientoEnRevision, PuertoCatalogo, PuertoFormatos, RegistrarAuditoria, RegistrarCambios, RepositorioRevision } from "./puertos";
 
 export interface DependenciasRevision {
   bd: BaseDeDatos;
@@ -11,6 +11,7 @@ export interface DependenciasRevision {
   formatos: PuertoFormatos;
   registrarAuditoria: RegistrarAuditoria;
   registrarCambios: RegistrarCambios;
+  avisar: Avisar;
   catalogo: PuertoCatalogo;
   /** Para decir quién tiene la revisión cuando otra persona intenta tomarla. */
   nombres: (organizacionId: string, ids: readonly string[]) => Promise<Map<string, string>>;
@@ -148,6 +149,7 @@ export function marcar(deps: DependenciasRevision, actor: Actor, id: string, ver
     }
     const version = await guardar(deps, tx, actual, { estado: "revisado", revisadoEn: (deps.reloj ?? (() => new Date()))() });
     await deps.registrarAuditoria(tx, [{ ...comun(actor, id, correlacion), tipoEvento: "levantamiento_revisado" }]);
+    await deps.avisar(tx, { tipo: "levantamiento_revisado", organizacionId: actor.organizacionId, tecnicoId: actual.tecnicoId, levantamientoId: id, creadoEn: actual.creadoEnDispositivo });
     await avisarAlTecnico(deps, tx, actor, actual);
     return { ...r.revision, version };
   });
@@ -200,6 +202,7 @@ export function comentar(
         valorNuevo: { texto: datos.texto },
       },
     ]);
+    await deps.avisar(tx, { tipo: "comentario", organizacionId: actor.organizacionId, tecnicoId: actual.tecnicoId, levantamientoId: id, creadoEn: actual.creadoEnDispositivo });
     await avisarAlTecnico(deps, tx, actor, actual);
     return comentario;
   });

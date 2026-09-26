@@ -134,6 +134,20 @@
       "when": 1790390509976,
       "tag": "0018_permisos_llaves_de_acceso",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790450905547,
+      "tag": "0019_avisos",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790450919145,
+      "tag": "0020_permisos_avisos",
+      "breakpoints": true
     }
   ]
 }

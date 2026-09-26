@@ -2,6 +2,7 @@ import type { EstadoRevision, Repeticiones, Respuestas, VersionFormato } from "@
 import type { ResultadoComando } from "@teins/protocolo";
 import type { TxOrganizacion } from "../../../plataforma/base-de-datos";
 import type { EntradaAuditoria } from "../../auditoria";
+import type { Aviso } from "../../avisos";
 import type { Cambio } from "../../cambios";
 import type { EstadoArchivo } from "../../archivos";
 
@@ -59,6 +60,8 @@ export interface LevantamientoEnRevision {
   versionFormato: number;
   respuestas: Respuestas;
   repeticiones: Repeticiones;
+  /** Como el técnico lo reconoce en su teléfono: por el día en que lo creó. */
+  creadoEnDispositivo: Date;
 }
 
 export interface CambiosDeRevision {
@@ -114,6 +117,9 @@ export interface PuertoVisitas {
 export type RegistrarAuditoria = (tx: TxOrganizacion, entradas: readonly EntradaAuditoria[]) => Promise<void>;
 
 export type RegistrarCambios = (tx: TxOrganizacion, cambios: readonly Cambio[]) => Promise<void>;
+
+/** Aviso push en la transacción del hecho (ADR-0023). */
+export type Avisar = (tx: TxOrganizacion, aviso: Aviso) => Promise<void>;
 
 /** Violaciones de unicidad que el caso de uso distingue. */
 export const RESTRICCION_LLAVE = "comandos_procesados_pkey";

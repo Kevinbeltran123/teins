@@ -32,6 +32,8 @@ export interface Entrada<N extends NombreOperacion> {
   consulta: Consulta<N>;
   actor: Actor;
   correlacion: string;
+  /** Cabecera Origin del navegador. En las que modifican, el servidor ya rechazó los orígenes ajenos. */
+  origen: string | undefined;
 }
 
 export type Manejador<N extends NombreOperacion> = (entrada: Entrada<N>) => Promise<RespuestaServidor<N>>;
@@ -145,6 +147,7 @@ export function registrarOperacionDelPortal<N extends NombreOperacion, S>(app: F
         parametros: validar(op.parametros, solicitud.params, "parametros") as Parametros<N>,
         consulta: validar(op.consulta, solicitud.query, "consulta") as Consulta<N>,
         correlacion: solicitud.id,
+        origen: solicitud.headers.origin,
         sesion: sesion as S,
         portal,
       });
@@ -176,6 +179,7 @@ function registrar<N extends NombreOperacion, A>(
         consulta: validar(op.consulta, solicitud.query, "consulta") as Consulta<N>,
         actor,
         correlacion: solicitud.id,
+        origen: solicitud.headers.origin,
       });
       respuesta.status(op.estadoExito);
       return op.respuesta.parse(resultado);

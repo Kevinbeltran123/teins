@@ -6,6 +6,7 @@ import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
+import { avisar as avisarPush } from "../avisos";
 import { registrarCambios, type Cambio } from "../cambios";
 import type { ClientesYSitios } from "../clientes";
 import type { Identidad } from "../identidad";
@@ -94,6 +95,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       await registrar(tx, [
         { organizacionId, agregadoTipo: "visita", agregadoId: id, tipoEvento: "visita_creada", autorId, correlacion, valorNuevo: { clienteId, sitioId, programadaPara, tecnicos: unicos } },
       ]);
+      await avisarPush(tx, { tipo: "visita_asignada", organizacionId, tecnicos: unicos, visitaId: id, programadaPara });
       await registrarCambios(tx, avisar(organizacionId, id, unicos, "cambio"));
       return id;
     },
@@ -119,10 +121,11 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
           valorNuevo: [...nuevos],
         },
       ]);
-      await registrarCambios(tx, [
-        ...avisar(organizacionId, visitaId, [...anteriores].filter((t) => !nuevos.has(t)), "fuera_de_alcance"),
-        ...avisar(organizacionId, visitaId, [...nuevos].filter((t) => !anteriores.has(t)), "cambio"),
-      ]);
+      const salen = [...anteriores].filter((t) => !nuevos.has(t));
+      const entran = [...nuevos].filter((t) => !anteriores.has(t));
+      await avisarPush(tx, { tipo: "visita_retirada", organizacionId, tecnicos: salen, visitaId, programadaPara: actual.programadaPara });
+      await avisarPush(tx, { tipo: "visita_asignada", organizacionId, tecnicos: entran, visitaId, programadaPara: actual.programadaPara });
+      await registrarCambios(tx, [...avisar(organizacionId, visitaId, salen, "fuera_de_alcance"), ...avisar(organizacionId, visitaId, entran, "cambio")]);
     },
 
     async reprogramar(tx, { organizacionId, autorId, correlacion, visitaId, version, programadaPara, motivo }) {
@@ -145,6 +148,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         },
       ]);
       // Los teléfonos de sus técnicos reciben la visita con la fecha y el motivo nuevos.
+      await avisarPush(tx, { tipo: "visita_reprogramada", organizacionId, tecnicos: actual.tecnicos, visitaId, antes: actual.programadaPara, despues: programadaPara });
       await registrarCambios(tx, avisar(organizacionId, visitaId, actual.tecnicos, "cambio"));
     },
 
@@ -155,6 +159,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         .set({ canceladaEn: new Date(), canceladaPor: autorId, motivoCancelacion: motivo.trim(), version: sql`${visitas.version} + 1` })
         .where(eq(visitas.id, visitaId));
       await registrar(tx, [{ organizacionId, agregadoTipo: "visita", agregadoId: visitaId, tipoEvento: "visita_cancelada", autorId, correlacion, motivo: motivo.trim() }]);
+      await avisarPush(tx, { tipo: "visita_cancelada", organizacionId, tecnicos: actual.tecnicos, visitaId, programadaPara: actual.programadaPara });
       await registrarCambios(tx, avisar(organizacionId, visitaId, actual.tecnicos, "fuera_de_alcance"));
     },
 

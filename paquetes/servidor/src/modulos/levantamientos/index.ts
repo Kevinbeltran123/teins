@@ -8,6 +8,7 @@ import { registrarOperacion } from "../../plataforma/rutas";
 import type { Archivos } from "../archivos";
 import type { Catalogo } from "../catalogo";
 import { leerCadena, registrar, verificarCadena } from "../auditoria";
+import { avisar } from "../avisos";
 import { registrarCambios } from "../cambios";
 import type { Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
@@ -69,8 +70,8 @@ const SIN_NOMBRE = "[Usuario no disponible]";
 
 /** Interfaz pública del módulo de levantamientos: núcleo del sistema. */
 export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad, catalogo }: Dependencias): Levantamientos {
-  const envio: DependenciasEnvio = { bd, repositorio: repositorioDrizzle, formatos, archivos, visitas, registrarAuditoria: registrar, registrarCambios };
-  const revision: DependenciasRevision = { bd, repositorio: repositorioRevision, formatos, registrarAuditoria: registrar, registrarCambios, nombres: identidad.nombres, catalogo };
+  const envio: DependenciasEnvio = { bd, repositorio: repositorioDrizzle, formatos, archivos, visitas, registrarAuditoria: registrar, registrarCambios, avisar, nombres: identidad.nombres };
+  const revision: DependenciasRevision = { bd, repositorio: repositorioRevision, formatos, registrarAuditoria: registrar, registrarCambios, avisar, nombres: identidad.nombres, catalogo };
 
   async function personas(organizacionId: string, ids: readonly (string | null)[]) {
     const nombres = await identidad.nombres(organizacionId, [...new Set(ids.filter((i): i is string => i !== null))]);

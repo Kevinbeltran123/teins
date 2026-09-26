@@ -9,6 +9,7 @@ import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion, registrarOperacionDeDispositivo, registrarRutaPublica } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
+import { olvidarSuscripciones } from "../avisos";
 import { crearAuth, type Auth, type EventosDeAuth } from "./auth";
 import { dispositivos, llavesDeAcceso, organizaciones, sesiones, usuarios } from "./esquema";
 
@@ -166,11 +167,13 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
    * Restablecer el acceso cambia la contraseña, cierra todas las sesiones y quita las llaves de acceso:
    * si se restablece porque se perdió el teléfono, la llave de ese teléfono deja de servir.
    */
-  async function restablecer(id: string, contrasena: string): Promise<{ llavesQuitadas: number }> {
+  async function restablecer({ id, organizacionId }: { id: string; organizacionId: string }, contrasena: string): Promise<{ llavesQuitadas: number }> {
     const contexto = await auth.$context;
     await contexto.internalAdapter.updatePassword(id, await contexto.password.hash(contrasena));
     await contexto.internalAdapter.deleteUserSessions(id);
     const quitadas = await bd.delete(llavesDeAcceso).where(eq(llavesDeAcceso.userId, id)).returning({ id: llavesDeAcceso.id });
+    // El teléfono perdido tampoco sigue recibiendo sus avisos (ADR-0023).
+    await enOrganizacion(bd, organizacionId, (tx) => olvidarSuscripciones(tx, id));
     return { llavesQuitadas: quitadas.length };
   }
 
@@ -185,6 +188,7 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         .set({ ordenDeBorradoEn: ahora })
         .where(and(eq(dispositivos.usuarioId, fila.id), isNull(dispositivos.ordenDeBorradoEn)))
         .returning({ id: dispositivos.id });
+      await olvidarSuscripciones(tx, fila.id);
       await registrar(tx, [
         {
           organizacionId: fila.organizacionId,
@@ -267,7 +271,7 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
 
     async restablecerContrasena(usuario, contrasena) {
       if (contrasena.length < 10) throw new Error("La contraseña debe tener al menos 10 caracteres");
-      await restablecer((await porNombreDeUsuario(usuario)).id, contrasena);
+      await restablecer(await porNombreDeUsuario(usuario), contrasena);
     },
 
     async desactivarUsuario(usuario, contexto) {
@@ -393,7 +397,7 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
           const fila = await administrado(actor.organizacionId, id);
           if (fila.desactivadoEn) throw problema("estado_invalido", "El usuario está desactivado");
           const contrasena = contrasenaTemporal();
-          const { llavesQuitadas } = await restablecer(fila.id, contrasena);
+          const { llavesQuitadas } = await restablecer(fila, contrasena);
           await enOrganizacion(bd, actor.organizacionId, (tx) =>
             registrar(tx, [
               { organizacionId: actor.organizacionId, agregadoTipo: "usuario", agregadoId: fila.id, tipoEvento: "contrasena_restablecida", autorId: actor.usuarioId, correlacion, valorNuevo: { llavesQuitadas } },

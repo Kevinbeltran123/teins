@@ -6,6 +6,7 @@ import { problema } from "../../../plataforma/errores";
 import {
   RESTRICCION_LEVANTAMIENTO,
   RESTRICCION_LLAVE,
+  type Avisar,
   type PuertoArchivos,
   type PuertoFormatos,
   type PuertoVisitas,
@@ -22,6 +23,9 @@ export interface DependenciasEnvio {
   visitas: PuertoVisitas;
   registrarAuditoria: RegistrarAuditoria;
   registrarCambios: RegistrarCambios;
+  avisar: Avisar;
+  /** El aviso a oficina dice quién envió (ADR-0023). */
+  nombres: (organizacionId: string, ids: readonly string[]) => Promise<Map<string, string>>;
   reloj?: () => Date;
 }
 
@@ -41,6 +45,9 @@ export async function recibirEnvio(
 ): Promise<ResultadoComando> {
   const { levantamiento: datos, llave } = comando;
   const reloj = deps.reloj ?? (() => new Date());
+  // Antes de la transacción: leerlo adentro pediría una segunda conexión mientras la primera espera, y diez
+  // envíos simultáneos agotarían el pool.
+  const tecnico = (await deps.nombres(actor.organizacionId, [actor.usuarioId])).get(actor.usuarioId) ?? "Un técnico";
 
   try {
     return await enOrganizacion(deps.bd, actor.organizacionId, async (tx) => {
@@ -118,6 +125,8 @@ export async function recibirEnvio(
         { ...comun, tipoEvento: "levantamiento_creado", horaDispositivo: new Date(datos.creadoEn), valorNuevo: { formato: datos.formato, versionFormato: datos.versionFormato } },
         { ...comun, tipoEvento: "levantamiento_enviado", horaDispositivo: new Date(datos.enviadoEn), valorNuevo: { fotos: huellas.length } },
       ]);
+
+      await deps.avisar(tx, { tipo: "levantamiento_enviado", organizacionId: actor.organizacionId, levantamientoId: datos.id, tecnico });
 
       const resultado: ResultadoComando = { resultado: "aceptado", levantamientoId: datos.id, recibidoEn: recibidoEn.toISOString() };
       await deps.repositorio.guardarResultado(tx, llave, resultado);

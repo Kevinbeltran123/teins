@@ -68,6 +68,15 @@ const Esquema = z.object({
   DIAS_PERMISO_LOCAL: z.coerce.number().int().min(1).max(30).default(7),
   /** Intentos de inicio de sesión por minuto y dirección (QA-7). */
   INICIOS_DE_SESION_POR_MINUTO: z.coerce.number().int().min(1).max(10_000).default(5),
+
+  /**
+   * Avisos push (ADR-0023). Claves VAPID generadas con `generar-claves-avisos`; sin ellas, los avisos están
+   * apagados. El rol web solo necesita la pública; el worker, las tres. El contacto va en cada envío para que
+   * el servicio de avisos pueda escribir si hay un problema.
+   */
+  AVISOS_VAPID_PUBLICA: z.string().regex(/^[A-Za-z0-9_-]{80,100}$/, "Clave pública VAPID en base64url").optional(),
+  AVISOS_VAPID_PRIVADA: z.string().regex(/^[A-Za-z0-9_-]{40,50}$/, "Clave privada VAPID en base64url").optional(),
+  AVISOS_CONTACTO: z.string().regex(/^(mailto:|https:\/\/)\S+$/, "Use mailto:correo o una URL https").optional(),
 });
 
 export type Config = z.infer<typeof Esquema>;

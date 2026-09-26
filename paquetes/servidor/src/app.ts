@@ -20,6 +20,7 @@ import { crearVisitas } from "./modulos/visitas";
 import { crearInformes } from "./modulos/informes";
 import { crearAccesosDeClientes, crearPortal } from "./modulos/portal";
 import { crearCatalogo } from "./modulos/catalogo";
+import { crearAvisos } from "./modulos/avisos";
 
 export interface Dependencias {
   config: Config;
@@ -161,6 +162,8 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   informes.registrarRutas(app);
   registrarRutasDeClientes(app, bd);
   catalogo.registrarRutas(app);
+  // El rol web no envía avisos (lo hace el worker): solo guarda suscripciones y entrega la clave pública.
+  crearAvisos({ bd, config }).registrarRutas(app);
   visitas.registrarRutas(app, { bd, identidad, conteos: levantamientos.conteosPorVisita });
   crearAccesosDeClientes(bd).registrarRutas(app, config);
   if (bdPortal) crearPortal({ bdPortal, almacenamiento, config }).registrarRutas(app);
