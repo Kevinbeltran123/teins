@@ -27,7 +27,8 @@ src/
     catalogo/        Ítems del catálogo (código, descripción, unidad), importación en bloque por código.
     sincronizacion/  Bajada: compone los cambios del técnico con las interfaces de los demás módulos.
     informes/        Informe por visita, versiones publicadas inmutables y su PDF (plantilla HTML,
-                     Chromium y pdf-lib en el worker, ADR-0013).
+                     Chromium y pdf-lib en el worker, ADR-0013). Las firmas van en una "Constancia de
+                     visita", sin cuadrícula y recortadas (ADR-0024).
     portal/          Accesos de cliente (scrypt, límite de intentos, sesiones cortas) y rutas del portal,
                      siempre con la conexión del rol teins_portal (ADR-0009, partes 3 y 4).
     avisos/          Avisos push (ADR-0023): suscripciones por persona y navegador, un trabajo por

@@ -1,4 +1,4 @@
-import { aDecimalColombiano, bloques, describirValor, esBoceto, esCantidades, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
+import { aDecimalColombiano, bloques, describirValor, esBoceto, esCantidades, esFirma, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
 
 /**
  * Plantilla del informe (ADR-0013): HTML y CSS con la dirección de DESIGN.md. Se arma solo desde la
@@ -36,16 +36,19 @@ export interface RecursosPlantilla {
   fotos: ReadonlyMap<string, string>;
   /** Boceto por huella, ya convertido a SVG (ADR-0019). Uno que falte se muestra como marcador. */
   bocetos?: ReadonlyMap<string, string>;
+  /** Firma por huella, en SVG sin cuadrícula y recortada a sus trazos (ADR-0024). */
+  firmas?: ReadonlyMap<string, string>;
 }
 
-export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos = new Map() }: RecursosPlantilla): string {
+export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos = new Map(), firmas = new Map() }: RecursosPlantilla): string {
   const capitulos = c.levantamientos
     .map((l, i) => {
       // Cada sección, y cada repetición de las repetibles con su nombre, en orden (iteración 9).
       const secciones = bloques(l.formato, l.repeticiones ?? {})
         .map(({ seccion: s, clave, titulo }) => {
           const datos = s.campos
-            .filter((campo) => campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "cantidades")
+            // Una firma tomada va en su constancia; sin firmar (o "no se pudo obtener"), como cualquier dato.
+            .filter((campo) => campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "cantidades" && !(campo.tipo === "firma" && esFirma(l.respuestas[clave]?.[campo.clave])))
             .map((campo) => {
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
               const vacio = valor === undefined || esNoObtenido(valor);
@@ -88,7 +91,17 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
               return `<h4>${escapar(campo.etiqueta)}</h4><table class="cantidades"><thead><tr><th>Descripción</th><th class="numero">Cantidad</th><th>Unidad</th><th>Observación</th></tr></thead><tbody>${filas}</tbody></table>`;
             })
             .join("");
-          return `<section class="seccion"><h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${cantidades}${galerias}${croquis}</section>`;
+          // Constancia de visita (ADR-0024): lo que leyó quien firmó, su firma y cuándo.
+          const constancias = s.campos
+            .filter((campo) => campo.tipo === "firma")
+            .map((campo) => {
+              const valor = l.respuestas[clave]?.[campo.clave];
+              if (!esFirma(valor)) return "";
+              const trazo = firmas.get(valor.firma) ?? '<div class="falta">[FIRMA]</div>';
+              return `<section class="constancia"><h4>Constancia de visita</h4><p>${escapar(valor.declaracion)}</p><div class="firmado"><div class="trazo">${trazo}<p><strong>${escapar(valor.nombre)}</strong>${valor.cargo ? `<br><span class="tenue">${escapar(valor.cargo)}</span>` : ""}</p></div><p class="tenue">Firmado en el sitio el ${fechaHora.format(new Date(valor.firmadoEn))}, en el teléfono del técnico.</p></div></section>`;
+            })
+            .join("");
+          return `<section class="seccion"><h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${cantidades}${galerias}${croquis}${constancias}</section>`;
         })
         .join("");
       return `<article class="capitulo">
@@ -146,6 +159,12 @@ table.cantidades .numero { text-align: right; font-variant-numeric: tabular-nums
 .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
 figure { margin: 0; break-inside: avoid; }
 figure.boceto svg { width: 100%; height: auto; display: block; border: 1px solid ${MARCA.division}; border-radius: 6px; }
+.constancia { break-inside: avoid; border: 1px solid ${MARCA.division}; border-radius: 6px; padding: 10pt 12pt; margin-top: 8pt; }
+.constancia h4 { margin-top: 0; }
+.constancia .firmado { display: flex; align-items: flex-end; gap: 18pt; }
+.constancia .trazo { width: 72mm; }
+.constancia .trazo svg { width: 100%; height: auto; max-height: 30mm; display: block; }
+.constancia .trazo p { border-top: 1.5px solid ${MARCA.texto}; padding-top: 4pt; margin: 0; }
 figure.boceto .falta { height: 62mm; border: 1.5px dashed ${MARCA.division}; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: ${MARCA.secundario}; }
 figure img { width: 100%; height: 62mm; object-fit: cover; border-radius: 6px; display: block; }
 figure.falta div { height: 62mm; border: 1.5px dashed ${MARCA.division}; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: ${MARCA.secundario}; }

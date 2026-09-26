@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { bocetoASvg, bocetosReferenciados, fotosReferenciadas, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
+import { bocetoASvg, bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
 import type { Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } from "../../plataforma/base-de-datos";
@@ -135,16 +135,21 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         const fotos = new Map<string, string>();
         for (const h of huellas) fotos.set(h, `data:image/jpeg;base64,${(await leerTodo(almacenamiento, clave(organizacionId, h))).toString("base64")}`);
         // Bocetos (ADR-0019): el documento vectorial se convierte a SVG con los colores de la marca.
+        // Las firmas usan el mismo documento, sin cuadrícula y recortadas a sus trazos (ADR-0024).
+        const valores = c.levantamientos.flatMap((l) => Object.values(l.respuestas).flatMap((seccion) => Object.values(seccion)));
+        const deFirmas = new Set(valores.flatMap((valor) => (esFirma(valor) ? [valor.firma] : [])));
         const bocetos = new Map<string, string>();
+        const firmas = new Map<string, string>();
         for (const h of [...new Set(c.levantamientos.flatMap((l) => bocetosReferenciados(l.respuestas)))]) {
           const documento = leerBoceto((await leerTodo(almacenamiento, clave(organizacionId, h))).toString("utf8"));
-          if (documento) bocetos.set(h, bocetoASvg(documento));
+          if (documento && deFirmas.has(h)) firmas.set(h, firmaASvg(documento));
+          else if (documento) bocetos.set(h, bocetoASvg(documento));
         }
         const planos = [];
         for (const p of c.planos) planos.push(await leerTodo(almacenamiento, clave(organizacionId, p.huella)));
 
         const pdf = await imprimirInforme({
-          html: plantillaInforme(c, { fuente: fuenteIncrustada(), fotos, bocetos }),
+          html: plantillaInforme(c, { fuente: fuenteIncrustada(), fotos, bocetos, firmas }),
           pie: piePagina(c),
           planos,
           metadatos: { titulo: `Informe técnico · ${c.visita.cliente} · versión ${c.numero}`, autor: c.organizacion.nombre, fecha: new Date(c.publicadaEn) },
