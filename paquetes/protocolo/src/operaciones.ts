@@ -439,6 +439,20 @@ const erroresDeVisita = ["no_autenticado", "sin_permiso", "no_encontrado", "conf
 
 const NombreDeUsuario = z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,30}$/);
 
+// Avisos push (ADR-0023)
+
+const ClaveBase64Url = (maximo: number) => z.string().regex(/^[A-Za-z0-9_-]+={0,2}$/).max(maximo);
+
+/** Lo que `PushSubscription.toJSON()` entrega; el servidor decide a quién pertenece y desde qué superficie. */
+export const SuscripcionAvisos = z
+  .object({
+    endpoint: z.url({ protocol: /^https$/ }).max(2048),
+    claves: z.object({ p256dh: ClaveBase64Url(200), auth: ClaveBase64Url(64) }),
+  })
+  .meta({ id: "SuscripcionAvisos" });
+
+export const ConfiguracionAvisos = z.object({ clavePublica: z.string().nullable() }).meta({ id: "ConfiguracionAvisos" });
+
 export const operaciones = {
   obtenerSesion: {
     metodo: "GET",
@@ -944,6 +958,33 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: UrlDeArchivo,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  // Avisos push (ADR-0023)
+  configuracionAvisos: {
+    metodo: "GET",
+    ruta: "/api/avisos/configuracion",
+    resumen: "Clave pública VAPID para suscribirse; nula si los avisos están apagados en este entorno",
+    estadoExito: 200,
+    respuesta: ConfiguracionAvisos,
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  suscribirAvisos: {
+    metodo: "POST",
+    ruta: "/api/avisos/suscripciones",
+    resumen: "Guarda la suscripción de este navegador para la persona de la sesión (reemplaza la de otra persona en un teléfono compartido)",
+    cuerpo: SuscripcionAvisos,
+    estadoExito: 200,
+    respuesta: z.object({}),
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida", "no_encontrado"],
+  },
+  quitarSuscripcionAvisos: {
+    metodo: "POST",
+    ruta: "/api/avisos/suscripciones/quitar",
+    resumen: "Quita la suscripción de este navegador (al cerrar sesión o al desactivar los avisos)",
+    cuerpo: z.object({ endpoint: z.url() }),
+    estadoExito: 200,
+    respuesta: z.object({}),
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
   },
 } as const satisfies Record<string, Operacion>;
 

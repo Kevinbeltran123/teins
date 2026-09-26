@@ -31,6 +31,8 @@ export {
   SaludDeDispositivo,
   SaludDispositivo,
   SesionPortal,
+  SuscripcionAvisos,
+  ConfiguracionAvisos,
   Sesion,
   TIPOS_DE_ARCHIVO,
   UrlDeArchivo,
