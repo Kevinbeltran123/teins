@@ -1,5 +1,5 @@
 /*
-  Tokens de diseño de TEINS (dirección Marquilla).
+  Tokens de diseño de TEINS (dirección Consola, iteración 14).
   Fuente única de verdad: DESIGN.md explica cada valor; ADR-0020 explica los dos niveles.
   Los componentes usan solo los tokens semánticos (--t-*), nunca los de marca ni valores fijos.
 */
@@ -14,33 +14,64 @@
   --t-superficie: var(--marca-superficie);
   --t-superficie-elevada: color-mix(in srgb, var(--marca-superficie), #FFFFFF 12%);
   --t-superficie-pista: color-mix(in srgb, var(--marca-superficie), #FFFFFF 24%);
+  /* Fondo del elemento activo (sección del menú, paso actual): la marca muy diluida */
+  --t-superficie-suave: color-mix(in srgb, var(--marca-superficie), #FFFFFF 90%);
   --t-sobre-superficie: #FFFFFF;
   --t-sobre-superficie-tenue: color-mix(in srgb, var(--marca-superficie), #FFFFFF 70%);
   --t-sobre-superficie-suave: color-mix(in srgb, var(--marca-superficie), #FFFFFF 85%);
 
+  /* El acento ya no pinta botones: marca el foco y lo recién hecho */
   --t-acento: var(--marca-acento);
   --t-sobre-acento: #15171A;
+  --t-resaltado: color-mix(in srgb, var(--marca-acento), #FFFFFF 80%);
 
-  --t-fondo: #F3F1EC;
+  --t-fondo: #F5F6F8;
   --t-panel: #FFFFFF;
+  /* Encabezados de tabla y pies de diálogo: un escalón bajo el panel */
+  --t-panel-hundido: #F8F9FB;
   --t-texto: #15171A;
   --t-texto-secundario: var(--marca-texto-secundario);
-  --t-division: #DEDBD3;
-  --t-borde-control: #8A867E;
+  --t-division: #E1E4EA;
+  /* Borde de botones secundarios y tarjetas: el texto ya los identifica */
+  --t-borde-suave: #C9CED8;
+  /* Borde de campos de texto: 3:1 sobre blanco (WCAG 1.4.11), el borde es lo único que los delimita */
+  --t-borde-control: #8C93A3;
   --t-borde-activo: var(--marca-superficie);
   --t-foco: var(--marca-acento);
+  /* Capa translúcida del cursor encima de filas y botones fantasma */
+  --t-encima: rgb(21 23 26 / 0.05);
 
-  /* Estados del documento: fijos para toda organización */
+  /* Estados del documento: fijos para toda organización (ADR-0020) */
   --t-estado-enviado-fondo: #E3ECFA;      --t-estado-enviado-texto: #1C4E9E;
   --t-estado-revision-fondo: #EEE6F7;     --t-estado-revision-texto: #5B2E91;
   --t-estado-revisado-fondo: #DDF1EB;     --t-estado-revisado-texto: #0B5E50;
   --t-estado-anulado-fondo: #F8E0E4;      --t-estado-anulado-texto: #8E1D33;
   /* Borrador usa --t-superficie-pista; Publicado usa --t-superficie */
 
+  /*
+    Mensajes: éxito, alerta y peligro. El texto de color va solo en insignias (palabras cortas en negrita,
+    6:1 o más); los avisos usan --t-texto sobre el fondo teñido y el color queda en el icono.
+  */
+  --t-exito-fondo: #E3F4EC;     --t-exito-texto: #0B5E45;
+  --t-alerta-fondo: #FFF4D6;    --t-alerta-texto: #6B4500;
+  --t-peligro-fondo: #FBE9EB;   --t-error: #A3223A;
+  /* Botón de peligro: blanco sobre rojo, 6,5:1 */
+  --t-peligro: #B42318;
+  --t-sobre-peligro: #FFFFFF;
+  /* Notificaciones: oscuras para separarse del contenido */
+  --t-notificacion: #1B2130;
+  /* Visor de fotos: casi negro, para que la foto sea lo único que se ve */
+  --t-visor: #0B0F17;
+
   /* Sincronización (campo) */
   --t-sync-ok: #0F6B5C;
   --t-sync-pendiente: #7A4F00;
   --t-sync-error: #A3223A;
+
+  /* Capas: diálogos, hojas laterales y menús (las únicas con sombra) */
+  --t-velo: rgb(10 18 36 / 0.48);
+  --t-sombra-capa: 0 24px 64px rgb(10 18 36 / 0.24);
+  --t-sombra-menu: 0 8px 24px rgb(10 18 36 / 0.16);
 
   /* Tipografía */
   /* Una sola familia en toda la interfaz (DESIGN.md) */
@@ -50,40 +81,41 @@
   --t-texto-cuerpo: 17px;
   --t-texto-ayuda: 15px;
   --t-subtitulo: 21px;
-  --t-titulo: 34px;
-  --t-cifra-focal: 76px;
-
-  /* Validación */
-  --t-error: #A3223A;
+  --t-titulo: 26px;
+  --t-cifra-focal: 44px;
 
   /* Forma */
-  --t-radio-control: 6px;
-  --t-radio-panel: 8px;
+  --t-radio-control: 8px;
+  --t-radio-panel: 12px;
+  --t-radio-capa: 16px;
   --t-tactil-min: 44px;
   --t-tactil: 58px;
-
-  /* Marquilla: punta del extremo derecho según altura */
-  --t-marquilla-punta-sm: 6px;   /* 24px de alto */
-  --t-marquilla-punta-md: 8px;   /* 30px */
-  --t-marquilla-punta-lg: 12px;  /* 44px */
+  /* Alto de los controles: normal y pequeño (en campo, nunca menos que la zona táctil mínima) */
+  --t-control: var(--t-tactil);
+  --t-control-sm: var(--t-tactil-min);
 
   /* Movimiento */
   --t-duracion-rapida: 120ms;
   --t-duracion-estandar: 200ms;
   --t-duracion-pantalla: 280ms;
+  /* Lo recién creado se resalta y se desvanece (Basecamp, "yellow fade") */
+  --t-duracion-resaltado: 2400ms;
   --t-curva: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /*
-  Escala de oficina (DESIGN.md): escritorio, texto 14 y zonas táctiles de 44.
+  Escala de oficina (DESIGN.md): escritorio, controles de 40 y 32.
   Los componentes no cambian: usan los mismos tokens y la superficie los redefine.
 */
 [data-superficie="oficina"] {
-  --t-texto-cuerpo: 14px;
+  --t-texto-cuerpo: 15px;
   --t-texto-ayuda: 13px;
   --t-subtitulo: 18px;
-  --t-cifra-focal: 104px;
+  --t-titulo: 28px;
+  --t-cifra-focal: 56px;
   --t-tactil: 44px;
+  --t-control: 40px;
+  --t-control-sm: 32px;
 }
 
 @media (prefers-reduced-motion: reduce) {

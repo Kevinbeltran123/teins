@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
-import { Boton } from "./Boton";
+import { Boton, BotonIcono } from "./Boton";
 import { CampoSeleccion } from "./CampoSeleccion";
 import { CampoTexto } from "./CampoTexto";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
+import { Plus, Trash } from "./iconos";
+import { useNotificar } from "./Notificaciones";
 
 /**
  * Tabla de cantidades (F9): materiales y trabajos con descripción, cantidad, unidad y observación, sin
@@ -35,7 +37,14 @@ export function EditorCantidades({
   obligatorio?: boolean | undefined;
   error?: string | undefined;
 }) {
+  const notificar = useNotificar();
   const cambiar = (i: number, cambio: Partial<LineaEditable>) => onCambio(lineas.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
+  // Quitar es inmediato y se puede deshacer: preguntar antes solo entrenaría a aceptar sin leer (DESIGN.md).
+  function quitar(i: number) {
+    const antes = [...lineas];
+    onCambio(lineas.filter((_, j) => j !== i));
+    notificar({ texto: `Línea ${i + 1} quitada`, accion: { texto: "Deshacer", alHacer: () => onCambio(antes) } });
+  }
   const errorId = `error-cantidades-${etiqueta}`;
   return (
     <fieldset className="flex flex-col gap-3" aria-describedby={error ? errorId : undefined}>
@@ -44,21 +53,24 @@ export function EditorCantidades({
       </legend>
       {lineas.length === 0 && <p className="text-ayuda text-texto-secundario">Todavía no hay líneas.</p>}
       {lineas.map((l, i) => (
-        <div key={l.id} role="group" aria-label={`Línea ${i + 1}`} className="flex flex-col gap-3 rounded-control border border-division p-3">
+        <div key={l.id} role="group" aria-label={`Línea ${i + 1}`} className="flex flex-col gap-3 rounded-panel border border-division p-3">
+          <div className="-mb-1 flex items-center justify-between">
+            <span className="text-ayuda font-bold text-texto-secundario">{`Línea ${i + 1}`}</span>
+            <BotonIcono icono={Trash} etiqueta={`Quitar la línea ${i + 1}`} tamano="pequeno" onClick={() => quitar(i)} />
+          </div>
           <CampoTexto etiqueta={`Descripción de la línea ${i + 1}`} valorInicial={l.descripcion} onCambio={(descripcion) => cambiar(i, { descripcion })} />
           <div className="grid grid-cols-2 gap-3">
             <CampoTexto etiqueta={`Cantidad de la línea ${i + 1}`} modoEntrada="decimal" valorInicial={l.cantidad} onCambio={(cantidad) => cambiar(i, { cantidad })} />
             <CampoSeleccion etiqueta={`Unidad de la línea ${i + 1}`} valor={l.unidad} onCambio={(unidad) => cambiar(i, { unidad })} opciones={unidades.map((u) => ({ valor: u, texto: u }))} />
           </div>
           <CampoTexto etiqueta={`Observación de la línea ${i + 1} (opcional)`} valorInicial={l.observacion} onCambio={(observacion) => cambiar(i, { observacion })} />
-          <div>
-            <Boton onClick={() => onCambio(lineas.filter((_, j) => j !== i))}>{`Quitar la línea ${i + 1}`}</Boton>
-          </div>
         </div>
       ))}
       {error && <MensajeError id={errorId}>{error}</MensajeError>}
       <div>
-        <Boton onClick={() => onCambio([...lineas, { id: nuevoId(), descripcion: "", cantidad: "", unidad: unidades[0] ?? "", observacion: "" }])}>Agregar línea</Boton>
+        <Boton icono={Plus} onClick={() => onCambio([...lineas, { id: nuevoId(), descripcion: "", cantidad: "", unidad: unidades[0] ?? "", observacion: "" }])}>
+          Agregar línea
+        </Boton>
       </div>
     </fieldset>
   );

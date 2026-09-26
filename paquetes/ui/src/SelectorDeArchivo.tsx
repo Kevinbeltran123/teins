@@ -1,5 +1,6 @@
 import { useId, useRef } from "react";
 import { claseBoton } from "./Boton";
+import { Upload } from "./iconos";
 
 /** Botón que abre el selector de archivos del sistema; el input real queda oculto pero accesible. */
 export function SelectorDeArchivo({ etiqueta, aceptar, onElegir, deshabilitado }: { etiqueta: string; aceptar: string; onElegir: (archivos: File[]) => void; deshabilitado?: boolean }) {
@@ -13,7 +14,7 @@ export function SelectorDeArchivo({ etiqueta, aceptar, onElegir, deshabilitado }
         type="file"
         accept={aceptar}
         multiple
-        className="sr-only"
+        className="peer sr-only"
         disabled={deshabilitado}
         onChange={(e) => {
           const archivos = [...(e.target.files ?? [])];
@@ -21,7 +22,8 @@ export function SelectorDeArchivo({ etiqueta, aceptar, onElegir, deshabilitado }
           if (archivos.length > 0) onElegir(archivos);
         }}
       />
-      <label htmlFor={id} className={`${claseBoton()} cursor-pointer self-start ${deshabilitado ? "pointer-events-none opacity-60" : ""}`}>
+      <label htmlFor={id} className={`${claseBoton()} cursor-pointer self-start peer-focus-visible:outline-3 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-superficie ${deshabilitado ? "pointer-events-none opacity-60" : ""}`}>
+        <Upload aria-hidden />
         {etiqueta}
       </label>
     </>

@@ -24,7 +24,7 @@ export function Pestanas<T extends string>({ pestanas, activa, onCambio, etiquet
   }
 
   return (
-    <div role="tablist" aria-label={etiqueta} className="flex flex-wrap gap-1 border-b border-division">
+    <div role="tablist" aria-label={etiqueta} className="flex flex-wrap gap-x-6 border-b border-division">
       {pestanas.map((p, i) => {
         const seleccionada = p.valor === activa;
         return (
@@ -39,12 +39,14 @@ export function Pestanas<T extends string>({ pestanas, activa, onCambio, etiquet
             tabIndex={seleccionada ? 0 : -1}
             onClick={() => onCambio(p.valor)}
             onKeyDown={(e) => teclado(e, i)}
-            className={`-mb-px min-h-tactil border-b-[3px] px-4 text-cuerpo font-bold transition-colors focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie ${
-              seleccionada ? "border-superficie text-superficie" : "border-transparent text-texto-secundario"
+            className={`-mb-px inline-flex min-h-control items-center gap-2 border-b-2 text-cuerpo transition-colors focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie ${
+              seleccionada ? "border-superficie font-extrabold text-superficie" : "border-transparent font-semibold text-texto-secundario hover:text-texto"
             }`}
           >
             {p.etiqueta}
-            {p.cantidad !== undefined && <span className="ml-2 text-ayuda">{p.cantidad}</span>}
+            {p.cantidad !== undefined && (
+              <span className={`rounded-control px-1.5 text-ayuda font-bold ${seleccionada ? "bg-superficie-suave" : "bg-division"}`}>{p.cantidad}</span>
+            )}
           </button>
         );
       })}

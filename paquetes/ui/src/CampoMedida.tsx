@@ -51,7 +51,7 @@ export function CampoMedida({ etiqueta, unidades, valorInicial, unidadInicial, o
           {unidades.map((u) => (
             <label
               key={u}
-              className="relative flex min-h-tactil min-w-tactil cursor-pointer items-center justify-center rounded-control border-[1.5px] border-borde-control px-2 text-cuerpo font-bold has-checked:border-superficie has-checked:bg-superficie has-checked:text-sobre-superficie has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-superficie has-disabled:cursor-default has-disabled:opacity-60"
+              className="relative flex min-h-control min-w-control cursor-pointer items-center justify-center rounded-control border-[1.5px] border-borde-control px-2 text-cuerpo font-bold has-checked:border-superficie has-checked:bg-superficie has-checked:text-sobre-superficie has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-superficie has-disabled:cursor-default has-disabled:opacity-60"
             >
               <input type="radio" name={id} value={u} checked={unidad === u} onChange={() => cambiar(texto, u)} className="sr-only" />
               {u}

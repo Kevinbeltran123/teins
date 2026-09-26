@@ -1,6 +1,6 @@
 import { useId } from "react";
-import { claseControl } from "./CampoTexto";
-import { EtiquetaCampo } from "./Etiqueta";
+import { claseConError, claseControl } from "./CampoTexto";
+import { EtiquetaCampo, MensajeError } from "./Etiqueta";
 
 /** Una opción de una lista larga (clientes, sitios): el control nativo, accesible y con el teclado del sistema. */
 export function CampoSeleccion({
@@ -11,6 +11,7 @@ export function CampoSeleccion({
   vacio,
   deshabilitado,
   etiquetaOculta,
+  error,
 }: {
   etiqueta: string;
   opciones: readonly { valor: string; texto: string }[];
@@ -21,6 +22,8 @@ export function CampoSeleccion({
   deshabilitado?: boolean;
   /** Dentro de una tabla, donde el encabezado de la columna ya dice qué es: la etiqueta queda para el lector de pantalla. */
   etiquetaOculta?: boolean;
+  /** Mensaje del campo al validar (se valida al enviar). */
+  error?: string | undefined;
 }) {
   const id = useId();
   return (
@@ -32,7 +35,15 @@ export function CampoSeleccion({
       ) : (
         <EtiquetaCampo htmlFor={id}>{etiqueta}</EtiquetaCampo>
       )}
-      <select id={id} className={claseControl} value={valor} disabled={deshabilitado} onChange={(e) => onCambio(e.target.value)}>
+      <select
+        id={id}
+        className={`${claseControl} ${error ? claseConError : ""}`}
+        value={valor}
+        disabled={deshabilitado}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+        onChange={(e) => onCambio(e.target.value)}
+      >
         {vacio !== undefined && <option value="">{vacio}</option>}
         {opciones.map((o) => (
           <option key={o.valor} value={o.valor}>
@@ -40,6 +51,7 @@ export function CampoSeleccion({
           </option>
         ))}
       </select>
+      {error && <MensajeError id={`${id}-error`}>{error}</MensajeError>}
     </div>
   );
 }
