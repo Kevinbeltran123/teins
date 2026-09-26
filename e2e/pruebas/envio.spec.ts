@@ -62,6 +62,9 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   await iniciarSesion(bandeja, oficina);
   await expect(bandeja.getByRole("heading", { name: "Esperando revisión" })).toBeVisible();
   const fila = (await filaDeLaBandeja(bandeja, tecnico.nombre)).last();
+  // La bandeja dice de qué cliente y sitio es, sin abrirlo (iteración 14).
+  await expect(fila).toContainText(cliente);
+  await expect(fila).toContainText("Sede E2E");
   await fila.getByRole("link").click();
 
   await expect(bandeja.getByRole("heading", { name: `Levantamiento de ${tecnico.nombre}` })).toBeVisible();
