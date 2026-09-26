@@ -561,6 +561,8 @@ function CorregirCantidades({
 }) {
   const [lineas, setLineas] = useState<LineaEditable[]>(() => inicial.map((l) => ({ ...l, cantidad: l.cantidad.replace(".", ","), observacion: l.observacion ?? "" })));
   if (deshabilitado) return null;
+  // El ítem que eligió el técnico viaja con su línea (ADR-0025): corregir la cantidad no lo borra del documento.
+  const itemDe = new Map(inicial.flatMap((l) => (l.item ? [[l.id, l.item] as const] : [])));
   function cambiar(nuevas: LineaEditable[]) {
     setLineas(nuevas);
     onCambio(
@@ -572,6 +574,7 @@ function CorregirCantidades({
             cantidad: normalizarDecimal(l.cantidad) ?? l.cantidad,
             unidad: l.unidad,
             ...(l.observacion.trim() ? { observacion: l.observacion.trim() } : {}),
+            ...(itemDe.has(l.id) ? { item: itemDe.get(l.id)! } : {}),
           })),
     );
   }
@@ -599,12 +602,21 @@ function LineasDeCantidad({
 }) {
   const catalogo = useQuery({ ...consultasDeCatalogo.items(), enabled: mia });
   const vincular = useVincular(l.id);
-  const vinculoDe = (linea: string) => l.vinculos.find((v) => v.seccion === seccion && v.campo === campo.clave && v.linea === linea)?.item;
+  const vinculoDe = (linea: string) => l.vinculos.find((v) => v.seccion === seccion && v.campo === campo.clave && v.linea === linea);
+  // Lo eligió el técnico y nadie lo ha cambiado (ADR-0025): quien revisa sabe qué confirmar.
+  const deCampo = (linea: string) => vinculoDe(linea)?.elegidoEnCampo && <span className="block text-ayuda text-texto-secundario">Elegido en campo</span>;
 
   function celda(linea: string) {
-    const actual = vinculoDe(linea);
+    const actual = vinculoDe(linea)?.item;
     if (!mia) {
-      return actual ? `${actual.codigo} · ${actual.descripcion}` : <span className="text-texto-secundario">Sin vincular</span>;
+      return actual ? (
+        <>
+          {`${actual.codigo} · ${actual.descripcion}`}
+          {deCampo(linea)}
+        </>
+      ) : (
+        <span className="text-texto-secundario">Sin vincular</span>
+      );
     }
     if (catalogo.isPending) return <span className="text-texto-secundario">Cargando el catálogo…</span>;
     if (catalogo.isError) return <span className="text-error">No se pudo cargar el catálogo</span>;
@@ -612,15 +624,18 @@ function LineasDeCantidad({
     if (activos.length === 0) return <span className="text-texto-secundario">El catálogo está vacío</span>;
     const numero = lineas.findIndex((x) => x.id === linea) + 1;
     return (
-      <CampoSeleccion
-        etiqueta={`Ítem del catálogo para la línea ${numero}`}
-        etiquetaOculta
-        vacio="Sin vincular"
-        valor={actual?.id ?? ""}
-        deshabilitado={vincular.isPending}
-        onCambio={(itemId) => vincular.mutate({ version: l.version, seccion, campo: campo.clave, linea, itemId: itemId || null })}
-        opciones={activos.map((i) => ({ valor: i.id, texto: `${i.codigo} · ${i.descripcion} (${i.unidad})` }))}
-      />
+      <div className="flex flex-col gap-1">
+        <CampoSeleccion
+          etiqueta={`Ítem del catálogo para la línea ${numero}`}
+          etiquetaOculta
+          vacio="Sin vincular"
+          valor={actual?.id ?? ""}
+          deshabilitado={vincular.isPending}
+          onCambio={(itemId) => vincular.mutate({ version: l.version, seccion, campo: campo.clave, linea, itemId: itemId || null })}
+          opciones={activos.map((i) => ({ valor: i.id, texto: `${i.codigo} · ${i.descripcion} (${i.unidad})` }))}
+        />
+        {deCampo(linea)}
+      </div>
     );
   }
 
