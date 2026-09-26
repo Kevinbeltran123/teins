@@ -16,3 +16,4 @@ PWA de campo: captura sin conexión, outbox, sincronización, editor de bocetos.
 - Iteración 7: una visita que sale del teléfono con algo empezado guarda por qué (`motivoSalida`): "Oficina canceló esta visita" o "se asignó a otra persona", también en el bloque azul de la siguiente visita. Lo empezado se puede terminar y enviar; no se pueden iniciar levantamientos nuevos en ella.
 - Presupuesto de JavaScript inicial: `pnpm presupuesto` desde la raíz (ADR-0011).
 - En desarrollo, `/api` se reenvía al servidor en `localhost:3000`; para abrirla desde un celular en la red local, agregue ese origen a `ORIGENES_CONFIABLES` del servidor.
+- Iteración 9 (app 4): secciones repetibles en la captura. "Agregar tablero", cada repetición con su nombre editable y "Quitar" con confirmación; el levantamiento nace con las que pide el formato. Solo los formatos con `appMinima` 4 las traen.

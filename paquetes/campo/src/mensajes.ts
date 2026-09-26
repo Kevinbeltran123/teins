@@ -15,6 +15,9 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   seccion_desconocida: "Esta sección no pertenece al formato",
   no_obtenido_no_permitido: "Este dato no es obligatorio: bórralo en lugar de marcarlo",
   no_corregible: "Este dato no se corrige desde oficina",
+  repeticiones_insuficientes: "Faltan repeticiones: agrega las que pide el formato",
+  repeticiones_excedidas: "Hay más repeticiones de las que permite el formato: quita alguna",
+  nombre_de_repeticion_invalido: "Cada una necesita un nombre",
 };
 
 export type Tono = "ok" | "pendiente" | "error";

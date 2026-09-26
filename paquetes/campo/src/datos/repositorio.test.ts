@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import Dexie from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { abrirBase, repositorioDexie } from "./dexie";
+import { abrirBase, nuevoIdDeRepeticion, repositorioDexie } from "./dexie";
 import type { ArchivoNuevo } from "./repositorio";
 
 // Formato ficticio (R5).
@@ -42,6 +42,32 @@ describe("repositorio de levantamientos en Dexie", () => {
     await repo.crear(crearLevantamiento(sinObligatorios, id, ahora, visitaId), "t1");
     expect((await repo.enviar(id, sinObligatorios, despues)).ok).toBe(true);
     expect((await db.envios.get(id))?.comando.levantamiento.visitaId).toBe(visitaId);
+  });
+
+  it("agrega, renombra y quita repeticiones, y el envío las lleva (iteración 9)", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const conTableros: VersionFormato = {
+      ...formato,
+      appMinima: 4,
+      secciones: [{ clave: "tableros", titulo: "Tableros", repetible: { etiqueta: "Tablero", min: 1, max: 3 }, campos: [{ clave: "t", etiqueta: "T", tipo: "texto", obligatorio: true }] }],
+    };
+    const id = "0192f0e0-0000-7000-8000-000000000400";
+    await repo.crear(crearLevantamiento(conTableros, id, ahora, undefined, nuevoIdDeRepeticion), "t1");
+    await repo.agregarRepeticion(id, conTableros, "tableros", despues);
+    const [primera, segunda] = (await repo.obtener(id))!.repeticiones!.tableros!;
+    expect([primera?.nombre, segunda?.nombre]).toEqual(["Tablero 1", "Tablero 2"]);
+    expect(segunda?.id).toMatch(/^[a-z0-9]{8}$/);
+
+    await repo.renombrarRepeticion(id, "tableros", segunda!.id, "Tablero del sótano", despues);
+    await repo.guardarRespuesta(id, `tableros~${primera!.id}`, "t", "Piso 1", despues);
+    await repo.guardarRespuesta(id, `tableros~${segunda!.id}`, "t", "Sótano", despues);
+    await repo.quitarRepeticion(id, "tableros", primera!.id, despues);
+
+    expect((await repo.enviar(id, conTableros, despues)).ok).toBe(true);
+    const enviado = (await db.envios.get(id))!.comando.levantamiento;
+    expect(enviado.repeticiones).toEqual({ tableros: [{ id: segunda!.id, nombre: "Tablero del sótano" }] });
+    expect(enviado.respuestas).toEqual({ [`tableros~${segunda!.id}`]: { t: "Sótano" } });
   });
 
   it("guarda y borra respuestas, y actualiza la hora de modificación", async () => {

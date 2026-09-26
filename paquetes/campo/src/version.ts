@@ -3,4 +3,4 @@
  * cambia lo que entiende de la bajada. Las versiones de formato declaran `appMinima` contra este número,
  * y el informe de salud lo reporta para detectar teléfonos atrasados (ADR-0017).
  */
-export const VERSION_APP = 3;
+export const VERSION_APP = 4;

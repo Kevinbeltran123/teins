@@ -1,9 +1,14 @@
-import { agregarFoto, enviarLevantamiento, responder, type Levantamiento } from "@teins/dominio";
+import { agregarFoto, agregarRepeticion, enviarLevantamiento, quitarRepeticion, renombrarRepeticion, responder, type Levantamiento } from "@teins/dominio";
 import { llaveDeEnvio } from "@teins/protocolo/llaves";
 import type { BaseCampo } from "./base";
 import type { RepositorioLevantamientos } from "./repositorio";
 
 export { abrirBase } from "./base";
+
+/** Id de una repetición nueva: 8 caracteres en base 36, al azar (dominio no genera ids). */
+export function nuevoIdDeRepeticion(): string {
+  return [...crypto.getRandomValues(new Uint8Array(8))].map((b) => (b % 36).toString(36)).join("");
+}
 
 export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
   async function modificar(id: string, cambio: (l: Levantamiento) => Levantamiento) {
@@ -32,6 +37,16 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
 
     guardarRespuesta(id, seccion, campo, valor, ahora) {
       return db.transaction("rw", db.levantamientos, () => modificar(id, (l) => responder(l, seccion, campo, valor, ahora)));
+    },
+
+    agregarRepeticion(id, formato, seccion, ahora) {
+      return db.transaction("rw", db.levantamientos, () => modificar(id, (l) => agregarRepeticion(l, formato, seccion, nuevoIdDeRepeticion(), ahora)));
+    },
+    renombrarRepeticion(id, seccion, repeticion, nombre, ahora) {
+      return db.transaction("rw", db.levantamientos, () => modificar(id, (l) => renombrarRepeticion(l, seccion, repeticion, nombre, ahora)));
+    },
+    quitarRepeticion(id, seccion, repeticion, ahora) {
+      return db.transaction("rw", db.levantamientos, () => modificar(id, (l) => quitarRepeticion(l, seccion, repeticion, ahora)));
     },
 
     agregarFoto(id, seccion, campo, archivo, ahora) {
@@ -72,6 +87,8 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
               // Sin visita solo los borradores de los cortes 0 y 1 (ADR-0015, expansión).
               ...(enviado.visitaId ? { visitaId: enviado.visitaId } : {}),
               respuestas: enviado.respuestas,
+              // Solo con secciones repetibles: un levantamiento sin ellas viaja igual que antes (ADR-0015).
+              ...(enviado.repeticiones ? { repeticiones: enviado.repeticiones } : {}),
               creadoEn: enviado.creadoEn,
               enviadoEn: enviado.enviadoEn!,
             },

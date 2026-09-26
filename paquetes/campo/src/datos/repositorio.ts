@@ -18,6 +18,11 @@ export interface RepositorioLevantamientos {
   asignarSinResponsable(tecnicoId: string): Promise<void>;
   /** `undefined` borra la respuesta. */
   guardarRespuesta(id: string, seccion: string, campo: string, valor: Valor | undefined, ahora: Date): Promise<void>;
+  /** Secciones repetibles (iteración 9): agrega al final, con el primer nombre libre ("Tablero 3"). */
+  agregarRepeticion(id: string, formato: VersionFormato, seccion: string, ahora: Date): Promise<void>;
+  renombrarRepeticion(id: string, seccion: string, repeticion: string, nombre: string, ahora: Date): Promise<void>;
+  /** Quita la repetición con sus respuestas. */
+  quitarRepeticion(id: string, seccion: string, repeticion: string, ahora: Date): Promise<void>;
   /** Guarda el archivo y su referencia en la misma transacción: nunca queda una foto sin referencia. */
   agregarFoto(id: string, seccion: string, campo: string, archivo: ArchivoNuevo, ahora: Date): Promise<void>;
   obtenerArchivos(ids: readonly string[]): Promise<ArchivoLocal[]>;

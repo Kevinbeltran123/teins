@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
+  bloques,
+  claveDeRepeticion,
   crearMedida,
   describirValor,
   esNoObtenido,
+  LIMITES,
+  nombreDeDato,
   type CodigoErrorValidacion,
   type DefinicionCampo,
+  type DefinicionSeccion,
   type Valor,
   type ValorMedida,
   type VersionFormato,
@@ -150,22 +155,39 @@ function Borrador({ id, formato, inicial, actual }: { id: string; formato: Versi
         </div>
       )}
       {formato.secciones.map((seccion) =>
-        agrupar(seccion.campos).map((grupo) => (
-          <div key={`${seccion.clave}.${grupo[0]!.clave}`} className="flex flex-col gap-6 rounded-panel bg-panel p-4">
-            {grupo.map((campo) => (
-              <Campo
-                key={campo.clave}
-                id={id}
-                seccion={seccion.clave}
-                campo={campo}
-                inicial={inicial.respuestas[seccion.clave]?.[campo.clave]}
-                actual={actual.respuestas[seccion.clave]?.[campo.clave]}
-                error={errores?.get(claveDeError(seccion.clave, campo.clave))}
-                alGuardar={() => alGuardar(seccion.clave, campo.clave)}
-              />
+        seccion.repetible ? (
+          <SeccionRepetible
+            key={seccion.clave}
+            id={id}
+            formato={formato}
+            seccion={seccion}
+            inicial={inicial}
+            actual={actual}
+            errores={errores}
+            alGuardar={alGuardar}
+          />
+        ) : (
+          <div key={seccion.clave} className="flex flex-col gap-3">
+            {/* Con una sola sección, el título ya está en el encabezado. */}
+            {formato.secciones.length > 1 && <h2 className="text-subtitulo font-extrabold">{seccion.titulo}</h2>}
+            {agrupar(seccion.campos).map((grupo) => (
+              <div key={`${seccion.clave}.${grupo[0]!.clave}`} className="flex flex-col gap-6 rounded-panel bg-panel p-4">
+                {grupo.map((campo) => (
+                  <Campo
+                    key={campo.clave}
+                    id={id}
+                    seccion={seccion.clave}
+                    campo={campo}
+                    inicial={inicial.respuestas[seccion.clave]?.[campo.clave]}
+                    actual={actual.respuestas[seccion.clave]?.[campo.clave]}
+                    error={errores?.get(claveDeError(seccion.clave, campo.clave))}
+                    alGuardar={() => alGuardar(seccion.clave, campo.clave)}
+                  />
+                ))}
+              </div>
             ))}
           </div>
-        )),
+        ),
       )}
       <p className="text-ayuda text-texto-secundario" aria-live="polite">
         Guardado en este teléfono a las {horaExacta(actual.actualizadoEn)}
@@ -186,6 +208,101 @@ function Borrador({ id, formato, inicial, actual }: { id: string; formato: Versi
         </Boton>
       )}
     </>
+  );
+}
+
+/**
+ * Sección repetible (iteración 9): cada repetición con su nombre y los mismos campos. Agregar y quitar
+ * también son parte del borrador: se guardan en el teléfono al instante, como cualquier dato.
+ */
+function SeccionRepetible({
+  id,
+  formato,
+  seccion,
+  inicial,
+  actual,
+  errores,
+  alGuardar,
+}: {
+  id: string;
+  formato: VersionFormato;
+  seccion: DefinicionSeccion;
+  inicial: LevantamientoLocal;
+  actual: LevantamientoLocal;
+  errores: Errores | null;
+  alGuardar: (seccion: string, campo: string) => void;
+}) {
+  const [quitando, setQuitando] = useState<string | null>(null);
+  const lista = actual.repeticiones?.[seccion.clave] ?? [];
+  const etiqueta = seccion.repetible!.etiqueta;
+  const maximo = seccion.repetible!.max ?? LIMITES.repeticiones;
+  const errorDeSeccion = errores?.get(claveDeError(seccion.clave, ""));
+  const tituloId = `titulo-${seccion.clave}`;
+
+  async function agregar() {
+    await repositorio.agregarRepeticion(id, formato, seccion.clave, new Date());
+    alGuardar(seccion.clave, "");
+  }
+
+  return (
+    <section aria-labelledby={tituloId} className="flex flex-col gap-3">
+      <h2 id={tituloId} className="text-subtitulo font-extrabold">
+        {seccion.titulo}
+      </h2>
+      {errorDeSeccion && <Aviso tono="error">{mensajeDeValidacion[errorDeSeccion]}</Aviso>}
+      {lista.length === 0 && <p className="text-ayuda text-texto-secundario">Todavía no hay ninguno. Si aplica, agrégalo con el botón.</p>}
+      {lista.map((r) => {
+        const clave = claveDeRepeticion(seccion.clave, r.id);
+        return (
+          <article key={r.id} aria-label={r.nombre} className="flex flex-col gap-6 rounded-panel bg-panel p-4">
+            <CampoTexto
+              etiqueta={`Nombre (${etiqueta.toLowerCase()})`}
+              valorInicial={r.nombre}
+              error={errorDeSeccion === "nombre_de_repeticion_invalido" ? mensajeDeValidacion.nombre_de_repeticion_invalido : undefined}
+              onCambio={(texto) => {
+                // Un nombre vacío no se guarda: se conserva el anterior.
+                if (texto.trim()) void repositorio.renombrarRepeticion(id, seccion.clave, r.id, texto.trim(), new Date());
+              }}
+            />
+            {seccion.campos.map((campo) => (
+              <Campo
+                key={campo.clave}
+                id={id}
+                seccion={clave}
+                campo={campo}
+                inicial={inicial.respuestas[clave]?.[campo.clave]}
+                actual={actual.respuestas[clave]?.[campo.clave]}
+                error={errores?.get(claveDeError(clave, campo.clave))}
+                alGuardar={() => alGuardar(clave, campo.clave)}
+              />
+            ))}
+            {quitando === r.id ? (
+              <Aviso tono="alerta">
+                <p>Se borra lo que llenaste en {r.nombre}. Las fotos que tomaste en él también dejan de ir en el levantamiento.</p>
+                <div className="mt-3 flex flex-col gap-2">
+                  <Boton
+                    onClick={async () => {
+                      await repositorio.quitarRepeticion(id, seccion.clave, r.id, new Date());
+                      setQuitando(null);
+                      alGuardar(seccion.clave, "");
+                    }}
+                  >
+                    {`Sí, quitar ${r.nombre}`}
+                  </Boton>
+                  <Boton onClick={() => setQuitando(null)}>Cancelar</Boton>
+                </div>
+              </Aviso>
+            ) : (
+              <Boton onClick={() => setQuitando(r.id)}>{`Quitar ${r.nombre}`}</Boton>
+            )}
+          </article>
+        );
+      })}
+      <Boton disabled={lista.length >= maximo} onClick={() => void agregar()}>
+        {`Agregar ${etiqueta.toLowerCase()}`}
+      </Boton>
+      {lista.length >= maximo && <p className="text-ayuda text-texto-secundario">{`Este formato permite hasta ${maximo}.`}</p>}
+    </section>
   );
 }
 
@@ -325,8 +442,9 @@ function Enviado({
   // Lo que dijo el servidor en la bajada manda sobre el estado de envío del teléfono.
   const estado = servidor ? estadoSegunServidor(servidor) : envio ? estadoDeEnvio(envio, enLinea) : null;
   const comentarios = servidor?.comentarios ?? [];
+  // En una repetición, el comentario dice en cuál (iteración 9).
   const sobre = (c: { seccion?: string | undefined; campo?: string | undefined }) =>
-    formato.secciones.find((s) => s.clave === c.seccion)?.campos.find((f) => f.clave === c.campo)?.etiqueta;
+    c.seccion && c.campo ? nombreDeDato(formato, levantamiento.repeticiones ?? {}, c.seccion, c.campo, true) : undefined;
   return (
     <>
       {estado && (
@@ -356,7 +474,7 @@ function Enviado({
               <li key={c.id} className="flex flex-col gap-0.5 border-l-[3px] border-division pl-3">
                 <p className="text-ayuda text-texto-secundario">
                   {c.autor} · {fechaHora(c.creadoEn)}
-                  {sobre(c) && ` · Sobre ${sobre(c)!.toLowerCase()}`}
+                  {sobre(c) && ` · Sobre ${sobre(c)}`}
                 </p>
                 <p className="text-cuerpo whitespace-pre-line">{c.texto}</p>
               </li>
@@ -364,11 +482,12 @@ function Enviado({
           </ul>
         </section>
       )}
-      {formato.secciones.map((seccion) =>
-        agrupar(seccion.campos).map((grupo) => (
-          <div key={`${seccion.clave}.${grupo[0]!.clave}`} className="flex flex-col gap-5 rounded-panel bg-panel p-4">
+      {bloques(formato, levantamiento.repeticiones ?? {}).map(({ seccion, clave, titulo }, _i, todos) =>
+        agrupar(seccion.campos).map((grupo, g) => (
+          <div key={`${clave}.${grupo[0]!.clave}`} className="flex flex-col gap-5 rounded-panel bg-panel p-4">
+            {g === 0 && todos.length > 1 && <h2 className="text-subtitulo font-extrabold">{titulo}</h2>}
             {grupo.map((campo) => {
-              const valor = levantamiento.respuestas[seccion.clave]?.[campo.clave];
+              const valor = levantamiento.respuestas[clave]?.[campo.clave];
               return campo.tipo === "foto" && !esNoObtenido(valor) ? (
                 <FotosLeidas key={campo.clave} etiqueta={campo.etiqueta} ids={Array.isArray(valor) ? (valor as string[]) : []} />
               ) : (

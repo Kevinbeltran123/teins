@@ -2,6 +2,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
 import { Aviso, Boton, Marquilla } from "@teins/ui";
+import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
 import type { EnvioLocal, EstadoServidor, LevantamientoLocal, UsuarioLocal, VisitaLocal } from "../datos/modelo";
 import { estaInstalada } from "../dispositivo/almacenamiento";
@@ -57,7 +58,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   const permisoVencido = bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
 
   async function iniciar(visitaId: string, formato: VersionFormato) {
-    const levantamiento = crearLevantamiento(formato, uuidv7(), new Date(), visitaId);
+    const levantamiento = crearLevantamiento(formato, uuidv7(), new Date(), visitaId, nuevoIdDeRepeticion);
     await repositorio.crear(levantamiento, usuario.id);
     abrir(levantamiento.id);
   }
