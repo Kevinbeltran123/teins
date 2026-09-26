@@ -54,6 +54,7 @@ Desde la raíz del repositorio, con la CLI enlazada (`railway link` → `teins-p
 # Desplegar la versión local (sube la carpeta respetando .gitignore; campo migra antes de arrancar)
 railway up --service campo --detach
 railway up --service oficina --detach
+railway up --service portal --detach
 railway up --service worker --detach
 
 # Comandos de administración dentro del entorno

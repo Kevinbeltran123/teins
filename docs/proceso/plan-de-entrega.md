@@ -20,7 +20,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 11 | Cantidades con catálogo y exportación a Excel | Los materiales anotados en campo no se vuelven a digitar para cotizar (F9, P27 a P29) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 12 | Cifrado local en campo (ADR-0022) | Un teléfono perdido no entrega datos de clientes y el borrado por revocación es instantáneo (QA-5, I-15) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 13 | Llaves de acceso (passkeys) | Entrar con Face ID, huella o PIN, sin contraseñas que se puedan suplantar (ADR-0009) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
-| Iteración 14 | Interfaz rehecha con la dirección Consola (`DESIGN.md`) | Una herramienta que la gente quiera usar: jerarquía clara, confirmaciones donde hay consecuencias, resultados junto a la acción | Terminada y verificada en local; falta desplegarla en el entorno de pruebas y la prueba en iPhone |
+| Iteración 14 | Interfaz rehecha con la dirección Consola (`DESIGN.md`) | Una herramienta que la gente quiera usar: jerarquía clara, confirmaciones donde hay consecuencias, resultados junto a la acción | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -31,7 +31,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 1. **Verificación manual hecha por Kevin el 2026-09-25** en un iPhone 15 Pro con iOS 26.6.1 (fases 1 a 7 de [`verificacion-manual.md`](verificacion-manual.md); producción quedó para después). Todo funcionó salvo dos avisos que no aparecían, corregidos con su prueba de extremo a extremo y confirmados por Kevin en el iPhone el mismo día: "Oficina canceló esta visita" en el bloque azul de campo y "Su sesión se cerró" en el portal. Falta la fase 8 (producción), que Kevin dejó para después.
 2. **Respuestas de TEINS** para ajustar el informe (P22, P23, P26, formato de los planos) y las preguntas P2, P5, P7, P8 y P9.
 
-**Iteración 14 terminada el 2026-09-26 (en local):** la interfaz de campo, oficina y portal rehecha con la dirección Consola, elegida por Kevin entre tres comparadas en el lienzo. Falta desplegarla en el entorno de pruebas (con el visto bueno de Kevin) y probarla en el iPhone junto con las fases 9 a 13.
+**Iteración 14 terminada el 2026-09-26:** la interfaz de campo, oficina y portal rehecha con la dirección Consola, elegida por Kevin entre tres comparadas en el lienzo, más la columna "Visita" en la bandeja. Desplegada en el entorno de pruebas y verificada allí con los 12 archivos del extremo a extremo en Chromium (13 pruebas, uno por minuto por el límite de inicios de sesión). Falta probarla en el iPhone junto con las fases 9 a 13.
 
 **Iteración 13 terminada el 2026-09-25:** llaves de acceso en campo y oficina, desplegadas en el entorno de pruebas y verificadas allí con `llaves.spec.ts` (cada superficie con su dominio). Con ella se completa la lista de iteraciones por riesgo que se trazó al cerrar el corte 5. La prueba en iPhone (fase 13 de la guía) queda en espera con las de las iteraciones 9 a 12.
 
@@ -903,7 +903,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteración 14 · Interfaz con la dirección Consola
 
-**Estado:** terminada el 2026-09-26 y verificada en local (verificación completa en el orden de la integración continua, en verde). Falta desplegarla en el entorno de pruebas y probarla en el iPhone.
+**Estado:** terminada el 2026-09-26, verificada en local (verificación completa en el orden de la integración continua, en verde) y desplegada en el entorno de pruebas (`campo`, `oficina`, `portal` y `worker`; extremo a extremo en Chromium contra el entorno, 13 de 13). Falta la prueba en iPhone.
 
 **Para qué:** Kevin encontró la interfaz "básica y fea": botones de tamaños distintos, confirmaciones metidas en filas, resultados que aparecían lejos de la acción (el QR de un acceso salía arriba de la tabla), lo creado se perdía en el orden alfabético y no había diálogos, menús ni notificaciones. Se auditó el código pantalla por pantalla, se investigó cómo resuelven lo mismo Google, Microsoft, Apple, AWS, GitHub, Shopify e IBM (segundo factor, credenciales que se muestran una vez, QR, confirmaciones, creación, tablas, formularios de campo), se compararon tres direcciones en el lienzo (página "v0.3 · Direcciones") y Kevin eligió la A, Consola, con dos reglas: la jerarquía (el título es la sección del menú; las subsecciones, pestañas) y que todo lo que se muestra esté justificado.
 
@@ -938,7 +938,8 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 | 6. Quitar una foto no rompe la sincronización ni pierde otra | Hecho: 4 pruebas nuevas de `quitarFoto` en `campo` |
 | 6b. La bandeja dice de qué cliente y sitio es cada levantamiento | Hecho: `informes.test.ts` ("bandeja", en cualquier pestaña), `api.test.ts` (nulo sin visita) y `envio.spec.ts` |
 | 7. Lo anterior sigue igual y el presupuesto de campo se respeta | Hecho: tipos, reglas de arquitectura, licencias y auditoría en verde; dominio 73, protocolo 18, oficina 4, campo 51, servidor 96; extremo a extremo 24 y 2 omitidas (Chromium y WebKit); campo 116,0 de 120 KB |
-| 8. Desplegada en el entorno de pruebas y probada en el iPhone | Pendiente |
+| 8. Desplegada en el entorno de pruebas | Hecho: los cuatro servicios en `SUCCESS`, salud en 200 y los 12 archivos del extremo a extremo contra el entorno en Chromium, 13 pruebas en verde |
+| 9. Probada en el iPhone | Pendiente, con las fases 9 a 13 |
 
 ### Decisiones tomadas al construirlo
 
