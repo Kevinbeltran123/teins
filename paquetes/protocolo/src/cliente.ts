@@ -48,6 +48,24 @@ async function leerProblema(respuesta: Response): Promise<Problema> {
   return problemaSintetico(respuesta.status, "error_interno", `Error ${respuesta.status}`);
 }
 
+export interface LlaveDeAcceso {
+  id: string;
+  nombre: string | null;
+  creadaEn: string;
+  /** Se sincroniza entre los dispositivos de la persona (llavero de iCloud, gestor de Google). */
+  sincronizada: boolean;
+}
+
+/** ¿Este dispositivo tiene Face ID, huella o PIN para una llave de acceso? */
+export async function admiteLlaves(): Promise<boolean> {
+  // Por `globalThis`: este archivo también compila en el servidor, sin los tipos del navegador.
+  const credencial = (globalThis as { PublicKeyCredential?: { isUserVerifyingPlatformAuthenticatorAvailable(): Promise<boolean> } }).PublicKeyCredential;
+  return credencial ? credencial.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false) : false;
+}
+
+/** La persona cerró el diálogo del sistema o no se verificó: no es un error que haya que explicar. */
+export const esLlaveCancelada = (error: unknown) => error instanceof Error && (error.name === "NotAllowedError" || error.name === "AbortError");
+
 /** Cliente del contrato para las superficies. Mismo origen: la cookie de sesión viaja sola (ADR-0016). */
 export function crearClienteApi({ base = "", fetch: f = globalThis.fetch.bind(globalThis) }: { base?: string; fetch?: typeof fetch } = {}) {
   async function solicitar(url: string, init: RequestInit): Promise<Response> {
@@ -80,6 +98,12 @@ export function crearClienteApi({ base = "", fetch: f = globalThis.fetch.bind(gl
     return op.respuesta.parse(await respuesta.json()) as Respuesta<N>;
   }
 
+  async function consultaDeAutenticacion(ruta: string): Promise<unknown> {
+    const respuesta = await solicitar(`${base}/api/auth${ruta}`, { method: "GET" });
+    if (!respuesta.ok) throw new ErrorApi(await leerProblema(respuesta));
+    return respuesta.json();
+  }
+
   async function autenticacion(ruta: string, cuerpo: unknown): Promise<unknown> {
     const respuesta = await solicitar(`${base}/api/auth${ruta}`, {
       method: "POST",
@@ -108,6 +132,26 @@ export function crearClienteApi({ base = "", fetch: f = globalThis.fetch.bind(gl
       return { uri: r.totpURI, codigosDeRespaldo: r.backupCodes };
     },
     cerrarSesion: async () => void (await autenticacion("/sign-out", {})),
+
+    // Llaves de acceso (iteración 13, ADR-0009). La biblioteca del navegador se carga solo al usarlas:
+    // el JavaScript inicial de campo no la paga (ADR-0011).
+    /** Entra sin usuario ni contraseña: el teléfono ofrece sus llaves de TEINS y pide Face ID, huella o PIN. */
+    async iniciarSesionConLlave(): Promise<void> {
+      const { startAuthentication } = await import("@simplewebauthn/browser");
+      const opciones = (await consultaDeAutenticacion("/passkey/generate-authenticate-options")) as Parameters<typeof startAuthentication>[0]["optionsJSON"];
+      await autenticacion("/passkey/verify-authentication", { response: await startAuthentication({ optionsJSON: opciones }) });
+    },
+    /** Crea una llave para quien tiene la sesión abierta, en este dispositivo. */
+    async crearLlave(): Promise<void> {
+      const { startRegistration } = await import("@simplewebauthn/browser");
+      const opciones = (await consultaDeAutenticacion("/passkey/generate-register-options")) as Parameters<typeof startRegistration>[0]["optionsJSON"];
+      await autenticacion("/passkey/verify-registration", { response: await startRegistration({ optionsJSON: opciones }) });
+    },
+    async llaves(): Promise<LlaveDeAcceso[]> {
+      const filas = (await consultaDeAutenticacion("/passkey/list-user-passkeys")) as { id: string; name?: string | null; createdAt: string; deviceType: string; aaguid?: string | null }[];
+      return filas.map((f) => ({ id: f.id, nombre: f.name ?? null, creadaEn: f.createdAt, sincronizada: f.deviceType === "multiDevice" }));
+    },
+    quitarLlave: async (id: string) => void (await autenticacion("/passkey/delete-passkey", { id })),
   };
 }
 

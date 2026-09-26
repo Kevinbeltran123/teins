@@ -10,4 +10,5 @@ Esquemas Zod de comandos y respuestas de sincronización, con su versión. Gener
 - `problemas.ts`: códigos de error (Problem Details) y si cada uno se puede reintentar.
 - `cliente.ts`: cliente para las superficies; valida también las respuestas.
 - Entradas livianas: `@teins/protocolo/llaves` (sin Zod, para campo) y `@teins/protocolo/openapi` (solo el servidor).
+- Iteración 13: el cliente entra y crea, lista y quita llaves de acceso (`iniciarSesionConLlave`, `crearLlave`, `llaves`, `quitarLlave`), con `admiteLlaves` y `esLlaveCancelada`. La biblioteca del navegador (`@simplewebauthn/browser`) se importa solo al usarlas.
 - Iteración 9: `Respuestas` acepta claves de repetición (`seccion~id`), `Repeticiones` describe su lista, `VersionFormato` admite `repetible` en una sección, y `EnviarLevantamiento` y `DetalleLevantamiento` llevan `repeticiones` (opcional al enviar: expansión).

@@ -55,5 +55,5 @@ export type {
   Respuesta,
   RespuestaServidor,
 } from "./operaciones";
-export { crearClienteApi, ErrorApi, ErrorDeRed } from "./cliente";
-export type { ClienteApi, EntradaCliente } from "./cliente";
+export { admiteLlaves, crearClienteApi, ErrorApi, ErrorDeRed, esLlaveCancelada } from "./cliente";
+export type { ClienteApi, EntradaCliente, LlaveDeAcceso } from "./cliente";
