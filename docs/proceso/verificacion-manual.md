@@ -261,6 +261,29 @@ Hágala **antes de aceptar la actualización**, con un borrador a medias y al me
 
 **Anotar:** si el iPhone ofreció la llave sin tener que tocar el botón, o si el botón se ve fuera de lugar.
 
+## Fase 15 · Instalación guiada y avisos (iteración 15)
+
+Antes: en el iPhone, borre TEINS de la pantalla de inicio si ya estaba (los datos de la app instalada se borran con ella; envíe antes lo pendiente).
+
+1. En Safari, abra campo.
+   - Debe: "Instala la app" antes de iniciar sesión, con el aviso de que lo capturado en Safari no pasa a la app instalada y tres pasos.
+2. Siga los pasos (Compartir, "Agregar a inicio") y abra TEINS desde el ícono.
+   - Debe: el ícono dice "TEINS"; la app abre en pantalla completa, en el inicio de sesión, sin la guía.
+3. Entre con `tecnico.prueba`.
+   - Debe: bajo la siguiente visita, "Avisos en este teléfono" con **Activar avisos** y **Ahora no**.
+4. Toque **Activar avisos** y permita en la pregunta del iPhone.
+   - Debe: "Avisos activados en este teléfono." y la tarjeta desaparece. En el diagnóstico, "Avisos: Activos".
+5. Bloquee el iPhone. En el computador, en oficina, programe una visita para `tecnico.prueba`.
+   - Debe: en menos de un minuto, en la pantalla bloqueada, "Visita nueva · Para el …", sin el nombre del cliente. Tocarlo abre TEINS y la visita aparece.
+6. Reprograme esa visita y después cancélela.
+   - Debe: "Visita reprogramada" y luego "Visita cancelada", el segundo reemplazando al primero.
+7. En oficina, **Mi cuenta** → **Activar avisos** en el navegador. Desde el iPhone, envíe un levantamiento y cierre la pestaña de oficina.
+   - Debe: el computador muestra "Levantamiento nuevo · Técnico … envió un levantamiento."
+8. En Ajustes → Notificaciones → TEINS, desactive las notificaciones y abra el diagnóstico.
+   - Debe: "Avisos: Bloqueados" y el camino para volver a permitirlos.
+
+**Anotar:** cuánto tardó cada aviso, y si la guía de instalación coincide con lo que muestra Safari (el nombre de "Agregar a inicio" puede variar con la versión de iOS).
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.

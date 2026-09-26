@@ -37,6 +37,8 @@ Variables, iguales en los tres servicios (las credenciales son referencias, nunc
 | `PORT` (solo servicios web) | `3000`: Railway prueba la salud en ese puerto |
 | `DATABASE_URL_PORTAL` · `SUPERFICIE_PORTAL_HOST` (solo `portal`) | `postgresql://teins_portal:${{Postgres.TEINS_PORTAL_CONTRASENA}}@…` y su dominio |
 | `PORTAL_URL` | Dominio del portal: la URL que lleva el QR de cada acceso |
+| `AVISOS_VAPID_PUBLICA` · `AVISOS_VAPID_PRIVADA` (solo `worker`) | Par VAPID de los avisos push (ADR-0023), generado con `generar-claves-avisos` sin mostrarlo; `campo` y `oficina` leen la pública por referencia (`${{worker.AVISOS_VAPID_PUBLICA}}`) |
+| `AVISOS_CONTACTO` (solo `worker`) | La dirección de oficina: va en cada envío para que el servicio de avisos pueda escribir |
 
 - **`TEINS_APP_CONTRASENA`** y **`TEINS_PORTAL_CONTRASENA`** viven en el servicio `Postgres`. El rol `teins_app` se creó con `infra/roles.sql` a través de `railway connect Postgres --tunnel-only` (túnel por SSH).
 - **`campo`:** pre-deploy `node dist/cli/migrar.js` (una sola migración por versión) y salud en `/salud`.

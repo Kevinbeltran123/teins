@@ -133,6 +133,13 @@ Contraseñas temporales y accesos de clientes (QR y clave) se muestran en un di�
 
 Cuatro pasos numerados en una misma pantalla: confirmar la contraseña; escanear el QR (con "¿No puede escanearlo?", que muestra la clave en bloques de cuatro con "Copiar"); escribir el código en un solo campo que acepta autocompletar y pegar; y guardar los códigos de respaldo ("Descargar" o "Copiar") antes de "Ya los guardé".
 
+## Permisos del teléfono y avisos
+
+- **Un permiso se pide solo al tocar un botón que dice para qué es** ("Activar avisos"), nunca al abrir la app: iPhone lo exige y una pregunta sin contexto se rechaza.
+- **La propuesta va una vez, bajo el punto focal y con botón secundario,** con "Ahora no", que se recuerda en ese teléfono. Rechazado el permiso, la app ya no puede volver a preguntar: el diagnóstico dice cómo permitirlo en los ajustes.
+- **Los avisos no llevan datos del cliente:** se leen con el teléfono bloqueado. Dicen qué pasó y cuándo ("Visita nueva · Para el jue 3 oct"); el cliente y el sitio se ven al abrirlos. La app se llama "TEINS" bajo el ícono y en los avisos.
+- **La instalación va antes de iniciar sesión** en un teléfono que no tiene la app: en iPhone, lo capturado en Safari no pasa a la app instalada.
+
 ## Punto focal por pantalla
 
 | Pantalla | Punto focal |

@@ -2,13 +2,12 @@
 
 ## Pantallas por diseñar
 
-La dirección cambió a **Consola** en la iteración 14 (`DESIGN.md`); el lienzo guarda las tres direcciones comparadas en la página "v0.3 · Direcciones". Todas las pantallas existentes se rehicieron con ella. Lo que queda:
+La dirección cambió a **Consola** en la iteración 14 (`DESIGN.md`); el lienzo guarda las tres direcciones comparadas en la página "v0.3 · Direcciones". Todas las pantallas existentes se rehicieron con ella. La instalación guiada y los avisos (iteración 15) están en la página "v0.4 · Avisos e instalación". Lo que queda:
 
-1. **Instalación guiada de la PWA en iPhone:** hoy es un aviso con los pasos.
-2. **Lienzo con el juego completo de Consola:** el lienzo tiene la dirección elegida en dos pantallas (accesos de clientes y captura); falta pasar al lienzo las demás tal como quedaron en código, para revisar con TEINS.
-3. **Nombre del formato en la bandeja:** la columna "Formato" muestra la clave (`prueba-ups`), no el nombre que ve el técnico; el nombre solo viaja en el detalle.
-4. **Logo en vector** (insumo de TEINS): con todas las superficies claras sirve la versión a color.
-5. **Plantilla del PDF** (ADR-0013) con los mismos tokens, cuando TEINS responda P22, P23 y P26.
+1. **Lienzo con el juego completo de Consola:** el lienzo tiene la dirección elegida en dos pantallas (accesos de clientes y captura); falta pasar al lienzo las demás tal como quedaron en código, para revisar con TEINS.
+2. **Nombre del formato en la bandeja:** la columna "Formato" muestra la clave (`prueba-ups`), no el nombre que ve el técnico; el nombre solo viaja en el detalle.
+3. **Logo en vector** (insumo de TEINS): con todas las superficies claras sirve la versión a color.
+4. **Plantilla del PDF** (ADR-0013) con los mismos tokens, cuando TEINS responda P22, P23 y P26.
 
 ## Supuestos de diseño
 

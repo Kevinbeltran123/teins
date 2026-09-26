@@ -21,10 +21,19 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 12 | Cifrado local en campo (ADR-0022) | Un teléfono perdido no entrega datos de clientes y el borrado por revocación es instantáneo (QA-5, I-15) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 13 | Llaves de acceso (passkeys) | Entrar con Face ID, huella o PIN, sin contraseñas que se puedan suplantar (ADR-0009) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 14 | Interfaz rehecha con la dirección Consola (`DESIGN.md`) | Una herramienta que la gente quiera usar: jerarquía clara, confirmaciones donde hay consecuencias, resultados junto a la acción | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
+| Iteración 15 | Avisos push (técnicos y oficina) e instalación guiada de la app | El técnico se entera de su visita sin abrir la app; nadie captura en Safari lo que la app instalada no ve (ADR-0002) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
+| Iteración 16 | Firma del cliente en sitio | Constancia de la visita firmada en el teléfono, íntegra (Ley 527) | Planeada |
+| Iteración 17 | Catálogo en el teléfono al anotar cantidades | Líneas que llegan vinculadas: menos digitación y cotización casi automática (P28) | Planeada |
+| Iteración 18 | Bocetos: enderezar trazos, formas, mover, cotas | Croquis limpios sin dibujar lo mismo cada vez (F3) | Planeada |
+| Iteración 19 | Biblioteca de símbolos en los bocetos | Tableros, UPS, tomas y demás con un toque, iguales en todo croquis | Planeada |
+| Iteración 20 | Contactos del cliente e informe por correo y WhatsApp | El informe le llega al cliente por donde lo espera, con PDF adjunto (P17) | Planeada |
+| Iteración 21 | Cotizaciones desde las cantidades | De la visita a la cotización sin volver a digitar (P27, QA-12) | Planeada |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
+
+**Plan acordado con Kevin el 2026-09-26: iteraciones 15 a 21** (sección "Iteraciones 15 a 21"). Kevin eligió siete funciones después de una investigación de producto (envío del informe por WhatsApp y correo, firma del cliente, símbolos y enderezado en los bocetos, ítems frecuentes en cantidades, avisos push y cotizaciones) y pidió terminar primero la PWA de campo. **Iteración 15 terminada y desplegada en el entorno de pruebas el 2026-09-26** (avisos push, ADR-0023, e instalación guiada; maquetas en el lienzo, página "v0.4 · Avisos e instalación"). Falta la prueba en iPhone (fase 15 de la guía, junto con las fases 9 a 14). Siguiente: iteración 16, firma del cliente, empezando por sus maquetas.
 
 **El recorrido delgado está completo (cortes 0 a 5, 2026-09-25)** y desplegado en el entorno de pruebas. Antes de la primera demostración a TEINS:
 
@@ -900,6 +909,88 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Administrar sigue exigiendo el TOTP activo.** Entrar con la llave cuenta como segundo factor (ADR-0009), pero el TOTP es el respaldo si se pierde el dispositivo con la llave.
 - **La biblioteca del navegador (`@simplewebauthn/browser`, MIT) se carga solo al usar una llave:** 2,8 KB comprimidos fuera del JavaScript inicial de campo. La propuesta de crearla también se carga aparte.
 - **Pruebas sin navegador:** un autenticador WebAuthn de software (`servidor/pruebas/autenticador.ts`, clave P-256 y el CBOR mínimo) prueba las reglas de seguridad en el servidor. WebKit no tiene autenticador virtual: esa parte se prueba en Chromium y en el iPhone.
+
+## Iteraciones 15 a 21 · Plan acordado el 2026-09-26
+
+**Por qué estas:** Kevin pidió funciones útiles en la vida real de TEINS; se investigaron aplicaciones de campo comparables (SafetyCulture, CompanyCam, magicplan, Bluebeam, software de mantenimiento de UPS) y se descartaron las que la plataforma no permite (medir con la cámara o LiDAR y medidores por Bluetooth: Safari no tiene WebXR ni Web Bluetooth) o que el teléfono ya resuelve (dictado por voz, que el teclado ya hace). Kevin eligió siete.
+
+**Orden:** campo primero, porque Kevin quiere la PWA terminada. La 15 cierra lo último que le faltaba a la PWA (la instalación guiada) y monta los avisos; la 17 va antes de la 21 porque las líneas que llegan vinculadas vuelven casi automática la cotización; la 20 va antes de la 21 para enviar las cotizaciones por los mismos canales. Cada iteración empieza con maquetas en el lienzo, luego el ADR, el código, las pruebas de extremo a extremo y el despliegue en el entorno de pruebas. La prueba en iPhone de las iteraciones 9 a 14 sigue pendiente y es la que más riesgo reduce: cada iteración de campo se suma a ella.
+
+| # | Qué | Versión de la app | Qué hace falta de fuera |
+|---|---|---|---|
+| 15 | Avisos push (Web Push con VAPID y el formato declarativo de Safari 18.4) e instalación guiada | Sin cambio de protocolo | Nada |
+| 16 | Firma del cliente: tipo de campo `firma`, guardado como documento de boceto de solo trazos | 7 | TEINS confirma el texto de la constancia |
+| 17 | Catálogo en la bajada; sugerencias, frecuentes y recientes al escribir; la línea lleva el ítem | 8 | Catálogo real de TEINS (P28); con el de prueba se construye |
+| 18 | Mantener para enderezar (línea, polilínea, rectángulo, elipse), ajuste de ángulos y extremos, mover, rotar, duplicar, cota y flecha; documento de boceto versión 2 | 9 | Nada |
+| 19 | Símbolos como datos (trazado SVG, nombre, categoría, código de catálogo opcional), publicados como los formatos y copiados dentro del boceto que los usa | 10 | Lista de símbolos de TEINS |
+| 20 | Contactos del cliente; el informe publicado sale por correo (Resend, por HTTPS) y WhatsApp (Cloud API de Meta, plantilla de utilidad con el PDF) con estado por envío | Sin cambio | Cuenta de Resend y número de prueba de Meta para el entorno de pruebas; dominio de TEINS y cuenta de WhatsApp Business a su nombre para producción (R10) |
+| 21 | Módulo de cotizaciones: lista de precios con historia, cotización desde las cantidades revisadas, IVA o AIU por cotización, versiones inmutables, PDF y envío | Sin cambio | Precios, plantilla (P29), tratamiento tributario y numeración |
+
+**Decisiones de Kevin (2026-09-26):**
+
+- **El informe se envía con el PDF adjunto** y el enlace al portal, no solo con el enlace: es lo que el cliente espera (P17). Consecuencia aceptada: "Retirar del portal" no recupera las copias ya enviadas, y el diálogo de retiro lo dirá.
+- **La firma del cliente certifica la visita, no el contenido técnico:** oficina puede corregir medidas sin invalidarla, y firmar no bloquea el levantamiento.
+- **El orden de la tabla.**
+
+**Hallazgos que cambian el diseño:**
+
+- **Railway bloquea SMTP en los planes Hobby y Free:** el correo sale por la API HTTPS del proveedor, no por SMTP.
+- **El portal oculta una versión hasta que su PDF está listo:** el envío al cliente se encola cuando el PDF queda listo, no al publicar.
+- **Los clientes no tienen contactos en ninguna parte** (solo `nombre`): la iteración 20 empieza por ellos. Para la SIC, los datos de contacto corporativos quedan fuera de la Ley 1581; Meta igual exige la autorización para WhatsApp, que se registra con quién y cuándo.
+- **El AIU no aplica a la instalación ni al mantenimiento de redes eléctricas** según la doctrina de la DIAN: la cotización admite IVA sobre el subtotal o AIU con IVA sobre la utilidad, y el contador de TEINS decide en cada caso.
+- **En iPhone, la app instalada no comparte datos con Safari** y los avisos solo llegan a la app instalada: la instalación va antes de iniciar sesión.
+- **La biblioteca `web-push` es MPL-2.0,** que la verificación de licencias ya admite.
+
+## Iteración 15 · Avisos push e instalación guiada
+
+**Estado:** terminada el 2026-09-26, verificada en local y desplegada en el entorno de pruebas (los cuatro servicios; extremo a extremo contra el entorno en Chromium, 13 archivos y 15 pruebas en verde). Falta la prueba en iPhone. Maquetas aprobadas en el lienzo (página "v0.4 · Avisos e instalación").
+
+**Para qué:** que el técnico sepa de una visita nueva, cambiada o cancelada, de un comentario o de una revisión sin abrir la app, y que oficina sepa de un levantamiento nuevo con la pestaña cerrada. En iPhone los avisos exigen la app instalada, así que la instalación guiada (pendiente desde la iteración 14) entra aquí.
+
+### Alcance
+
+- **Módulo `avisos` en el servidor (ADR-0023):** suscripciones por persona y dispositivo; un trabajo por suscripción, encolado en la misma transacción del hecho que avisa; envío con VAPID; la suscripción que el servicio de avisos da por muerta (404 o 410) se borra; desactivar o restablecer a una persona borra las suyas (QA-5).
+- **Qué se avisa:** al técnico, visita asignada, reprogramada, cancelada o pasada a otra persona, comentario de oficina y levantamiento revisado; a oficina (quien lo active), levantamiento nuevo. El texto nunca lleva datos del cliente: se ve con el teléfono bloqueado (R5).
+- **Campo:** el service worker generado importa un manejador de avisos; tarjeta "Avisos en este teléfono" bajo la siguiente visita; estado de los avisos en el diagnóstico; al cerrar sesión o borrar por revocación se quita la suscripción.
+- **Instalación guiada:** en un teléfono sin la app instalada, antes de iniciar sesión, los pasos de iPhone o el botón de Android; "Seguir en Safari" o "Seguir en el navegador" deja continuar.
+- **Oficina:** service worker solo de avisos (sin caché, sigue siendo una app en línea) y la sección "Avisos en este navegador" en Mi cuenta.
+
+### Fuera de la iteración 15
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Avisos de envíos al cliente que fallan | Iteración 20 |
+| Abrir el levantamiento o la visita exacta al tocar el aviso | Se abre el inicio de cada superficie, que ya muestra lo nuevo primero; se revisa si la prueba con técnicos lo pide |
+| Preferencias por tipo de aviso | Cuando alguien pida apagar uno solo; hoy son pocos y todos piden una acción |
+| Quitar la suscripción del navegador al ejecutar la orden de borrado | No hace falta: desactivar ya borró las suscripciones en el servidor, así que no llega ningún aviso |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Kevin aprueba las maquetas en el lienzo antes de programar | Hecho el 2026-09-26 ("i like the hierarchy"), con un cambio: la app se llama "TEINS" en los avisos y bajo el ícono |
+| 2. Cada hecho avisa a quien corresponde, en la transacción del hecho, y un hecho revertido no avisa | Hecho: `servidor/pruebas/avisos.test.ts` (visita asignada, reprogramada, cancelada y reasignada; comentario, revisado y levantamiento nuevo; una reasignación rechazada no avisa; otra organización no recibe nada) |
+| 3. Ningún aviso lleva datos del cliente | Hecho: la misma prueba busca el nombre del cliente y del sitio en todo lo enviado |
+| 4. Solo se aceptan servicios de avisos conocidos, por https y desde una superficie propia | Hecho: `avisos.test.ts` (dirección interna, host desconocido, http y origen ajeno rechazados) |
+| 5. Suscripciones muertas se borran; desactivar o restablecer a una persona apaga sus avisos; 5xx reintenta | Hecho: `avisos.test.ts` (410, 400, 503, desactivar, restablecer, teléfono compartido) |
+| 6. Cada envío va cifrado y firmado con VAPID | Hecho: `avisos.test.ts` con las opciones reales del enviador |
+| 7. Campo guía la instalación antes de iniciar sesión; el técnico activa los avisos y oficina en su navegador | Hecho: `e2e/pruebas/avisos.spec.ts` (guía en Chromium y WebKit; activar en Chromium con el servicio de avisos simulado en el navegador) |
+| 8. Lo anterior sigue igual y el presupuesto de campo se respeta | Hecho: tipos, arquitectura, licencias y auditoría en verde; dominio 73, protocolo 18, oficina 4, campo 51, servidor 108; extremo a extremo 27 y 3 omitidas (Chromium y WebKit); campo 117,0 de 120 KB |
+| 9. Desplegada en el entorno de pruebas | Hecho el 2026-09-26: claves VAPID generadas sin mostrarlas y guardadas en el `worker`; `railway config apply` (la pública por referencia en `campo` y `oficina`, el contacto en el `worker`) y el plan sin diferencias después; los cuatro servicios en `SUCCESS`, salud en 200 y los 13 archivos del extremo a extremo contra el entorno en verde |
+| 10. Probada en el iPhone: instalar, activar y recibir una visita nueva con el teléfono bloqueado | Pendiente: fase 15 de [`verificacion-manual.md`](verificacion-manual.md) |
+
+### Decisiones tomadas al construirlo
+
+- **Avisos a personas y envíos al cliente en módulos distintos:** el plan hablaba de un solo módulo de mensajería, pero las suscripciones son de personas con sesión (se revocan con ellas) y los contactos del cliente tendrán otro ciclo (autorización de WhatsApp, rebotes de correo). Lo que comparten, el trabajo encolado en la transacción del hecho, ya lo da la cola (ADR-0012). `envios` llega en la iteración 20.
+- **Un trabajo por suscripción, con el texto armado al encolar:** si un teléfono falla, su reintento no repite el aviso en los demás; el trabajo no necesita leer otros módulos.
+- **`tag` y `Topic`:** un segundo aviso de la misma visita reemplaza al primero en el teléfono y en el servicio de avisos si todavía no se entregó.
+- **El aviso abre el inicio de la superficie, tomado del origen desde el que se suscribió** (la operación recibe ahora la cabecera `Origin`, que el servidor ya valida): sin variables nuevas por superficie.
+- **El nombre del técnico se lee antes de la transacción del envío:** leído adentro pedía una segunda conexión mientras la primera esperaba, y la prueba de diez envíos simultáneos agotó el pool.
+- **Campo conserva el service worker generado** y le suma el manejador con `importScripts`; pasar a `injectManifest` habría obligado a escribir a mano la caché que hoy da `vite-plugin-pwa`.
+- **Sin instalar, el recordatorio del inicio habla de los avisos y abre la misma guía;** la tarjeta de avisos no aparece (en la maqueta era otro estado de la tarjeta: decía lo mismo dos veces).
+- **"Seguir en Safari" y "Ahora no" se recuerdan en `localStorage`,** por teléfono, como la propuesta de la llave de acceso: son comodidades, no datos del negocio.
+- **En el extremo a extremo el servicio de avisos se simula en el navegador** (permiso y `PushManager`): no hay servicio de avisos en las pruebas ni worker corriendo. La entrega real se prueba en el servidor y en el iPhone.
+- **La clave pública del extremo a extremo vive en `playwright.config.ts`:** no es un secreto; la privada no existe ahí.
 
 ## Iteración 14 · Interfaz con la dirección Consola
 
