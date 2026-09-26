@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DECIMAL_CANONICO, HUELLA_SHA256, ID_LINEA, ID_REPETICION, LIMITES, LIMITES_CANTIDADES } from "@teins/dominio";
+import { DECIMAL_CANONICO, HUELLA_SHA256, ID_LINEA, ID_REPETICION, LIMITES, LIMITES_CANTIDADES, LIMITES_FIRMA } from "@teins/dominio";
 import type * as dominio from "@teins/dominio";
 
 /**
@@ -31,6 +31,16 @@ export const Valor = z
     z.object({ boceto: Huella }).strict(),
     /** Cantidades (iteración 11): las líneas de la tabla. */
     z.array(LineaCantidad).max(LIMITES_CANTIDADES.lineas).readonly(),
+    /** Firma del cliente (iteración 16, ADR-0024): la huella de sus trazos, quién, cuándo y qué leyó. */
+    z
+      .object({
+        firma: Huella,
+        nombre: z.string().max(LIMITES_FIRMA.nombre),
+        cargo: z.string().max(LIMITES_FIRMA.cargo).optional(),
+        firmadoEn: Fecha,
+        declaracion: z.string().max(LIMITES_FIRMA.declaracion),
+      })
+      .strict(),
     z.object({ noObtenido: z.literal(true), motivo: z.string().max(LIMITES.motivo) }).strict(),
   ])
   .meta({ id: "Valor" });
@@ -57,6 +67,7 @@ export const DefinicionCampo = z.discriminatedUnion("tipo", [
   z.object({ ...CampoBase, tipo: z.literal("foto"), min: z.int().min(0).max(LIMITES.fotosPorCampo).optional() }),
   z.object({ ...CampoBase, tipo: z.literal("boceto") }),
   z.object({ ...CampoBase, tipo: z.literal("cantidades"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly() }),
+  z.object({ ...CampoBase, tipo: z.literal("firma"), declaracion: z.string().min(1).max(LIMITES_FIRMA.declaracion).optional() }),
 ]);
 
 export const VersionFormato = z
