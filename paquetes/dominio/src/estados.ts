@@ -13,7 +13,7 @@ export function enviarLevantamiento(levantamiento: Levantamiento, formato: Versi
   if (levantamiento.formato !== formato.formato || levantamiento.versionFormato !== formato.version) {
     return { ok: false, motivo: "formato_distinto" };
   }
-  const errores = validarRespuestas(formato, levantamiento.respuestas);
+  const errores = validarRespuestas(formato, levantamiento.respuestas, levantamiento.repeticiones);
   if (errores.length > 0) return { ok: false, motivo: "respuestas_invalidas", errores };
   return { ok: true, levantamiento: { ...levantamiento, estado: "enviado", enviadoEn: ahora.toISOString() } };
 }

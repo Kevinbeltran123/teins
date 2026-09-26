@@ -1,4 +1,4 @@
-// Subconjunto del meta-esquema de ADR-0006: tipos texto, medida y foto.
+// Subconjunto del meta-esquema de ADR-0006: tipos texto, medida y foto, y secciones repetibles.
 
 interface CampoBase {
   clave: string;
@@ -11,9 +11,20 @@ export type DefinicionCampo =
   | (CampoBase & { tipo: "medida"; unidades: readonly string[] })
   | (CampoBase & { tipo: "foto"; min?: number | undefined });
 
+/** Sección que el técnico repite cuantas veces haga falta: "Tablero 1", "Tablero 2" (F2). */
+export interface Repetible {
+  /** Cómo se llama cada repetición: "Tablero", "Piso", "Área". */
+  etiqueta: string;
+  /** Repeticiones mínimas para enviar; el levantamiento nace con ellas. Por defecto 0. */
+  min?: number | undefined;
+  /** Máximo de repeticiones. Por defecto LIMITES.repeticiones. */
+  max?: number | undefined;
+}
+
 export interface DefinicionSeccion {
   clave: string;
   titulo: string;
+  repetible?: Repetible | undefined;
   campos: readonly DefinicionCampo[];
 }
 

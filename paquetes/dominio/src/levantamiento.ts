@@ -1,4 +1,6 @@
 import type { VersionFormato } from "./formato";
+import { claveDeRepeticion, nombrePorDefecto, type Repeticiones } from "./repeticiones";
+import { LIMITES } from "./limites";
 
 /** Medida: el número va como texto decimal para no introducir errores de coma flotante (ADR-0006). */
 export interface ValorMedida {
@@ -31,14 +33,28 @@ export interface Levantamiento {
   visitaId?: string | undefined;
   estado: EstadoLevantamiento;
   respuestas: Respuestas;
+  /** Repeticiones de las secciones repetibles, en orden. Ausente en formatos sin ellas. */
+  repeticiones?: Repeticiones | undefined;
   /** Horas del dispositivo (regla 16): declarativas; la oficial la pone el servidor al recibirlo. */
   creadoEn: string;
   actualizadoEn: string;
   enviadoEn?: string;
 }
 
-export function crearLevantamiento(formato: VersionFormato, id: string, ahora: Date, visitaId?: string): Levantamiento {
+const sinGenerador = (): string => {
+  throw new Error("El formato tiene secciones repetibles: falta el generador de ids de repetición");
+};
+
+/** El levantamiento nace con las repeticiones mínimas de cada sección repetible. */
+export function crearLevantamiento(formato: VersionFormato, id: string, ahora: Date, visitaId?: string, nuevoId: () => string = sinGenerador): Levantamiento {
   const fecha = ahora.toISOString();
+  const repeticiones: Record<string, { id: string; nombre: string }[]> = {};
+  for (const seccion of formato.secciones) {
+    if (!seccion.repetible) continue;
+    const lista: { id: string; nombre: string }[] = [];
+    for (let i = 0; i < (seccion.repetible.min ?? 0); i++) lista.push({ id: nuevoId(), nombre: nombrePorDefecto(seccion, lista) });
+    repeticiones[seccion.clave] = lista;
+  }
   return {
     id,
     formato: formato.formato,
@@ -46,6 +62,7 @@ export function crearLevantamiento(formato: VersionFormato, id: string, ahora: D
     ...(visitaId ? { visitaId } : {}),
     estado: "borrador",
     respuestas: {},
+    ...(Object.keys(repeticiones).length > 0 ? { repeticiones } : {}),
     creadoEn: fecha,
     actualizadoEn: fecha,
   };
@@ -95,4 +112,41 @@ export function agregarFoto(levantamiento: Levantamiento, seccion: string, campo
     const fotos = Array.isArray(actuales) ? (actuales as readonly string[]) : [];
     if (!fotos.includes(huella)) valores[campo] = [...fotos, huella];
   });
+}
+
+function editarRepeticiones(levantamiento: Levantamiento, seccion: string, ahora: Date, cambio: (lista: { id: string; nombre: string }[]) => void): Levantamiento {
+  // Regla 4: después del envío el técnico no edita.
+  if (levantamiento.estado !== "borrador") throw new LevantamientoNoEditable(levantamiento.id);
+  const lista = [...(levantamiento.repeticiones?.[seccion] ?? [])];
+  cambio(lista);
+  return { ...levantamiento, repeticiones: { ...levantamiento.repeticiones, [seccion]: lista }, actualizadoEn: ahora.toISOString() };
+}
+
+/** Agrega una repetición al final, con el primer nombre libre ("Tablero 3"). */
+export function agregarRepeticion(levantamiento: Levantamiento, formato: VersionFormato, seccion: string, id: string, ahora: Date): Levantamiento {
+  const definicion = formato.secciones.find((s) => s.clave === seccion);
+  if (!definicion?.repetible) throw new Error(`La sección ${seccion} no es repetible`);
+  const maximo = definicion.repetible.max ?? LIMITES.repeticiones;
+  return editarRepeticiones(levantamiento, seccion, ahora, (lista) => {
+    if (lista.length >= maximo) throw new Error(`La sección ${seccion} ya tiene el máximo de repeticiones (${maximo})`);
+    if (lista.some((r) => r.id === id)) throw new Error(`La repetición ${id} ya existe`);
+    lista.push({ id, nombre: nombrePorDefecto(definicion, lista) });
+  });
+}
+
+export function renombrarRepeticion(levantamiento: Levantamiento, seccion: string, id: string, nombre: string, ahora: Date): Levantamiento {
+  return editarRepeticiones(levantamiento, seccion, ahora, (lista) => {
+    const i = lista.findIndex((r) => r.id === id);
+    if (i >= 0) lista[i] = { id, nombre: nombre.slice(0, LIMITES.nombreDeRepeticion) };
+  });
+}
+
+/** Quita la repetición y sus respuestas. Las fotos siguen en el teléfono hasta que nada las use. */
+export function quitarRepeticion(levantamiento: Levantamiento, seccion: string, id: string, ahora: Date): Levantamiento {
+  const sinLaRepeticion = editarRepeticiones(levantamiento, seccion, ahora, (lista) => {
+    const i = lista.findIndex((r) => r.id === id);
+    if (i >= 0) lista.splice(i, 1);
+  });
+  const { [claveDeRepeticion(seccion, id)]: _quitada, ...respuestas } = sinLaRepeticion.respuestas;
+  return { ...sinLaRepeticion, respuestas };
 }

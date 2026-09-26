@@ -1,6 +1,7 @@
 import type { VersionFormato } from "./formato";
 import type { Respuestas, Valor } from "./levantamiento";
-import { validarCampo, validarRespuestas, type ErrorValidacion } from "./validacion";
+import type { Repeticiones } from "./repeticiones";
+import { campoDeRuta, validarCampo, validarRespuestas, type ErrorValidacion } from "./validacion";
 
 /** Estados del levantamiento después del envío (modelo de dominio, sección 5). */
 export type EstadoRevision = "enviado" | "en_revision" | "revisado";
@@ -60,13 +61,14 @@ const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b
  * campos que de verdad cambian: reescribir el mismo valor no es un cambio ni deja registro.
  * Las fotos no se corrigen desde oficina.
  */
-export function corregir(formato: VersionFormato, respuestas: Respuestas, correcciones: readonly Correccion[]): ResultadoCorreccion {
+export function corregir(formato: VersionFormato, respuestas: Respuestas, correcciones: readonly Correccion[], repeticiones: Repeticiones = {}): ResultadoCorreccion {
   const errores: ErrorValidacion[] = [];
   const nuevas: Record<string, Record<string, Valor>> = Object.fromEntries(Object.entries(respuestas).map(([s, v]) => [s, { ...v }]));
   const cambios: CambioDeCampo[] = [];
 
   for (const { seccion, campo, valor } of correcciones) {
-    const definicion = formato.secciones.find((s) => s.clave === seccion)?.campos.find((c) => c.clave === campo);
+    // En una sección repetible, solo en una repetición que existe: oficina no crea repeticiones.
+    const definicion = campoDeRuta(formato, repeticiones, seccion, campo);
     if (!definicion) {
       errores.push({ seccion, campo, codigo: "campo_desconocido" });
       continue;
@@ -93,10 +95,10 @@ export function corregir(formato: VersionFormato, respuestas: Respuestas, correc
 export type ResultadoMarca = { ok: true; revision: Revision } | { ok: false; motivo: MotivoSinPermiso } | { ok: false; motivo: "respuestas_invalidas"; errores: ErrorValidacion[] };
 
 /** Marcar revisado: quien tiene la revisión, con respuestas válidas contra su formato. */
-export function marcarRevisado(revision: Revision, actorId: string, formato: VersionFormato, respuestas: Respuestas): ResultadoMarca {
+export function marcarRevisado(revision: Revision, actorId: string, formato: VersionFormato, respuestas: Respuestas, repeticiones: Repeticiones = {}): ResultadoMarca {
   const motivo = puedeEditar(revision, actorId);
   if (motivo) return { ok: false, motivo };
-  const errores = validarRespuestas(formato, respuestas);
+  const errores = validarRespuestas(formato, respuestas, repeticiones);
   if (errores.length > 0) return { ok: false, motivo: "respuestas_invalidas", errores };
   return { ok: true, revision: { estado: "revisado", revisorId: actorId } };
 }

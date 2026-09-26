@@ -1,3 +1,4 @@
+import type { Repeticiones } from "./repeticiones";
 import type { VersionFormato } from "./formato";
 import type { Respuestas } from "./levantamiento";
 import type { EstadoRevision } from "./revision";
@@ -89,6 +90,8 @@ export interface ContenidoVersion {
     revisor: string;
     recibidoEn: string;
     respuestas: Respuestas;
+    /** Repeticiones de las secciones repetibles (iteración 9); ausente en las versiones anteriores. */
+    repeticiones?: Repeticiones | undefined;
   }[];
   planos: Plano[];
 }
