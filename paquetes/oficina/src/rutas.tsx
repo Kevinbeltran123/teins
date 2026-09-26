@@ -12,6 +12,7 @@ import { InformeDeVisita } from "./pantallas/Informe";
 import { Informes } from "./pantallas/Informes";
 import { IniciarSesion } from "./pantallas/IniciarSesion";
 import { Marco } from "./pantallas/Marco";
+import { MiCuenta } from "./pantallas/MiCuenta";
 import { Visitas } from "./pantallas/Visitas";
 
 /** Toda pantalla de oficina exige una sesión de oficina; la autorización real la aplica el servidor. */
@@ -66,6 +67,15 @@ const visitas = createRoute({ getParentRoute: () => raiz, path: "visitas", compo
 const clientes = createRoute({ getParentRoute: () => raiz, path: "clientes", component: Clientes });
 const catalogo = createRoute({ getParentRoute: () => raiz, path: "catalogo", component: Catalogo });
 
+const cuenta = createRoute({
+  getParentRoute: () => raiz,
+  path: "cuenta",
+  component: function RutaCuenta() {
+    const sesion = useQuery(consultas.sesion());
+    return sesion.data ? <MiCuenta nombre={sesion.data.usuario.nombre} /> : null;
+  },
+});
+
 const administracion = createRoute({
   getParentRoute: () => raiz,
   path: "administracion",
@@ -75,7 +85,7 @@ const administracion = createRoute({
   },
 });
 
-export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, visitas, clientes, catalogo, listaDeInformes, informe, administracion]) });
+export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, visitas, clientes, catalogo, listaDeInformes, informe, cuenta, administracion]) });
 
 declare module "@tanstack/react-router" {
   interface Register {

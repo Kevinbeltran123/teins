@@ -207,6 +207,7 @@ function Usuarios({ propioId }: { propioId: string }) {
           <Dato etiqueta="Usuario" valor={credencial.usuario} />
           <Dato etiqueta="Contraseña temporal" valor={credencial.contrasena} />
           <p className="text-cuerpo">Entréguela en persona o por un medio distinto al del usuario.</p>
+          {!credencial.nuevo && <p className="text-cuerpo">Sus sesiones se cerraron y sus llaves de acceso se quitaron: si perdió un teléfono o un computador, ya no sirven para entrar.</p>}
         </CredencialUnaVez>
       )}
       <CrearUsuario alCrear={(c) => setCredencial({ ...c, nuevo: true })} />

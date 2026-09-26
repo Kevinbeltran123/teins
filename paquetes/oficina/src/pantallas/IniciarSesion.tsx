@@ -1,11 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
+import { ErrorApi, ErrorDeRed, esLlaveCancelada } from "@teins/protocolo";
 import { Aviso, Boton, CampoTexto } from "@teins/ui";
 import { cliente, consultas } from "../api";
 
-function mensajeDeError(error: unknown): string {
+/** En el computador también sirve la llave del celular (con un código QR): basta con que el navegador sepa de llaves. */
+const conLlaves = typeof window !== "undefined" && "PublicKeyCredential" in window;
+
+function mensajeDeError(error: unknown, conLlave = false): string {
   if (error instanceof ErrorDeRed) return "No hay conexión con el servidor. Revise su conexión e intente de nuevo.";
+  if (conLlave && error instanceof ErrorApi && error.codigo !== "demasiadas_solicitudes") return "Esa llave de acceso no sirve. Inicie sesión con su usuario y contraseña.";
   if (error instanceof ErrorApi && error.codigo === "no_autenticado") return "Usuario o contraseña incorrectos.";
   if (error instanceof ErrorApi && error.codigo === "demasiadas_solicitudes") return "Demasiados intentos. Espere un minuto e intente de nuevo.";
   return "No se pudo iniciar sesión. Intente de nuevo.";
@@ -69,6 +73,16 @@ export function IniciarSesion({ aviso }: { aviso?: string }) {
     }
   }
 
+  async function entrarConLlave() {
+    setEstado({ tipo: "enviando" });
+    try {
+      await cliente.iniciarSesionConLlave();
+      await consultasCliente.invalidateQueries({ queryKey: consultas.sesion().queryKey });
+    } catch (error) {
+      setEstado(esLlaveCancelada(error) ? { tipo: "listo" } : { tipo: "error", mensaje: mensajeDeError(error, true) });
+    }
+  }
+
   function volverAEmpezar() {
     setPideCodigo(false);
     setContrasena("");
@@ -104,6 +118,11 @@ export function IniciarSesion({ aviso }: { aviso?: string }) {
             <Boton type="submit" variante="principal" disabled={estado.tipo === "enviando"}>
               {estado.tipo === "enviando" ? "Iniciando sesión…" : "Iniciar sesión"}
             </Boton>
+            {conLlaves && (
+              <Boton type="button" onClick={() => void entrarConLlave()} disabled={estado.tipo === "enviando"}>
+                Entrar con llave de acceso
+              </Boton>
+            )}
           </form>
         )}
       </main>

@@ -42,7 +42,13 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-ayuda text-sobre-superficie-suave">{nombre}</span>
+          <Link
+            to="/cuenta"
+            aria-label={`Mi cuenta: ${nombre}`}
+            className="inline-flex min-h-tactil items-center rounded-control px-2 text-ayuda text-sobre-superficie-suave underline data-[status=active]:bg-superficie-elevada data-[status=active]:text-sobre-superficie focus-visible:outline-3 focus-visible:outline-acento"
+          >
+            {nombre}
+          </Link>
           <button
             type="button"
             onClick={() => void cerrarSesion()}
