@@ -2,7 +2,12 @@ import { defineConfig, devices } from "@playwright/test";
 import { REMOTO } from "./destino";
 
 const enCI = Boolean(process.env.CI);
-const servidor = { cwd: "../paquetes/servidor", env: { INICIOS_DE_SESION_POR_MINUTO: "1000" } };
+/**
+ * Avisos push (ADR-0023): el rol web solo necesita la clave pública para que las superficies ofrezcan
+ * activarlos. No es un secreto; la privada no existe aquí porque en el extremo a extremo no corre el worker.
+ */
+const CLAVE_PUBLICA_AVISOS = "BOXZWm72IS92BJJBRVsOr18iQm923oFhf1AEZDwBe6t-q8GJISfEGyTTVn4agceqiue9pH2hTy8V1NqMosVxqpk";
+const servidor = { cwd: "../paquetes/servidor", env: { INICIOS_DE_SESION_POR_MINUTO: "1000", AVISOS_VAPID_PUBLICA: CLAVE_PUBLICA_AVISOS } };
 
 /**
  * Extremo a extremo (ADR-0018, nivel 5): Chromium y WebKit sobre el sistema completo.

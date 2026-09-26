@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { deflateSync } from "node:zlib";
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { codigoTotp } from "../totp";
 
 /**
@@ -36,7 +36,12 @@ function crc32(b: Buffer): number {
 }
 
 export async function iniciarSesion(page: Page, u: { usuario: string; contrasena: string }) {
-  await page.getByLabel("Usuario").fill(u.usuario);
+  // En un teléfono sin la app instalada, campo guía la instalación antes de iniciar sesión (iteración 15).
+  const usuario = page.getByLabel("Usuario");
+  const seguir = page.getByRole("button", { name: /^Seguir en (Safari|el navegador)$/ });
+  await expect(usuario.or(seguir)).toBeVisible();
+  if (await seguir.isVisible()) await seguir.click();
+  await usuario.fill(u.usuario);
   await page.getByLabel("Contraseña").fill(u.contrasena);
   await page.getByRole("button", { name: "Iniciar sesión" }).click();
 }
