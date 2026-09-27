@@ -44,6 +44,7 @@ export {
   Ruler,
   Search,
   Send,
+  Shapes,
   Share,
   ShieldCheck,
   Smartphone,

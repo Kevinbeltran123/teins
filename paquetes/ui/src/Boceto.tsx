@@ -13,7 +13,12 @@ export type ElementoDibujable =
   /** Versión 2 (ADR-0026). */
   | { tipo: "polilinea"; grosor: number; puntos: readonly Par[]; cerrada: boolean }
   | { tipo: "elipse"; grosor: number; centro: Par; radios: Par; giro: number }
-  | { tipo: "cota"; grosor: number; desde: Par; hasta: Par; texto: string };
+  | { tipo: "cota"; grosor: number; desde: Par; hasta: Par; texto: string }
+  /** Símbolo de la biblioteca (ADR-0027): su caja de 100 × 100 a `tamano`, girada; líneas de 5 a cualquier tamaño. */
+  | { tipo: "simbolo"; nombre: string; trazado: string; relleno?: string | undefined; texto?: string | undefined; centro: Par; tamano: number; giro: number };
+
+/** El mismo `GROSOR_SIMBOLO` de `dominio` (el PDF). */
+const GROSOR_SIMBOLO = 5;
 
 /** La misma cuenta de `geometriaDeCota` en `dominio` (el PDF): topes perpendiculares y el texto sin quedar de cabeza. */
 function cota(desde: Par, hasta: Par) {
@@ -119,6 +124,20 @@ export function ElementoDeBoceto({ elemento: e }: { elemento: ElementoDibujable 
   }
   if (e.tipo === "elipse") {
     return <ellipse cx={e.centro[0]} cy={e.centro[1]} rx={e.radios[0]} ry={e.radios[1]} transform={`rotate(${e.giro} ${e.centro[0]} ${e.centro[1]})`} className="fill-none stroke-texto" strokeWidth={e.grosor} />;
+  }
+  if (e.tipo === "simbolo") {
+    const k = e.tamano / 100;
+    return (
+      <g transform={`translate(${e.centro[0]} ${e.centro[1]}) rotate(${e.giro}) scale(${k}) translate(-50 -50)`}>
+        <path d={e.trazado} className="fill-none stroke-texto" strokeWidth={GROSOR_SIMBOLO / k} strokeLinecap="round" strokeLinejoin="round" />
+        {e.relleno && <path d={e.relleno} className="fill-texto" />}
+        {e.texto && (
+          <text x={50} y={e.texto.length > 2 ? 58 : 60} fontSize={e.texto.length > 2 ? 22 : 28} fontWeight={700} textAnchor="middle" className="fill-texto font-texto">
+            {e.texto}
+          </text>
+        )}
+      </g>
+    );
   }
   if (e.tipo === "cota") {
     const g = cota(e.desde, e.hasta);

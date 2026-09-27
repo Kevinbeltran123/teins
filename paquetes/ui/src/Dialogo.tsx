@@ -25,13 +25,18 @@ interface Props {
   forma?: keyof typeof formas;
   /** Amplio: contenido en dos columnas, como el QR con sus pasos. */
   amplio?: boolean;
+  /**
+   * Una lista para elegir con un toque (la biblioteca de símbolos): el foco queda en el diálogo y no en su primer
+   * campo, para que el teléfono no abra el teclado encima de la lista.
+   */
+  focoEnElDialogo?: boolean;
 }
 
 /**
  * Abre un <dialog> como modal al montarse y lo cierra al desmontarse. Esc y un clic en el velo llaman a
  * `alCerrar` solo si `cerrable`; el foco vuelve a lo que lo abrió.
  */
-export function useModal(cerrable: boolean, alCerrar: () => void) {
+export function useModal(cerrable: boolean, alCerrar: () => void, focoEnElDialogo = false) {
   const ref = useRef<HTMLDialogElement>(null);
   const presionEnVelo = useRef(false);
   // Los manejadores leen siempre el valor vigente, aunque el efecto de apertura corra una sola vez.
@@ -43,6 +48,7 @@ export function useModal(cerrable: boolean, alCerrar: () => void) {
     const anterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let desmontando = false;
     elemento.showModal();
+    if (focoEnElDialogo) elemento.focus();
     // El navegador puede cerrarlo por su cuenta (Esc repetido): si no se podía cerrar, vuelve a abrirse.
     const alCerrarse = () => {
       if (desmontando) return;
@@ -80,15 +86,16 @@ export function useModal(cerrable: boolean, alCerrar: () => void) {
  * Esc funciona sin JavaScript de animación (el movimiento es CSS, DESIGN.md). Se abre al montarse: quien lo
  * usa lo muestra u oculta con una condición, y cada apertura empieza limpia.
  */
-export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerrar, cerrable = true, forma = "centrado", amplio = false }: Props) {
-  const modal = useModal(cerrable, alCerrar);
+export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerrar, cerrable = true, forma = "centrado", amplio = false, focoEnElDialogo = false }: Props) {
+  const modal = useModal(cerrable, alCerrar, focoEnElDialogo);
   const tituloId = useId();
 
   return (
     <dialog
       {...modal}
       aria-labelledby={tituloId}
-      className={`bg-panel p-0 text-texto shadow-capa backdrop:bg-velo ${amplio && forma === "centrado" ? "w-[min(820px,calc(100vw-32px))]" : ""} ${formas[forma]}`}
+      tabIndex={focoEnElDialogo ? -1 : undefined}
+      className={`bg-panel p-0 text-texto shadow-capa backdrop:bg-velo ${amplio && forma === "centrado" ? "w-[min(820px,calc(100vw-32px))]" : ""} ${focoEnElDialogo ? "outline-none" : ""} ${formas[forma]}`}
     >
       <div className={`flex flex-col ${forma === "lateral" ? "h-full" : "max-h-[inherit]"}`}>
         <header className="flex items-start gap-3 px-6 pt-6 pb-4">

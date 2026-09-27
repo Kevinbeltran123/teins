@@ -14,6 +14,13 @@ function puntosDe(e: ElementoDibujable): readonly Par[] {
       return [e.en];
     case "polilinea":
       return e.puntos;
+    case "simbolo": {
+      const r = (e.tamano / 2) * Math.SQRT2;
+      return [
+        [e.centro[0] - r, e.centro[1] - r],
+        [e.centro[0] + r, e.centro[1] + r],
+      ];
+    }
     case "elipse": {
       const r = Math.max(...e.radios);
       return [
