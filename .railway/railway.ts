@@ -66,7 +66,14 @@ export default defineRailway((ctx) => {
   });
   const oficina = service("oficina", {
     ...web,
-    env: { ...comun, PORT: "3000", SUPERFICIE_OFICINA_HOST: ref("oficina", "RAILWAY_PUBLIC_DOMAIN"), AVISOS_VAPID_PUBLICA: ref("worker", "AVISOS_VAPID_PUBLICA") },
+    env: {
+      ...comun,
+      PORT: "3000",
+      SUPERFICIE_OFICINA_HOST: ref("oficina", "RAILWAY_PUBLIC_DOMAIN"),
+      AVISOS_VAPID_PUBLICA: ref("worker", "AVISOS_VAPID_PUBLICA"),
+      // Los eventos de Resend llegan a oficina (ADR-0028); su secreto lo guarda Kevin, nunca este archivo.
+      ...(produccion ? {} : { RESEND_SECRETO_EVENTOS: preserve() }),
+    },
   });
   // Solo el portal tiene la conexión con el rol `teins_portal` (ADR-0009, parte 3).
   const portal = service("portal", {
@@ -79,7 +86,18 @@ export default defineRailway((ctx) => {
     start: "node --enable-source-maps dist/worker.js",
     replicas: { [REGION]: 1 },
     deploy: { restartPolicyMaxRetries: 5 },
-    env: { ...comun, AVISOS_VAPID_PUBLICA: preserve(), AVISOS_VAPID_PRIVADA: preserve(), AVISOS_CONTACTO: https("oficina") },
+    env: {
+      ...comun,
+      AVISOS_VAPID_PUBLICA: preserve(),
+      AVISOS_VAPID_PRIVADA: preserve(),
+      AVISOS_CONTACTO: https("oficina"),
+      // Envíos al cliente (ADR-0028): en pruebas, el correo sale de verdad por Resend con el dominio verificado de
+      // Kevin y WhatsApp sigue simulado hasta tener el número de prueba de Meta. Producción nunca simula (la
+      // configuración lo impide) y, sin sus claves, los envíos quedan "No llegó" con el motivo.
+      ...(produccion
+        ? {}
+        : { ENVIOS_SIMULADOS: "whatsapp", RESEND_CLAVE_API: preserve(), CORREO_REMITENTE: "TEINS pruebas <teins-pruebas@deportur.tech>" }),
+    },
   });
 
   // Copia diaria fuera del proyecto (ADR-0016, nivel 2): volcado de la base y archivos, a las 02:00 de Colombia.
