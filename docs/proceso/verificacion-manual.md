@@ -349,6 +349,24 @@ Con la app 9 instalada en el iPhone. Todo sin señal salvo el envío.
 
 **Anotar:** si la barra de arriba se alcanza con una mano, si el medio segundo para enderezar se siente largo o corto, y si alguna vez un trazo se volvió forma sin querer.
 
+## Fase 19 · Símbolos en el croquis (iteración 19)
+
+Con la app 10 instalada y la biblioteca de prueba publicada en el entorno (`sembrar` la publica).
+
+1. Abra la app con señal un momento y después póngala en modo avión.
+2. Inicie un levantamiento, **Dibujar boceto** y toque **Símbolos** (abajo a la derecha).
+   - Debe: la biblioteca por categoría (Energía, Datos, Obra), sin señal; el teclado **no** se abre solo.
+3. Toque **UPS**.
+   - Debe: la UPS en el centro de lo que ve, elegida, con **Mover** marcado. Arrástrela, gírela y agrándela; **Duplicar** deja otra.
+4. Acerque con dos dedos y ponga un **Tomacorriente**.
+   - Debe: se ve del mismo tamaño en pantalla que la UPS al ponerla; las líneas, igual de gruesas.
+5. **Símbolos** otra vez y escriba "tom".
+   - Debe: **Tomacorriente** y **Toma regulada**; y al borrar la búsqueda, **Recientes** con lo que acaba de poner.
+6. Quite el modo avión, envíe y en oficina abra el levantamiento; publique el informe y descargue el PDF.
+   - Debe: los símbolos iguales en oficina y en el PDF.
+
+**Anotar:** qué símbolos faltan para los croquis de TEINS, y si el tamaño con que caen sirve o casi siempre hay que cambiarlo.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.

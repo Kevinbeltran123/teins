@@ -84,9 +84,12 @@ Comandos de administración (uso en el encabezado de cada archivo de `src/cli/`)
 | `crear-cliente` | Cliente con su primer sitio |
 | `crear-visita`, `reasignar-visita` | Programa una visita para uno o varios técnicos; al reasignar, sale del teléfono de quien deja de tenerla |
 | `publicar-formato` | Publica una versión de formato desde un JSON; llega a los teléfonos en la siguiente bajada |
+| `publicar-simbolos` | Publica la biblioteca de símbolos de los bocetos desde un JSON (ADR-0027): crea o cambia cada símbolo y retira los que ya no están; llega a la app 10 en la siguiente bajada. La de prueba es `@teins/dominio/formatos-de-prueba/simbolos-prueba.json`, que `sembrar` publica |
 | `crear-acceso-cliente`, `regenerar-acceso-cliente` | Acceso de un cliente al portal: muestra una sola vez identificador, clave y QR (`--qr archivo.svg` lo guarda); regenerar invalida el anterior y sus sesiones |
 
 El permiso de trabajo sin conexión dura `DIAS_PERMISO_LOCAL` días (7 por defecto) desde el último contacto.
+
+Símbolos (iteración 19, ADR-0027): módulo `simbolos` con su tabla por organización (migraciones `0022` y `0023`); `publicar` valida la biblioteca con `validarBiblioteca` del dominio y registra un cambio `simbolo` por símbolo tocado, que la sincronización entrega a la app 10 o posterior. En el PDF, el símbolo copiado en el boceto se dibuja con `hojaASvg`.
 
 Bocetos en el PDF (iteración 18, ADR-0026): cada hoja se convierte a SVG (`hojaASvg`); las verticales van de a dos por fila y una apaisada ocupa la fila, con su nombre si hay varias. El worker valida la versión 2 desde ya: el servidor se despliega antes que la app 9.
 

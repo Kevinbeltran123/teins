@@ -50,6 +50,7 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0024](0024-firma-del-cliente.md) | Firma del cliente como constancia de la visita, guardada con el formato de los bocetos | Aceptada |
 | [0025](0025-catalogo-en-el-telefono.md) | El catálogo baja al teléfono y la línea de cantidad puede llegar vinculada | Aceptada |
 | [0026](0026-bocetos-con-formas.md) | Bocetos versión 2: hojas con nombre, formas enderezadas, cotas y mover, en un editor a pantalla completa | Aceptada |
+| [0027](0027-simbolos-de-los-bocetos.md) | Símbolos de los bocetos: biblioteca como datos de la organización, copiada en el boceto que la usa | Aceptada |
 
 ### Estados
 

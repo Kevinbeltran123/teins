@@ -65,6 +65,8 @@ railway ssh -s campo -- node dist/cli/desactivar-usuario.js --usuario ana.prueba
 railway ssh -s campo -- node dist/cli/restablecer-contrasena.js --usuario tecnico.prueba
 railway ssh -s campo -- node dist/cli/crear-acceso-cliente.js --organizacion 00000000-0000-4000-8000-000000000001 --cliente <uuid>
 railway ssh -s campo -- node dist/cli/marcar-administrador.js --usuario oficina.prueba
+# Biblioteca de símbolos de prueba (iteración 19, ADR-0027); con la de TEINS, su archivo
+railway ssh -s campo -- node dist/cli/publicar-simbolos.js --organizacion 00000000-0000-4000-8000-000000000001 --archivo node_modules/@teins/dominio/formatos-de-prueba/simbolos-prueba.json
 
 # Registros
 railway logs --service campo --deployment
