@@ -62,11 +62,13 @@ export const Repeticiones = z
   .readonly()
   .meta({ id: "Repeticiones" });
 
+/** Respuestas frecuentes de un campo, que se eligen con un toque (rediseño Recorrido). */
+const ValoresComunes = z.array(z.string().min(1).max(40)).min(1).max(8).readonly();
 const CampoBase = { clave: ClaveEsquema, etiqueta: z.string().min(1).max(200), obligatorio: z.boolean().optional() };
 export const DefinicionCampo = z.discriminatedUnion("tipo", [
-  z.object({ ...CampoBase, tipo: z.literal("texto") }),
-  z.object({ ...CampoBase, tipo: z.literal("medida"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly() }),
-  z.object({ ...CampoBase, tipo: z.literal("foto"), min: z.int().min(0).max(LIMITES.fotosPorCampo).optional() }),
+  z.object({ ...CampoBase, tipo: z.literal("texto"), largo: z.boolean().optional(), valoresComunes: ValoresComunes.optional() }),
+  z.object({ ...CampoBase, tipo: z.literal("medida"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly(), valoresComunes: ValoresComunes.optional() }),
+  z.object({ ...CampoBase, tipo: z.literal("foto"), min: z.int().min(0).max(LIMITES.fotosPorCampo).optional(), puestos: z.array(z.string().min(1).max(40)).min(1).max(LIMITES.fotosPorCampo).readonly().optional() }),
   z.object({ ...CampoBase, tipo: z.literal("boceto") }),
   z.object({ ...CampoBase, tipo: z.literal("cantidades"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly() }),
   z.object({ ...CampoBase, tipo: z.literal("firma"), declaracion: z.string().min(1).max(LIMITES_FIRMA.declaracion).optional() }),
