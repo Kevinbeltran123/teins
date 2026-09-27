@@ -26,14 +26,14 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 17 | Catálogo en el teléfono al anotar cantidades | Líneas que llegan vinculadas: menos digitación y cotización casi automática (P28) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 18 | Bocetos: pantalla completa, hojas con nombre, enderezar trazos, formas, mover, cotas | Croquis limpios y grandes, un piso por hoja (F3) | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 19 | Biblioteca de símbolos en los bocetos | Tableros, UPS, tomas y demás con un toque, iguales en todo croquis | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
-| Iteración 20 | Contactos del cliente e informe por correo y WhatsApp | El informe le llega al cliente por donde lo espera, con PDF adjunto (P17) | Planeada |
-| Iteración 21 | Cotizaciones desde las cantidades | De la visita a la cotización sin volver a digitar (P27, QA-12) | Planeada |
+| Iteración 20 | Contactos del cliente e informe por correo y WhatsApp | El informe le llega al cliente por donde lo espera, con PDF adjunto (P17) | Terminada y desplegada en el entorno de pruebas; el correo sale de verdad por Resend, WhatsApp sigue simulado hasta tener el número de prueba de Meta |
+| Iteración 21 | Cotizaciones desde las cantidades | De la visita a la cotización sin volver a digitar (P27, QA-12) | Terminada y desplegada en el entorno de pruebas (precios de prueba; faltan los de TEINS) |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
 
-**Plan acordado con Kevin el 2026-09-26: iteraciones 15 a 21** (sección "Iteraciones 15 a 21"). Kevin eligió siete funciones después de una investigación de producto (envío del informe por WhatsApp y correo, firma del cliente, símbolos y enderezado en los bocetos, ítems frecuentes en cantidades, avisos push y cotizaciones) y pidió terminar primero la PWA de campo. **Iteración 15 terminada y desplegada en el entorno de pruebas el 2026-09-26** (avisos push, ADR-0023, e instalación guiada; maquetas en el lienzo, página "v0.4 · Avisos e instalación"). Falta la prueba en iPhone (fase 15 de la guía, junto con las fases 9 a 14). **Iteración 16 (firma del cliente, ADR-0024) terminada y desplegada en el entorno de pruebas el 2026-09-26**, con el formato de prueba v7; falta la prueba en iPhone (fase 16 de la guía). **Iteración 17 (catálogo en el teléfono, ADR-0025) terminada y desplegada en el entorno de pruebas el 2026-09-26**; falta la prueba en iPhone (fase 17 de la guía). **Iteración 18 (croquis a pantalla completa con hojas, ADR-0026) terminada y desplegada en el entorno de pruebas el 2026-09-26** (maquetas aprobadas en la página "v0.8 · Croquis a pantalla completa"); falta la prueba en iPhone (fase 18 de la guía). **Iteración 19 (símbolos en el croquis, ADR-0027) terminada y desplegada en el entorno de pruebas el 2026-09-26**, con la biblioteca de prueba publicada; falta la prueba en iPhone (fase 19 de la guía) y la lista de símbolos de TEINS. Siguiente: iteración 20, contactos del cliente e informe por correo y WhatsApp, empezando por sus maquetas; hace falta la cuenta de Resend y el número de prueba de Meta. Pendiente menor: las fallas intermitentes de `repeticiones.spec` (WebKit, local) y `bajada.spec` (entorno). El JavaScript inicial de campo está en 119,9 de 120 KB: cualquier cosa nueva de campo debe cargarse aparte.
+**Plan acordado con Kevin el 2026-09-26: iteraciones 15 a 21** (sección "Iteraciones 15 a 21"). Kevin eligió siete funciones después de una investigación de producto (envío del informe por WhatsApp y correo, firma del cliente, símbolos y enderezado en los bocetos, ítems frecuentes en cantidades, avisos push y cotizaciones) y pidió terminar primero la PWA de campo. **Iteración 15 terminada y desplegada en el entorno de pruebas el 2026-09-26** (avisos push, ADR-0023, e instalación guiada; maquetas en el lienzo, página "v0.4 · Avisos e instalación"). Falta la prueba en iPhone (fase 15 de la guía, junto con las fases 9 a 14). **Iteración 16 (firma del cliente, ADR-0024) terminada y desplegada en el entorno de pruebas el 2026-09-26**, con el formato de prueba v7; falta la prueba en iPhone (fase 16 de la guía). **Iteración 17 (catálogo en el teléfono, ADR-0025) terminada y desplegada en el entorno de pruebas el 2026-09-26**; falta la prueba en iPhone (fase 17 de la guía). **Iteración 18 (croquis a pantalla completa con hojas, ADR-0026) terminada y desplegada en el entorno de pruebas el 2026-09-26** (maquetas aprobadas en la página "v0.8 · Croquis a pantalla completa"); falta la prueba en iPhone (fase 18 de la guía). **Iteración 19 (símbolos en el croquis, ADR-0027) terminada y desplegada en el entorno de pruebas el 2026-09-26**, con la biblioteca de prueba publicada; falta la prueba en iPhone (fase 19 de la guía) y la lista de símbolos de TEINS. **Iteración 20 (contactos del cliente e informe por correo y WhatsApp, ADR-0028) construida el 2026-09-27** con maquetas aprobadas (página "v1.0 · Informe por correo y WhatsApp"), y desplegada en el entorno de pruebas: el correo sale de verdad por Resend (dominio de pruebas `deportur.tech`) y WhatsApp sigue simulado hasta tener el número de prueba de Meta con la plantilla `informe_publicado` aprobada (sección "Iteración 20", "Fuera"). WhatsApp queda en espera: el 2026-09-27 Kevin avisó un problema con su cuenta de Meta. **Iteración 21 (cotizaciones desde las cantidades, ADR-0029) construida el 2026-09-27** con maquetas aprobadas (página "v1.1 · Cotizaciones") y precios de prueba: con ella se cierra el plan de las iteraciones 15 a 21. Siguiente: la prueba en iPhone de las fases 9 a 19 (antes, revisar por qué `bajada.spec` falla contra el entorno), la cuenta de Meta para WhatsApp, y lo que TEINS entregue: lista de precios, plantilla de la cotización (P29), tratamiento tributario, numeración y lista de símbolos. Pendiente menor: las fallas intermitentes de `repeticiones.spec` (WebKit, local) y `bajada.spec` (entorno). El JavaScript inicial de campo está en 119,9 de 120 KB: cualquier cosa nueva de campo debe cargarse aparte.
 
 **El recorrido delgado está completo (cortes 0 a 5, 2026-09-25)** y desplegado en el entorno de pruebas. Antes de la primera demostración a TEINS:
 
@@ -940,6 +940,107 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **El AIU no aplica a la instalación ni al mantenimiento de redes eléctricas** según la doctrina de la DIAN: la cotización admite IVA sobre el subtotal o AIU con IVA sobre la utilidad, y el contador de TEINS decide en cada caso.
 - **En iPhone, la app instalada no comparte datos con Safari** y los avisos solo llegan a la app instalada: la instalación va antes de iniciar sesión.
 - **La biblioteca `web-push` es MPL-2.0,** que la verificación de licencias ya admite.
+
+## Iteración 21 · Cotizaciones desde las cantidades
+
+**Estado:** terminada el 2026-09-27, verificada en local y desplegada en el entorno de pruebas (ver "Terminado cuando"). Maquetas aprobadas por Kevin en el lienzo (página "v1.1 · Cotizaciones", "Sí, aprobadas"); decidió que los precios los cambia solo administración.
+
+**Para qué:** de la visita revisada a una cotización con PDF y envío, sin volver a digitar las cantidades (P27, QA-12).
+
+### Alcance
+
+- **Lista de precios con historia (ADR-0029, parte 1):** en "Catálogo", la columna "Precio sin IVA" y el filtro "Solo los que no tienen precio"; "Cambiar precio" (solo administración con segundo factor) abre la hoja lateral con la historia. Importar el CSV con una columna de precio también es de administración; para el resto de oficina, el archivo entra sin precios y lo dice. Los precios nunca bajan al teléfono (regla 7).
+- **Módulo `cotizaciones` (ADR-0029, parte 2):** "Cotizaciones" en la navegación. "Nueva cotización" elige una visita con levantamientos revisados; las líneas salen de sus cantidades, sumadas por ítem y unidad, con el precio vigente. Oficina cambia cantidad y precio por línea (se ve el del catálogo si lo cambió), agrega líneas (mano de obra), quita con "Deshacer", elige IVA sobre el subtotal o AIU con IVA sobre la utilidad, y fija validez, forma de pago y notas.
+- **Pesos enteros:** el cálculo vive en el dominio, con `BigInt`; la pantalla y el servidor usan el mismo. Una línea sin precio impide publicar, y el aviso está junto a la línea.
+- **Numeración `COT-{año}-{consecutivo}`,** por organización y año, sin repetirse.
+- **Versiones inmutables con PDF** (cola `pdf`, carta, con la marca), y envío por correo como el informe (ADR-0028): cada contacto marca si recibe informes, cotizaciones o los dos, y al publicar se marcan quienes reciben cotizaciones.
+- **La impresión a PDF pasó a `plataforma/pdf.ts`:** un módulo no importa las partes internas de otro.
+
+### Fuera de la iteración 21
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Lista de precios, plantilla (P29), tratamiento tributario, forma de pago y numeración de TEINS | Cuando TEINS los entregue: la lista se importa por CSV (administración); la numeración cambia en `numeroDeCotizacion` |
+| Estado comercial de la cotización (aceptada, rechazada) y su retiro | Si TEINS lo pide |
+| Cotizaciones en el portal del cliente | Si TEINS lo pide: hoy el portal solo muestra informes |
+| WhatsApp de la cotización (plantilla `cotizacion_publicada`) | Con la cuenta de Meta, como el del informe |
+| Contar los símbolos del croquis como cantidades | Si TEINS lo pide: el código de catálogo ya viaja en cada símbolo puesto |
+| Precios de prueba en `sembrar` | No hacen falta: el entorno de pruebas los pone administración desde "Catálogo" |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Kevin aprueba las maquetas | Hecho el 2026-09-27 |
+| 2. El cálculo es exacto en pesos enteros: línea, porcentajes, IVA, AIU con IVA sobre la utilidad, líneas sin precio, validación y numeración | Hecho: `dominio/src/cotizacion.test.ts` |
+| 3. Solo administración cambia o importa precios; la historia se conserva y reimportar el mismo precio no la ensucia | Hecho: `servidor/pruebas/cotizaciones.test.ts` |
+| 4. La cotización toma las cantidades revisadas con el precio vigente, se numera, no se publica sin precios, se publica congelada (cambiar la lista después no la toca; la base no deja modificarla) con su PDF, y su envío sale como cotización | Hecho: `servidor/pruebas/cotizaciones.test.ts` y `envios.test.ts` |
+| 5. Extremo a extremo: administración pone el precio, el técnico anota el material, oficina revisa, crea la cotización, agrega mano de obra, elige AIU, publica y descarga el PDF, y el contacto de compras la recibe | Hecho en Chromium y WebKit (`e2e/pruebas/cotizaciones.spec.ts`) |
+| 6. Lo anterior sigue igual | Hecho el 2026-09-27: tipos, arquitectura, licencias y auditoría en verde; dominio 103, protocolo 18, oficina 6, campo 80, servidor 134; extremo a extremo 40 y 3 omitidas en Chromium y WebKit (la de cotizaciones falló una vez en WebKit porque el nombre del PDF llega en forma NFD, como en macOS; la prueba ahora lo normaliza); campo sigue en 119,9 de 120 KB |
+| 7. Desplegada en el entorno de pruebas | Hecho el 2026-09-27: el worker en `SUCCESS` (con `cotizaciones.generarPdf`) antes que la app; campo (que aplicó `0026` y `0027`), oficina y portal en `SUCCESS` y salud en 200. Contra el entorno, `cotizaciones.spec` e `informe-al-cliente.spec` en verde en Chromium, con el correo de la cotización saliendo por Resend |
+
+### Decisiones tomadas al construirlo
+
+- **Puede haber más de una cotización por visita** (alternativas); la hoja de "Nueva cotización" dice cuáles ya tiene.
+- **El borrador guarda la cantidad y el precio de cada línea;** la versión publicada guarda además sus totales calculados, así el PDF y la lista no recalculan.
+- **En pantallas de menos de 1600 px, los totales y la publicación van debajo de las líneas,** en dos columnas: la tabla de líneas no cabe al lado del panel a 1366 px.
+- **Las pruebas del servidor de cotizaciones no procesan envíos:** la cola es compartida y el correo de la cotización se prueba en `envios.test.ts`.
+- **Quitar una línea no pide confirmación:** se deshace con la notificación (DESIGN.md).
+
+## Iteración 20 · Contactos del cliente e informe por correo y WhatsApp
+
+**Estado:** construida el 2026-09-27 con los envíos simulados y verificada en local (ver "Terminado cuando"). Maquetas aprobadas por Kevin en el lienzo (página "v1.0 · Informe por correo y WhatsApp", "Sí, aprobadas"). Kevin eligió construir sin las cuentas externas: el correo y el WhatsApp reales esperan la clave de Resend y el número de prueba de Meta.
+
+**Para qué:** que el informe publicado le llegue al cliente por correo y WhatsApp con el PDF adjunto (P17), y que oficina vea qué llegó y qué no.
+
+### Alcance
+
+- **Contactos del cliente (ADR-0028, parte 5):** el cliente tiene su pantalla (Clientes → el cliente) con sus contactos y sus sitios. Cada contacto: nombre, cargo, correo, celular y por qué canal recibe el informe. WhatsApp exige la autorización, que queda con quién de oficina la confirmó y cuándo; cambiar el celular la borra. La lista de clientes dice cuántos reciben el informe y avisa "Nadie".
+- **Publicar con destinatarios:** el diálogo de publicar marca por omisión a todos los que reciben el informe; se puede desmarcar. Sin contactos, avisa que el informe solo quedará en el portal y lleva a agregarlos.
+- **Envíos (módulo `envios`, ADR-0028):** una fila por contacto y canal, "En cola" al publicar; salen cuando el PDF queda listo, en la misma transacción que lo marca. Correo por Resend (HTTPS, idempotente, con el PDF adjunto y el enlace al portal); WhatsApp por la Cloud API de Meta con la plantilla `informe_publicado` y el PDF en el encabezado.
+- **Estado de cada envío:** En cola, Enviado, Entregado y No llegó, con el motivo. Los eventos firmados de Resend (Svix) y de Meta (`X-Hub-Signature-256`) llegan a `/api/envios/eventos/correo` y `/api/envios/eventos/whatsapp`. Un rebote marca el correo del contacto. Lo que no llega avisa por push a quien lo pidió y se marca en la bandeja de Informes ("Envío sin entregar").
+- **Volver a enviar y enviar a otro contacto** desde el panel "Envíos de la versión N"; el intento anterior se conserva.
+- **Retirar del portal** dice a quién ya le llegó una copia, porque no se recupera.
+- **Proveedores simulados** (`ENVIOS_SIMULADOS=true`) en desarrollo, en el extremo a extremo y en el entorno de pruebas: aceptan todo menos las direcciones con "rebota" (y los celulares que terminan en 000). El servidor no arranca con simulados en producción.
+
+### Fuera de la iteración 20
+
+| Qué | Dónde se resuelve |
+|---|---|
+| Correo real en el entorno de pruebas: cuenta de Resend, dominio verificado, `RESEND_CLAVE_API`, `RESEND_SECRETO_EVENTOS`, `CORREO_REMITENTE`, `CORREO_RESPONDER_A` y la dirección de eventos registrada | Cuando Kevin entregue la cuenta: variables en el worker (clave) y en `oficina` (secreto de eventos), y `ENVIOS_SIMULADOS` fuera |
+| WhatsApp real: número de prueba de Meta, plantilla `informe_publicado` aprobada, `WHATSAPP_TOKEN`, `WHATSAPP_NUMERO_ID`, `WHATSAPP_SECRETO_APP`, `WHATSAPP_TOKEN_VERIFICACION` | Igual que el correo; producción con la cuenta de WhatsApp Business de TEINS (R10) |
+| Producción: dominio de TEINS y su cuenta de WhatsApp Business | Al transferir producción (ADR-0021) |
+| Un envío que se acepta y no se reenvía si el worker cae justo después de que Meta lo aceptó (Meta no tiene llave de idempotencia) | Aceptado: el riesgo es un WhatsApp repetido, no uno perdido |
+| `bajada.spec.ts` "permiso local vencido" falla contra el entorno de pruebas incluso sola (2 de 2): al recargar sin conexión, el service worker no sirve la página (`ERR_INTERNET_DISCONNECTED`). En local pasa. La iteración no toca campo; ya había fallado una vez en la iteración 19 | Investigar antes de la prueba en iPhone: si el service worker controla la primera carga en el entorno (precarga terminada antes de quedar sin señal) |
+| La corrida completa contra el entorno choca con el límite de 5 inicios de sesión por minuto (QA-7) y falla en cualquier archivo | Correr contra el entorno de a un archivo con un minuto entre ellos, o subir el límite solo en pruebas con `INICIOS_DE_SESION_POR_MINUTO` |
+| `informes.test.ts` ("planos verificados") falló una vez en la corrida completa del servidor y pasó al repetirla: otro archivo verificó el plano antes de publicar | Ya existía la carrera: aislar la cola de verificación por archivo si vuelve a fallar |
+
+### Terminado cuando
+
+| Criterio | Estado |
+|---|---|
+| 1. Kevin aprueba las maquetas | Hecho el 2026-09-27 |
+| 2. Contactos: se crean, cambian y quitan (sin borrar la fila, ADR-0009); WhatsApp exige la autorización y la registra; el técnico no los ve | Hecho: `servidor/pruebas/envios.test.ts` |
+| 3. Los envíos esperan el PDF y salen con el adjunto, el asunto, las etiquetas y las variables de la plantilla; lo rechazado queda "No llegó" con su motivo, se marca en la bandeja y se vuelve a enviar | Hecho: `servidor/pruebas/envios.test.ts` |
+| 4. Nadie envía a un contacto de otro cliente, por un canal que no recibe, ni una versión retirada | Hecho: `servidor/pruebas/envios.test.ts` |
+| 5. Eventos: sin firma válida o viejos se rechazan; entregado, rebote (marca al contacto) y fallo de WhatsApp cambian el estado | Hecho: `servidor/pruebas/envios.test.ts` |
+| 6. Extremo a extremo: contactos desde oficina, publicar con destinatarios, "No llegó" con su motivo, "Envío sin entregar" en la bandeja, corregir el correo y volver a enviar | Hecho en Chromium y WebKit (`e2e/pruebas/informe-al-cliente.spec.ts`) |
+| 7. Lo anterior sigue igual | Hecho el 2026-09-27: tipos, arquitectura, licencias y auditoría en verde; dominio 95, protocolo 18, oficina 4, campo 80, servidor 127; extremo a extremo 37 y 3 omitidas en Chromium y WebKit; campo sigue en 119,9 de 120 KB (la iteración no toca campo) |
+| 8. Desplegada en el entorno de pruebas, el worker antes que la app, con los envíos simulados | Hecho el 2026-09-27: `ENVIOS_SIMULADOS` aplicado con `railway config apply`; el worker en `SUCCESS` antes de subir la app; campo (que aplicó `0024` y `0025`), oficina y portal en `SUCCESS`, salud en 200 y el contrato nuevo publicado. Extremo a extremo contra el entorno en Chromium: `informe-al-cliente.spec` en verde. La corrida completa tuvo 8 fallas por el límite de 5 inicios de sesión por minuto (429 en el inicio de sesión); repetidas de a una, con un minuto entre ellas, pasaron 7. La octava, `bajada.spec` (permiso vencido), falla sola: ver "Fuera" |
+| 9. Correo y WhatsApp reales en el entorno de pruebas | Correo hecho el 2026-09-27: clave de solo envío limitada a `deportur.tech` y dirección de eventos creadas con el CLI de Resend (Kevin guardó los secretos en Railway por tubería); `informe-al-cliente.spec` contra el entorno en verde, con los envíos saliendo por Resend y tres eventos firmados aceptados (204). WhatsApp en espera: el 2026-09-27 Kevin avisó un problema con su cuenta de Meta y pidió seguir con la iteración 21; mientras tanto sigue simulado |
+
+### Decisiones tomadas al construirlo
+
+- **Quitar un contacto no borra la fila:** la aplicación no borra en ninguna tabla de negocio (ADR-0009, prueba de plataforma). Se borran su correo, su celular y su autorización, y queda el nombre.
+- **Los eventos se aceptan solo con el id del mensaje que dio el proveedor** (o antes de guardarlo): un evento firmado de otro mensaje no cambia un envío.
+- **El panel muestra el último intento por contacto y canal:** uno que no llegó y se volvió a enviar ya no pide nada; el historial completo queda en la base.
+- **Publicar confirma con el botón de peligro**, como dice `DESIGN.md` para lo que no se deshace (antes usaba el principal).
+- **Sin la configuración de un canal, sus envíos quedan "No llegó: … no está configurado en este entorno":** oficina lo ve, nunca se pierde en silencio.
+- **Mientras la plantilla de WhatsApp no esté aprobada, Meta rechaza el envío** y queda "No llegó" con su motivo (la maqueta decía "En cola"): así oficina sabe que no salió.
+- **La simulación se elige por canal** (`ENVIOS_SIMULADOS`: `true`, `correo` o `whatsapp`): en el entorno de pruebas el correo sale de verdad por Resend con el dominio verificado de Kevin (`deportur.tech`, elegido por él para pruebas; producción irá con el de TEINS) mientras WhatsApp sigue simulado.
+- **El extremo a extremo usa las direcciones de prueba de Resend** (`delivered@resend.dev`, `bounced@resend.dev`): con Resend real no dañan la reputación del dominio, y simulado `bounced@resend.dev` también se rechaza, así la misma prueba sirve en local y en el entorno.
+- **El panel de envíos se vuelve a leer cada 10 s durante 10 minutos** después de enviar: la entrega o el rebote llegan por evento, no al enviar.
+- **En las pruebas del servidor, solo el archivo que trae sus proveedores procesa `envios.enviar`:** la cola es compartida entre archivos, como con los avisos.
 
 ## Iteración 19 · Símbolos en el croquis
 

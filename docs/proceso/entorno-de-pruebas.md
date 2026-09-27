@@ -39,6 +39,8 @@ Variables, iguales en los tres servicios (las credenciales son referencias, nunc
 | `PORTAL_URL` | Dominio del portal: la URL que lleva el QR de cada acceso |
 | `AVISOS_VAPID_PUBLICA` · `AVISOS_VAPID_PRIVADA` (solo `worker`) | Par VAPID de los avisos push (ADR-0023), generado con `generar-claves-avisos` sin mostrarlo; `campo` y `oficina` leen la pública por referencia (`${{worker.AVISOS_VAPID_PUBLICA}}`) |
 | `AVISOS_CONTACTO` (solo `worker`) | La dirección de oficina: va en cada envío para que el servicio de avisos pueda escribir |
+| `ENVIOS_SIMULADOS` · `RESEND_CLAVE_API` · `CORREO_REMITENTE` (solo `worker`) | `whatsapp`: el correo sale de verdad por Resend (clave de solo envío limitada a `deportur.tech`, remitente `TEINS pruebas <teins-pruebas@deportur.tech>`) y WhatsApp sigue simulado hasta tener el número de prueba de Meta (ADR-0028). Con Meta: `WHATSAPP_TOKEN` y `WHATSAPP_NUMERO_ID` en el worker, y `ENVIOS_SIMULADOS` en `false` |
+| `RESEND_SECRETO_EVENTOS` (solo `oficina`) | Secreto de la dirección de eventos registrada en Resend (`/api/envios/eventos/correo`). Con Meta, también `WHATSAPP_SECRETO_APP` y `WHATSAPP_TOKEN_VERIFICACION`, y la dirección `/api/envios/eventos/whatsapp` registrada en Meta |
 
 - **`TEINS_APP_CONTRASENA`** y **`TEINS_PORTAL_CONTRASENA`** viven en el servicio `Postgres`. El rol `teins_app` se creó con `infra/roles.sql` a través de `railway connect Postgres --tunnel-only` (túnel por SSH).
 - **`campo`:** pre-deploy `node dist/cli/migrar.js` (una sola migración por versión) y salud en `/salud`.
