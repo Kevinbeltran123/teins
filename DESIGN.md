@@ -12,6 +12,76 @@ Herramienta de trabajo para técnicos de Transporte de Datos y Transporte de Ene
 
 **Por qué cambió (iteración 14):** la dirección Marquilla dejaba botones de tamaños distintos, confirmaciones metidas en filas, resultados lejos de la acción que los producía y ninguna capa (diálogo, menú, notificación). Se compararon tres direcciones en el lienzo y se eligió Consola.
 
+## Campo · dirección Recorrido (desde el 2026-09-27)
+
+Kevin juzgó la interfaz de campo "demasiado fea": todo era una lista larga de campos. Lo único que le gustaba era el croquis. Se hizo una línea base (21 problemas), una crítica con impeccable y un prototipo navegable con ideas de Mobbin (`prototipos/campo/prototipo.html`, publicado en https://claude.ai/artifact/7w6dwx24fDUraW8EkWbNxj). Kevin aprobó la mezcla B+A: **la estructura sigue el recorrido de la visita y el lenguaje visual es el del croquis.** Oficina y portal siguen con Consola.
+
+- **La visita como recorrido.** La captura ya no es un solo desplazamiento. Un levantamiento nuevo abre en su primer paso; uno con datos, en el recorrido. El recorrido muestra cada sección del formato como un paso unido por una línea: hechos en verde, el actual resaltado con "Sigue aquí", los demás en espera, y al final "Revisar y enviar". Los pasos salen de las secciones del formato (regla 6): un formato nuevo tiene su recorrido sin escribir código.
+- **Un paso por pantalla.** Arriba: volver al recorrido, "Paso N de M", la barra de avance y el contador de pasos hechos. Abajo, fija: "Siguiente: …" hacia el paso que sigue. Avanzar no se bloquea: lo que falta se ve en el recorrido y en Revisar.
+- **Lo repetido son tarjetas.** Cada tablero se resume en una tarjeta con su estado ("Completo" o "Faltan N datos") y dos datos; tocarla la abre en su propia pantalla, con "Listo" abajo y "Quitar" al final.
+- **Revisar antes de enviar.** Un aviso de lo que no se podrá cambiar, cada sección con su estado y "Editar", y "Enviar a oficina" como única acción. Los datos que faltan se listan y cada uno lleva a su paso.
+- **Enviado.** Un chulo que se dibuja, "Levantamiento enviado" y "Puedes salir de esta pantalla".
+- **Oscuro, con papel claro.** Campo usa una paleta oscura (`[data-superficie="campo"]` en `tokens.css`): fondo casi negro, paneles un escalón más claros, la marca aclarada (#6E9BFF) con texto oscuro en los botones principales. Lo que se dibuja o se firma (croquis, firma, miniaturas de bocetos) conserva la paleta clara con `data-tema="claro"`, porque la tinta es negra. **Por decidir:** la lectura bajo sol directo se prueba en el iPhone; si el oscuro no se lee, se cambia solo en los tokens.
+- **Forma.** Radios más grandes (16 en controles, 22 en paneles, 28 en capas), botones redondos de icono como los del croquis, el botón que avanza de 60 px de alto. La unidad elegida (kVA, m, A) se pinta con el color del texto, no con el azul de la acción principal.
+- **Mis visitas.** La visita de hoy con una barra amarilla al borde y la fecha en una pastilla. El aviso de instalar es una línea que no empuja la visita, y un levantamiento enviado dice su estado una sola vez.
+- **Movimiento, todo CSS (regla 10).** Entre pasos, View Transitions del navegador: adelante, la pantalla nueva entra por la derecha; atrás, por la izquierda (`tema.css`). Las tarjetas nuevas suben al aparecer y el chulo de enviado se dibuja. Con movimiento reducido, nada se mueve.
+- **Componentes.** `EncabezadoDePaso`, `BarraDePaso`, `BotonSiguiente`, `ListaRecorrido`, `PasoDelRecorrido`, `TarjetaResumen`, `BotonAgregar`, `Repaso`, `FilaDeRepaso` y `ChuloDeExito`, en `paquetes/ui/src/Recorrido.tsx`.
+- **Peso.** El JavaScript inicial de campo puede llegar a 135 KB (ADR-0030); hoy mide 122,7 KB.
+- **Igual al prototipo (Kevin lo pidió así el 2026-09-27):**
+  - Saludo con la fecha, botón de cuenta (con el diagnóstico y "Cerrar sesión") y franja de sincronización.
+  - Cifra grande con la unidad en la misma caja y valores comunes en pastillas.
+  - Fotos por puesto con nombre, y "No se pudo obtener" como enlace.
+  - Tableros con tres datos.
+  - Materiales con − y +, "Agregar nota", pastilla con el total y catálogo en hoja alta, donde "Agregar" se vuelve − 1 +.
+  - Croquis como paso a pantalla completa, con "Listo".
+  - Firma con "Entrega el teléfono a quien te recibió".
+  - Revisar con "Sale ahora a oficina", y enviado con la cola de subida y "Siguiente visita".
+  - Inicio de sesión e instalación con la marca arriba y la acción abajo.
+  - Los valores comunes y los puestos son datos del formato (`valoresComunes`, `puestos`, `largo`; formato de prueba v8).
+
+## Identidad visual Recorrido (para llevarla a oficina)
+
+Kevin aprobó el resultado de campo el 2026-09-27 y pidió dejar anotada la identidad para aplicarla después a oficina. **Oficina todavía no se toca:** sigue con Consola hasta que Kevin lo pida. Esta es la identidad, en el orden en que se decide:
+
+**Método.** Primero una línea base de la pantalla actual con sus problemas numerados. Después una crítica con impeccable, referencias de Mobbin y un prototipo navegable en un artifact que Kevin aprueba. Solo entonces se construye, y la app debe quedar igual al prototipo, sin recortar nada. Cada pantalla se compara lado a lado con el prototipo antes de mostrarla.
+
+**Carácter.** Una herramienta, no un formulario. El modelo es el croquis: el contenido grande, los controles redondos y rellenos, un trabajo por pantalla y las capas que suben cuando hacen falta.
+
+**Color (tema oscuro).**
+
+| Papel | Valor |
+|---|---|
+| Fondo | `#0B0F17` |
+| Panel (tarjetas, campos) | `#151B26` |
+| Panel hundido (segmentos, filas dentro de un panel) | `#1E2634` |
+| Texto / secundario | `#F3F5F9` / `#AEB6C6` |
+| Acción principal | `#6E9BFF` con texto `#0B0F17` |
+| Acento (lo actual, el foco, "Sigue aquí") | `#FFC21A` |
+| Hecho / pendiente / error | `#3DD68C` / `#FFB547` / `#FF8A8A` |
+
+Lo que se dibuja o se firma va sobre papel claro (`data-tema="claro"`). Una opción elegida (unidad, valor común) se pinta con el color del texto, nunca con el azul de la acción.
+
+**Forma.** Radios de 16 en controles, 22 en paneles y 28 en capas. Campos rellenos sin borde que al enfocarse muestran borde amarillo. Botones redondos de icono de 48 px. El botón que avanza mide 60 px de alto, lleva flecha y va abajo en una barra con degradado.
+
+**Tipografía.** Una sola familia (Atkinson Hyperlegible Next). Títulos de 30/800. Etiquetas de 17/700 con "obligatorio" pequeño al lado, sin paréntesis. Cifras de 40/800 con números tabulares. Las etiquetas de grupo son pequeñas, en negrita y secundarias ("Después", "Enviados").
+
+**Patrones y de dónde salen (Mobbin).**
+- Tarjeta focal con barra amarilla al borde (Jobber).
+- Pasos unidos por una línea: hechos en verde, actual resaltado (Lloyds, Bloom).
+- Cifra con unidad en una caja y valores comunes en pastillas (Yazio, Up).
+- Fotos por puesto con nombre (eBay, Grailed).
+- Lo repetido como tarjetas con tres datos y su estado (Hevy, Runna).
+- "Agregar" que se vuelve − 1 + y una pastilla con el total (Gojek).
+- Datos faltantes en rojo en el campo, con una hoja que dice cuáles faltan (Cleo, Tesla, BitePal).
+- Revisar con aviso y "Editar" por sección (Vestiaire, Cash App).
+- Envío con avance real, etapas y chulo solo al recibir (Fiverr, Mindvalley).
+- Entrada con marca centrada, campos con etiqueta flotante y la llave de acceso como alternativa (Rocket Money, Remote, Oportun).
+- Cuenta como lista de ajustes.
+
+**Movimiento (siempre CSS).** Pantallas que entran por el lado de la dirección (View Transitions). Hojas que suben. Tarjetas y filas que suben al aparecer, una tras otra. Una sacudida en lo que falta y un latido en el contador de faltantes. El anillo que avanza y el chulo que se dibuja. Con movimiento reducido, nada se mueve.
+
+**Para oficina, cuando toque.** Escritorio y claro u oscuro, por decidir con Kevin. Se conserva lo que ya funciona de Consola (menú lateral, tablas, hojas laterales), con la forma, el color de acción, los campos rellenos, los faltantes animados y el cuidado del detalle de campo. El primer paso es la línea base de cotizaciones, donde Totales y Publicación hoy se parten en columnas de 150 px.
+
 ## La regla: todo se justifica
 
 Cada elemento de una pantalla responde a una pregunta: **¿qué decisión o acción de la persona ayuda?** Si no hay respuesta, no va.

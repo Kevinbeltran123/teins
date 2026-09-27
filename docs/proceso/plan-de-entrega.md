@@ -28,10 +28,13 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 19 | Biblioteca de símbolos en los bocetos | Tableros, UPS, tomas y demás con un toque, iguales en todo croquis | Terminada y desplegada en el entorno de pruebas; falta la prueba en iPhone |
 | Iteración 20 | Contactos del cliente e informe por correo y WhatsApp | El informe le llega al cliente por donde lo espera, con PDF adjunto (P17) | Terminada y desplegada en el entorno de pruebas; el correo sale de verdad por Resend, WhatsApp sigue simulado hasta tener el número de prueba de Meta |
 | Iteración 21 | Cotizaciones desde las cantidades | De la visita a la cotización sin volver a digitar (P27, QA-12) | Terminada y desplegada en el entorno de pruebas (precios de prueba; faltan los de TEINS) |
+| Iteración 22 | Campo rehecho con la dirección Recorrido (`DESIGN.md`) | Una app que los técnicos quieran usar: la captura sigue la visita paso a paso en vez de una lista interminable | Terminada, desplegada en el entorno de pruebas y aprobada por Kevin en su iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
+
+**Rediseño de campo (iteración 22, 2026-09-27).** Kevin dijo que todo funciona pero que la app es "demasiado fea". Se hizo una línea base con 21 problemas, una crítica con impeccable, referencias de Mobbin y un prototipo navegable (`prototipos/campo/prototipo.html`). Kevin aprobó la dirección Recorrido y quedó construida en campo y desplegada en el entorno de pruebas. Kevin la probó en el iPhone y aprobó el resultado. La identidad visual quedó anotada en `DESIGN.md` ("Identidad visual Recorrido") para llevarla a oficina más adelante; oficina no se toca hasta que Kevin lo pida. Siguiente: oficina con el mismo método, empezando por cotizaciones, cuando Kevin lo decida.
 
 **Plan acordado con Kevin el 2026-09-26: iteraciones 15 a 21** (sección "Iteraciones 15 a 21"). Kevin eligió siete funciones después de una investigación de producto (envío del informe por WhatsApp y correo, firma del cliente, símbolos y enderezado en los bocetos, ítems frecuentes en cantidades, avisos push y cotizaciones) y pidió terminar primero la PWA de campo. **Iteración 15 terminada y desplegada en el entorno de pruebas el 2026-09-26** (avisos push, ADR-0023, e instalación guiada; maquetas en el lienzo, página "v0.4 · Avisos e instalación"). Falta la prueba en iPhone (fase 15 de la guía, junto con las fases 9 a 14). **Iteración 16 (firma del cliente, ADR-0024) terminada y desplegada en el entorno de pruebas el 2026-09-26**, con el formato de prueba v7; falta la prueba en iPhone (fase 16 de la guía). **Iteración 17 (catálogo en el teléfono, ADR-0025) terminada y desplegada en el entorno de pruebas el 2026-09-26**; falta la prueba en iPhone (fase 17 de la guía). **Iteración 18 (croquis a pantalla completa con hojas, ADR-0026) terminada y desplegada en el entorno de pruebas el 2026-09-26** (maquetas aprobadas en la página "v0.8 · Croquis a pantalla completa"); falta la prueba en iPhone (fase 18 de la guía). **Iteración 19 (símbolos en el croquis, ADR-0027) terminada y desplegada en el entorno de pruebas el 2026-09-26**, con la biblioteca de prueba publicada; falta la prueba en iPhone (fase 19 de la guía) y la lista de símbolos de TEINS. **Iteración 20 (contactos del cliente e informe por correo y WhatsApp, ADR-0028) construida el 2026-09-27** con maquetas aprobadas (página "v1.0 · Informe por correo y WhatsApp"), y desplegada en el entorno de pruebas: el correo sale de verdad por Resend (dominio de pruebas `deportur.tech`) y WhatsApp sigue simulado hasta tener el número de prueba de Meta con la plantilla `informe_publicado` aprobada (sección "Iteración 20", "Fuera"). WhatsApp queda en espera: el 2026-09-27 Kevin avisó un problema con su cuenta de Meta. **Iteración 21 (cotizaciones desde las cantidades, ADR-0029) construida el 2026-09-27** con maquetas aprobadas (página "v1.1 · Cotizaciones") y precios de prueba: con ella se cierra el plan de las iteraciones 15 a 21. Siguiente: la prueba en iPhone de las fases 9 a 19 (antes, revisar por qué `bajada.spec` falla contra el entorno), la cuenta de Meta para WhatsApp, y lo que TEINS entregue: lista de precios, plantilla de la cotización (P29), tratamiento tributario, numeración y lista de símbolos. Pendiente menor: las fallas intermitentes de `repeticiones.spec` (WebKit, local) y `bajada.spec` (entorno). El JavaScript inicial de campo está en 119,9 de 120 KB: cualquier cosa nueva de campo debe cargarse aparte.
 
@@ -940,6 +943,57 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **El AIU no aplica a la instalación ni al mantenimiento de redes eléctricas** según la doctrina de la DIAN: la cotización admite IVA sobre el subtotal o AIU con IVA sobre la utilidad, y el contador de TEINS decide en cada caso.
 - **En iPhone, la app instalada no comparte datos con Safari** y los avisos solo llegan a la app instalada: la instalación va antes de iniciar sesión.
 - **La biblioteca `web-push` es MPL-2.0,** que la verificación de licencias ya admite.
+
+## Iteración 22 · Campo rehecho con la dirección Recorrido
+
+**Estado:** terminada, desplegada en el entorno de pruebas y aprobada por Kevin en su iPhone el 2026-09-27.
+
+**Para qué:** Kevin juzgó la interfaz "demasiado fea". En el teléfono todo era una lista larga de campos, y lo único que le gustaba era el croquis.
+
+### Cómo se hizo
+
+1. **Línea base:** 21 pantallas de campo en tamaño iPhone y 21 problemas numerados (artifact "Línea base de campo").
+2. **Crítica con impeccable:** 22/40 y veredicto "genérica". Lo más grave (P0) era la captura en un solo desplazamiento.
+3. **Referencias de Mobbin:** 15 búsquedas en apps reales (Jobber, Lloyds, Hevy, Gojek, Vestiaire y otras).
+4. **Prototipo navegable** con la mezcla B+A: estructura de recorrido y lenguaje del croquis (`prototipos/campo/prototipo.html`). Kevin lo aprobó.
+
+### Terminado cuando
+
+| Criterio | Evidencia |
+|---|---|
+| La captura va por pasos: recorrido, un paso por sección, tarjetas para lo repetido, revisar antes de enviar | `Captura.tsx` (`Borrador`, `Repeticiones`, `Repeticion`); pruebas de extremo a extremo de envío, repeticiones, firma y cifrado |
+| El recorrido sale de las secciones del formato, sin código por formato (regla 6) | Los pasos se arman con `formato.secciones` |
+| Paleta oscura en campo; croquis, firma y miniaturas sobre papel claro | `tokens.css` (`[data-superficie="campo"]`, `[data-tema="claro"]`) |
+| El movimiento es CSS (regla 10) | View Transitions y `@keyframes` en `tema.css`; el JavaScript solo cambia de pantalla |
+| Presupuesto de peso | 120,1 KB de 135 KB (ADR-0030) |
+| Verificación | Tipos, arquitectura, licencias, pruebas rápidas y extremo a extremo en Chromium y WebKit (39 pasan, 3 omitidas) |
+
+### Decisiones tomadas al construirlo
+
+- Un levantamiento nuevo abre en su primer paso; uno con datos, en el recorrido.
+- Avanzar no se bloquea. Lo que falta se ve en el recorrido y se lista en Revisar, donde cada dato lleva a su paso.
+- La unidad elegida se pinta con el color del texto, para que el azul quede solo en la acción que avanza.
+- El aviso de instalar es una línea. Un enviado ya no repite su estado en una insignia.
+- "Guardado en este teléfono" se muestra en el recorrido, no en cada paso.
+
+### Corrección del 2026-09-27
+
+Al probarlo en el iPhone, Kevin vio que el contador de pasos no avanzaba y que la firma se veía lavada. También vio que varias pantallas del prototipo quedaron comprimidas en una. Pidió que quedara igual al prototipo, sin recortar nada.
+
+Se agregó lo que faltaba:
+- el formato v8 con los pasos del prototipo (Llegada, Cuarto técnico, Tableros, Materiales, Croquis, Firma del cliente), valores comunes y fotos por puesto;
+- el campo de medida grande;
+- materiales con − y + y el catálogo alto;
+- el croquis y la firma como pasos propios;
+- la pantalla de enviado del prototipo;
+- el saludo y la cuenta en Mis visitas;
+- el inicio de sesión rediseñado.
+
+El contador cuenta también los pasos por los que ya se pasó. El texto de lo que se dibuja o se firma toma el color de la paleta clara. "Diagnóstico del teléfono" pasó al botón de la cuenta.
+
+### Fuera de la iteración 22
+
+Oficina y portal siguen con Consola: el mismo método empieza por cotizaciones.
 
 ## Iteración 21 · Cotizaciones desde las cantidades
 

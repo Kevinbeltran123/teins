@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "all-caps-body",
+        "value": "*",
+        "files": [
+          "prototipos/campo/prototipo.html"
+        ],
+        "createdAt": "2026-09-27T19:35:53.665Z",
+        "reason": "Claude: solo etiquetas cortas (.ceja, contador) del prototipo, no texto corrido"
+      }
+    ]
+  }
+}

@@ -53,6 +53,7 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0027](0027-simbolos-de-los-bocetos.md) | Símbolos de los bocetos: biblioteca como datos de la organización, copiada en el boceto que la usa | Aceptada |
 | [0028](0028-envio-del-informe-al-cliente.md) | Envío del informe al cliente por correo (Resend) y WhatsApp (Cloud API de Meta), con contactos del cliente y estado por envío | Aceptada |
 | [0029](0029-cotizaciones.md) | Cotizaciones desde las cantidades revisadas, con lista de precios con historia, IVA o AIU y versiones inmutables | Aceptada |
+| [0030](0030-presupuesto-de-campo-para-el-rediseno.md) | El presupuesto de JavaScript inicial de campo sube a 135 KB para el rediseño Recorrido | Aceptada |
 
 ### Estados
 
