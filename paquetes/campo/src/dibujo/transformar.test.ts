@@ -37,4 +37,14 @@ describe("mover, girar y cambiar el tamaño (iteración 18, ADR-0026)", () => {
     expect(elementoEn(elementos, [640, 90], 12)).toBe(2);
     expect(elementoEn(elementos, [300, 604], 12)).toBe(3);
   });
+
+  it("un símbolo se mueve, gira sumando su giro, cambia de tamaño dentro de sus límites y se toma por dentro (iteración 19)", () => {
+    const ups: ElementoBoceto = { tipo: "simbolo", simbolo: "s", nombre: "UPS", trazado: "M10 25H90V75H10Z", texto: "UPS", centro: [300, 300], tamano: 100, giro: 0 };
+    expect(mover(ups, 10, 20)).toMatchObject({ centro: [310, 320], tamano: 100 });
+    expect(girar(ups, 90, [300, 300])).toMatchObject({ centro: [300, 300], giro: 90 });
+    expect(escalar(ups, 2, [300, 300])).toMatchObject({ tamano: 200 });
+    expect(escalar(ups, 0.01, [300, 300])).toMatchObject({ tamano: 10 });
+    expect(elementoEn([ups], [310, 290], 12)).toBe(0);
+    expect(elementoEn([ups], [420, 300], 12)).toBe(-1);
+  });
 });

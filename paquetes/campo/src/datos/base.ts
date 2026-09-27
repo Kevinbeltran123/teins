@@ -3,7 +3,7 @@ import type { VersionFormato } from "@teins/dominio";
 import v1 from "@teins/dominio/formatos-de-prueba/prueba-ups.v1.json";
 import v2 from "@teins/dominio/formatos-de-prueba/prueba-ups.v2.json";
 import { VERSION_APP } from "../version";
-import type { Ajuste, ClaveLocal, ArchivoGuardado, BajadaLocal, EnvioGuardado, EstadoServidorGuardado, FormatoLocal, ItemCatalogoLocal, LevantamientoGuardado, UsuarioLocal, VisitaGuardada } from "./modelo";
+import type { Ajuste, ClaveLocal, ArchivoGuardado, BajadaLocal, EnvioGuardado, EstadoServidorGuardado, FormatoLocal, ItemCatalogoLocal, LevantamientoGuardado, SimboloLocal, UsuarioLocal, VisitaGuardada } from "./modelo";
 
 export type BaseCampo = Dexie & {
   levantamientos: EntityTable<LevantamientoGuardado, "id">;
@@ -16,6 +16,7 @@ export type BaseCampo = Dexie & {
   bajadas: EntityTable<BajadaLocal, "tecnicoId">;
   claves: EntityTable<ClaveLocal, "tecnicoId">;
   catalogo: EntityTable<ItemCatalogoLocal, "id">;
+  simbolos: EntityTable<SimboloLocal, "id">;
 };
 
 /** Los formatos que los cortes 0 y 1 traían en el código. Solo los usa la migración a la versión 3. */
@@ -87,6 +88,10 @@ export function abrirBase(nombre = "teins-campo"): BaseCampo {
   // Iteración 17: el catálogo de la organización, para elegir materiales sin conexión (ADR-0025). Llega con
   // la bajada: al actualizar a la app 8, el teléfono baja todo de nuevo y lo trae completo.
   db.version(5).stores({ catalogo: "id" });
+
+  // Iteración 19: la biblioteca de símbolos de los bocetos (ADR-0027), igual que el catálogo: llega con la bajada
+  // y, al actualizar a la app 10, el teléfono baja todo de nuevo y la trae completa.
+  db.version(6).stores({ simbolos: "id" });
 
   return db;
 }

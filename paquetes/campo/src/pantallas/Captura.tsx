@@ -624,6 +624,8 @@ function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: str
   const [editando, setEditando] = useState<number | null>(null);
   const hojas = documento ? hojasDe(documento) : [];
   const hayDibujo = hojas.some((h) => h.elementos.length > 0);
+  // La biblioteca de símbolos (ADR-0027), solo mientras se dibuja.
+  const simbolos = useLiveQuery(() => (editando === null ? [] : db.simbolos.toArray()), [editando === null]);
   return (
     <div className="flex flex-col gap-2">
       <EtiquetaCampo obligatorio={campo.obligatorio}>{campo.etiqueta}</EtiquetaCampo>
@@ -642,6 +644,7 @@ function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: str
             etiqueta={campo.etiqueta}
             inicial={documento ?? null}
             hojaInicial={editando}
+            simbolos={simbolos}
             guardar={async (d) => {
               await repositorio.guardarBoceto(id, seccion, campo.clave, d, new Date());
               alGuardar();

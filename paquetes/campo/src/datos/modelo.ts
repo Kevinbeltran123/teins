@@ -1,4 +1,4 @@
-import type { Levantamiento, Repeticiones, Respuestas, VersionFormato } from "@teins/dominio";
+import type { DefinicionSimbolo, Levantamiento, Repeticiones, Respuestas, VersionFormato } from "@teins/dominio";
 import type { EnviarLevantamiento, VisitaAsignada } from "@teins/protocolo";
 
 /** Un valor cifrado con AES-GCM (ADR-0022): el vector de inicio y el texto cifrado con su etiqueta. */
@@ -118,6 +118,15 @@ export interface ItemCatalogoLocal {
   codigo: string;
   descripcion: string;
   unidad: string;
+  activo: boolean;
+}
+
+/**
+ * Símbolo de la biblioteca de los bocetos (iteración 19, ADR-0027): sin sellar, como el catálogo. Uno inactivo
+ * deja de ofrecerse; los bocetos que ya lo usan lo llevan copiado.
+ */
+export interface SimboloLocal extends DefinicionSimbolo {
+  orden: number;
   activo: boolean;
 }
 

@@ -1,4 +1,4 @@
-import { puntosDeElemento, type ElementoBoceto, type Punto } from "@teins/dominio";
+import { LIMITES_SIMBOLO, puntosDeElemento, type ElementoBoceto, type Punto } from "@teins/dominio";
 
 /**
  * Mover, girar, cambiar el tamaño y duplicar (ADR-0026): se recalculan las coordenadas del elemento; el
@@ -41,6 +41,7 @@ function cadaPunto(e: ElementoBoceto, f: (p: Punto) => Punto): ElementoBoceto {
     case "polilinea":
       return { ...e, puntos: e.puntos.map(g) };
     case "elipse":
+    case "simbolo":
       return { ...e, centro: g(e.centro) };
   }
 }
@@ -52,7 +53,7 @@ export function girar(e: ElementoBoceto, grados: number, centro: Punto): Element
   if (e.tipo === "texto") return e;
   const [cos, sen] = [Math.cos((grados * Math.PI) / 180), Math.sin((grados * Math.PI) / 180)];
   const girado = cadaPunto(e, ([x, y]) => [centro[0] + (x - centro[0]) * cos - (y - centro[1]) * sen, centro[1] + (x - centro[0]) * sen + (y - centro[1]) * cos]);
-  if (girado.tipo !== "elipse") return girado;
+  if (girado.tipo !== "elipse" && girado.tipo !== "simbolo") return girado;
   let giro = r1(girado.giro + grados) % 360;
   if (giro > 180) giro -= 360;
   if (giro < -180) giro += 360;
@@ -64,6 +65,7 @@ export function escalar(e: ElementoBoceto, factor: number, centro: Punto): Eleme
   const escalado = cadaPunto(e, ([x, y]) => [centro[0] + (x - centro[0]) * factor, centro[1] + (y - centro[1]) * factor]);
   if (escalado.tipo === "elipse") return { ...escalado, radios: [r1(escalado.radios[0] * factor), r1(escalado.radios[1] * factor)] };
   if (escalado.tipo === "texto") return { ...escalado, tamano: Math.min(120, Math.max(8, r1(escalado.tamano * factor))) };
+  if (escalado.tipo === "simbolo") return { ...escalado, tamano: Math.min(LIMITES_SIMBOLO.tamanoMaximo, Math.max(LIMITES_SIMBOLO.tamanoMinimo, r1(escalado.tamano * factor))) };
   return escalado;
 }
 
@@ -108,6 +110,8 @@ export function elementoEn(elementos: readonly ElementoBoceto[], p: Punto, toler
         if (Math.abs(normal - 1) * Math.min(...e.radios) <= margen) return i;
         break;
       }
+      // El símbolo se toma por dentro, como el texto: es una pieza, no una línea.
+      case "simbolo":
       case "texto": {
         const c = cajaDe(e);
         if (p[0] >= c.x - tolerancia && p[0] <= c.x + c.ancho + tolerancia && p[1] >= c.y - tolerancia && p[1] <= c.y + c.alto + tolerancia) return i;

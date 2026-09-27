@@ -2,9 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Even
 import {
   altoDeHoja,
   aVersion2,
+  elementoDeSimbolo,
   hojaNueva,
   LIENZO,
   LIMITES_BOCETO,
+  LIMITES_SIMBOLO,
   type DocumentoBoceto,
   type ElementoBoceto,
   type HojaBoceto,
@@ -32,6 +34,7 @@ import {
   Plus,
   Redo2,
   Ruler,
+  Shapes,
   Trash,
   Type,
   Undo2,
@@ -40,6 +43,10 @@ import { ajustarAngulo, enderezar, pegarA, type Forma } from "../dibujo/endereza
 import { cajaDe, centroDe, duplicar, elementoEn, escalar, girar, mover } from "../dibujo/transformar";
 import { contornoDe as contornoDelTrazo } from "../dibujo/trazo";
 import { acercar, aPantalla, encajar, VISTA_COMPLETA, type Encaje, type Tamano, type Vista } from "../dibujo/vista";
+import type { SimboloLocal } from "../datos/modelo";
+import { recordarReciente } from "../simbolos";
+// La biblioteca de símbolos (ADR-0027) va con el editor: no pesa en el arranque de campo.
+import HojaSimbolos from "./HojaSimbolos";
 
 /**
  * Editor de bocetos a pantalla completa (ADR-0019, ADR-0026), como GoodNotes: una sola barra de iconos arriba y
@@ -108,12 +115,15 @@ export default function EditorBoceto({
   etiqueta,
   inicial,
   hojaInicial = 0,
+  simbolos,
   guardar,
   cerrar,
 }: {
   etiqueta: string;
   inicial: DocumentoBoceto | null;
   hojaInicial?: number;
+  /** La biblioteca del teléfono (ADR-0027); `undefined` mientras se lee. */
+  simbolos: readonly SimboloLocal[] | undefined;
   guardar: (documento: DocumentoBoceto) => Promise<void>;
   cerrar: () => void;
 }) {
@@ -129,6 +139,7 @@ export default function EditorBoceto({
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [textoPedido, setTextoPedido] = useState("");
   const [menuHojas, setMenuHojas] = useState(false);
+  const [biblioteca, setBiblioteca] = useState(false);
   const [deslizar, setDeslizarEstado] = useState(0);
   const [entrada, setEntrada] = useState<"siguiente" | "anterior" | null>(null);
   const [anillo, setAnillo] = useState<Punto | null>(null);
@@ -491,6 +502,24 @@ export default function EditorBoceto({
     setPedido(null);
   }
 
+  /**
+   * Un símbolo de la biblioteca cae en el centro de lo que se ve, elegido y con "Mover", para llevarlo a su sitio.
+   * Mide lo mismo en pantalla a cualquier acercamiento.
+   */
+  function ponerSimbolo(s: SimboloLocal) {
+    setBiblioteca(false);
+    if (!hoja || !marco || !encaje || hoja.elementos.length >= LIMITES_BOCETO.elementos) return;
+    const centro: Punto = [
+      r1((marco.ancho / 2 - encaje.x - vista.x) / pxPorUnidad),
+      r1((marco.alto / 2 - encaje.y - vista.y) / pxPorUnidad),
+    ];
+    const tamano = Math.round(Math.min(Math.max(unidades(96), LIMITES_SIMBOLO.tamanoMinimo), LIMITES_SIMBOLO.tamanoMaximo));
+    cambiarElementos([...hoja.elementos, elementoDeSimbolo(s, centro, tamano)]);
+    setHerramienta("mover");
+    setSeleccion(hoja.elementos.length);
+    recordarReciente(s.id);
+  }
+
   function duplicarSeleccion() {
     if (seleccion === null || !hoja || hoja.elementos.length >= LIMITES_BOCETO.elementos) return;
     cambiarElementos([...hoja.elementos, duplicar(hoja.elementos[seleccion]!)]);
@@ -714,7 +743,7 @@ export default function EditorBoceto({
               aria-haspopup="menu"
               aria-expanded={menuHojas}
               aria-label={`Hojas: ${hoja.nombre}, hoja ${actual + 1} de ${hojas.length}`}
-              className="absolute bottom-2.5 left-1/2 flex h-control-sm max-w-[calc(100%-120px)] -translate-x-1/2 items-center gap-1.5 rounded-panel border border-division bg-panel pr-2.5 pl-3.5 text-ayuda font-bold whitespace-nowrap shadow-menu [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:text-texto-secundario"
+              className="absolute bottom-2.5 left-1/2 flex h-control-sm max-w-[calc(100%-160px)] -translate-x-1/2 items-center gap-1.5 rounded-panel border border-division bg-panel pr-2.5 pl-3.5 text-ayuda font-bold whitespace-nowrap shadow-menu [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:text-texto-secundario"
               onClick={() => setMenuHojas((abierto) => !abierto)}
             >
               <span className="truncate">{hoja.nombre}</span>
@@ -723,11 +752,23 @@ export default function EditorBoceto({
               </span>
               {menuHojas ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
             </button>
+            <button
+              type="button"
+              aria-label="Símbolos"
+              aria-expanded={biblioteca}
+              className="absolute right-2 bottom-2.5 flex size-12 items-center justify-center rounded-panel border border-division bg-panel text-superficie shadow-menu [&_svg]:size-6"
+              onClick={() => {
+                setMenuHojas(false);
+                setBiblioteca(true);
+              }}
+            >
+              <Shapes aria-hidden />
+            </button>
             {vista.escala > 1 && (
               <button
                 type="button"
                 aria-label="Ver la hoja completa"
-                className="absolute right-2 bottom-2.5 h-control-sm rounded-panel border border-division bg-panel px-3 text-ayuda font-bold shadow-menu"
+                className="absolute bottom-2.5 left-2 h-control-sm rounded-panel border border-division bg-panel px-3 text-ayuda font-bold shadow-menu"
                 onClick={() => setVista(VISTA_COMPLETA)}
               >
                 {Math.round(vista.escala * 100)} %
@@ -736,6 +777,8 @@ export default function EditorBoceto({
           </>
         )}
       </div>
+
+      {biblioteca && <HojaSimbolos simbolos={simbolos} elegir={ponerSimbolo} cerrar={() => setBiblioteca(false)} />}
 
       {pedido && (
         <Dialogo

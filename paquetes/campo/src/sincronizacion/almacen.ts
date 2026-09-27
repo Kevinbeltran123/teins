@@ -149,7 +149,7 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
           sellados.set(i, await sellarEstado(db, { id: cambio.id, tecnicoId, estado: cambio.estado, recibidoEn: cambio.recibidoEn, comentarios: cambio.comentarios }));
         }
       }
-      return db.transaction("rw", [db.formatos, db.visitas, db.estadosServidor, db.bajadas, db.levantamientos, db.catalogo], async () => {
+      return db.transaction("rw", [db.formatos, db.visitas, db.estadosServidor, db.bajadas, db.levantamientos, db.catalogo, db.simbolos], async () => {
         for (const [i, cambio] of bajada.cambios.entries()) {
           switch (cambio.tipo) {
             case "formato":
@@ -169,6 +169,9 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
               break;
             case "item_catalogo":
               await db.catalogo.put(cambio.item);
+              break;
+            case "simbolo":
+              await db.simbolos.put(cambio.simbolo);
               break;
           }
         }
