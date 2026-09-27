@@ -97,25 +97,32 @@ export const VersionFormato = z
   })
   .meta({ id: "VersionFormato" });
 
-/** Documento de un boceto (ADR-0019), tal como lo entrega el servidor ya verificado. */
+/** Documento de un boceto (ADR-0019, ADR-0026), tal como lo entrega el servidor ya verificado. */
 const PuntoBoceto = z.tuple([z.number(), z.number()]).readonly();
+const ElementosBoceto = z
+  .array(
+    z.discriminatedUnion("tipo", [
+      z.object({ tipo: z.literal("trazo"), grosor: z.number(), puntos: z.array(z.tuple([z.number(), z.number(), z.number()]).readonly()).readonly(), contorno: z.array(PuntoBoceto).readonly() }),
+      z.object({ tipo: z.literal("linea"), grosor: z.number(), desde: PuntoBoceto, hasta: PuntoBoceto }),
+      z.object({ tipo: z.literal("texto"), en: PuntoBoceto, texto: z.string(), tamano: z.number() }),
+      // Versión 2 (ADR-0026).
+      z.object({ tipo: z.literal("polilinea"), grosor: z.number(), puntos: z.array(PuntoBoceto).readonly(), cerrada: z.boolean() }),
+      z.object({ tipo: z.literal("elipse"), grosor: z.number(), centro: PuntoBoceto, radios: PuntoBoceto, giro: z.number() }),
+      z.object({ tipo: z.literal("cota"), grosor: z.number(), desde: PuntoBoceto, hasta: PuntoBoceto, texto: z.string() }),
+    ]),
+  )
+  .readonly();
 export const DocumentoBoceto = z
-  .object({
-    formato: z.literal("teins-boceto"),
-    version: z.literal(1),
-    ancho: z.number(),
-    alto: z.number(),
-    cuadricula: z.number(),
-    elementos: z
-      .array(
-        z.discriminatedUnion("tipo", [
-          z.object({ tipo: z.literal("trazo"), grosor: z.number(), puntos: z.array(z.tuple([z.number(), z.number(), z.number()]).readonly()).readonly(), contorno: z.array(PuntoBoceto).readonly() }),
-          z.object({ tipo: z.literal("linea"), grosor: z.number(), desde: PuntoBoceto, hasta: PuntoBoceto }),
-          z.object({ tipo: z.literal("texto"), en: PuntoBoceto, texto: z.string(), tamano: z.number() }),
-        ]),
-      )
-      .readonly(),
-  })
+  .discriminatedUnion("version", [
+    z.object({ formato: z.literal("teins-boceto"), version: z.literal(1), ancho: z.number(), alto: z.number(), cuadricula: z.number(), elementos: ElementosBoceto }),
+    // Versión 2: hojas con nombre (ADR-0026).
+    z.object({
+      formato: z.literal("teins-boceto"),
+      version: z.literal(2),
+      cuadricula: z.number(),
+      hojas: z.array(z.object({ nombre: z.string(), ancho: z.number(), alto: z.number(), elementos: ElementosBoceto })).readonly(),
+    }),
+  ])
   .meta({ id: "DocumentoBoceto" });
 
 // Comprobaciones en compilación: lo que la frontera acepta es exactamente lo que el dominio usa.
