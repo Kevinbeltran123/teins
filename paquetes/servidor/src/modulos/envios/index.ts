@@ -1,0 +1,240 @@
+import { randomUUID } from "node:crypto";
+import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import type { FastifyInstance } from "fastify";
+import type { Respuesta } from "@teins/protocolo";
+import type { Config } from "../../config";
+import type { Almacenamiento } from "../../plataforma/almacenamiento";
+import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
+import { encolar, type Trabajos } from "../../plataforma/cola";
+import { problema } from "../../plataforma/errores";
+import { registrarRutaPublica } from "../../plataforma/rutas";
+import { avisar } from "../avisos";
+import { contactosDelCliente } from "../clientes";
+import { envios, type CanalDeEnvio, type FilaEnvio, type MensajeDeEnvio } from "./esquema";
+import { eventoDeResend, eventosDeWhatsapp, firmaMetaValida, firmaSvixValida, type EventoDeEnvio } from "./eventos";
+import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "./mensajes";
+import { RechazoDefinitivo, type Proveedores } from "./proveedores";
+
+export type { MensajeDeCotizacion, MensajeDeEnvio, MensajeDeInforme } from "./esquema";
+export { proveedoresSegunConfig, proveedoresSimulados, RechazoDefinitivo, type Proveedores, type ProveedorDeCorreo, type ProveedorDeWhatsapp } from "./proveedores";
+
+type EnvioDeVersion = Respuesta<"obtenerInforme">["versiones"][number]["envios"][number];
+
+/** Resend admite 40 MB después de codificar en base64: por encima de esto el PDF no va adjunto (ADR-0028, parte 3). */
+const BYTES_MAXIMOS_ADJUNTO = 30 * 1024 * 1024;
+
+export interface Programacion {
+  organizacionId: string;
+  versionId: string;
+  /** Cliente de la versión; las versiones muy antiguas pueden no tenerlo. */
+  clienteId: string | null | undefined;
+  mensaje: MensajeDeEnvio;
+  destinos: readonly { contactoId: string; canal?: CanalDeEnvio | undefined }[];
+  por: string;
+  /** Ruta del PDF en el almacenamiento, si ya está listo: los envíos se encolan de una vez. */
+  pdfRuta?: string | undefined;
+}
+
+/**
+ * Crea un envío "En cola" por destinatario y canal, en la transacción de quien lo pide (publicar o
+ * enviar otra vez). Sale cuando el PDF está listo (ADR-0028, parte 3).
+ */
+export async function programarEnvios(tx: TxOrganizacion, p: Programacion): Promise<number> {
+  if (p.destinos.length === 0) return 0;
+  if (!p.clienteId) throw problema("estado_invalido", "La versión no tiene cliente: no hay a quién enviarla");
+  const destinatarios = await contactosDelCliente.paraEnviar(tx, p.clienteId, p.destinos);
+  for (const d of destinatarios) {
+    const id = randomUUID();
+    await tx.insert(envios).values({ id, organizacionId: p.organizacionId, versionId: p.versionId, contactoId: d.contactoId, contactoNombre: d.nombre, canal: d.canal, destino: d.destino, mensaje: p.mensaje, creadoPor: p.por });
+    if (p.pdfRuta) await encolarEnvio(tx, { organizacionId: p.organizacionId, envioId: id, pdfRuta: p.pdfRuta });
+  }
+  return destinatarios.length;
+}
+
+/** El PDF de la versión quedó listo: salen sus envíos en cola, en la misma transacción que lo marca (ADR-0012). */
+export async function enviarAlQuedarListo(tx: TxOrganizacion, { organizacionId, versionId, pdfRuta }: { organizacionId: string; versionId: string; pdfRuta: string }): Promise<void> {
+  const pendientes = await tx.select({ id: envios.id }).from(envios).where(and(eq(envios.versionId, versionId), eq(envios.estado, "en_cola")));
+  for (const { id } of pendientes) await encolarEnvio(tx, { organizacionId, envioId: id, pdfRuta });
+}
+
+const encolarEnvio = (tx: TxOrganizacion, datos: Trabajos["envios.enviar"]) => encolar(tx, "envios.enviar", datos, { llave: `envios.enviar:${datos.envioId}`, intentosMaximos: 5 });
+
+const comoEnvio = (f: Pick<FilaEnvio, "id" | "contactoId" | "contactoNombre" | "canal" | "destino" | "estado" | "error" | "creadoEn" | "enviadoEn">): EnvioDeVersion => ({
+  id: f.id,
+  contacto: { id: f.contactoId, nombre: f.contactoNombre },
+  canal: f.canal,
+  destino: f.destino,
+  estado: f.estado,
+  error: f.error,
+  creadoEn: f.creadoEn.toISOString(),
+  enviadoEn: f.enviadoEn?.toISOString() ?? null,
+});
+
+/** Envíos por versión, del más reciente al más antiguo. */
+export async function enviosDeVersiones(tx: TxOrganizacion, versionIds: readonly string[]): Promise<Map<string, EnvioDeVersion[]>> {
+  const mapa = new Map<string, EnvioDeVersion[]>();
+  if (versionIds.length === 0) return mapa;
+  const filas = await tx.select().from(envios).where(inArray(envios.versionId, [...versionIds])).orderBy(desc(envios.creadoEn), envios.contactoNombre, envios.canal);
+  for (const f of filas) mapa.set(f.versionId, [...(mapa.get(f.versionId) ?? []), comoEnvio(f)]);
+  return mapa;
+}
+
+/**
+ * Versiones con una copia que no llegó y no se volvió a enviar: el último intento de algún contacto
+ * y canal quedó "No llegó" (la bandeja de Informes lo muestra).
+ */
+export async function versionesConEnvioSinEntregar(tx: TxOrganizacion, versionIds: readonly string[]): Promise<Set<string>> {
+  if (versionIds.length === 0) return new Set();
+  const ultimos = tx
+    .selectDistinctOn([envios.versionId, envios.contactoId, envios.canal], { versionId: envios.versionId, estado: envios.estado })
+    .from(envios)
+    .where(inArray(envios.versionId, [...versionIds]))
+    .orderBy(envios.versionId, envios.contactoId, envios.canal, desc(envios.creadoEn))
+    .as("ultimos");
+  const filas = await tx.select({ versionId: ultimos.versionId }).from(ultimos).where(eq(ultimos.estado, "fallido"));
+  return new Set(filas.map((f) => f.versionId));
+}
+
+async function leerTodo(almacenamiento: Almacenamiento, ruta: string): Promise<Buffer> {
+  const partes: Buffer[] = [];
+  for await (const trozo of await almacenamiento.leer(ruta)) partes.push(trozo as Buffer);
+  return Buffer.concat(partes);
+}
+
+/** "No llegó": queda el motivo y se avisa a quien lo pidió. Un rebote de correo marca al contacto. */
+async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string, rebote = false): Promise<void> {
+  const [cambiado] = await tx
+    .update(envios)
+    .set({ estado: "fallido", error: motivo.slice(0, 500), actualizadoEn: new Date() })
+    .where(and(eq(envios.id, fila.id), ne(envios.estado, "fallido")))
+    .returning({ id: envios.id });
+  if (!cambiado) return;
+  if (rebote && fila.canal === "correo") await contactosDelCliente.marcarRebote(tx, fila.contactoId, fila.destino, motivo);
+  await avisar(tx, { tipo: "envio_fallido", organizacionId: fila.organizacionId, usuarioId: fila.creadoPor, versionId: fila.versionId });
+}
+
+export interface Envios {
+  /** Manejador del trabajo `envios.enviar` (worker). Idempotente: un envío que salió de "En cola" no se repite. */
+  enviar(datos: Trabajos["envios.enviar"], contexto: { ultimoIntento: boolean }): Promise<void>;
+  /** Eventos firmados de los proveedores (rol web). */
+  registrarRutas(app: FastifyInstance): void;
+}
+
+/** Interfaz pública del módulo de envíos al cliente (ADR-0028). */
+export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { bd: BaseDeDatos; almacenamiento: Almacenamiento; config: Config; proveedores?: Proveedores }): Envios {
+  async function salir(fila: FilaEnvio, pdf: Buffer): Promise<{ id: string }> {
+    const m = fila.mensaje;
+    if (fila.canal === "correo") {
+      if (!proveedores.correo) throw new RechazoDefinitivo("El envío por correo no está configurado en este entorno");
+      const sinAdjunto = pdf.length > BYTES_MAXIMOS_ADJUNTO;
+      const opciones = { nombre: fila.contactoNombre, portal: m.documento === "cotizacion" ? undefined : config.PORTAL_URL, sinAdjunto };
+      return proveedores.correo({
+        idempotencia: fila.id,
+        de: config.CORREO_REMITENTE,
+        para: fila.destino,
+        responderA: config.CORREO_RESPONDER_A,
+        asunto: asunto(m),
+        html: htmlDeCorreo(m, opciones),
+        texto: textoDeCorreo(m, opciones),
+        adjunto: sinAdjunto ? null : { nombre: m.nombreArchivo, contenido: pdf },
+        etiquetas: { organizacion: fila.organizacionId, envio: fila.id },
+      });
+    }
+    if (!proveedores.whatsapp) throw new RechazoDefinitivo("El envío por WhatsApp no está configurado en este entorno");
+    return proveedores.whatsapp({
+      para: fila.destino,
+      plantilla: m.documento === "cotizacion" ? config.WHATSAPP_PLANTILLA_COTIZACION : config.WHATSAPP_PLANTILLA,
+      idioma: config.WHATSAPP_IDIOMA,
+      variables: variablesDeWhatsapp(m, fila.contactoNombre),
+      documento: { nombre: m.nombreArchivo, contenido: pdf },
+      referencia: `${fila.organizacionId}:${fila.id}`,
+    });
+  }
+
+  /** El estado solo avanza; un rebote o un fallo después de "Entregado" sí pasa a "No llegó" (ADR-0028, parte 4). */
+  async function aplicar(evento: EventoDeEnvio): Promise<void> {
+    await enOrganizacion(bd, evento.organizacionId, async (tx) => {
+      const [fila] = await tx
+        .select()
+        .from(envios)
+        .where(and(eq(envios.id, evento.envioId), or(isNull(envios.proveedorId), eq(envios.proveedorId, evento.proveedorId))));
+      if (!fila) return;
+      if (evento.estado === "fallido") return marcarFallido(tx, fila, evento.motivo ?? "El proveedor no lo entregó", evento.rebote);
+      await tx
+        .update(envios)
+        .set({ estado: "entregado", proveedorId: evento.proveedorId, actualizadoEn: new Date() })
+        .where(and(eq(envios.id, fila.id), inArray(envios.estado, ["en_cola", "enviado"])));
+    });
+  }
+
+  return {
+    async enviar({ organizacionId, envioId, pdfRuta }, { ultimoIntento }) {
+      const [fila] = await enOrganizacion(bd, organizacionId, (tx) => tx.select().from(envios).where(eq(envios.id, envioId)));
+      if (!fila || fila.estado !== "en_cola") return;
+      try {
+        const { id } = await salir(fila, await leerTodo(almacenamiento, pdfRuta));
+        await enOrganizacion(bd, organizacionId, (tx) =>
+          tx
+            .update(envios)
+            .set({ estado: "enviado", proveedorId: id, enviadoEn: new Date(), actualizadoEn: new Date() })
+            .where(and(eq(envios.id, envioId), eq(envios.estado, "en_cola"))),
+        );
+      } catch (error) {
+        // Definitivo o sin más intentos: "No llegó" con su motivo. Si no, la cola lo reintenta.
+        if (!(error instanceof RechazoDefinitivo) && !ultimoIntento) throw error;
+        const motivo = error instanceof RechazoDefinitivo ? error.message : `No se pudo enviar después de varios intentos: ${error instanceof Error ? error.message : String(error)}`;
+        await enOrganizacion(bd, organizacionId, (tx) => marcarFallido(tx, fila, motivo));
+      }
+    },
+
+    registrarRutas(app) {
+      // Cuerpo crudo: la firma se calcula sobre los bytes tal como llegaron. Solo en estas rutas.
+      void app.register(async (eventos) => {
+        eventos.removeContentTypeParser("application/json");
+        eventos.addContentTypeParser("application/json", { parseAs: "buffer" }, (_solicitud, cuerpo, listo) => listo(null, cuerpo));
+
+        registrarRutaPublica(eventos, {
+          method: "POST",
+          url: "/api/envios/eventos/correo",
+          motivo: "Eventos de entrega de Resend, verificados por su firma (ADR-0028, parte 4)",
+          handler: async (solicitud, respuesta) => {
+            const secreto = config.RESEND_SECRETO_EVENTOS;
+            const cuerpo = solicitud.body as Buffer | undefined;
+            const cabecera = (nombre: string) => [solicitud.headers[nombre]].flat()[0];
+            if (!secreto || !Buffer.isBuffer(cuerpo)) throw problema("no_encontrado", "Los eventos de correo están apagados en este entorno");
+            if (!firmaSvixValida(secreto, { id: cabecera("svix-id"), hora: cabecera("svix-timestamp"), firma: cabecera("svix-signature") }, cuerpo)) throw problema("no_autenticado", "Firma inválida");
+            const evento = eventoDeResend(JSON.parse(cuerpo.toString("utf8")));
+            if (evento) await aplicar(evento);
+            return respuesta.status(204).send();
+          },
+        });
+
+        registrarRutaPublica(eventos, {
+          method: "GET",
+          url: "/api/envios/eventos/whatsapp",
+          motivo: "Verificación de la dirección de eventos que hace Meta al registrarla (ADR-0028, parte 4)",
+          handler: async (solicitud, respuesta) => {
+            const q = solicitud.query as Record<string, string | undefined>;
+            const token = config.WHATSAPP_TOKEN_VERIFICACION;
+            if (!token || q["hub.mode"] !== "subscribe" || q["hub.verify_token"] !== token || !q["hub.challenge"]) throw problema("sin_permiso", "Token de verificación inválido");
+            return respuesta.type("text/plain").send(q["hub.challenge"]);
+          },
+        });
+
+        registrarRutaPublica(eventos, {
+          method: "POST",
+          url: "/api/envios/eventos/whatsapp",
+          motivo: "Estados de los mensajes de WhatsApp, verificados por la firma de Meta (ADR-0028, parte 4)",
+          handler: async (solicitud, respuesta) => {
+            const secreto = config.WHATSAPP_SECRETO_APP;
+            const cuerpo = solicitud.body as Buffer | undefined;
+            if (!secreto || !Buffer.isBuffer(cuerpo)) throw problema("no_encontrado", "Los eventos de WhatsApp están apagados en este entorno");
+            if (!firmaMetaValida(secreto, [solicitud.headers["x-hub-signature-256"]].flat()[0], cuerpo)) throw problema("no_autenticado", "Firma inválida");
+            for (const evento of eventosDeWhatsapp(JSON.parse(cuerpo.toString("utf8")))) await aplicar(evento);
+            return respuesta.status(200).send();
+          },
+        });
+      });
+    },
+  };
+}

@@ -52,9 +52,11 @@ import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { crearArchivos } from "../src/modulos/archivos";
 import { crearAvisos, type EnviadorDeAvisos } from "../src/modulos/avisos";
+import { crearEnvios, type Proveedores } from "../src/modulos/envios";
 import { crearFormatos } from "../src/modulos/formatos";
 import { crearIdentidad } from "../src/modulos/identidad";
 import { crearGeneradorPdf } from "../src/modulos/informes";
+import { crearGeneradorPdfDeCotizaciones } from "../src/modulos/cotizaciones";
 import { definirTareas } from "../src/tareas";
 import { codigoTotp } from "./totp";
 
@@ -69,7 +71,7 @@ export const cabecerasSync = { [CABECERA_VERSION]: String(VERSION_PROTOCOLO) };
  * Servidor completo sobre la base y el almacenamiento reales de la prueba. Con `enviadorDeAvisos`, este
  * archivo también procesa los avisos push; sin él, no los toma de la cola compartida (son de otro archivo).
  */
-export async function servidorDePrueba(opciones: { config?: Partial<Record<string, string>>; enviadorDeAvisos?: EnviadorDeAvisos } = {}) {
+export async function servidorDePrueba(opciones: { config?: Partial<Record<string, string>>; enviadorDeAvisos?: EnviadorDeAvisos; proveedoresDeEnvio?: Proveedores } = {}) {
   const config = configDePrueba({ INICIOS_DE_SESION_POR_MINUTO: "1000", ...opciones.config });
   const { app: conexionApp, propietario } = conexionesDePrueba();
   const almacenamiento = almacenamientoS3(config);
@@ -103,7 +105,11 @@ export async function servidorDePrueba(opciones: { config?: Partial<Record<strin
 
   const informes = crearGeneradorPdf({ bd: conexionApp.bd, almacenamiento, config });
   const avisos = crearAvisos({ bd: conexionApp.bd, config, enviador: opciones.enviadorDeAvisos });
-  const tareas = definirTareas({ archivos, informes, avisos });
+  // Envíos al cliente (ADR-0028): con los proveedores que traiga la prueba.
+  const envios = crearEnvios({ bd: conexionApp.bd, almacenamiento, config, proveedores: opciones.proveedoresDeEnvio ?? {} });
+  const tareas = definirTareas({ archivos, informes, avisos, envios, cotizaciones: crearGeneradorPdfDeCotizaciones({ bd: conexionApp.bd, almacenamiento, config }) });
+  // La cola es compartida entre archivos: solo el que trae sus proveedores procesa los envíos, con los suyos.
+  if (!opciones.proveedoresDeEnvio) delete tareas["envios.enviar"];
   if (!opciones.enviadorDeAvisos) delete tareas["avisos.enviar"];
   /**
    * Ejecuta los trabajos pendientes, como lo haría el worker. Los archivos de pruebas corren en paralelo

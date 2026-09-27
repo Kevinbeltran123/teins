@@ -1,5 +1,18 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { chromium } from "playwright-core";
 import { PDFDocument } from "pdf-lib";
+
+/*
+  Impresión de documentos a PDF (ADR-0013): la usan el informe y la cotización (ADR-0029). Vive en la
+  plataforma porque un módulo no importa las partes internas de otro.
+*/
+
+const requerir = createRequire(import.meta.url);
+let fuente: string | undefined;
+/** La misma familia de la interfaz, incrustada: el PDF no depende de las fuentes del servidor (ADR-0013). */
+export const fuenteIncrustada = () =>
+  (fuente ??= readFileSync(requerir.resolve("@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2")).toString("base64"));
 
 export interface Impresion {
   html: string;
@@ -19,10 +32,10 @@ export class PlanoIlegible extends Error {
 }
 
 /**
- * Imprime el informe con Chromium sin interfaz y anexa los planos con pdf-lib. La página no ejecuta
+ * Imprime el documento con Chromium sin interfaz y anexa los planos con pdf-lib. La página no ejecuta
  * JavaScript ni sale a la red: todo lo que muestra viene incrustado en el HTML.
  */
-export async function imprimirInforme({ html, pie, planos, metadatos, chromiumRuta }: Impresion): Promise<Uint8Array> {
+export async function imprimirPdf({ html, pie, planos, metadatos, chromiumRuta }: Impresion): Promise<Uint8Array> {
   const navegador = await chromium.launch({
     ...(chromiumRuta ? { executablePath: chromiumRuta } : {}),
     // En el contenedor corre sin privilegios y sin el espacio de nombres que pide el sandbox de Chromium;

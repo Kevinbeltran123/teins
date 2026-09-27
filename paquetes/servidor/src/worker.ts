@@ -3,6 +3,8 @@ import pino from "pino";
 import { leerConfig } from "./config";
 import { crearArchivos } from "./modulos/archivos";
 import { crearAvisos, enviadorSegunConfig } from "./modulos/avisos";
+import { crearGeneradorPdfDeCotizaciones } from "./modulos/cotizaciones";
+import { crearEnvios, proveedoresSegunConfig } from "./modulos/envios";
 import { crearGeneradorPdf } from "./modulos/informes";
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
@@ -22,6 +24,8 @@ const almacenamiento = almacenamientoS3(config);
 const archivos = crearArchivos({ bd: negocio.bd, almacenamiento, config });
 const informes = crearGeneradorPdf({ bd: negocio.bd, almacenamiento, config });
 const avisos = crearAvisos({ bd: negocio.bd, config, enviador: enviadorSegunConfig(config) });
+const envios = crearEnvios({ bd: negocio.bd, almacenamiento, config, proveedores: proveedoresSegunConfig(config) });
+const cotizaciones = crearGeneradorPdfDeCotizaciones({ bd: negocio.bd, almacenamiento, config });
 
 const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
   const metodo = nivel === "error" ? "error" : nivel === "warning" ? "warn" : nivel === "debug" ? "debug" : "info";
@@ -30,7 +34,7 @@ const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
 
 const corredor = await run({
   pgPool: cola.pool,
-  taskList: definirTareas({ archivos, informes, avisos }),
+  taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones }),
   concurrency: 4,
   // Las tareas periódicas (ADR-0012, regla 5) se declaran aquí cuando existan; nunca en un archivo suelto.
   crontab: "",

@@ -13,6 +13,7 @@ const TITULOS: Record<CodigoProblema, string> = {
   estado_invalido: "La acción no aplica en el estado actual",
   no_tomado: "Solo quien tomó la revisión puede hacerlo",
   informe_invalido: "El informe no cumple sus reglas",
+  cotizacion_invalida: "A la cotización le falta algo para publicarse",
   segundo_factor_requerido: "Active el segundo factor para administrar",
   archivos_faltantes: "Faltan archivos por subir",
   archivos_en_verificacion: "Hay archivos en verificación",

@@ -34,6 +34,11 @@ src/
                      siempre con la conexión del rol teins_portal (ADR-0009, partes 3 y 4).
     avisos/          Avisos push (ADR-0023): suscripciones por persona y navegador, un trabajo por
                      suscripción encolado en la transacción del hecho, envío con VAPID en el worker.
+    cotizaciones/    Cotizaciones desde las cantidades revisadas (ADR-0029): borrador, consecutivo por año,
+                     versiones inmutables con su PDF (cola `pdf`) y envío por `envios`.
+    envios/          Informe al cliente por correo (Resend) y WhatsApp (Cloud API de Meta), ADR-0028:
+                     un envío por contacto y canal, que sale al quedar listo el PDF; eventos firmados
+                     de los proveedores y proveedores simulados (ENVIOS_SIMULADOS).
   app.ts        Composición del rol web.
   web.ts        Punto de entrada del rol web.
   worker.ts     Punto de entrada del rol worker.
@@ -88,6 +93,10 @@ Comandos de administración (uso en el encabezado de cada archivo de `src/cli/`)
 | `crear-acceso-cliente`, `regenerar-acceso-cliente` | Acceso de un cliente al portal: muestra una sola vez identificador, clave y QR (`--qr archivo.svg` lo guarda); regenerar invalida el anterior y sus sesiones |
 
 El permiso de trabajo sin conexión dura `DIAS_PERMISO_LOCAL` días (7 por defecto) desde el último contacto.
+
+Cotizaciones (iteración 21, ADR-0029): la lista de precios vive en `catalogo.precios` (una fila por cambio, el vigente es el más reciente; cambiarla o importarla con precios exige administración con segundo factor) y las cotizaciones en el esquema `cotizaciones` (migraciones `0026` y `0027`: las versiones publicadas solo dejan cambiar las columnas de su PDF). `crearCotizacion` toma las cantidades de los levantamientos revisados (`levantamientos.cantidadesRevisadas`) con los precios vigentes; `publicarCotizacion` congela líneas, impuestos y totales, encola `cotizaciones.generarPdf` y programa los envíos con el mensaje de tipo `cotizacion`. La impresión HTML a PDF está en `plataforma/pdf.ts` y la usan el informe y la cotización.
+
+Envíos al cliente (iteración 20, ADR-0028): los contactos viven en `clientes.contactos` y los envíos en `envios.envios` (migraciones `0024` y `0025`). Publicar con `destinatarios` crea los envíos "En cola"; el worker los encola al marcar el PDF listo (`enviarAlQuedarListo`) y los manda con el trabajo `envios.enviar`. Sin `RESEND_CLAVE_API` o sin `WHATSAPP_TOKEN` y `WHATSAPP_NUMERO_ID`, ese canal queda "No llegó: no está configurado"; con `ENVIOS_SIMULADOS=true` (desarrollo, extremo a extremo y entorno de pruebas; nunca en producción) nada sale del servidor y una dirección con "rebota" o un celular que termina en 000 se rechazan. Los eventos de Resend llegan a `POST /api/envios/eventos/correo` (firma Svix con `RESEND_SECRETO_EVENTOS`) y los de Meta a `GET` y `POST /api/envios/eventos/whatsapp` (`WHATSAPP_TOKEN_VERIFICACION` y `WHATSAPP_SECRETO_APP`). Todas las variables están en `.env.example`.
 
 Símbolos (iteración 19, ADR-0027): módulo `simbolos` con su tabla por organización (migraciones `0022` y `0023`); `publicar` valida la biblioteca con `validarBiblioteca` del dominio y registra un cambio `simbolo` por símbolo tocado, que la sincronización entrega a la app 10 o posterior. En el PDF, el símbolo copiado en el boceto se dibuja con `hojaASvg`.
 

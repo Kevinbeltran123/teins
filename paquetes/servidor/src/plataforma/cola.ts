@@ -6,6 +6,8 @@ export interface Trabajos {
   "archivos.verificar": { organizacionId: string; huella: string };
   "informes.generarPdf": { organizacionId: string; versionId: string };
   "avisos.enviar": { organizacionId: string; suscripcionId: string; titulo: string; cuerpo: string; etiqueta: string };
+  "envios.enviar": { organizacionId: string; envioId: string; pdfRuta: string };
+  "cotizaciones.generarPdf": { organizacionId: string; versionId: string };
 }
 export type NombreTrabajo = keyof Trabajos;
 

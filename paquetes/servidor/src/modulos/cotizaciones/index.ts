@@ -1,0 +1,405 @@
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import type { FastifyInstance } from "fastify";
+import { calcularTotales, lineasDesdeCantidades, numeroDeCotizacion, validarCotizacion, type BorradorCotizacion, type LineaDeCotizacion } from "@teins/dominio";
+import type { Config } from "../../config";
+import type { Almacenamiento } from "../../plataforma/almacenamiento";
+import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
+import { encolar } from "../../plataforma/cola";
+import { problema } from "../../plataforma/errores";
+import { fuenteIncrustada, imprimirPdf } from "../../plataforma/pdf";
+import { politicas } from "../../plataforma/politicas";
+import { registrarOperacion } from "../../plataforma/rutas";
+import { registrar } from "../auditoria";
+import type { Catalogo } from "../catalogo";
+import { enviarAlQuedarListo, enviosDeVersiones, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeCotizacion } from "../envios";
+import type { Identidad } from "../identidad";
+import type { Levantamientos } from "../levantamientos";
+import type { Visitas } from "../visitas";
+import { consecutivos, cotizaciones, versionesCotizacion, type ContenidoCotizacion, type EstadoPdfCotizacion } from "./esquema";
+import { piePaginaCotizacion, plantillaCotizacion } from "./pdf/plantilla";
+
+interface Dependencias {
+  bd: BaseDeDatos;
+  almacenamiento: Almacenamiento;
+  levantamientos: Pick<Levantamientos, "cantidadesRevisadas">;
+  visitas: Pick<Visitas, "resumenes" | "clienteDe">;
+  catalogo: Pick<Catalogo, "items" | "preciosVigentes">;
+  identidad: Pick<Identidad, "nombres" | "nombreDeOrganizacion">;
+}
+
+export interface Cotizaciones {
+  /** Trabajo del worker (cola `pdf`, de a uno). Idempotente: un PDF listo nunca se vuelve a generar. */
+  generarPdf(datos: { organizacionId: string; versionId: string }, contexto: { ultimoIntento: boolean }): Promise<void>;
+  registrarRutas(app: FastifyInstance): void;
+}
+
+const SIN_NOMBRE = "[Usuario no disponible]";
+/** Objetos por contenido, como los PDF del informe (ADR-0007). */
+const clave = (organizacionId: string, huella: string) => `${organizacionId}/${huella}`;
+/** Con qué nombre se descarga: se encuentra después por el número y el cliente. */
+const nombreDelPdf = (c: Pick<ContenidoCotizacion, "numero" | "version" | "visita">) =>
+  `Cotización ${c.numero} - ${c.visita.cliente} - versión ${c.version}.pdf`.replace(/[/\\:*?"<>|]/g, "-");
+
+/** Id de línea: 8 caracteres, como los de las cantidades. */
+const idDeLinea = () => BigInt(`0x${randomBytes(8).toString("hex")}`).toString(36).padStart(8, "0").slice(-8);
+
+const CONDICIONES_INICIALES = { validezDias: 30, formaPago: "", notas: "" };
+
+/** Año en Colombia: una cotización creada el 31 de diciembre a las 8 p. m. es de ese año. */
+const anioEnColombia = (ahora = new Date()) => Number(ahora.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }).slice(0, 4));
+
+/** Lo único que necesita el worker: el PDF de una versión desde su copia congelada. */
+export function crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }: { bd: BaseDeDatos; almacenamiento: Almacenamiento; config: Config }): Pick<Cotizaciones, "generarPdf"> {
+  return {
+    async generarPdf({ organizacionId, versionId }, { ultimoIntento }) {
+      const [version] = await enOrganizacion(bd, organizacionId, (tx) => tx.select().from(versionesCotizacion).where(eq(versionesCotizacion.id, versionId)));
+      if (!version || version.pdfEstado === "listo") return;
+      const c = version.contenido;
+      try {
+        const pdf = await imprimirPdf({
+          html: plantillaCotizacion(c, { fuente: fuenteIncrustada() }),
+          pie: piePaginaCotizacion(c),
+          planos: [],
+          metadatos: { titulo: `Cotización ${c.numero} · ${c.visita.cliente} · versión ${c.version}`, autor: c.organizacion.nombre, fecha: new Date(c.publicadaEn) },
+          chromiumRuta: config.CHROMIUM_RUTA,
+        });
+        const huella = createHash("sha256").update(pdf).digest("hex");
+        await almacenamiento.guardar(clave(organizacionId, huella), pdf, "application/pdf");
+        await enOrganizacion(bd, organizacionId, async (tx) => {
+          const listo = await tx
+            .update(versionesCotizacion)
+            .set({ pdfEstado: "listo", pdfHuella: huella, pdfGeneradoEn: new Date(), pdfError: null })
+            .where(and(eq(versionesCotizacion.id, versionId), sql`${versionesCotizacion.pdfEstado} <> 'listo'`))
+            .returning({ id: versionesCotizacion.id });
+          // Los envíos al cliente salen ahora, con el PDF adjunto (ADR-0028, ADR-0029).
+          if (listo.length > 0) await enviarAlQuedarListo(tx, { organizacionId, versionId, pdfRuta: clave(organizacionId, huella) });
+        });
+      } catch (error) {
+        const mensaje = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+        await enOrganizacion(bd, organizacionId, (tx) =>
+          tx
+            .update(versionesCotizacion)
+            .set({ pdfError: mensaje, ...(ultimoIntento ? { pdfEstado: "fallido" as EstadoPdfCotizacion } : {}) })
+            .where(eq(versionesCotizacion.id, versionId)),
+        );
+        throw error;
+      }
+    },
+  };
+}
+
+type FilaVersion = typeof versionesCotizacion.$inferSelect;
+
+/** Interfaz pública del módulo de cotizaciones (ADR-0029). */
+export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, visitas, catalogo, identidad }: Dependencias & { config: Config }): Cotizaciones {
+  async function leer(tx: TxOrganizacion, id: string) {
+    const [fila] = await tx.select().from(cotizaciones).where(eq(cotizaciones.id, id));
+    if (!fila) throw problema("no_encontrado", "La cotización no existe");
+    return fila;
+  }
+
+  /** Las líneas de cada visita, desde sus cantidades revisadas y con los precios vigentes; sin `visitaIds`, de todas. */
+  async function lineasPorVisita(tx: TxOrganizacion, visitaIds?: readonly string[]): Promise<Map<string, { lineas: LineaDeCotizacion[]; levantamientos: number }>> {
+    const revisadas = await levantamientos.cantidadesRevisadas(tx, visitaIds);
+    const itemIds = [...new Set(revisadas.flatMap((l) => (l.itemId ? [l.itemId] : [])))];
+    const [items, precios] = await Promise.all([catalogo.items(tx, itemIds), catalogo.preciosVigentes(tx, itemIds)]);
+    const valores = new Map([...precios].map(([id, p]) => [id, p.valor]));
+    const porVisita = new Map<string, typeof revisadas>();
+    for (const l of revisadas) porVisita.set(l.visitaId, [...(porVisita.get(l.visitaId) ?? []), l]);
+    return new Map(
+      [...porVisita].map(([visitaId, lineas]) => [
+        visitaId,
+        {
+          levantamientos: new Set(lineas.map((l) => l.levantamientoId)).size,
+          lineas: lineasDesdeCantidades(
+            lineas.map((l) => {
+              const item = l.itemId ? items.get(l.itemId) : undefined;
+              return { descripcion: l.descripcion, cantidad: l.cantidad, unidad: l.unidad, item: item ? { id: item.id, codigo: item.codigo, descripcion: item.descripcion } : null };
+            }),
+            valores,
+            idDeLinea,
+          ),
+        },
+      ]),
+    );
+  }
+
+  async function versionesDe(tx: TxOrganizacion, cotizacionIds: readonly string[]) {
+    if (cotizacionIds.length === 0) return [];
+    return tx.select().from(versionesCotizacion).where(inArray(versionesCotizacion.cotizacionId, [...cotizacionIds])).orderBy(desc(versionesCotizacion.numero));
+  }
+
+  const comoVersion = (v: FilaVersion, nombres: Map<string, string>, envios: Awaited<ReturnType<typeof enviosDeVersiones>>) => ({
+    numero: v.numero,
+    publicadaEn: v.publicadaEn.toISOString(),
+    publicadaPor: { id: v.publicadaPor, nombre: nombres.get(v.publicadaPor) ?? SIN_NOMBRE },
+    pdf: v.pdfEstado,
+    total: v.total,
+    envios: envios.get(v.id) ?? [],
+  });
+
+  const mensajeDe = (c: ContenidoCotizacion, organizacion: string): MensajeDeCotizacion => ({
+    documento: "cotizacion",
+    organizacion,
+    cliente: c.visita.cliente,
+    sitio: c.visita.sitio,
+    cotizacion: c.numero,
+    numero: c.version,
+    nombreArchivo: nombreDelPdf(c),
+  });
+
+  async function versionConEnvios(tx: TxOrganizacion, organizacionId: string, v: FilaVersion) {
+    const envios = await enviosDeVersiones(tx, [v.id]);
+    const nombres = await identidad.nombres(organizacionId, [v.publicadaPor]);
+    return comoVersion(v, nombres, envios);
+  }
+
+  return {
+    generarPdf: crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }).generarPdf,
+
+    registrarRutas(app) {
+      registrarOperacion(app, "listarCotizaciones", {
+        politica: politicas.oficina,
+        manejar: async ({ actor }) =>
+          enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const filas = await tx.select().from(cotizaciones).orderBy(desc(cotizaciones.creadaEn));
+            const ultimas = new Map<string, FilaVersion>();
+            for (const v of await versionesDe(tx, filas.map((f) => f.id))) if (!ultimas.has(v.cotizacionId)) ultimas.set(v.cotizacionId, v);
+            const sinEntregar = await versionesConEnvioSinEntregar(tx, [...ultimas.values()].map((v) => v.id));
+            const resumenes = await visitas.resumenes(tx, [...new Set(filas.map((f) => f.visitaId))]);
+            return {
+              cotizaciones: filas.flatMap((f) => {
+                const visita = resumenes.get(f.visitaId);
+                const vigente = ultimas.get(f.id);
+                return visita
+                  ? [
+                      {
+                        id: f.id,
+                        numero: f.numero,
+                        visita: { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, programadaPara: visita.programadaPara },
+                        vigente: vigente?.numero ?? null,
+                        total: vigente?.total ?? null,
+                        envioSinEntregar: vigente ? sinEntregar.has(vigente.id) : false,
+                      },
+                    ]
+                  : [];
+              }),
+            };
+          }),
+      });
+
+      registrarOperacion(app, "visitasParaCotizar", {
+        politica: politicas.oficina,
+        manejar: async ({ actor }) =>
+          enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const porVisita = await lineasPorVisita(tx);
+            if (porVisita.size === 0) return { visitas: [] };
+            const resumenes = await visitas.resumenes(tx, [...porVisita.keys()]);
+            const existentes = await tx.select({ visitaId: cotizaciones.visitaId, numero: cotizaciones.numero }).from(cotizaciones).where(inArray(cotizaciones.visitaId, [...porVisita.keys()]));
+            return {
+              visitas: [...porVisita]
+                .flatMap(([visitaId, { lineas, levantamientos: revisados }]) => {
+                  const v = resumenes.get(visitaId);
+                  return v
+                    ? [
+                        {
+                          visitaId,
+                          cliente: v.cliente.nombre,
+                          sitio: v.sitio.nombre,
+                          programadaPara: v.programadaPara,
+                          levantamientosRevisados: revisados,
+                          materiales: lineas.length,
+                          sinPrecio: lineas.filter((l) => l.precio === null).length,
+                          cotizaciones: existentes.filter((e) => e.visitaId === visitaId).map((e) => e.numero),
+                        },
+                      ]
+                    : [];
+                })
+                .sort((a, b) => b.programadaPara.localeCompare(a.programadaPara)),
+            };
+          }),
+      });
+
+      registrarOperacion(app, "crearCotizacion", {
+        politica: politicas.oficina,
+        manejar: async ({ cuerpo: { visitaId }, actor, correlacion }) =>
+          enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const clienteId = await visitas.clienteDe(tx, visitaId);
+            if (!clienteId) throw problema("no_encontrado", "La visita no existe");
+            const lineas = (await lineasPorVisita(tx, [visitaId])).get(visitaId)?.lineas ?? [];
+            if (lineas.length === 0) throw problema("estado_invalido", "La visita no tiene cantidades de levantamientos revisados");
+            // El consecutivo se incrementa en esta transacción: nunca se repite ni se reutiliza (ADR-0029, parte 2).
+            const anio = anioEnColombia();
+            const [{ ultimo } = { ultimo: 0 }] = await tx
+              .insert(consecutivos)
+              .values({ organizacionId: actor.organizacionId, anio, ultimo: 1 })
+              .onConflictDoUpdate({ target: [consecutivos.organizacionId, consecutivos.anio], set: { ultimo: sql`${consecutivos.ultimo} + 1` } })
+              .returning({ ultimo: consecutivos.ultimo });
+            const id = randomUUID();
+            const numero = numeroDeCotizacion(anio, ultimo);
+            await tx.insert(cotizaciones).values({ id, organizacionId: actor.organizacionId, numero, visitaId, clienteId, lineas, impuestos: { tipo: "iva" }, condiciones: CONDICIONES_INICIALES, creadaPor: actor.usuarioId });
+            await registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: "cotizacion_creada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, visitaId, lineas: lineas.length } },
+            ]);
+            return { id };
+          }),
+      });
+
+      registrarOperacion(app, "obtenerCotizacion", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { id }, actor }) => {
+          const r = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const c = await leer(tx, id);
+            const versiones = await versionesDe(tx, [id]);
+            return { c, visita: (await visitas.resumenes(tx, [c.visitaId])).get(c.visitaId), versiones, envios: await enviosDeVersiones(tx, versiones.map((v) => v.id)) };
+          });
+          if (!r.visita) throw problema("no_encontrado", "La visita de la cotización no existe");
+          const nombres = await identidad.nombres(actor.organizacionId, [...new Set(r.versiones.map((v) => v.publicadaPor))]);
+          return {
+            id: r.c.id,
+            numero: r.c.numero,
+            visitaId: r.c.visitaId,
+            clienteId: r.c.clienteId,
+            visita: { cliente: r.visita.cliente.nombre, sitio: r.visita.sitio.nombre, direccion: r.visita.sitio.direccion, programadaPara: r.visita.programadaPara },
+            version: r.c.version,
+            lineas: r.c.lineas,
+            impuestos: r.c.impuestos,
+            condiciones: r.c.condiciones,
+            versiones: r.versiones.map((v) => comoVersion(v, nombres, r.envios)),
+          };
+        },
+      });
+
+      registrarOperacion(app, "guardarCotizacion", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { id }, cuerpo, actor }) =>
+          enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const c = await leer(tx, id);
+            if (c.version !== cuerpo.version) throw problema("conflicto_de_version", "Otra persona guardó esta cotización mientras usted la tenía abierta", { versionActual: c.version });
+            if (new Set(cuerpo.lineas.map((l) => l.id)).size !== cuerpo.lineas.length) throw problema("entrada_invalida", "Hay dos líneas con el mismo id");
+            const guardada = await tx
+              .update(cotizaciones)
+              .set({ lineas: cuerpo.lineas, impuestos: cuerpo.impuestos, condiciones: cuerpo.condiciones, version: sql`${cotizaciones.version} + 1` })
+              .where(and(eq(cotizaciones.id, id), eq(cotizaciones.version, cuerpo.version)))
+              .returning({ version: cotizaciones.version });
+            if (guardada.length === 0) throw problema("conflicto_de_version", "Otra persona guardó esta cotización mientras usted la tenía abierta");
+            return guardada[0]!;
+          }),
+      });
+
+      registrarOperacion(app, "publicarCotizacion", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { id }, cuerpo, actor, correlacion }) => {
+          const organizacion = await identidad.nombreDeOrganizacion(actor.organizacionId);
+          const nombres = await identidad.nombres(actor.organizacionId, [actor.usuarioId]);
+          return enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const c = await leer(tx, id);
+            if (c.version !== cuerpo.version) throw problema("conflicto_de_version", "La cotización cambió desde que la abrió. Recargue antes de publicar", { versionActual: c.version });
+            const borrador: BorradorCotizacion = { lineas: c.lineas, impuestos: c.impuestos, condiciones: c.condiciones };
+            const errores = validarCotizacion(borrador);
+            if (errores.length > 0) throw problema("cotizacion_invalida", "A la cotización le falta algo para publicarse", { erroresCotizacion: errores.map((e) => ({ ...e })) });
+            // Nadie publica dos veces desde la misma versión del borrador.
+            const reservada = await tx
+              .update(cotizaciones)
+              .set({ version: sql`${cotizaciones.version} + 1` })
+              .where(and(eq(cotizaciones.id, id), eq(cotizaciones.version, cuerpo.version)))
+              .returning({ version: cotizaciones.version });
+            if (reservada.length === 0) throw problema("conflicto_de_version", "Otra persona publicó o guardó esta cotización al mismo tiempo");
+
+            const visita = (await visitas.resumenes(tx, [c.visitaId])).get(c.visitaId);
+            if (!visita) throw problema("no_encontrado", "La visita de la cotización no existe");
+            const [{ numero } = { numero: 0 }] = await tx
+              .select({ numero: sql<number>`coalesce(max(${versionesCotizacion.numero}), 0)` })
+              .from(versionesCotizacion)
+              .where(eq(versionesCotizacion.cotizacionId, id));
+            const publicadaEn = new Date();
+            // Copia congelada con sus precios y totales: cambiar la lista después no la toca (ADR-0029).
+            const contenido: ContenidoCotizacion = {
+              numero: c.numero,
+              version: numero + 1,
+              publicadaEn: publicadaEn.toISOString(),
+              publicadaPor: nombres.get(actor.usuarioId) ?? SIN_NOMBRE,
+              organizacion: { nombre: organizacion },
+              visita: { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, programadaPara: visita.programadaPara },
+              lineas: c.lineas,
+              impuestos: c.impuestos,
+              condiciones: c.condiciones,
+              totales: calcularTotales(c.lineas, c.impuestos),
+            };
+            const versionId = randomUUID();
+            const [fila] = await tx
+              .insert(versionesCotizacion)
+              .values({ id: versionId, organizacionId: actor.organizacionId, cotizacionId: id, numero: contenido.version, contenido, total: contenido.totales.total, publicadaPor: actor.usuarioId, publicadaEn })
+              .returning();
+            await registrar(tx, [
+              {
+                organizacionId: actor.organizacionId,
+                agregadoTipo: "cotizacion",
+                agregadoId: id,
+                tipoEvento: "cotizacion_publicada",
+                autorId: actor.usuarioId,
+                correlacion,
+                valorNuevo: { version: contenido.version, total: contenido.totales.total, destinatarios: cuerpo.destinatarios },
+              },
+            ]);
+            await encolar(tx, "cotizaciones.generarPdf", { organizacionId: actor.organizacionId, versionId }, { cola: "pdf", llave: `cotizaciones.generarPdf:${versionId}`, intentosMaximos: 5 });
+            await programarEnvios(tx, {
+              organizacionId: actor.organizacionId,
+              versionId,
+              clienteId: c.clienteId,
+              mensaje: mensajeDe(contenido, organizacion),
+              destinos: cuerpo.destinatarios.map((contactoId) => ({ contactoId })),
+              por: actor.usuarioId,
+            });
+            return versionConEnvios(tx, actor.organizacionId, fila!);
+          });
+        },
+      });
+
+      registrarOperacion(app, "pdfDeCotizacion", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { id, numero }, actor }) => {
+          const [version] = await enOrganizacion(bd, actor.organizacionId, (tx) =>
+            tx
+              .select()
+              .from(versionesCotizacion)
+              .where(and(eq(versionesCotizacion.cotizacionId, id), eq(versionesCotizacion.numero, numero))),
+          );
+          if (!version) throw problema("no_encontrado");
+          if (version.pdfEstado !== "listo" || !version.pdfHuella) throw problema("estado_invalido", "El PDF de esta versión todavía no está listo");
+          const firma = await almacenamiento.firmarDescarga(clave(actor.organizacionId, version.pdfHuella), { descargarComo: nombreDelPdf(version.contenido) });
+          return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
+        },
+      });
+
+      registrarOperacion(app, "enviarCotizacion", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { id, numero }, cuerpo, actor, correlacion }) => {
+          const organizacion = await identidad.nombreDeOrganizacion(actor.organizacionId);
+          return enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const c = await leer(tx, id);
+            const [version] = await tx
+              .select()
+              .from(versionesCotizacion)
+              .where(and(eq(versionesCotizacion.cotizacionId, id), eq(versionesCotizacion.numero, numero)));
+            if (!version) throw problema("no_encontrado", "La versión no existe");
+            await programarEnvios(tx, {
+              organizacionId: actor.organizacionId,
+              versionId: version.id,
+              clienteId: c.clienteId,
+              mensaje: mensajeDe(version.contenido, organizacion),
+              destinos: cuerpo.destinos,
+              por: actor.usuarioId,
+              pdfRuta: version.pdfEstado === "listo" && version.pdfHuella ? clave(actor.organizacionId, version.pdfHuella) : undefined,
+            });
+            await registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: "cotizacion_enviada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, destinos: cuerpo.destinos } },
+            ]);
+            return versionConEnvios(tx, actor.organizacionId, version);
+          });
+        },
+      });
+    },
+  };
+}

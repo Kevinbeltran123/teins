@@ -168,3 +168,32 @@ export async function lineasDeVisita(tx: TxOrganizacion, visitaId: string) {
     .where(and(eq(levantamientos.visitaId, visitaId), isNull(lineasCantidad.quitadaEn)))
     .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id), asc(lineasCantidad.seccion), asc(lineasCantidad.campo), asc(lineasCantidad.orden));
 }
+
+/** Una línea de cantidad de un levantamiento revisado: lo único que entra en una cotización (ADR-0029). */
+export interface LineaRevisadaDeVisita {
+  visitaId: string;
+  levantamientoId: string;
+  descripcion: string;
+  cantidad: string;
+  unidad: string;
+  itemId: string | null;
+}
+
+/** Líneas vigentes de los levantamientos revisados; sin `visitaIds`, de todas las visitas de la organización. */
+export async function cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readonly string[]): Promise<LineaRevisadaDeVisita[]> {
+  if (visitaIds && visitaIds.length === 0) return [];
+  const filas = await tx
+    .select({
+      visitaId: levantamientos.visitaId,
+      levantamientoId: levantamientos.id,
+      descripcion: lineasCantidad.descripcion,
+      cantidad: lineasCantidad.cantidad,
+      unidad: lineasCantidad.unidad,
+      itemId: lineasCantidad.itemCatalogoId,
+    })
+    .from(lineasCantidad)
+    .innerJoin(levantamientos, eq(levantamientos.id, lineasCantidad.levantamientoId))
+    .where(and(eq(levantamientos.estado, "revisado"), isNull(lineasCantidad.quitadaEn), isNotNull(levantamientos.visitaId), visitaIds ? inArray(levantamientos.visitaId, [...visitaIds]) : undefined))
+    .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id), asc(lineasCantidad.seccion), asc(lineasCantidad.campo), asc(lineasCantidad.orden));
+  return filas.map((f) => ({ ...f, visitaId: f.visitaId! }));
+}

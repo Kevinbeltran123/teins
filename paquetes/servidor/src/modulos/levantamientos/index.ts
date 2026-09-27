@@ -15,7 +15,9 @@ import type { Identidad } from "../identidad";
 import type { Visitas } from "../visitas";
 import { recibirEnvio, type DependenciasEnvio } from "./aplicacion/recibir-envio";
 import { comentar, corregirCampos, marcar, tomar, vincular, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
-import { comentariosDe, conteosPorVisita, detalle, deVisita, estadosDe, lineasDeVisita, paginaPorEstado, vinculosDe, type ConteoDeVisita } from "./consultas";
+import { cantidadesRevisadas, comentariosDe, conteosPorVisita, detalle, deVisita, estadosDe, lineasDeVisita, paginaPorEstado, vinculosDe, type ConteoDeVisita, type LineaRevisadaDeVisita } from "./consultas";
+
+export type { LineaRevisadaDeVisita } from "./consultas";
 import { repositorioDrizzle, repositorioRevision } from "./repositorio";
 
 export interface ComentarioParaElTecnico {
@@ -54,6 +56,8 @@ export interface Levantamientos {
   estados(tx: TxOrganizacion, ids: readonly string[], tecnicoId: string): Promise<EstadoParaElTecnico[]>;
   /** Levantamientos por estado de cada visita: su avance (modelo de dominio, sección 5). */
   conteosPorVisita(tx: TxOrganizacion, visitaIds: readonly string[]): Promise<Map<string, ConteoDeVisita>>;
+  /** Cantidades de los levantamientos revisados, para cotizar (ADR-0029). */
+  cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readonly string[]): Promise<LineaRevisadaDeVisita[]>;
   registrarRutas(app: FastifyInstance): void;
 }
 
@@ -87,6 +91,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
     estados: estadosDe,
     deVisita,
     conteosPorVisita,
+    cantidadesRevisadas,
 
     registrarRutas(app) {
       registrarOperacion(app, "enviarComando", {

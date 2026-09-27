@@ -22,6 +22,8 @@ import { crearAccesosDeClientes, crearPortal } from "./modulos/portal";
 import { crearCatalogo } from "./modulos/catalogo";
 import { crearSimbolos } from "./modulos/simbolos";
 import { crearAvisos } from "./modulos/avisos";
+import { crearEnvios } from "./modulos/envios";
+import { crearCotizaciones } from "./modulos/cotizaciones";
 
 export interface Dependencias {
   config: Config;
@@ -133,7 +135,7 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   const formatos = crearFormatos();
   const archivos = crearArchivos({ bd, almacenamiento, config });
   const visitas = crearVisitas(clientesYSitios);
-  const catalogo = crearCatalogo(bd);
+  const catalogo = crearCatalogo(bd, identidad);
   const levantamientos = crearLevantamientos({ bd, formatos, archivos, visitas, identidad, catalogo });
   const sincronizacion = crearSincronizacion({ bd, formatos, visitas, levantamientos, identidad, catalogo, simbolos: crearSimbolos() });
   const informes = crearInformes({ bd, almacenamiento, config, archivos, levantamientos, visitas, identidad, formatos });
@@ -161,7 +163,10 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   levantamientos.registrarRutas(app);
   sincronizacion.registrarRutas(app);
   informes.registrarRutas(app);
-  registrarRutasDeClientes(app, bd);
+  registrarRutasDeClientes(app, bd, identidad);
+  // El rol web no envía (lo hace el worker): solo recibe los eventos firmados de los proveedores.
+  crearEnvios({ bd, almacenamiento, config }).registrarRutas(app);
+  crearCotizaciones({ bd, almacenamiento, config, levantamientos, visitas, catalogo, identidad }).registrarRutas(app);
   catalogo.registrarRutas(app);
   // El rol web no envía avisos (lo hace el worker): solo guarda suscripciones y entrega la clave pública.
   crearAvisos({ bd, config }).registrarRutas(app);

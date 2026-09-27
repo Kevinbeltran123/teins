@@ -14,8 +14,12 @@ export type TipoEvento =
   | "visita_cancelada"
   | "cliente_creado"
   | "sitio_agregado"
+  | "contacto_creado"
+  | "contacto_editado"
+  | "contacto_quitado"
   | "item_catalogo_creado"
   | "item_catalogo_actualizado"
+  | "precio_cambiado"
   | "catalogo_importado"
   | "linea_vinculada"
   | "usuario_desactivado"
@@ -34,11 +38,15 @@ export type TipoEvento =
   | "comentario_agregado"
   | "informe_publicado"
   | "version_retirada"
+  | "informe_enviado"
+  | "cotizacion_creada"
+  | "cotizacion_publicada"
+  | "cotizacion_enviada"
   | "acceso_cliente_creado"
   | "acceso_cliente_regenerado"
   | "ingreso_portal"
   | "descarga_portal";
-export type TipoAgregado = "levantamiento" | "organizacion" | "visita" | "usuario" | "informe" | "acceso_cliente" | "cliente" | "item_catalogo";
+export type TipoAgregado = "levantamiento" | "organizacion" | "visita" | "usuario" | "informe" | "acceso_cliente" | "cliente" | "item_catalogo" | "cotizacion";
 
 export interface EntradaAuditoria {
   organizacionId: string;

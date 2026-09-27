@@ -77,7 +77,40 @@ const Esquema = z.object({
   AVISOS_VAPID_PUBLICA: z.string().regex(/^[A-Za-z0-9_-]{80,100}$/, "Clave pública VAPID en base64url").optional(),
   AVISOS_VAPID_PRIVADA: z.string().regex(/^[A-Za-z0-9_-]{40,50}$/, "Clave privada VAPID en base64url").optional(),
   AVISOS_CONTACTO: z.string().regex(/^(mailto:|https:\/\/)\S+$/, "Use mailto:correo o una URL https").optional(),
-});
+
+  /**
+   * Envío del informe al cliente (ADR-0028). Sin la configuración de un canal, sus envíos quedan "No llegó"
+   * con ese motivo. `ENVIOS_SIMULADOS` los acepta sin salir del servidor (desarrollo, pruebas, entorno de pruebas):
+   * `true` simula los dos canales; `correo` o `whatsapp`, solo ese (el otro sale de verdad si está configurado).
+   */
+  ENVIOS_SIMULADOS: z
+    .enum(["true", "false", "correo", "whatsapp"])
+    .default("false")
+    .transform((v) => ({ correo: v === "true" || v === "correo", whatsapp: v === "true" || v === "whatsapp" })),
+  RESEND_CLAVE_API: z.string().regex(/^re_\w+$/, "Clave de API de Resend (re_…)").optional(),
+  /** Secreto de firma de los eventos de Resend (Svix, whsec_…). */
+  RESEND_SECRETO_EVENTOS: z.string().regex(/^whsec_[A-Za-z0-9+/=]+$/, "Secreto de eventos de Resend (whsec_…)").optional(),
+  /** Remitente con su nombre, de un dominio verificado en Resend: "TEINS <informes@dominio>". */
+  CORREO_REMITENTE: z.string().min(3).default("TEINS <informes@example.com>"),
+  /** Adonde llegan las respuestas del cliente: el correo de oficina de TEINS. */
+  CORREO_RESPONDER_A: z.email().optional(),
+  WHATSAPP_TOKEN: z.string().min(20).optional(),
+  WHATSAPP_NUMERO_ID: z.string().regex(/^\d+$/, "Id del número de WhatsApp Business (solo dígitos)").optional(),
+  /** Secreto de la app de Meta: firma los eventos (X-Hub-Signature-256). */
+  WHATSAPP_SECRETO_APP: z.string().min(16).optional(),
+  /** Lo que Meta repite al registrar la dirección de los eventos. */
+  WHATSAPP_TOKEN_VERIFICACION: z.string().min(16).optional(),
+  WHATSAPP_PLANTILLA: z.string().regex(/^[a-z0-9_]+$/).default("informe_publicado"),
+  /** Plantilla de las cotizaciones (ADR-0029): nombre, número de la cotización, sitio y versión. */
+  WHATSAPP_PLANTILLA_COTIZACION: z.string().regex(/^[a-z0-9_]+$/).default("cotizacion_publicada"),
+  WHATSAPP_IDIOMA: z.string().regex(/^[a-z]{2}(_[A-Z]{2})?$/).default("es"),
+  WHATSAPP_VERSION_API: z.string().regex(/^v\d+\.\d+$/).default("v25.0"),
+})
+  // Los envíos simulados nunca corren en producción real: el cliente no recibiría nada y oficina vería "Enviado".
+  .refine((c) => !(c.ENVIOS_SIMULADOS.correo || c.ENVIOS_SIMULADOS.whatsapp) || c.NODE_ENV !== "production" || c.ENTORNO_DE_PRUEBAS, {
+    path: ["ENVIOS_SIMULADOS"],
+    message: "Los envíos simulados solo se permiten fuera de producción o en el entorno de pruebas",
+  });
 
 export type Config = z.infer<typeof Esquema>;
 

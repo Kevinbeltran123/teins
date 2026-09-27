@@ -15,7 +15,9 @@ export type Aviso =
   | { tipo: "visita_asignada" | "visita_cancelada" | "visita_retirada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; programadaPara: string }
   | { tipo: "visita_reprogramada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; antes: string; despues: string }
   | { tipo: "comentario" | "levantamiento_revisado"; organizacionId: string; tecnicoId: string; levantamientoId: string; creadoEn: Date }
-  | { tipo: "levantamiento_enviado"; organizacionId: string; levantamientoId: string; tecnico: string };
+  | { tipo: "levantamiento_enviado"; organizacionId: string; levantamientoId: string; tecnico: string }
+  /** A quien publicó o pidió el envío: una copia del informe no llegó al cliente (ADR-0028). */
+  | { tipo: "envio_fallido"; organizacionId: string; usuarioId: string; versionId: string };
 
 /** Lo que se ve en el aviso. Nunca lleva datos del cliente: se lee con el teléfono bloqueado (R5). */
 export interface Contenido {
@@ -49,6 +51,8 @@ export function contenidoDe(aviso: Aviso): Contenido {
       return { titulo: "Levantamiento revisado", cuerpo: `Oficina revisó tu levantamiento del ${diaDe(aviso.creadoEn)}.`, etiqueta: `levantamiento:${aviso.levantamientoId}` };
     case "levantamiento_enviado":
       return { titulo: "Levantamiento nuevo", cuerpo: `${aviso.tecnico} envió un levantamiento.`, etiqueta: `levantamiento:${aviso.levantamientoId}` };
+    case "envio_fallido":
+      return { titulo: "Un envío del informe no llegó", cuerpo: "Abra Informes para ver cuál y volver a enviarlo.", etiqueta: `envio:${aviso.versionId}` };
   }
 }
 
@@ -56,6 +60,8 @@ function destinatarios(aviso: Aviso) {
   switch (aviso.tipo) {
     case "levantamiento_enviado":
       return eq(suscripciones.superficie, "oficina");
+    case "envio_fallido":
+      return and(eq(suscripciones.superficie, "oficina"), eq(suscripciones.usuarioId, aviso.usuarioId));
     case "comentario":
     case "levantamiento_revisado":
       return and(eq(suscripciones.superficie, "campo"), eq(suscripciones.usuarioId, aviso.tecnicoId));

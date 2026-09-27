@@ -1,8 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+import type { Respuesta } from "@teins/protocolo";
 import { bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
 import type { Almacenamiento } from "../../plataforma/almacenamiento";
@@ -13,11 +12,12 @@ import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Archivos } from "../archivos";
 import { registrar } from "../auditoria";
+import { enviarAlQuedarListo, enviosDeVersiones, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeInforme } from "../envios";
 import type { Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
 import type { Visitas } from "../visitas";
-import { imprimirInforme } from "./pdf/imprimir";
+import { fuenteIncrustada, imprimirPdf } from "../../plataforma/pdf";
 import { piePagina, plantillaInforme, type HojaDelInforme } from "./pdf/plantilla";
 import { informes, versionesPublicadas, type EstadoPdf } from "./esquema";
 
@@ -88,11 +88,6 @@ export interface Informes {
 const clave = (organizacionId: string, huella: string) => `${organizacionId}/${huella}`;
 const SIN_NOMBRE = "[Usuario no disponible]";
 
-const requerir = createRequire(import.meta.url);
-let fuente: string | undefined;
-/** La misma familia de la interfaz, incrustada: el PDF no depende de las fuentes del servidor (ADR-0013). */
-const fuenteIncrustada = () =>
-  (fuente ??= readFileSync(requerir.resolve("@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2")).toString("base64"));
 
 async function leerTodo(almacenamiento: Almacenamiento, ruta: string): Promise<Buffer> {
   const partes: Buffer[] = [];
@@ -110,7 +105,7 @@ interface FilaVersion {
   motivoRetiro: string | null;
 }
 
-const comoVersion = (v: FilaVersion, nombres: Map<string, string>) => ({
+const comoVersion = (v: FilaVersion, nombres: Map<string, string>, envios: Respuesta<"obtenerInforme">["versiones"][number]["envios"] = []) => ({
   numero: v.numero,
   publicadaEn: v.publicadaEn.toISOString(),
   publicadaPor: { id: v.publicadaPor, nombre: nombres.get(v.publicadaPor) ?? SIN_NOMBRE },
@@ -118,6 +113,18 @@ const comoVersion = (v: FilaVersion, nombres: Map<string, string>) => ({
   retirada: v.retiradaEn
     ? { en: v.retiradaEn.toISOString(), por: { id: v.retiradaPor ?? "", nombre: nombres.get(v.retiradaPor ?? "") ?? SIN_NOMBRE }, motivo: v.motivoRetiro ?? "" }
     : null,
+  envios,
+});
+
+/** Lo que dice el correo o el WhatsApp, de la copia congelada de la versión (ADR-0028). */
+const mensajeDe = (c: ContenidoVersion): MensajeDeInforme => ({
+  organizacion: c.organizacion.nombre,
+  cliente: c.visita.cliente,
+  sitio: c.visita.sitio,
+  motivo: c.visita.motivo,
+  programadaPara: c.visita.programadaPara,
+  numero: c.numero,
+  nombreArchivo: nombreDelPdf(c.visita, c.numero),
 });
 
 const invalido = (errores: ErrorInforme[]) => problema("informe_invalido", "El informe no cumple sus reglas", { erroresInforme: errores.map((e) => ({ ...e })) });
@@ -148,7 +155,7 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         const planos = [];
         for (const p of c.planos) planos.push(await leerTodo(almacenamiento, clave(organizacionId, p.huella)));
 
-        const pdf = await imprimirInforme({
+        const pdf = await imprimirPdf({
           html: plantillaInforme(c, { fuente: fuenteIncrustada(), fotos, bocetos, firmas }),
           pie: piePagina(c),
           planos,
@@ -157,12 +164,15 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         });
         const huella = createHash("sha256").update(pdf).digest("hex");
         await almacenamiento.guardar(clave(organizacionId, huella), pdf, "application/pdf");
-        await enOrganizacion(bd, organizacionId, (tx) =>
-          tx
+        await enOrganizacion(bd, organizacionId, async (tx) => {
+          const listo = await tx
             .update(versionesPublicadas)
             .set({ pdfEstado: "listo", pdfHuella: huella, pdfGeneradoEn: new Date(), pdfError: null })
-            .where(and(eq(versionesPublicadas.id, versionId), sql`${versionesPublicadas.pdfEstado} <> 'listo'`)),
-        );
+            .where(and(eq(versionesPublicadas.id, versionId), sql`${versionesPublicadas.pdfEstado} <> 'listo'`))
+            .returning({ id: versionesPublicadas.id });
+          // Los envíos al cliente salen ahora, no al publicar: antes no hay PDF que adjuntar (ADR-0028, parte 3).
+          if (listo.length > 0) await enviarAlQuedarListo(tx, { organizacionId, versionId, pdfRuta: clave(organizacionId, huella) });
+        });
       } catch (error) {
         const mensaje = (error instanceof Error ? error.message : String(error)).slice(0, 500);
         // Con reintentos pendientes sigue "generando"; al agotarlos, el fallo queda a la vista de oficina.
@@ -222,12 +232,13 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             const filas = await tx.select({ id: informes.id, visitaId: informes.visitaId }).from(informes);
             // La versión vigente es la de mayor número sin retirar (regla 10): la que ve el cliente.
             const publicadas = await tx
-              .select({ informeId: versionesPublicadas.informeId, numero: versionesPublicadas.numero, pdf: versionesPublicadas.pdfEstado })
+              .select({ id: versionesPublicadas.id, informeId: versionesPublicadas.informeId, numero: versionesPublicadas.numero, pdf: versionesPublicadas.pdfEstado })
               .from(versionesPublicadas)
               .where(isNull(versionesPublicadas.retiradaEn))
               .orderBy(desc(versionesPublicadas.numero));
-            const vigentes = new Map<string, { numero: number; pdf: EstadoPdf }>();
+            const vigentes = new Map<string, { id: string; numero: number; pdf: EstadoPdf }>();
             for (const v of publicadas) if (!vigentes.has(v.informeId)) vigentes.set(v.informeId, v);
+            const sinEntregar = await versionesConEnvioSinEntregar(tx, [...vigentes.values()].map((v) => v.id));
             const resumenes = await visitas.resumenes(tx, filas.map((f) => f.visitaId));
             return {
               elementos: filas
@@ -240,6 +251,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
                           visita: { cliente: v.cliente.nombre, sitio: v.sitio.nombre, direccion: v.sitio.direccion, motivo: v.motivo, programadaPara: v.programadaPara },
                           vigente: vigentes.get(f.id)?.numero ?? null,
                           pdf: vigentes.get(f.id)?.pdf ?? null,
+                          envioSinEntregar: sinEntregar.has(vigentes.get(f.id)?.id ?? ""),
                         },
                       ]
                     : [];
@@ -278,7 +290,8 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               const k = `${l.formato}@${l.versionFormato}`;
               if (!nombresDeFormato.has(k)) nombresDeFormato.set(k, (await formatos.obtener(tx, l.formato, l.versionFormato))?.nombre ?? l.formato);
             }
-            return { informe, visita, lista, nombresDeFormato, versiones: await versionesDe(tx, id) };
+            const versiones = await versionesDe(tx, id);
+            return { informe, visita, lista, nombresDeFormato, versiones, clienteId: await visitas.clienteDe(tx, informe.visitaId), envios: await enviosDeVersiones(tx, versiones.map((v) => v.id)) };
           });
           if (!r.visita) throw problema("no_encontrado", "La visita del informe no existe");
           const nombres = await identidad.nombres(actor.organizacionId, [
@@ -287,6 +300,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
           return {
             id: r.informe.id,
             visitaId: r.informe.visitaId,
+            clienteId: r.clienteId ?? "",
             visita: { cliente: r.visita.cliente.nombre, sitio: r.visita.sitio.nombre, direccion: r.visita.sitio.direccion, motivo: r.visita.motivo, programadaPara: r.visita.programadaPara },
             version: r.informe.version,
             introduccion: r.informe.introduccion,
@@ -300,7 +314,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               estado: l.estado,
               recibidoEn: l.recibidoEn.toISOString(),
             })),
-            versiones: r.versiones.map((v) => comoVersion(v, nombres)),
+            versiones: r.versiones.map((v) => comoVersion(v, nombres, r.envios.get(v.id))),
           };
         },
       });
@@ -398,9 +412,18 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
                 tipoEvento: "informe_publicado",
                 autorId: actor.usuarioId,
                 correlacion,
-                valorNuevo: { numero: contenido.numero, levantamientos: informe.levantamientos, planos: informe.planos.map((p) => p.huella) },
+                valorNuevo: { numero: contenido.numero, levantamientos: informe.levantamientos, planos: informe.planos.map((p) => p.huella), destinatarios: cuerpo.destinatarios },
               },
             ]);
+            // Quedan "En cola" y salen cuando el PDF esté listo (ADR-0028, parte 3).
+            await programarEnvios(tx, {
+              organizacionId: actor.organizacionId,
+              versionId,
+              clienteId,
+              mensaje: mensajeDe(contenido),
+              destinos: cuerpo.destinatarios.map((contactoId) => ({ contactoId })),
+              por: actor.usuarioId,
+            });
             // El PDF se genera en segundo plano, de a uno (ADR-0012); si la transacción se revierte, el trabajo no existe.
             await encolar(tx, "informes.generarPdf", { organizacionId: actor.organizacionId, versionId }, { cola: "pdf", llave: `informes.generarPdf:${versionId}`, intentosMaximos: 5 });
             return { numero: contenido.numero, publicadaEn, publicadaPor: contenido.publicadaPor };
@@ -433,10 +456,42 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             await registrar(tx, [
               { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "version_retirada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero }, motivo: cuerpo.motivo },
             ]);
-            return (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
+            const retirada = (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
+            return { ...retirada, envios: (await enviosDeVersiones(tx, [retirada.id])).get(retirada.id) };
           });
           const nombres = await identidad.nombres(actor.organizacionId, [version.publicadaPor, actor.usuarioId]);
-          return comoVersion(version, nombres);
+          return comoVersion(version, nombres, version.envios);
+        },
+      });
+
+      registrarOperacion(app, "enviarVersion", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { id, numero }, cuerpo, actor, correlacion }) => {
+          const version = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const [fila] = await tx
+              .select()
+              .from(versionesPublicadas)
+              .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero)));
+            if (!fila) throw problema("no_encontrado", "La versión no existe");
+            // Lo retirado no se vuelve a entregar (regla 10): para eso se publica una versión nueva.
+            if (fila.retiradaEn) throw problema("estado_invalido", "La versión está retirada del portal: publique una nueva para enviarla");
+            await programarEnvios(tx, {
+              organizacionId: actor.organizacionId,
+              versionId: fila.id,
+              clienteId: fila.clienteId,
+              mensaje: mensajeDe(fila.contenido),
+              destinos: cuerpo.destinos,
+              por: actor.usuarioId,
+              pdfRuta: fila.pdfEstado === "listo" && fila.pdfHuella ? clave(actor.organizacionId, fila.pdfHuella) : undefined,
+            });
+            await registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "informe_enviado", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, destinos: cuerpo.destinos } },
+            ]);
+            const actual = (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
+            return { ...actual, envios: (await enviosDeVersiones(tx, [actual.id])).get(actual.id) };
+          });
+          const nombres = await identidad.nombres(actor.organizacionId, [version.publicadaPor, ...(version.retiradaPor ? [version.retiradaPor] : [])]);
+          return comoVersion(version, nombres, version.envios);
         },
       });
 
