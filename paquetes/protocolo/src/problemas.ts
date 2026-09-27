@@ -18,6 +18,7 @@ export const ESTADO_POR_CODIGO = {
   no_tomado: 403,
   /** El borrador del informe no cumple sus reglas (regla 9). */
   informe_invalido: 422,
+  cotizacion_invalida: 422,
   /** Administrar exige segundo factor activo (ADR-0009). */
   segundo_factor_requerido: 403,
   archivos_faltantes: 409,
@@ -46,6 +47,7 @@ export const REINTENTABLE: Readonly<Record<CodigoProblema, boolean>> = {
   estado_invalido: false,
   no_tomado: false,
   informe_invalido: false,
+  cotizacion_invalida: false,
   segundo_factor_requerido: false,
   archivos_faltantes: true,
   archivos_en_verificacion: true,
@@ -78,6 +80,8 @@ export const Problema = z
     erroresInforme: z
       .array(z.object({ codigo: z.string(), levantamientoId: z.string().optional(), huella: z.string().optional(), campo: z.string().optional() }))
       .optional(),
+    /** Lo que falta para publicar una cotización (ADR-0029). */
+    erroresCotizacion: z.array(z.object({ codigo: z.string(), lineas: z.array(z.string()).optional(), campo: z.string().optional() })).optional(),
     reintentarEnSegundos: z.int().optional(),
     campos: z.array(z.object({ ruta: z.string(), mensaje: z.string() })).optional(),
   })

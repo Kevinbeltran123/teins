@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LIMITES, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
+import { DECIMAL_CANONICO, LIMITES, PORCENTAJE, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
 import { DocumentoBoceto, Fecha, Huella, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
 import type { CodigoProblema } from "./problemas";
 
@@ -320,6 +320,26 @@ const Plano = z.object({ huella: Huella, nombre: z.string().trim().min(1).max(20
 /** "Publicada" y "visible para el cliente" son distintos: sin PDF listo, el cliente no la ve (ADR-0013). */
 const EstadoPdf = z.enum(["generando", "listo", "fallido"]);
 
+/** Canales por los que el informe le llega al cliente (ADR-0028). */
+export const CanalDeEnvio = z.enum(["correo", "whatsapp"]);
+/** Estado de un envío (ADR-0028, parte 4): solo avanza, salvo un rebote después de entregado. */
+export const EstadoDeEnvio = z.enum(["en_cola", "enviado", "entregado", "fallido"]);
+
+/** Una copia del informe enviada a un contacto por un canal. Nombre y destino copiados: el contacto puede cambiar o quitarse. */
+export const EnvioDeVersion = z
+  .object({
+    id: Uuid,
+    contacto: z.object({ id: Uuid, nombre: z.string() }),
+    canal: CanalDeEnvio,
+    destino: z.string(),
+    estado: EstadoDeEnvio,
+    /** Por qué no llegó, en palabras para oficina. */
+    error: z.string().nullable(),
+    creadoEn: Fecha,
+    enviadoEn: Fecha.nullable(),
+  })
+  .meta({ id: "EnvioDeVersion" });
+
 export const VersionPublicada = z
   .object({
     numero: z.int().positive(),
@@ -328,6 +348,8 @@ export const VersionPublicada = z
     pdf: EstadoPdf,
     /** Retirada del portal por una persona administradora (el cliente ya no la ve); se conserva. */
     retirada: z.object({ en: Fecha, por: Persona, motivo: z.string() }).nullable().default(null),
+    /** Copias enviadas al cliente, de la más reciente a la más antigua (ADR-0028). */
+    envios: z.array(EnvioDeVersion).default([]),
   })
   .meta({ id: "VersionPublicada" });
 
@@ -342,6 +364,8 @@ export const PaginaInformes = z
         /** Número de la versión vigente; null mientras no se publica ninguna. */
         vigente: z.int().positive().nullable(),
         pdf: EstadoPdf.nullable(),
+        /** La versión vigente tiene una copia que no llegó y no se ha vuelto a enviar (ADR-0028). */
+        envioSinEntregar: z.boolean().default(false),
       }),
     ),
   })
@@ -351,6 +375,8 @@ export const DetalleInforme = z
   .object({
     id: Uuid,
     visitaId: Uuid,
+    /** Para elegir a quién se envía (sus contactos, ADR-0028). */
+    clienteId: Uuid,
     visita: VisitaDelInforme,
     version: z.int().positive(),
     introduccion: z.string(),
@@ -427,8 +453,63 @@ export const ClienteConSitios = z
     id: Uuid,
     nombre: z.string(),
     sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string() })),
+    /** Contactos que reciben el informe por algún canal: con cero, el informe solo queda en el portal. */
+    reciben: z.int().nonnegative(),
   })
   .meta({ id: "ClienteConSitios" });
+
+/** Celular en formato internacional (E.164), como lo exige WhatsApp: +573105550142. */
+export const CELULAR = /^\+[1-9]\d{7,14}$/;
+
+/** Contacto del cliente (ADR-0028, parte 5). */
+export const Contacto = z
+  .object({
+    id: Uuid,
+    nombre: z.string(),
+    cargo: z.string(),
+    correo: z.string().nullable(),
+    celular: z.string().nullable(),
+    recibeCorreo: z.boolean(),
+    recibeWhatsapp: z.boolean(),
+    /** Qué documentos recibe por esos canales (ADR-0029): se marcan por omisión al publicar. */
+    recibeInformes: z.boolean(),
+    recibeCotizaciones: z.boolean(),
+    /** Quién de oficina confirmó que el contacto autorizó WhatsApp, y cuándo. Cambiar el celular la borra. */
+    whatsappAutorizado: z.object({ por: Persona, en: Fecha }).nullable(),
+    /** El último correo rebotó: sigue marcado hasta que oficina cambie la dirección. */
+    correoRebotado: z.object({ en: Fecha, motivo: z.string() }).nullable(),
+  })
+  .meta({ id: "Contacto" });
+
+export const DetalleCliente = z
+  .object({
+    id: Uuid,
+    nombre: z.string(),
+    sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string() })),
+    contactos: z.array(Contacto),
+  })
+  .meta({ id: "DetalleCliente" });
+
+const vacioANulo = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
+
+/** Datos de un contacto. Recibir por un canal exige su dato; por WhatsApp, además, la autorización. */
+export const DatosContacto = z
+  .object({
+    nombre: Texto(200),
+    cargo: z.string().trim().max(200).default(""),
+    correo: z.preprocess(vacioANulo, z.email().max(320).nullable()).default(null),
+    celular: z.preprocess(vacioANulo, z.string().regex(CELULAR, "Celular con indicativo, por ejemplo +573105550142").nullable()).default(null),
+    recibeCorreo: z.boolean(),
+    recibeWhatsapp: z.boolean(),
+    recibeInformes: z.boolean().default(true),
+    recibeCotizaciones: z.boolean().default(false),
+    whatsappAutorizado: z.boolean().default(false),
+  })
+  .superRefine((d, ctx) => {
+    if (d.recibeCorreo && !d.correo) ctx.addIssue({ code: "custom", path: ["correo"], message: "Para recibir el informe por correo hace falta el correo" });
+    if (d.recibeWhatsapp && !d.celular) ctx.addIssue({ code: "custom", path: ["celular"], message: "Para recibir el informe por WhatsApp hace falta el celular" });
+    if (d.recibeWhatsapp && !d.whatsappAutorizado) ctx.addIssue({ code: "custom", path: ["whatsappAutorizado"], message: "WhatsApp exige que el contacto lo autorice" });
+  });
 
 export const VisitaProgramada = z
   .object({
@@ -448,11 +529,99 @@ export const VisitaProgramada = z
 
 // Cantidades con catálogo (iteración 11).
 
+/** Pesos colombianos enteros, sin IVA (ADR-0029). */
+const Pesos = z.int().min(0).max(1_000_000_000);
+
 export const ItemCatalogo = z
-  .object({ id: Uuid, codigo: z.string(), descripcion: z.string(), unidad: z.string(), activo: z.boolean(), actualizadoEn: Fecha })
+  .object({
+    id: Uuid,
+    codigo: z.string(),
+    descripcion: z.string(),
+    unidad: z.string(),
+    activo: z.boolean(),
+    actualizadoEn: Fecha,
+    /** Precio vigente sin IVA; nunca baja al teléfono (regla 7, ADR-0029). */
+    precio: z.object({ valor: Pesos, desde: Fecha }).nullable(),
+  })
   .meta({ id: "ItemCatalogo" });
 
 const DatosItemCatalogo = { codigo: Texto(40), descripcion: Texto(200), unidad: Texto(20) };
+
+export const PrecioDeItem = z
+  .object({ valor: Pesos, desde: Fecha, por: Persona.nullable(), origen: z.enum(["manual", "importado"]) })
+  .meta({ id: "PrecioDeItem" });
+
+// Cotizaciones (iteración 21, ADR-0029)
+
+const Porcentaje = z.string().regex(PORCENTAJE).refine((p) => Number(p) <= 100, "Entre 0 y 100");
+export const Impuestos = z
+  .discriminatedUnion("tipo", [z.object({ tipo: z.literal("iva") }), z.object({ tipo: z.literal("aiu"), administracion: Porcentaje, imprevistos: Porcentaje, utilidad: Porcentaje })])
+  .meta({ id: "Impuestos" });
+
+export const LineaDeCotizacion = z
+  .object({
+    id: z.string().regex(/^[a-z0-9]{8}$/),
+    itemId: Uuid.nullable(),
+    codigo: z.string().max(40).nullable(),
+    descripcion: z.string().trim().min(1).max(200),
+    cantidad: z.string().regex(DECIMAL_CANONICO).refine((c) => !/^0(\.0+)?$/.test(c), "Mayor que cero"),
+    unidad: z.string().trim().min(1).max(20),
+    precio: Pesos.nullable(),
+    precioCatalogo: Pesos.nullable(),
+    origen: z.enum(["cantidades", "oficina"]),
+  })
+  .meta({ id: "LineaDeCotizacion" });
+
+export const CondicionesCotizacion = z
+  .object({ validezDias: z.int().min(1).max(365), formaPago: z.string().trim().max(300), notas: z.string().trim().max(2000) })
+  .meta({ id: "CondicionesCotizacion" });
+
+export const VersionCotizacion = z
+  .object({ numero: z.int().positive(), publicadaEn: Fecha, publicadaPor: Persona, pdf: EstadoPdf, total: z.int().min(0), envios: z.array(EnvioDeVersion) })
+  .meta({ id: "VersionCotizacion" });
+
+const VisitaDeCotizacion = z.object({ cliente: z.string(), sitio: z.string(), direccion: z.string(), programadaPara: z.iso.date() });
+
+export const DetalleCotizacion = z
+  .object({
+    id: Uuid,
+    numero: z.string(),
+    visitaId: Uuid,
+    clienteId: Uuid,
+    visita: VisitaDeCotizacion,
+    version: z.int().positive(),
+    lineas: z.array(LineaDeCotizacion),
+    impuestos: Impuestos,
+    condiciones: CondicionesCotizacion,
+    versiones: z.array(VersionCotizacion),
+  })
+  .meta({ id: "DetalleCotizacion" });
+
+export const ResumenCotizacion = z
+  .object({
+    id: Uuid,
+    numero: z.string(),
+    visita: VisitaDeCotizacion,
+    /** Número de la versión vigente (la más reciente); null mientras es borrador. */
+    vigente: z.int().positive().nullable(),
+    total: z.int().min(0).nullable(),
+    envioSinEntregar: z.boolean(),
+  })
+  .meta({ id: "ResumenCotizacion" });
+
+export const VisitaParaCotizar = z
+  .object({
+    visitaId: Uuid,
+    cliente: z.string(),
+    sitio: z.string(),
+    programadaPara: z.iso.date(),
+    levantamientosRevisados: z.int().min(0),
+    /** Filas que tendrá la cotización (sumadas por ítem y unidad). */
+    materiales: z.int().min(0),
+    sinPrecio: z.int().min(0),
+    cotizaciones: z.array(z.string()),
+  })
+  .meta({ id: "VisitaParaCotizar" });
 
 export const LineaDeVisita = z
   .object({
@@ -693,12 +862,22 @@ export const operaciones = {
   publicarInforme: {
     metodo: "POST",
     ruta: "/api/informes/{id}/publicar",
-    resumen: "Publica una versión inmutable y encola su PDF (QA-9, QA-17)",
+    resumen: "Publica una versión inmutable y encola su PDF (QA-9, QA-17); los destinatarios reciben el PDF cuando esté listo (ADR-0028)",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object(ConVersion),
+    cuerpo: z.object({ ...ConVersion, destinatarios: z.array(Uuid).max(50).default([]) }),
     estadoExito: 201,
     respuesta: VersionPublicada,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "informe_invalido", "archivos_faltantes", "archivos_en_verificacion"],
+  },
+  enviarVersion: {
+    metodo: "POST",
+    ruta: "/api/informes/{id}/versiones/{numero}/enviar",
+    resumen: "Envía una versión publicada a contactos del cliente: volver a enviar o enviar a otro contacto (ADR-0028)",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
+    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50) }),
+    estadoExito: 200,
+    respuesta: VersionPublicada,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
   },
   pdfDeVersion: {
     metodo: "GET",
@@ -865,10 +1044,103 @@ export const operaciones = {
     metodo: "POST",
     ruta: "/api/catalogo/importar",
     resumen: "Crea o actualiza ítems por código, en bloque (por ejemplo, desde un CSV)",
-    cuerpo: z.object({ items: z.array(z.object(DatosItemCatalogo)).min(1).max(5000) }),
+    /** Con precio, exige administración con segundo factor (ADR-0029). */
+    cuerpo: z.object({ items: z.array(z.object({ ...DatosItemCatalogo, precio: Pesos.optional() })).min(1).max(5000) }),
     estadoExito: 200,
     respuesta: z.object({ creados: z.int().min(0), actualizados: z.int().min(0) }),
-    errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "entrada_invalida"],
+  },
+  cambiarPrecio: {
+    metodo: "POST",
+    ruta: "/api/catalogo/{id}/precio",
+    resumen: "Nuevo precio vigente desde hoy; el anterior queda en la historia (solo administración, ADR-0029)",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ precio: Pesos }),
+    estadoExito: 200,
+    respuesta: ItemCatalogo,
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado"],
+  },
+  historialDePrecio: {
+    metodo: "GET",
+    ruta: "/api/catalogo/{id}/precios",
+    resumen: "Precios de un ítem, del más reciente al más antiguo",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: z.object({ precios: z.array(PrecioDeItem) }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  listarCotizaciones: {
+    metodo: "GET",
+    ruta: "/api/cotizaciones",
+    resumen: "Cotizaciones de la organización, de la más reciente a la más antigua",
+    estadoExito: 200,
+    respuesta: z.object({ cotizaciones: z.array(ResumenCotizacion) }),
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  visitasParaCotizar: {
+    metodo: "GET",
+    ruta: "/api/cotizaciones/visitas",
+    resumen: "Visitas con levantamientos revisados y cantidades, para crear una cotización",
+    estadoExito: 200,
+    respuesta: z.object({ visitas: z.array(VisitaParaCotizar) }),
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  crearCotizacion: {
+    metodo: "POST",
+    ruta: "/api/cotizaciones",
+    resumen: "Crea el borrador desde las cantidades revisadas de la visita, con su número y los precios vigentes",
+    cuerpo: z.object({ visitaId: Uuid }),
+    estadoExito: 201,
+    respuesta: z.object({ id: Uuid }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  obtenerCotizacion: {
+    metodo: "GET",
+    ruta: "/api/cotizaciones/{id}",
+    resumen: "Borrador de la cotización y sus versiones publicadas",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: DetalleCotizacion,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  guardarCotizacion: {
+    metodo: "POST",
+    ruta: "/api/cotizaciones/{id}/borrador",
+    resumen: "Guarda el borrador: líneas con su precio, impuestos y condiciones",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ ...ConVersion, lineas: z.array(LineaDeCotizacion).max(300), impuestos: Impuestos, condiciones: CondicionesCotizacion }),
+    estadoExito: 200,
+    respuesta: z.object({ version: z.int().positive() }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "entrada_invalida"],
+  },
+  publicarCotizacion: {
+    metodo: "POST",
+    ruta: "/api/cotizaciones/{id}/publicar",
+    resumen: "Publica una versión inmutable con sus precios y totales, encola su PDF y la envía cuando esté listo",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ ...ConVersion, destinatarios: z.array(Uuid).max(50).default([]) }),
+    estadoExito: 201,
+    respuesta: VersionCotizacion,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "cotizacion_invalida", "entrada_invalida"],
+  },
+  pdfDeCotizacion: {
+    metodo: "GET",
+    ruta: "/api/cotizaciones/{id}/versiones/{numero}/pdf",
+    resumen: "URL firmada del PDF de una versión publicada",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
+    estadoExito: 200,
+    respuesta: UrlDeArchivo,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  enviarCotizacion: {
+    metodo: "POST",
+    ruta: "/api/cotizaciones/{id}/versiones/{numero}/enviar",
+    resumen: "Envía una versión publicada a contactos del cliente",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
+    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50) }),
+    estadoExito: 200,
+    respuesta: VersionCotizacion,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
   },
   vincularLinea: {
     metodo: "POST",
@@ -908,6 +1180,44 @@ export const operaciones = {
     estadoExito: 201,
     respuesta: ClienteConSitios,
     errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
+  },
+  obtenerCliente: {
+    metodo: "GET",
+    ruta: "/api/clientes/{id}",
+    resumen: "Cliente con sus sitios y sus contactos",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  crearContacto: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/contactos",
+    resumen: "Agrega un contacto al cliente; la autorización de WhatsApp queda con quién y cuándo (ADR-0028)",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: DatosContacto,
+    estadoExito: 201,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
+  },
+  editarContacto: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/contactos/{contactoId}",
+    resumen: "Cambia un contacto; cambiar el celular borra la autorización de WhatsApp y cambiar el correo, su rebote",
+    parametros: z.object({ id: Uuid, contactoId: Uuid }),
+    cuerpo: DatosContacto,
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
+  },
+  quitarContacto: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/contactos/{contactoId}/quitar",
+    resumen: "Quita un contacto; sus envíos anteriores conservan el nombre y el destino",
+    parametros: z.object({ id: Uuid, contactoId: Uuid }),
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
   },
   agregarSitio: {
     metodo: "POST",
