@@ -9,6 +9,7 @@ import {
   esCantidades,
   esFirma,
   esNoObtenido,
+  hojasDe,
   leerClave,
   llenarDeclaracion,
   LIENZO,
@@ -29,7 +30,6 @@ import {
 } from "@teins/dominio";
 import {
   Aviso,
-  Boceto,
   Boton,
   BotonIcono,
   CampoFotos,
@@ -41,6 +41,7 @@ import {
   EsqueletoBloques,
   EtiquetaCampo,
   Firma,
+  HojasDeBoceto,
   Insignia,
   MarcaNoObtenido,
   MensajeError,
@@ -619,30 +620,33 @@ function useBoceto(valor: Valor | undefined) {
 
 function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: string; seccion: string; campo: DefinicionCampo; actual: Valor | undefined; error: string | undefined; alGuardar: () => void }) {
   const documento = useBoceto(actual);
-  const [editando, setEditando] = useState(false);
-  const hayDibujo = Boolean(documento && documento.elementos.length > 0);
+  // La hoja con la que abre el editor: tocar una de las miniaturas abre esa (ADR-0026).
+  const [editando, setEditando] = useState<number | null>(null);
+  const hojas = documento ? hojasDe(documento) : [];
+  const hayDibujo = hojas.some((h) => h.elementos.length > 0);
   return (
     <div className="flex flex-col gap-2">
       <EtiquetaCampo obligatorio={campo.obligatorio}>{campo.etiqueta}</EtiquetaCampo>
       {hayDibujo ? (
-        <Boceto ancho={LIENZO.ancho} alto={LIENZO.alto} cuadricula={LIENZO.cuadricula} elementos={documento!.elementos} etiqueta={`Boceto de ${campo.etiqueta.toLowerCase()}`} className="rounded-control border border-division" />
+        <HojasDeBoceto hojas={hojas} cuadricula={LIENZO.cuadricula} etiqueta={`Boceto de ${campo.etiqueta.toLowerCase()}`} alAbrir={setEditando} />
       ) : (
         <p className="text-ayuda text-texto-secundario">Todavía no hay boceto.</p>
       )}
       {error && <MensajeError id={`error-${seccion}-${campo.clave}`}>{error}</MensajeError>}
-      <Boton icono={Pencil} onClick={() => setEditando(true)}>
+      <Boton icono={Pencil} onClick={() => setEditando(0)}>
         {hayDibujo ? "Editar boceto" : "Dibujar boceto"}
       </Boton>
-      {editando && (
+      {editando !== null && (
         <Suspense fallback={<div aria-busy="true" aria-label="Abriendo el editor" className="fixed inset-0 z-50 bg-fondo" />}>
           <EditorBoceto
             etiqueta={campo.etiqueta}
             inicial={documento ?? null}
+            hojaInicial={editando}
             guardar={async (d) => {
               await repositorio.guardarBoceto(id, seccion, campo.clave, d, new Date());
               alGuardar();
             }}
-            cerrar={() => setEditando(false)}
+            cerrar={() => setEditando(null)}
           />
         </Suspense>
       )}
@@ -656,11 +660,13 @@ const soloHora = new Intl.DateTimeFormat("es-CO", { timeStyle: "short" });
 const cuandoFirmo = (iso: string) => (new Date(iso).toDateString() === new Date().toDateString() ? `hoy a las ${soloHora.format(new Date(iso))}` : `el ${fechaHora(iso)}`);
 
 function FirmaTomada({ valor, documento }: { valor: ValorFirma; documento: DocumentoBoceto | null | undefined }) {
+  // La firma es un boceto de una sola hoja (ADR-0024).
+  const trazos = documento ? hojasDe(documento)[0] : undefined;
   return (
     <>
-      {documento && (
+      {trazos && (
         <div className="rounded-control border border-division bg-panel p-2">
-          <Firma ancho={LIENZO.ancho} alto={LIENZO.alto} elementos={documento.elementos} etiqueta={`Firma de ${valor.nombre}`} className="max-h-32" />
+          <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={`Firma de ${valor.nombre}`} className="max-h-32" />
         </div>
       )}
       <div className="flex flex-col gap-0.5">
@@ -756,7 +762,7 @@ function BocetoLeido({ etiqueta, valor }: { etiqueta: string; valor: Valor | und
     <div className="flex flex-col gap-2">
       <span className="text-cuerpo font-bold">{etiqueta}</span>
       {documento ? (
-        <Boceto ancho={LIENZO.ancho} alto={LIENZO.alto} cuadricula={LIENZO.cuadricula} elementos={documento.elementos} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} className="rounded-control border border-division" />
+        <HojasDeBoceto hojas={hojasDe(documento)} cuadricula={LIENZO.cuadricula} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} />
       ) : (
         <p className="text-ayuda text-texto-secundario">{describirValor({ clave: "", etiqueta, tipo: "boceto" }, valor)}</p>
       )}
