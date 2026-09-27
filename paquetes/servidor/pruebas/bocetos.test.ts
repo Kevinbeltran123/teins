@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { llaveDeEnvio } from "@teins/protocolo";
-import { bocetoVacio, serializarBoceto, TIPO_ARCHIVO_BOCETO, type DocumentoBoceto, type VersionFormato } from "@teins/dominio";
+import { bocetoNuevo, bocetoVacio, hojaNueva, serializarBoceto, TIPO_ARCHIVO_BOCETO, type DocumentoBoceto, type VersionFormato } from "@teins/dominio";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { crearFormatos } from "../src/modulos/formatos";
 import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
@@ -79,6 +79,22 @@ describe("bocetos en el servidor (iteración 10)", () => {
     expect((await app.inject({ method: "GET", url: `/api/archivos/${archivo.huella}/boceto`, headers: { cookie: org.tecnico.cookie } })).statusCode).toBe(403);
   });
 
+  it("un boceto de la versión 2, con dos hojas y formas, se verifica y oficina lo recibe igual (ADR-0026)", async () => {
+    const conHojas: DocumentoBoceto = {
+      ...bocetoNuevo(1352),
+      hojas: [
+        { ...hojaNueva("Primer piso", 1352), elementos: [{ tipo: "polilinea", grosor: 5, puntos: [[100, 200], [650, 200], [650, 900], [100, 900]], cerrada: true }] },
+        { ...hojaNueva("Segundo piso", 1352), elementos: [{ tipo: "cota", grosor: 3, desde: [100, 940], hasta: [650, 940], texto: "5,50 m" }] },
+      ],
+    };
+    const archivo = archivoDe(serializarBoceto(conHojas));
+    await subir(archivo);
+    await s.procesarCola();
+    expect(await estado(archivo.huella)).toMatchObject({ estado: "verificado" });
+    const documento = await app.inject({ method: "GET", url: `/api/archivos/${archivo.huella}/boceto`, headers: { cookie: org.oficina.cookie } });
+    expect(documento.json()).toEqual(conHojas);
+  });
+
   it("el worker rechaza un boceto con estructura inválida o que no es JSON", async () => {
     const malo = archivoDe(JSON.stringify({ formato: "teins-boceto", version: 1, ancho: 1000, alto: 750, cuadricula: 25, elementos: [{ tipo: "circulo" }] }));
     const noJson = archivoDe("<svg>esto no es un boceto</svg>");
@@ -117,7 +133,16 @@ describe("bocetos en el servidor (iteración 10)", () => {
       planos: [],
       levantamientos: [{ id: randomUUID(), formato: conBoceto, tecnico: "T", revisor: "O", recibidoEn: "2026-09-25T11:00:00.000Z", respuestas: { cuarto: { croquis: { boceto: huella } } } }],
     };
-    expect(plantillaInforme(contenido, { fuente: "", fotos: new Map(), bocetos: new Map([[huella, '<svg id="croquis"></svg>']]) })).toContain('<figure class="boceto"><svg id="croquis"></svg></figure>');
+    const apaisada = [{ nombre: "", vertical: false, svg: '<svg id="croquis"></svg>' }];
+    expect(plantillaInforme(contenido, { fuente: "", fotos: new Map(), bocetos: new Map([[huella, apaisada]]) })).toContain('<figure class="boceto apaisada"><svg id="croquis"></svg></figure>');
+    // Con varias hojas, cada una lleva su nombre.
+    const pisos = [
+      { nombre: "Primer piso", vertical: true, svg: "<svg id=\"p1\"></svg>" },
+      { nombre: "Segundo <piso>", vertical: true, svg: "<svg id=\"p2\"></svg>" },
+    ];
+    const html = plantillaInforme(contenido, { fuente: "", fotos: new Map(), bocetos: new Map([[huella, pisos]]) });
+    expect(html).toContain('<div class="hojas"><figure class="boceto"><svg id="p1"></svg><figcaption>Primer piso</figcaption></figure>');
+    expect(html).toContain("<figcaption>Segundo &lt;piso&gt;</figcaption>");
     expect(plantillaInforme(contenido, { fuente: "", fotos: new Map() })).toContain("[BOCETO]");
   });
 });

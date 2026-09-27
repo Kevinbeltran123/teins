@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { bocetoASvg, bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
+import { bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
 import type { Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } from "../../plataforma/base-de-datos";
@@ -18,7 +18,7 @@ import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
 import type { Visitas } from "../visitas";
 import { imprimirInforme } from "./pdf/imprimir";
-import { piePagina, plantillaInforme } from "./pdf/plantilla";
+import { piePagina, plantillaInforme, type HojaDelInforme } from "./pdf/plantilla";
 import { informes, versionesPublicadas, type EstadoPdf } from "./esquema";
 
 interface Dependencias {
@@ -134,16 +134,16 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         const huellas = [...new Set(c.levantamientos.flatMap((l) => fotosReferenciadas(l.respuestas)))];
         const fotos = new Map<string, string>();
         for (const h of huellas) fotos.set(h, `data:image/jpeg;base64,${(await leerTodo(almacenamiento, clave(organizacionId, h))).toString("base64")}`);
-        // Bocetos (ADR-0019): el documento vectorial se convierte a SVG con los colores de la marca.
+        // Bocetos (ADR-0019): cada hoja del documento vectorial se convierte a SVG (ADR-0026).
         // Las firmas usan el mismo documento, sin cuadrícula y recortadas a sus trazos (ADR-0024).
         const valores = c.levantamientos.flatMap((l) => Object.values(l.respuestas).flatMap((seccion) => Object.values(seccion)));
         const deFirmas = new Set(valores.flatMap((valor) => (esFirma(valor) ? [valor.firma] : [])));
-        const bocetos = new Map<string, string>();
+        const bocetos = new Map<string, HojaDelInforme[]>();
         const firmas = new Map<string, string>();
         for (const h of [...new Set(c.levantamientos.flatMap((l) => bocetosReferenciados(l.respuestas)))]) {
           const documento = leerBoceto((await leerTodo(almacenamiento, clave(organizacionId, h))).toString("utf8"));
           if (documento && deFirmas.has(h)) firmas.set(h, firmaASvg(documento));
-          else if (documento) bocetos.set(h, bocetoASvg(documento));
+          else if (documento) bocetos.set(h, hojasDe(documento).map((hoja) => ({ nombre: hoja.nombre, vertical: hoja.alto > hoja.ancho, svg: hojaASvg(hoja) })));
         }
         const planos = [];
         for (const p of c.planos) planos.push(await leerTodo(almacenamiento, clave(organizacionId, p.huella)));

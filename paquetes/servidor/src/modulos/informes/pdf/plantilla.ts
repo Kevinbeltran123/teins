@@ -29,13 +29,21 @@ const parrafos = (texto: string) =>
     .map((p) => `<p>${escapar(p).replace(/\n/g, "<br>")}</p>`)
     .join("");
 
+/** Una hoja de un boceto, ya en SVG (ADR-0019, ADR-0026). */
+export interface HojaDelInforme {
+  nombre: string;
+  /** Las verticales van de a dos por fila; una apaisada (boceto de la versión 1) ocupa la fila. */
+  vertical: boolean;
+  svg: string;
+}
+
 export interface RecursosPlantilla {
   /** Fuente Atkinson Hyperlegible Next en woff2, en base64. */
   fuente: string;
   /** Foto por huella, como data URI. Una que falte se muestra como marcador, nunca se inventa. */
   fotos: ReadonlyMap<string, string>;
-  /** Boceto por huella, ya convertido a SVG (ADR-0019). Uno que falte se muestra como marcador. */
-  bocetos?: ReadonlyMap<string, string>;
+  /** Hojas de cada boceto por huella, ya en SVG. Uno que falte se muestra como marcador. */
+  bocetos?: ReadonlyMap<string, readonly HojaDelInforme[]>;
   /** Firma por huella, en SVG sin cuadrícula y recortada a sus trazos (ADR-0024). */
   firmas?: ReadonlyMap<string, string>;
 }
@@ -75,8 +83,13 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
             .map((campo) => {
               const valor = l.respuestas[clave]?.[campo.clave];
               if (!esBoceto(valor)) return "";
-              const svg = bocetos.get(valor.boceto);
-              return `<h4>${escapar(campo.etiqueta)}</h4><figure class="boceto">${svg ?? '<div class="falta">[BOCETO]</div>'}</figure>`;
+              const hojas = bocetos.get(valor.boceto);
+              if (!hojas) return `<h4>${escapar(campo.etiqueta)}</h4><figure class="boceto"><div class="falta">[BOCETO]</div></figure>`;
+              // El nombre de cada hoja ("Segundo piso") sale cuando hay más de una.
+              const figuras = hojas
+                .map((h) => `<figure class="boceto${h.vertical ? "" : " apaisada"}">${h.svg}${hojas.length > 1 ? `<figcaption>${escapar(h.nombre)}</figcaption>` : ""}</figure>`)
+                .join("");
+              return `<h4>${escapar(campo.etiqueta)}</h4><div class="hojas">${figuras}</div>`;
             })
             .join("");
           // Cantidades (F9): una tabla por campo, sin precios (regla 7).
@@ -158,6 +171,8 @@ table.cantidades .numero { text-align: right; font-variant-numeric: tabular-nums
 .tenue { color: ${MARCA.secundario}; font-weight: 400 !important; }
 .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
 figure { margin: 0; break-inside: avoid; }
+.hojas { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
+.hojas .apaisada { grid-column: 1 / -1; }
 figure.boceto svg { width: 100%; height: auto; display: block; border: 1px solid ${MARCA.division}; border-radius: 6px; }
 .constancia { break-inside: avoid; border: 1px solid ${MARCA.division}; border-radius: 6px; padding: 10pt 12pt; margin-top: 8pt; }
 .constancia h4 { margin-top: 0; }
