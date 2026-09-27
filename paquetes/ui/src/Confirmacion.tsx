@@ -54,6 +54,8 @@ export function Confirmacion({ titulo, children, confirmar, descartar = "Cancela
       alCerrar={alCerrar}
       cerrable={!ocupado}
       forma={forma}
+      // En el teléfono se abre sin anillo de foco sobre "Cancelar": se ve como si ya estuviera elegido.
+      focoEnElDialogo={forma === "inferior"}
       pie={
         <>
           <Boton onClick={alCerrar} disabled={ocupado}>

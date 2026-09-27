@@ -20,7 +20,8 @@ export function MarcaNoObtenido({ dato, marcado: guardado, motivoInicial, onCamb
   useEffect(() => setMarcado(guardado), [guardado]);
   return (
     <div className="flex flex-col gap-2">
-      <label className="flex min-h-tactil cursor-pointer items-center gap-3 text-cuerpo has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-superficie">
+      {/* Discreto, como un enlace: la excepción no ocupa lo mismo que el dato (rediseño Recorrido). Sigue siendo una casilla. */}
+      <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 self-start text-ayuda font-bold text-texto-secundario underline underline-offset-3 has-checked:text-alerta-texto has-checked:no-underline has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-foco">
         <input
           type="checkbox"
           checked={marcado}
@@ -29,8 +30,9 @@ export function MarcaNoObtenido({ dato, marcado: guardado, motivoInicial, onCamb
             onCambio(e.target.checked, motivo);
           }}
           aria-label={`${dato}: no se pudo obtener`}
-          className="size-6 shrink-0 accent-superficie"
+          className="peer sr-only"
         />
+        <span aria-hidden className="hidden rounded-full bg-alerta-fondo px-2 peer-checked:inline">✓</span>
         No se pudo obtener
       </label>
       {marcado && (

@@ -58,7 +58,7 @@ export function Boceto({
   for (let x = cuadricula; x < ancho; x += cuadricula) lineas.push(`M${x} 0V${alto}`);
   for (let y = cuadricula; y < alto; y += cuadricula) lineas.push(`M0 ${y}H${ancho}`);
   return (
-    <svg ref={ref} role="img" aria-label={etiqueta} viewBox={`0 0 ${ancho} ${alto}`} className={`block h-auto w-full bg-panel ${className}`}>
+    <svg ref={ref} role="img" aria-label={etiqueta} data-tema="claro" viewBox={`0 0 ${ancho} ${alto}`} className={`block h-auto w-full bg-panel ${className}`}>
       <path d={lineas.join("")} className="fill-none stroke-division" strokeWidth={1} />
       {elementos.map((e, i) => (
         <ElementoDeBoceto key={i} elemento={e} />

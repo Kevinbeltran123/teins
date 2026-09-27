@@ -168,3 +168,48 @@
     background-color: var(--t-resaltado);
   }
 }
+
+/* El chulo de enviado se dibuja (ChuloDeExito). */
+@keyframes trazo {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+/*
+  Pasar de un paso a otro en campo (DESIGN.md, Recorrido): el navegador captura las dos pantallas
+  (View Transitions) y este CSS las mueve. Adelante, la nueva entra por la derecha; atrás, por la izquierda.
+*/
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--t-duracion-pantalla);
+  animation-timing-function: var(--t-curva);
+}
+:root[data-direccion="adelante"]::view-transition-old(root) { animation-name: paso-sale-izquierda; }
+:root[data-direccion="adelante"]::view-transition-new(root) { animation-name: paso-entra-derecha; }
+:root[data-direccion="atras"]::view-transition-old(root) { animation-name: paso-sale-derecha; }
+:root[data-direccion="atras"]::view-transition-new(root) { animation-name: paso-entra-izquierda; }
+@keyframes paso-sale-izquierda { to { transform: translateX(-25%); opacity: 0; } }
+@keyframes paso-entra-derecha { from { transform: translateX(100%); } }
+@keyframes paso-sale-derecha { to { transform: translateX(100%); } }
+@keyframes paso-entra-izquierda { from { transform: translateX(-25%); opacity: 0; } }
+
+/* Entregar el teléfono para la firma: el icono gira como quien lo pasa (HojaDeFirma). */
+@keyframes entregar {
+  to { transform: rotate(-90deg); }
+}
+
+/* Cola de subida en Enviado: una franja que recorre la barra mientras hay señal. */
+@keyframes cargando {
+  from { translate: -100% 0; }
+  to { translate: 300% 0; }
+}
+
+/* El número de datos que faltan late tres veces al aparecer (ListaFaltantes). */
+@keyframes latido {
+  50% { transform: scale(1.18); }
+}
+
+/* Algo que corre sin avance medible (ProcesoDeEnvio). */
+@keyframes giro {
+  to { transform: rotate(360deg); }
+}

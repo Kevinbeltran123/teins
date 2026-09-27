@@ -94,6 +94,27 @@
   --t-control: var(--t-tactil);
   --t-control-sm: var(--t-tactil-min);
 
+  /* Controles de texto: borde, fondo y foco (campo los rellena sin borde, rediseño Recorrido) */
+  --t-control-borde: var(--t-borde-control);
+  --t-control-fondo: var(--t-panel);
+  --t-control-borde-foco: var(--t-borde-activo);
+  --t-control-halo: var(--t-foco);
+  /* La cifra de una medida y el grupo de unidades */
+  --t-texto-valor: var(--t-texto-cuerpo);
+  --t-peso-valor: 400;
+  --t-unidades-fondo: transparent;
+  --t-unidades-margen: 0px;
+  --t-unidad-alto: var(--t-control);
+  --t-unidad-borde: var(--t-borde-control);
+  /* La caja de una medida: en oficina no se ve; en campo agrupa cifra y unidad */
+  --t-medida-fondo: transparent;
+  --t-medida-radio: 0px;
+  --t-medida-margen: 0px;
+  --t-medida-foco: transparent;
+  --t-medida-control-fondo: var(--t-control-fondo);
+  --t-medida-control-borde: var(--t-control-borde);
+  --t-medida-control-margen: 12px;
+
   /* Movimiento */
   --t-duracion-rapida: 120ms;
   --t-duracion-estandar: 200ms;
@@ -116,6 +137,122 @@
   --t-tactil: 44px;
   --t-control: 40px;
   --t-control-sm: 32px;
+}
+
+/*
+  Campo, dirección Recorrido (DESIGN.md): oscuro, con el lenguaje del croquis. La marca se aclara para
+  leerse sobre el fondo casi negro y el texto de los botones principales pasa a oscuro.
+  Los estados, avisos y la sincronización se tiñen sobre oscuro con el mismo significado.
+*/
+[data-superficie="campo"] {
+  color-scheme: dark;
+  --t-superficie: #6E9BFF;
+  --t-superficie-elevada: #86ACFF;
+  --t-superficie-pista: #3A4A6B;
+  --t-superficie-suave: rgb(110 155 255 / 0.16);
+  --t-sobre-superficie: #0B0F17;
+  --t-sobre-superficie-tenue: #3A4A6B;
+  --t-sobre-superficie-suave: #1E2634;
+  --t-resaltado: rgb(255 194 26 / 0.22);
+
+  --t-fondo: #0B0F17;
+  --t-panel: #151B26;
+  --t-panel-hundido: #1E2634;
+  --t-texto: #F3F5F9;
+  --t-texto-secundario: #AEB6C6;
+  --t-division: #242C3A;
+  --t-borde-suave: #2C3647;
+  --t-borde-control: #5B6780;
+  --t-borde-activo: #F3F5F9;
+  --t-encima: rgb(255 255 255 / 0.06);
+
+  --t-estado-enviado-fondo: #1B2B4A;      --t-estado-enviado-texto: #9DBBFF;
+  --t-estado-revision-fondo: #2E2342;     --t-estado-revision-texto: #D2B8F5;
+  --t-estado-revisado-fondo: #12372F;     --t-estado-revisado-texto: #8FDCC4;
+  --t-estado-anulado-fondo: #3D1D25;      --t-estado-anulado-texto: #F5A8B8;
+
+  --t-exito-fondo: #12372F;     --t-exito-texto: #6FE0B4;
+  --t-alerta-fondo: #3A2E12;    --t-alerta-texto: #FFC66B;
+  --t-peligro-fondo: #3D1D25;   --t-error: #FF8A8A;
+  --t-peligro: #E5484D;
+  --t-notificacion: #F3F5F9;
+  --t-sync-ok: #3DD68C;
+  --t-sync-pendiente: #FFB547;
+  --t-sync-error: #FF8A8A;
+  --t-velo: rgb(3 5 10 / 0.6);
+  --t-sombra-capa: 0 24px 64px rgb(0 0 0 / 0.5);
+  --t-sombra-menu: 0 8px 24px rgb(0 0 0 / 0.4);
+
+  --t-radio-control: 16px;
+  --t-radio-panel: 22px;
+  --t-radio-capa: 28px;
+  --t-titulo: 30px;
+  --t-control: 60px;
+
+  /* Campos rellenos, sin borde; al enfocarlos, borde amarillo (prototipo Recorrido) */
+  --t-control-borde: transparent;
+  --t-control-fondo: #151B26;
+  --t-control-borde-foco: var(--t-foco);
+  --t-control-halo: transparent;
+  --t-texto-valor: 40px;
+  --t-peso-valor: 800;
+  --t-unidades-fondo: #1E2634;
+  --t-unidades-margen: 4px;
+  --t-unidad-alto: 48px;
+  --t-unidad-borde: transparent;
+  --t-medida-fondo: #151B26;
+  --t-medida-radio: 20px;
+  --t-medida-margen: 10px;
+  --t-medida-foco: var(--t-foco);
+  --t-medida-control-fondo: transparent;
+  --t-medida-control-borde: transparent;
+  --t-medida-control-margen: 0px;
+}
+
+/*
+  Lo que se dibuja o se firma va sobre papel claro, como hoy: el croquis y la firma conservan la paleta
+  clara dentro de campo (el croquis es el modelo de la dirección y la tinta es negra).
+*/
+[data-superficie="campo"] [data-tema="claro"] {
+  color-scheme: light;
+  --t-superficie: var(--marca-superficie);
+  --t-superficie-elevada: color-mix(in srgb, var(--marca-superficie), #FFFFFF 12%);
+  --t-superficie-pista: color-mix(in srgb, var(--marca-superficie), #FFFFFF 24%);
+  --t-superficie-suave: color-mix(in srgb, var(--marca-superficie), #FFFFFF 90%);
+  --t-sobre-superficie: #FFFFFF;
+  --t-sobre-superficie-tenue: color-mix(in srgb, var(--marca-superficie), #FFFFFF 70%);
+  --t-sobre-superficie-suave: color-mix(in srgb, var(--marca-superficie), #FFFFFF 85%);
+  --t-resaltado: color-mix(in srgb, var(--marca-acento), #FFFFFF 80%);
+  --t-fondo: #F5F6F8;
+  --t-panel: #FFFFFF;
+  --t-panel-hundido: #F8F9FB;
+  --t-texto: #15171A;
+  --t-texto-secundario: var(--marca-texto-secundario);
+  --t-division: #E1E4EA;
+  --t-borde-suave: #C9CED8;
+  --t-borde-control: #8C93A3;
+  --t-borde-activo: var(--marca-superficie);
+  --t-encima: rgb(21 23 26 / 0.05);
+  --t-exito-fondo: #E3F4EC;     --t-exito-texto: #0B5E45;
+  --t-alerta-fondo: #FFF4D6;    --t-alerta-texto: #6B4500;
+  --t-peligro-fondo: #FBE9EB;   --t-error: #A3223A;
+  --t-peligro: #B42318;
+  --t-notificacion: #1B2130;
+  --t-sombra-capa: 0 24px 64px rgb(10 18 36 / 0.24);
+  --t-sombra-menu: 0 8px 24px rgb(10 18 36 / 0.16);
+  --t-radio-control: 8px;
+  --t-radio-panel: 12px;
+  --t-radio-capa: 16px;
+  --t-control: 58px;
+  --t-control-borde: var(--t-borde-control);
+  --t-control-fondo: var(--t-panel);
+  --t-control-borde-foco: var(--t-borde-activo);
+  --t-control-halo: var(--t-foco);
+  --t-texto-valor: var(--t-texto-cuerpo);
+  --t-peso-valor: 400;
+  --t-unidades-fondo: transparent;
+  --t-unidades-margen: 0px;
+  color: var(--t-texto);
 }
 
 @media (prefers-reduced-motion: reduce) {

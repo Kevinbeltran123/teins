@@ -6,6 +6,7 @@
 export type { LucideIcon } from "lucide-react";
 export {
   ArrowDown,
+  ArrowRight,
   ArrowUp,
   Bell,
   Building,
@@ -25,6 +26,8 @@ export {
   Download,
   Ellipsis,
   Eraser,
+  Eye,
+  EyeOff,
   FileText,
   Image,
   Inbox,
@@ -32,6 +35,7 @@ export {
   KeyRound,
   LoaderCircle,
   LogOut,
+  MapPin,
   Mail,
   MessageCircle,
   MessageSquare,
@@ -45,6 +49,7 @@ export {
   Redo2,
   RefreshCw,
   Ruler,
+  ScanFace,
   Search,
   Send,
   Shapes,

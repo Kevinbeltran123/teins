@@ -9,6 +9,8 @@ const formas = {
   lateral: "my-0 mr-0 ml-auto h-dvh max-h-dvh w-[min(480px,100vw)] rounded-l-capa open:animate-entrar-lateral",
   /** Confirmaciones en el teléfono: abajo, al alcance del pulgar. */
   inferior: "mx-auto mt-auto mb-0 max-h-[90dvh] w-full max-w-xl rounded-t-capa open:animate-subir",
+  /** Hoja alta de campo (catálogo): casi toda la pantalla, para que el teclado no tape los resultados. */
+  hoja: "mx-auto mt-auto mb-0 h-[86dvh] max-h-[86dvh] w-full max-w-xl rounded-t-capa open:animate-subir",
 };
 
 interface Props {
@@ -97,7 +99,8 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
       tabIndex={focoEnElDialogo ? -1 : undefined}
       className={`bg-panel p-0 text-texto shadow-capa backdrop:bg-velo ${amplio && forma === "centrado" ? "w-[min(820px,calc(100vw-32px))]" : ""} ${focoEnElDialogo ? "outline-none" : ""} ${formas[forma]}`}
     >
-      <div className={`flex flex-col ${forma === "lateral" ? "h-full" : "max-h-[inherit]"}`}>
+      <div className={`flex flex-col ${forma === "lateral" || forma === "hoja" ? "h-full" : "max-h-[inherit]"}`}>
+        {forma === "hoja" && <span aria-hidden className="mx-auto mt-2.5 h-1.5 w-11 shrink-0 rounded-full bg-borde-suave" />}
         <header className="flex items-start gap-3 px-6 pt-6 pb-4">
           {Icono && (
             <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-superficie-suave text-superficie [&_svg]:size-5">
@@ -112,7 +115,19 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
           </div>
         </header>
         <div className="flex grow flex-col gap-4 overflow-y-auto px-6 pb-6">{children}</div>
-        {pie && <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-division bg-panel-hundido px-6 py-4">{pie}</footer>}
+        {pie && (
+          <footer
+            className={
+              forma === "inferior"
+                ? // Abajo, en el teléfono: los dos botones en fila y del mismo ancho, "Cancelar" a la izquierda y la acción a
+                  // la derecha, al alcance del pulgar (como las alertas de iOS).
+                  "grid auto-cols-fr grid-flow-col gap-2.5 px-6 pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))] [&>*]:min-h-14 [&>*]:w-full [&>*]:whitespace-normal"
+                : "flex flex-wrap items-center justify-end gap-2 border-t border-division bg-panel-hundido px-6 py-4"
+            }
+          >
+            {pie}
+          </footer>
+        )}
       </div>
       {/* Al final del documento: el foco inicial cae en el primer campo o en "Cancelar", no en la equis. */}
       {cerrable && <BotonIcono icono={X} etiqueta="Cerrar" tamano="pequeno" className="absolute top-5 right-4" onClick={alCerrar} />}

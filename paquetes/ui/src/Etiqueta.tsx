@@ -6,7 +6,7 @@ export function EtiquetaCampo({ children, obligatorio, htmlFor, id }: { children
   const contenido = (
     <>
       {children}
-      {obligatorio && <span className="font-normal text-texto-secundario"> (obligatorio)</span>}
+      {obligatorio && <span className="ml-2 text-ayuda font-bold text-texto-secundario">obligatorio</span>}
     </>
   );
   return htmlFor ? (
