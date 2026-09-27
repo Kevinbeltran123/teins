@@ -154,6 +154,25 @@ export const Cambio = z
       tipo: z.literal("item_catalogo"),
       item: z.object({ id: Uuid, codigo: z.string(), descripcion: z.string(), unidad: z.string(), activo: z.boolean() }),
     }),
+    /**
+     * Símbolo de la biblioteca de los bocetos (iteración 19, ADR-0027): solo a la app 10 o posterior. Uno retirado
+     * baja con `activo: false` y deja de ofrecerse; los bocetos que ya lo usan lo llevan copiado.
+     */
+    z.object({
+      tipo: z.literal("simbolo"),
+      simbolo: z.object({
+        id: Uuid,
+        nombre: z.string(),
+        categoria: z.string(),
+        trazado: z.string(),
+        relleno: z.string().optional(),
+        texto: z.string().optional(),
+        codigo: z.string().optional(),
+        /** El orden de la biblioteca: así se muestran categorías y símbolos. */
+        orden: z.int().min(0),
+        activo: z.boolean(),
+      }),
+    }),
     /** Salió del alcance del usuario (la visita se reasignó o se canceló): el dispositivo la retira. */
     z.object({
       tipo: z.literal("fuera_de_alcance"),

@@ -109,6 +109,19 @@ const ElementosBoceto = z
       z.object({ tipo: z.literal("polilinea"), grosor: z.number(), puntos: z.array(PuntoBoceto).readonly(), cerrada: z.boolean() }),
       z.object({ tipo: z.literal("elipse"), grosor: z.number(), centro: PuntoBoceto, radios: PuntoBoceto, giro: z.number() }),
       z.object({ tipo: z.literal("cota"), grosor: z.number(), desde: PuntoBoceto, hasta: PuntoBoceto, texto: z.string() }),
+      // Desde la app 10 (ADR-0027).
+      z.object({
+        tipo: z.literal("simbolo"),
+        simbolo: z.string(),
+        nombre: z.string(),
+        trazado: z.string(),
+        relleno: z.string().optional(),
+        texto: z.string().optional(),
+        codigo: z.string().optional(),
+        centro: PuntoBoceto,
+        tamano: z.number(),
+        giro: z.number(),
+      }),
     ]),
   )
   .readonly();
