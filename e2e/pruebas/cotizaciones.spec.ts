@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoAdministrador, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { activarSegundoFactor, filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { activarSegundoFactor, filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
 
 /**
  * Iteración 21 (ADR-0029): administración pone el precio; el técnico anota el material del catálogo;
@@ -45,15 +45,19 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("15");
   await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
-  await page.getByRole("button", { name: "Del catálogo" }).click();
-  const catalogo = page.getByRole("dialog", { name: "Agregar del catálogo" });
+  await irAlPaso(page, "Materiales");
+  await page.getByRole("button", { name: "Buscar en el catálogo" }).click();
+  const catalogo = page.getByRole("dialog", { name: "Catálogo" });
   await catalogo.getByRole("searchbox", { name: "Buscar en el catálogo" }).fill(codigo);
-  await catalogo.getByRole("button", { name: new RegExp(descripcion) }).click();
+  await catalogo.getByRole("button", { name: `Agregar ${descripcion}` }).click();
+  await catalogo.getByRole("button", { name: /^Listo · / }).click();
   await page.getByRole("textbox", { name: "Cantidad de la línea 1" }).fill("30");
   await expect(page.getByText("4.800")).toHaveCount(0);
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 60_000 });

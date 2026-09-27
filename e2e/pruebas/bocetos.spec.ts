@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { arrastrar, filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { abrirCroquis, arrastrar, filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar, verLoEnviado } from "./ayudas";
 
 test("bocetos: el técnico dibuja un trazo, una línea enderezada y texto, deshace y rehace, envía; oficina ve el croquis (iteraciones 10 y 18)", async ({ page, browser }) => {
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
@@ -13,12 +13,14 @@ test("bocetos: el técnico dibuja un trazo, una línea enderezada y texto, desha
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("15");
   await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
 
   // El editor, a pantalla completa.
-  await page.getByRole("button", { name: "Dibujar boceto" }).click();
+  // El croquis es su propio paso: abre el editor directamente (rediseño Recorrido).
+  await abrirCroquis(page);
   const editor = page.getByRole("dialog", { name: "Boceto: Croquis del cuarto" });
   const hoja = editor.getByRole("img", { name: "Croquis del cuarto" });
   await arrastrar(page, [[0.1, 0.2], [0.2, 0.35], [0.3, 0.3], [0.4, 0.5]]);
@@ -39,13 +41,13 @@ test("bocetos: el técnico dibuja un trazo, una línea enderezada y texto, desha
   await expect(editor.getByText("Guardado en este teléfono")).toBeAttached();
   await editor.getByRole("button", { name: "Volver a la captura" }).click();
 
-  // La miniatura en el formulario, y el boceto sube al enviar.
-  const miniatura = page.getByRole("img", { name: "Boceto de croquis del cuarto" });
-  await expect(miniatura.getByText("Tablero")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Editar boceto" })).toBeVisible();
+  // El boceto sube al enviar; lo enviado lo muestra en miniatura.
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 60_000 });
+  await verLoEnviado(page);
+  await expect(page.getByRole("img", { name: "Boceto de croquis del cuarto" }).getByText("Tablero")).toBeVisible();
 
   // Oficina lo ve, sin poder corregirlo.
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });

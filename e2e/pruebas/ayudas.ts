@@ -115,3 +115,50 @@ export async function arrastrar(page: Page, puntos: [number, number][], { quieto
   if (quieto) await page.waitForTimeout(quieto);
   await page.mouse.up();
 }
+
+/**
+ * Captura por pasos (rediseño Recorrido, DESIGN.md): desde un paso o una repetición abierta, vuelve al
+ * recorrido de la visita.
+ */
+export async function irAlRecorrido(page: Page) {
+  const recorrido = page.getByRole("navigation", { name: "Recorrido de la visita" });
+  const listo = page.getByRole("button", { name: /^Listo este / });
+  const ver = page.getByRole("button", { name: "Ver el recorrido", exact: true });
+  // Espera a que la pantalla (recorrido, paso o repetición) termine de pintarse antes de decidir.
+  await expect(recorrido.or(ver).or(listo)).toBeVisible();
+  if (await listo.isVisible()) {
+    await listo.click();
+    await expect(listo).toHaveCount(0);
+  }
+  if (!(await recorrido.isVisible())) await ver.click();
+  await expect(recorrido).toBeVisible();
+  return recorrido;
+}
+
+/** Abre un paso del recorrido por su título ("Cierre de la visita"). */
+export async function irAlPaso(page: Page, titulo: string) {
+  const recorrido = await irAlRecorrido(page);
+  await recorrido.getByRole("button", { name: new RegExp(`^${titulo}`) }).click();
+  await expect(page.getByRole("heading", { level: 1, name: titulo })).toBeVisible();
+}
+
+/** Abre "Revisar y enviar", donde está "Enviar a oficina". */
+export async function irARevisar(page: Page) {
+  const recorrido = await irAlRecorrido(page);
+  await recorrido.getByRole("button", { name: /^Revisar y enviar/ }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Antes de enviar" })).toBeVisible();
+}
+
+/** El croquis es un paso que abre el editor a pantalla completa. */
+export async function abrirCroquis(page: Page) {
+  const recorrido = await irAlRecorrido(page);
+  await recorrido.getByRole("button", { name: /^Croquis/ }).click();
+  await expect(page.getByLabel("Lienzo del boceto")).toBeVisible();
+}
+
+/** Lo enviado va plegado bajo el avance del envío: se abre para revisarlo. */
+export async function verLoEnviado(page: Page) {
+  const resumen = page.getByText("Ver lo que enviaste");
+  await expect(resumen).toBeVisible();
+  if (!(await page.locator("details[open]").count())) await resumen.click();
+}

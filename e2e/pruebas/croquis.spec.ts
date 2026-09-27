@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { arrastrar, filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { abrirCroquis, arrastrar, filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar, verLoEnviado } from "./ayudas";
 
 /**
  * Dos dedos que se deslizan a lo ancho de la hoja (solo Chromium: el protocolo de depuración simula el toque
@@ -31,11 +31,12 @@ test("croquis: formas enderezadas, cota, mover y duplicar, y dos hojas con nombr
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("15");
   await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Dibujar boceto" }).click();
+  await abrirCroquis(page);
   const editor = page.getByRole("dialog", { name: "Boceto: Croquis del cuarto" });
   const hoja = editor.getByRole("img", { name: "Croquis del cuarto" });
 
@@ -87,15 +88,18 @@ test("croquis: formas enderezadas, cota, mover y duplicar, y dos hojas con nombr
   await expect(hoja.locator("polygon")).toHaveCount(1);
   await editor.getByRole("button", { name: "Volver a la captura" }).click();
 
-  // En la captura, cada hoja con su nombre; tocar una abre esa hoja.
-  await expect(page.getByRole("img", { name: "Boceto de croquis del cuarto: Primer piso" }).getByText("5,50 m")).toBeVisible();
-  await page.getByRole("button", { name: "Abrir Segundo piso" }).click();
-  await expect(editor.getByRole("button", { name: "Hojas: Segundo piso, hoja 2 de 2" })).toBeVisible();
+  // Volver al paso abre el croquis con sus hojas.
+  await abrirCroquis(page);
+  await expect(editor.getByRole("button", { name: /^Hojas: .*de 2$/ })).toBeVisible();
   await editor.getByRole("button", { name: "Volver a la captura" }).click();
 
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 60_000 });
+  await verLoEnviado(page);
+  // Lo enviado muestra cada hoja con su nombre.
+  await expect(page.getByRole("img", { name: "Boceto de croquis del cuarto: Primer piso" }).getByText("5,50 m")).toBeVisible();
 
   // Oficina ve las dos hojas con su nombre, y el PDF se genera con ellas.
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });

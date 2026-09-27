@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irARevisar } from "./ayudas";
 
 const usuarios = () =>
   JSON.parse(readFileSync("test-results/usuarios.json", "utf8")) as Record<"tecnico" | "oficina", { usuario: string; nombre: string; contrasena: string }> & {
@@ -17,7 +17,7 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   // Campo: primera instalación con conexión; baja la visita asignada y los formatos.
   await page.goto(`${CAMPO}/`);
   await iniciarSesion(page, tecnico);
-  await expect(page.getByRole("heading", { name: "Mis visitas" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Hola, / })).toBeVisible();
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await expect(visita.getByText("Hoy")).toBeVisible();
@@ -35,14 +35,18 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   }
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
   // Con datos faltantes, "Enviar a oficina" muestra el resumen directamente: no hay nada que confirmar.
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
-  await expect(page.getByText("Faltan 2 datos por completar.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Faltan 2 datos por completar" })).toBeVisible();
+  // El resumen lleva al dato: abre su paso.
+  await page.getByRole("region", { name: "Faltan 2 datos por completar" }).getByRole("button", { name: /Potencia nominal/ }).click();
 
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("12,5");
   await page.getByRole("textbox", { name: "Descripción del sitio" }).fill("Cuarto de prueba E2E");
-  await page.locator("input[type=file]").setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
+  await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
   if (!capturaCompletaSinRed) await context.setOffline(true);
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Sin conexión: se enviará al recuperar señal")).toBeVisible();
@@ -53,7 +57,7 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });
   // En la lista, el estado que dio el servidor en la bajada.
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
-  await expect(page.getByRole("region", { name: `En ${cliente}` }).getByText("Recibido en oficina")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Enviados" }).getByText("Recibido en oficina")).toBeVisible();
 
   // Oficina, en su propio navegador de escritorio.
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });

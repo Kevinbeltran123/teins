@@ -26,6 +26,8 @@ test("llaves de acceso: el técnico y oficina crean una y entran sin contraseña
   await propuesta.getByRole("button", { name: "Crear llave de acceso" }).click();
   await expect(page.getByText("Listo. La próxima vez entra con")).toBeVisible();
 
+  // "Cerrar sesión" está en la cuenta (rediseño Recorrido).
+  await page.getByRole("button", { name: "Tu cuenta" }).click();
   await page.getByRole("button", { name: "Cerrar sesión" }).click();
   await page.getByRole("button", { name: "Entrar con llave de acceso" }).click();
   await expect(page.getByRole("region", { name: "Siguiente visita" }).getByText(cliente)).toBeVisible();

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { expect, test, type Download, type Page } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar, verLoEnviado } from "./ayudas";
 
 const contenido = async (descarga: Download) => (await readFile(await descarga.path())).toString("utf8");
 const descargar = async (o: Page, boton: string) => {
@@ -25,26 +25,33 @@ test("cantidades: el técnico anota líneas; oficina importa el catálogo, vincu
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("15");
   await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
 
-  // Con catálogo en el teléfono (iteración 17) el botón se llama "Línea libre"; sin él, "Agregar línea".
-  const lineaLibre = page.getByRole("button", { name: /^(Agregar línea|Línea libre)$/ });
+  // Materiales es su propio paso; la línea libre es un enlace y la cantidad va con − y + (rediseño Recorrido).
+  await irAlPaso(page, "Materiales");
+  const lineaLibre = page.getByRole("button", { name: /agregar línea libre$/i });
   await lineaLibre.click();
   await page.getByRole("textbox", { name: "Descripción de la línea 1" }).fill("Cable 12 AWG");
   await page.getByRole("textbox", { name: "Cantidad de la línea 1" }).fill("25,5");
-  await page.getByRole("combobox", { name: "Unidad de la línea 1" }).selectOption("m");
+  await page.getByRole("radiogroup", { name: "Unidad de la línea 1" }).getByText("m", { exact: true }).click();
   await lineaLibre.click();
   await page.getByRole("textbox", { name: "Descripción de la línea 2" }).fill("Breaker 20 A");
-  await page.getByRole("textbox", { name: "Cantidad de la línea 2" }).fill("2");
+  await page.getByRole("button", { name: "Más de la línea 2" }).click();
+  await expect(page.getByRole("textbox", { name: "Cantidad de la línea 2" })).toHaveValue("2");
+  await page.getByRole("group", { name: "Línea 2" }).getByRole("button", { name: "Agregar nota" }).click();
   await page.getByRole("textbox", { name: "Observación de la línea 2 (opcional)" }).fill("Uno de repuesto");
+  // Bajar a 0 quita la línea.
   await lineaLibre.click();
-  await page.getByRole("button", { name: "Quitar la línea 3" }).click();
+  await page.getByRole("button", { name: "Menos de la línea 3" }).click();
   await expect(page.getByRole("group", { name: "Línea 3" })).toHaveCount(0);
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 60_000 });
+  await verLoEnviado(page);
   // Lo enviado se lee como tabla, con coma decimal.
   await expect(page.getByRole("table", { name: "Materiales" }).getByRole("cell", { name: "25,5" })).toBeVisible();
 
@@ -95,7 +102,7 @@ test("cantidades: el técnico anota líneas; oficina importa el catálogo, vincu
   await expect(o.getByRole("dialog").getByText("2 líneas de 1 levantamiento · 1 sin vincular al catálogo")).toBeVisible();
   const detalle = await contenido(await descargar(o, "Descargar el detalle (CSV)"));
   expect(detalle.startsWith("﻿Fecha de la visita;Cliente;")).toBe(true);
-  expect(detalle).toContain(`;Cuarto técnico · Materiales;Cable 12 AWG;25,5;m;;${cable};Cable THHN 12 AWG\r\n`);
+  expect(detalle).toContain(`;Materiales · Materiales;Cable 12 AWG;25,5;m;;${cable};Cable THHN 12 AWG\r\n`);
   expect(detalle).toContain(";Breaker 20 A;3;und;Uno de repuesto;;\r\n");
   const resumen = await contenido(await descargar(o, "Descargar el resumen (CSV)"));
   expect(resumen).toContain(`${cable};Cable THHN 12 AWG;25,5;m;1\r\n`);

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
 
 /** Firma sobre el recuadro, en proporciones de su tamaño (0 a 1). */
 async function firmar(page: Page, puntos: [number, number][]) {
@@ -26,13 +26,16 @@ test("firma del cliente: quien recibe la visita firma la constancia en el teléf
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("15");
   await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
 
   // La constancia se llena con el técnico, el cliente, el sitio y el día.
-  await page.getByRole("button", { name: "Pedir la firma" }).click();
+  await irAlPaso(page, "Firma del cliente");
+  await page.getByRole("button", { name: "Entregar el teléfono" }).click();
   const hoja = page.getByRole("dialog", { name: "Constancia de visita" });
+  await hoja.getByRole("button", { name: "Ya lo tiene" }).click();
   await expect(hoja.getByText(`Confirmo que ${tecnico.nombre}, de TEINS, visitó ${cliente} · Sede E2E el`)).toBeVisible();
   // Sin nombre ni firma, dice qué falta.
   await hoja.getByRole("button", { name: "Firmar" }).click();
@@ -52,6 +55,7 @@ test("firma del cliente: quien recibe la visita firma la constancia en el teléf
   await expect(page.getByRole("img", { name: "Firma de Martha Gómez" })).toBeVisible();
 
   // Los trazos suben al enviar, como un boceto.
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 60_000 });

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { comando, nuevaVisita, nuevoUsuario } from "../consola";
 import { CAMPO } from "../destino";
-import { iniciarSesion } from "./ayudas";
+import { iniciarSesion, irAlPaso, irAlRecorrido } from "./ayudas";
 
 /** Un técnico con una visita, con sesión en campo y un borrador empezado en esa visita. */
 async function tecnicoConBorrador(page: Page) {
@@ -12,7 +12,9 @@ async function tecnicoConBorrador(page: Page) {
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Descripción del sitio" }).fill("Borrador E2E");
+  await irAlRecorrido(page);
   await expect(page.getByText("Guardado en este teléfono", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
   return { tecnico, visita };
@@ -75,7 +77,8 @@ test("con el permiso local vencido la captura se bloquea sin borrar nada, y al c
   // Con señal, la bajada renueva el permiso y la captura vuelve.
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect(page.getByRole("textbox", { name: "Descripción del sitio" })).toBeVisible({ timeout: 30_000 });
+  // Vuelve editable, en su recorrido (rediseño Recorrido): el borrador ya tenía datos.
+  await expect(page.getByRole("navigation", { name: "Recorrido de la visita" })).toBeVisible({ timeout: 30_000 });
 });
 
 test("un técnico revocado pierde el acceso y el teléfono borra sus datos en el siguiente contacto (QA-5)", async ({ page }) => {
@@ -88,7 +91,7 @@ test("un técnico revocado pierde el acceso y el teléfono borra sus datos en el
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
   await expect(page.getByText(`Se cerró el acceso de ${tecnico.nombre} en este teléfono y se borraron sus datos.`)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hola de nuevo" })).toBeVisible();
   expect(await contar(page, "levantamientos")).toBe(0);
   expect(await contar(page, "visitas")).toBe(0);
 

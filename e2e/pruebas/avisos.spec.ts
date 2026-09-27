@@ -67,6 +67,7 @@ test("el técnico activa los avisos en su teléfono y oficina en su navegador (A
   expect((await suscrita).status()).toBe(200);
   await expect(page.getByText("Avisos activados en este teléfono.")).toBeVisible();
   await expect(tarjeta).toHaveCount(0);
+  await page.getByRole("button", { name: "Tu cuenta" }).click();
   await page.getByText("Diagnóstico del teléfono").click();
   await expect(page.getByRole("definition").filter({ hasText: /^Activos$/ })).toBeVisible();
 

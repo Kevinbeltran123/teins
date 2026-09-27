@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoAcceso, nuevoAdministrador, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { activarSegundoFactor, filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { activarSegundoFactor, filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
 
 test("el recorrido completo: campo envía, oficina revisa y publica, y el cliente descarga su informe con el QR y la clave (QA-4)", async ({ page, browser }) => {
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
@@ -14,9 +14,11 @@ test("el recorrido completo: campo envía, oficina revisa y publica, y el client
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("15");
-  await page.locator("input[type=file]").setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
+  await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });

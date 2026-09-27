@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { nuevaVisita, nuevoUsuario, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
 
 /**
  * Iteración 20 (ADR-0028): contactos del cliente y el informe publicado por correo y WhatsApp.
@@ -15,10 +15,12 @@ async function enviarDesdeCampo(page: Page, tecnico: Usuario, cliente: string) {
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("20");
   await page.getByRole("textbox", { name: "Descripción del sitio" }).fill("Cuarto para el envío al cliente");
-  await page.locator("input[type=file]").setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
+  await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });

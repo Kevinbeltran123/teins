@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { iniciarSesion } from "./ayudas";
+import { iniciarSesion, irAlPaso, irAlRecorrido } from "./ayudas";
 
 test("oficina crea un cliente, programa una visita que llega al teléfono, la reprograma y la cancela (iteración 7)", async ({ browser }) => {
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
@@ -57,7 +57,9 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
 
   // El técnico ya empezó algo en esa visita.
   await siguiente.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(t, "Cuarto técnico");
   await t.getByRole("textbox", { name: "Descripción del sitio" }).fill("Empezado antes de cancelar (E2E)");
+  await irAlRecorrido(t);
   await expect(t.getByText("Guardado en este teléfono", { exact: false })).toBeVisible();
   await t.getByRole("button", { name: "Volver a mis visitas" }).click();
 

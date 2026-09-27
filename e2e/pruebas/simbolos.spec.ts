@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { abrirCroquis, filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar, verLoEnviado } from "./ayudas";
 
 /**
  * Símbolos (iteración 19, ADR-0027). La biblioteca de prueba la publica `sembrar` en la organización de
@@ -17,11 +17,12 @@ test("símbolos: el técnico busca y pone una UPS, la duplica, la ve en reciente
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("15");
   await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Dibujar boceto" }).click();
+  await abrirCroquis(page);
   const editor = page.getByRole("dialog", { name: "Boceto: Croquis del cuarto" });
   const hoja = editor.getByRole("img", { name: "Croquis del cuarto" });
 
@@ -45,12 +46,14 @@ test("símbolos: el técnico busca y pone una UPS, la duplica, la ve en reciente
   await expect(biblioteca.getByRole("region", { name: "Recientes" }).getByRole("button", { name: "UPS" })).toBeVisible();
   await biblioteca.getByRole("button", { name: "Cerrar" }).click();
   await editor.getByRole("button", { name: "Volver a la captura" }).click();
-  await expect(page.getByRole("img", { name: "Boceto de croquis del cuarto" }).getByText("UPS")).toHaveCount(2);
 
   // El worker lo verifica al enviar; oficina lo dibuja y el PDF se genera con él.
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 60_000 });
+  await verLoEnviado(page);
+  await expect(page.getByRole("img", { name: "Boceto de croquis del cuarto" }).getByText("UPS")).toHaveCount(2);
 
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });
   const o = await escritorio.newPage();

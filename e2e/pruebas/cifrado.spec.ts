@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO } from "../destino";
-import { fotoDePrueba, iniciarSesion } from "./ayudas";
+import { fotoDePrueba, iniciarSesion, irAlPaso, irARevisar, verLoEnviado } from "./ayudas";
 
 /** Lo que hay en la base del teléfono tal como está guardado, sin pasar por la app. */
 function baseCruda(page: Page) {
@@ -37,6 +37,7 @@ test("cifrado local: lo capturado queda cifrado en el teléfono, se lee al volve
   const visita = page.getByRole("region", { name: "Siguiente visita" });
   await expect(visita.getByText(cliente)).toBeVisible();
   await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("textbox", { name: "Descripción del sitio" }).fill(secreto);
   await page.getByRole("textbox", { name: "Potencia nominal" }).fill("15");
   await page.locator("input[type=file]").first().setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: fotoDePrueba() });
@@ -52,13 +53,16 @@ test("cifrado local: lo capturado queda cifrado en el teléfono, se lee al volve
   // Al volver a abrir la app, todo se lee igual.
   await page.reload();
   await page.getByRole("region", { name: "Siguiente visita" }).getByRole("button", { name: "Continuar levantamiento" }).click();
+  await irAlPaso(page, "Cuarto técnico");
   await expect(page.getByRole("textbox", { name: "Descripción del sitio" })).toHaveValue(secreto);
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
 
   // Y se envía: al servidor llegan los datos abiertos y la foto con la huella que la nombra.
+  await irARevisar(page);
   await page.getByRole("button", { name: "Enviar a oficina" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 60_000 });
+  await verLoEnviado(page);
   await expect(page.getByText(secreto)).toBeVisible();
   expect((await baseCruda(page)).texto).not.toContain(secreto);
 });
