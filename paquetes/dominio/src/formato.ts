@@ -7,9 +7,11 @@ interface CampoBase {
 }
 
 export type DefinicionCampo =
-  | (CampoBase & { tipo: "texto" })
-  | (CampoBase & { tipo: "medida"; unidades: readonly string[] })
-  | (CampoBase & { tipo: "foto"; min?: number | undefined })
+  /** `largo`: varias líneas. `valoresComunes`: respuestas frecuentes que se eligen con un toque (rediseño Recorrido). */
+  | (CampoBase & { tipo: "texto"; largo?: boolean | undefined; valoresComunes?: readonly string[] | undefined })
+  | (CampoBase & { tipo: "medida"; unidades: readonly string[]; valoresComunes?: readonly string[] | undefined })
+  /** `puestos`: las tomas que se esperan, con su nombre ("Fachada", "Placa"): se ve cuál falta. */
+  | (CampoBase & { tipo: "foto"; min?: number | undefined; puestos?: readonly string[] | undefined })
   /** Croquis a mano sobre cuadrícula (ADR-0019). */
   | (CampoBase & { tipo: "boceto" })
   /** Tabla de materiales y trabajos (F9), con las unidades permitidas. */
