@@ -78,6 +78,10 @@
   --animate-aparecer: aparecer var(--t-duracion-estandar) var(--t-curva) both;
   --animate-entrar-lateral: entrar-lateral var(--t-duracion-pantalla) var(--t-curva) both;
   --animate-subir: subir var(--t-duracion-pantalla) var(--t-curva) both;
+  /* Editor de bocetos (ADR-0026): la hoja a la que se pasa entra desde su lado; el anillo de enderezar se llena. */
+  --animate-hoja-siguiente: hoja-siguiente var(--t-duracion-estandar) var(--t-curva) both;
+  --animate-hoja-anterior: hoja-anterior var(--t-duracion-estandar) var(--t-curva) both;
+  --animate-llenar-anillo: llenar-anillo 350ms linear both;
 }
 
 @layer base {
@@ -139,6 +143,22 @@
 @keyframes subir {
   from { transform: translateY(24px); opacity: 0; }
   to { transform: none; opacity: 1; }
+}
+
+@keyframes hoja-siguiente {
+  from { transform: translateX(40%); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+@keyframes hoja-anterior {
+  from { transform: translateX(-40%); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+/* El trazo del anillo mide 100 (pathLength): se llena de 0 a 100. */
+@keyframes llenar-anillo {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
 }
 
 /* Sin movimiento: lo recién creado queda resaltado, sin desvanecerse, hasta salir de la pantalla. */

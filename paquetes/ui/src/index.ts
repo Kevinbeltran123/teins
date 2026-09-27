@@ -1,7 +1,7 @@
 export { Aviso } from "./Aviso";
-export { Boceto, ElementoDeBoceto } from "./Boceto";
+export { Boceto, ElementoDeBoceto, HojasDeBoceto } from "./Boceto";
 export { Firma } from "./Firma";
-export type { ElementoDibujable } from "./Boceto";
+export type { ElementoDibujable, HojaDibujable } from "./Boceto";
 export { Boton, BotonIcono, claseBoton } from "./Boton";
 export type { TamanoBoton, VarianteBoton } from "./Boton";
 export { BotonCopiar } from "./BotonCopiar";
@@ -29,6 +29,7 @@ export { MenuAcciones } from "./MenuAcciones";
 export type { OpcionMenu } from "./MenuAcciones";
 export { ProveedorNotificaciones, useNotificar } from "./Notificaciones";
 export type { Notificacion } from "./Notificaciones";
+export { BotonHerramienta, Pastilla } from "./Pastilla";
 export { Pestanas } from "./Pestanas";
 export type { Pestana } from "./Pestanas";
 export { SelectorDeArchivo } from "./SelectorDeArchivo";

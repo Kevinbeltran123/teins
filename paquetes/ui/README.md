@@ -24,6 +24,8 @@ Los tokens de tamaño son neutros (`texto-cuerpo`, `control`, `fondo`): cada sup
 | `BotonCopiar` | Copiar claves y códigos, con la confirmación en el mismo botón |
 | `VisorFotos` | Foto a pantalla completa con anterior y siguiente; en campo, "Eliminar foto" |
 | `CampoTexto`, `CampoTextoLargo`, `CampoSeleccion`, `CampoMedida`, `Casilla`, `GrupoDeOpciones`, `SelectorDeArchivo`, `MarcaNoObtenido` | Campos de formulario, con su mensaje de error por campo |
+| `Pastilla`, `BotonHerramienta` | La barra compacta del editor de bocetos (ADR-0026): grupos flotantes de iconos de 44 px; la herramienta elegida lleva `aria-pressed` y la superficie de marca |
+| `HojasDeBoceto` | Leer un boceto: sus hojas de a dos (una apaisada a lo ancho), con su nombre si hay varias y, con `alAbrir`, cada una como botón |
 | `CampoFotos`, `EditorCantidades`, `TablaCantidades`, `Boceto`, `Firma` | Tipos de campo de los formatos. `Firma` dibuja los trazos sin cuadrícula: recortada a la firma o, con `recortar={false}`, como el recuadro donde se firma |
 
-Historia: iteración 6 (`GrupoDeOpciones`, `modoEntrada="numeric"`), 7 (`CampoSeleccion`, `tipo="date"`), 10 (`Boceto`), 11 (`EditorCantidades`, `TablaCantidades`), 14 (el juego completo de la dirección Consola; `Marquilla` se retiró), 16 (`Firma`), 17 (`EditorCantidades` con líneas del catálogo y "Del catálogo").
+Historia: iteración 6 (`GrupoDeOpciones`, `modoEntrada="numeric"`), 7 (`CampoSeleccion`, `tipo="date"`), 10 (`Boceto`), 11 (`EditorCantidades`, `TablaCantidades`), 14 (el juego completo de la dirección Consola; `Marquilla` se retiró), 16 (`Firma`), 17 (`EditorCantidades` con líneas del catálogo y "Del catálogo"), 18 (`Pastilla`, `BotonHerramienta`, `HojasDeBoceto`, `CampoTexto` con `seleccionarAlEnfocar`, y las animaciones CSS de pasar de hoja y del anillo de enderezar).

@@ -4,9 +4,24 @@ import { ElementoDeBoceto, type ElementoDibujable } from "./Boceto";
 type Par = readonly [number, number];
 
 function puntosDe(e: ElementoDibujable): readonly Par[] {
-  if (e.tipo === "trazo") return e.contorno;
-  if (e.tipo === "linea") return [e.desde, e.hasta];
-  return [e.en];
+  switch (e.tipo) {
+    case "trazo":
+      return e.contorno;
+    case "linea":
+    case "cota":
+      return [e.desde, e.hasta];
+    case "texto":
+      return [e.en];
+    case "polilinea":
+      return e.puntos;
+    case "elipse": {
+      const r = Math.max(...e.radios);
+      return [
+        [e.centro[0] - r, e.centro[1] - r],
+        [e.centro[0] + r, e.centro[1] + r],
+      ];
+    }
+  }
 }
 
 /**

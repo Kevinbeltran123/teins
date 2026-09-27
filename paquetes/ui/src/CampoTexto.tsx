@@ -13,6 +13,8 @@ interface Props {
   nombre?: string;
   /** Teclado del celular: "numeric" para códigos de verificación. */
   modoEntrada?: "text" | "numeric" | "decimal";
+  /** Un nombre propuesto ("Hoja 3"): al enfocarlo queda seleccionado, y lo que se escribe lo reemplaza. */
+  seleccionarAlEnfocar?: boolean;
 }
 
 export const claseControl =
@@ -21,7 +23,7 @@ export const claseControl =
 export const claseConError = "animate-[sacudida_var(--t-duracion-estandar)_var(--t-curva)] border-2 border-error";
 
 /** No controlado: cada tecla se guarda sin volver a leer de la base, así el cursor no salta. */
-export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, error, deshabilitado, tipo = "text", autoComplete = "off", nombre, modoEntrada }: Props) {
+export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, error, deshabilitado, tipo = "text", autoComplete = "off", nombre, modoEntrada, seleccionarAlEnfocar }: Props) {
   const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
@@ -40,6 +42,7 @@ export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, erro
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
         onChange={(e) => onCambio(e.target.value)}
+        onFocus={seleccionarAlEnfocar ? (e) => e.target.select() : undefined}
       />
       {error && <MensajeError id={`${id}-error`}>{error}</MensajeError>}
     </div>
