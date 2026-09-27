@@ -27,7 +27,7 @@ export function useGuardarInforme(id: string) {
 export function usePublicarInforme(id: string) {
   const refrescar = useRefrescar();
   return useMutation({
-    mutationFn: (version: number) => cliente.llamar("publicarInforme", { parametros: { id }, cuerpo: { version } }),
+    mutationFn: ({ version, destinatarios }: { version: number; destinatarios: string[] }) => cliente.llamar("publicarInforme", { parametros: { id }, cuerpo: { version, destinatarios } }),
     onSettled: () => refrescar(),
   });
 }

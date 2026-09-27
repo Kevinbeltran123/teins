@@ -39,7 +39,13 @@ export function Informes() {
               </CeldaTabla>
               <CeldaTabla>{i.visita.sitio}</CeldaTabla>
               <CeldaTabla>{dia(i.visita.programadaPara)}</CeldaTabla>
-              <CeldaTabla>{i.vigente ? <Insignia tono="publicado">{`Versión ${i.vigente}`}</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}</CeldaTabla>
+              <CeldaTabla>
+                <span className="flex flex-wrap gap-1.5">
+                  {i.vigente ? <Insignia tono="publicado">{`Versión ${i.vigente}`}</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}
+                  {/* Hasta que se vuelva a enviar (ADR-0028): lo que no llegó no se pierde de vista. */}
+                  {i.envioSinEntregar && <Insignia tono="peligro">Envío sin entregar</Insignia>}
+                </span>
+              </CeldaTabla>
             </FilaTabla>
           ))}
         </Tabla>

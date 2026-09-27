@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Aviso, BotonIcono, Building, CalendarDays, ClipboardCheck, FileText, LogOut, Package, ShieldCheck, type LucideIcon } from "@teins/ui";
+import { Aviso, BotonIcono, Building, CalendarDays, ClipboardCheck, FileText, LogOut, Package, Receipt, ShieldCheck, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useConexion } from "../conexion";
@@ -19,6 +19,7 @@ const SECCIONES: Seccion[] = [
   { a: "/clientes", texto: "Clientes", icono: Building },
   { a: "/catalogo", texto: "Catálogo", icono: Package },
   { a: "/informes", texto: "Informes", icono: FileText },
+  { a: "/cotizaciones", texto: "Cotizaciones", icono: Receipt },
 ];
 
 const claseEnlace =

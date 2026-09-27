@@ -27,8 +27,11 @@ import { cliente, consultas } from "../api";
 import { aFechaHora } from "../formato";
 import { mensajeDeAdministracion } from "../administracion";
 import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
+import { consultasDeProgramacion } from "../programacion";
+import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
 
 type Informe = Respuesta<"obtenerInforme">;
+type Envio = Informe["versiones"][number]["envios"][number];
 interface Borrador {
   introduccion: string;
   conclusiones: string;
@@ -59,8 +62,14 @@ const migas = (
 export function InformeDeVisita({ id }: { id: string }) {
   const consulta = useQuery({
     ...consultas.informe(id),
-    // Mientras un PDF se genera, la lista de versiones se vuelve a leer sola (ADR-0013: aviso al terminar).
-    refetchInterval: (q) => (q.state.data?.versiones.some((v) => v.pdf === "generando") ? 3_000 : false),
+    // Mientras un PDF se genera o un envío espera, la lista de versiones se vuelve a leer sola (ADR-0013, ADR-0028).
+    // Un envío recién aceptado espera la confirmación del proveedor (entrega o rebote): se mira cada 10 s durante 10 minutos.
+    refetchInterval: (q) => {
+      const versiones = q.state.data?.versiones ?? [];
+      if (versiones.some((v) => v.pdf === "generando" || v.envios.some((e) => e.estado === "en_cola"))) return 3_000;
+      const hace10Minutos = Date.now() - 10 * 60_000;
+      return versiones.some((v) => v.envios.some((e) => e.estado === "enviado" && e.enviadoEn !== null && Date.parse(e.enviadoEn) > hace10Minutos)) ? 10_000 : false;
+    },
   });
 
   if (consulta.isPending) {
@@ -102,6 +111,9 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   const [subiendo, setSubiendo] = useState(false);
   const [errorPlano, setErrorPlano] = useState<unknown>(null);
   const [confirmando, setConfirmando] = useState(false);
+  const [destinatarios, setDestinatarios] = useState<string[] | null>(null);
+  const contactos = useQuery(consultasDeProgramacion.cliente(informe.clienteId));
+  const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "informes") : []);
   const guardar = useGuardarInforme(informe.id);
   const publicar = usePublicarInforme(informe.id);
   const cambiado = JSON.stringify(borrador) !== JSON.stringify({ introduccion: informe.introduccion, conclusiones: informe.conclusiones, levantamientos: informe.levantamientos, planos: informe.planos });
@@ -134,7 +146,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   async function guardarYPublicar() {
     // Lo que se publica es lo guardado: si hay cambios, primero se guardan.
     const { version } = cambiado ? await guardar.mutateAsync({ version: informe.version, ...borrador }) : { version: informe.version };
-    await publicar.mutateAsync(version);
+    await publicar.mutateAsync({ version, destinatarios: elegidos });
   }
 
   return (
@@ -251,7 +263,16 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
               </Aviso>
             )}
             <div className="flex flex-col gap-2">
-              <Boton variante="principal" icono={Send} disabled={subiendo} onClick={() => setConfirmando(true)}>
+              <Boton
+                variante="principal"
+                icono={Send}
+                disabled={subiendo}
+                onClick={() => {
+                  // Todos los que reciben el informe, marcados por omisión (ADR-0028, parte 3).
+                  setDestinatarios(null);
+                  setConfirmando(true);
+                }}
+              >
                 Publicar versión {siguiente}
               </Boton>
               <Boton disabled={!cambiado || subiendo} cargando={guardar.isPending} onClick={() => guardar.mutate({ version: informe.version, ...borrador })}>
@@ -259,6 +280,15 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
               </Boton>
             </div>
           </section>
+          {vigente && (
+            <PanelEnvios
+              cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }}
+              version={vigente}
+              contactos={contactos.data?.contactos}
+              enviar={(destinos) => cliente.llamar("enviarVersion", { parametros: { id: informe.id, numero: vigente.numero }, cuerpo: { destinos } })}
+              recargar={recargar}
+            />
+          )}
           <Versiones informe={informe} recargar={recargar} />
         </aside>
       </div>
@@ -266,15 +296,34 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
       {confirmando && (
         <Confirmacion
           titulo={`¿Publicar la versión ${siguiente}?`}
-          confirmar={`Publicar versión ${siguiente}`}
+          confirmar={elegidos.length > 0 ? `Publicar y enviar a ${elegidos.length}` : `Publicar versión ${siguiente}`}
+          peligro
           mensajeDeError={(e) => mensajeDeInforme(e, nombreDe).join(" ")}
           alCerrar={() => setConfirmando(false)}
-          alTerminar={() => notificar({ texto: `Versión ${siguiente} publicada. El PDF se está generando.` })}
+          alTerminar={() =>
+            notificar({ texto: elegidos.length > 0 ? `Versión ${siguiente} publicada. Se envía cuando el PDF esté listo.` : `Versión ${siguiente} publicada. El PDF se está generando.` })
+          }
           accion={guardarYPublicar}
         >
           <p>
             El cliente la verá en el portal. Queda congelada: no se podrá modificar. Para corregir algo después se publica una versión nueva, y la anterior se conserva.
           </p>
+          {contactos.isPending ? (
+            <p className="text-ayuda text-texto-secundario">Cargando los contactos del cliente…</p>
+          ) : contactos.isError ? (
+            <Aviso tono="error">No se pudieron cargar los contactos: se publicará sin enviar. Podrá enviarla después desde "Envíos".</Aviso>
+          ) : (
+            <Destinatarios
+              contactos={contactos.data.contactos}
+              elegidos={elegidos}
+              alCambiar={setDestinatarios}
+              cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }}
+              titulo="Enviar el PDF cuando esté listo"
+            />
+          )}
+          {elegidos.length > 0 && (
+            <p className="text-ayuda text-texto-secundario">Lo enviado no se puede recuperar, ni retirando la versión del portal.</p>
+          )}
         </Confirmacion>
       )}
       {salida.status === "blocked" && (
@@ -348,7 +397,7 @@ function Versiones({ informe, recargar }: { informe: Informe; recargar: () => vo
                   <span className="text-ayuda font-bold text-error">No se generó el PDF. Avísele a soporte.</span>
                 )}
               </div>
-              <p className="text-ayuda text-texto-secundario">{`Publicada el ${aFechaHora(v.publicadaEn)} por ${v.publicadaPor.nombre}`}</p>
+              <p className="text-ayuda text-texto-secundario">{`Publicada el ${aFechaHora(v.publicadaEn)} por ${v.publicadaPor.nombre}${v.envios.length > 0 ? ` · ${v.envios.length === 1 ? "1 envío" : `${v.envios.length} envíos`}` : ""}`}</p>
               {v.retirada && <p className="text-ayuda text-texto-secundario">{`Retirada el ${aFechaHora(v.retirada.en)} por ${v.retirada.por.nombre}: ${v.retirada.motivo}`}</p>}
               {administrador && !v.retirada && (
                 <Boton variante="fantasma" tamano="pequeno" className="self-start" aria-label={`Retirar la versión ${v.numero} del portal`} onClick={() => setRetirando(v.numero)}>
@@ -360,13 +409,21 @@ function Versiones({ informe, recargar }: { informe: Informe; recargar: () => vo
         </ul>
       )}
       {errorDescarga && <Aviso tono="error">No se pudo preparar la descarga. Intente de nuevo.</Aviso>}
-      {retirando !== null && <RetirarVersion informeId={informe.id} numero={retirando} alCerrar={() => setRetirando(null)} alRetirar={recargar} />}
+      {retirando !== null && (
+        <RetirarVersion
+          informeId={informe.id}
+          numero={retirando}
+          envios={informe.versiones.find((v) => v.numero === retirando)?.envios ?? []}
+          alCerrar={() => setRetirando(null)}
+          alRetirar={recargar}
+        />
+      )}
     </section>
   );
 }
 
 /** Solo quien administra: el cliente deja de ver la versión; se conserva y queda registrado. */
-function RetirarVersion({ informeId, numero, alCerrar, alRetirar }: { informeId: string; numero: number; alCerrar: () => void; alRetirar: () => void }) {
+function RetirarVersion({ informeId, numero, envios, alCerrar, alRetirar }: { informeId: string; numero: number; envios: Envio[]; alCerrar: () => void; alRetirar: () => void }) {
   const consultasCliente = useQueryClient();
   const notificar = useNotificar();
   const [motivo, setMotivo] = useState("");
@@ -388,6 +445,12 @@ function RetirarVersion({ informeId, numero, alCerrar, alRetirar }: { informeId:
       }}
     >
       <p>El cliente deja de verla: si hay una versión anterior sin retirar, verá esa. No se puede deshacer; para volver a entregar, publique una versión nueva.</p>
+      {/* Lo enviado no se recupera (ADR-0028): se dice a quién le llegó, para avisarle. */}
+      {copiasEnviadas(envios).length > 0 && (
+        <Aviso tono="alerta">
+          {`Ya se le envió a ${enLista(copiasEnviadas(envios))}. Esas copias no se pueden recuperar: ${copiasEnviadas(envios).length === 1 ? "avísele" : "avíseles"} que la versión ${numero} ya no vale.`}
+        </Aviso>
+      )}
       <CampoTextoLargo etiqueta={`Motivo del retiro de la versión ${numero}`} valor={motivo} onCambio={setMotivo} maximo={500} />
     </Confirmacion>
   );

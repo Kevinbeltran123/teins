@@ -3,6 +3,9 @@ const hora = new Intl.DateTimeFormat("es-CO", { timeStyle: "short" });
 const relativo = new Intl.RelativeTimeFormat("es-CO", { numeric: "auto" });
 
 export const aFechaHora = (iso: string) => fechaHora.format(new Date(iso));
+const fecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" });
+/** "27 sept 2026": cuándo rige un precio, sin la hora. */
+export const aFecha = (iso: string) => fecha.format(new Date(iso));
 export const aHora = (ms: number) => hora.format(new Date(ms));
 
 /** "hace 3 horas": cuánto lleva esperando. */
@@ -17,4 +20,24 @@ export function haceCuanto(iso: string, ahora = Date.now()): string {
     if (Math.abs(segundos) >= tamano) return relativo.format(Math.round(segundos / tamano), unidad);
   }
   return "hace un momento";
+}
+
+const formatoPesos = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 });
+/** "$ 1.234.567": pesos colombianos enteros (ADR-0029). */
+export const pesos = (valor: number) => `$ ${formatoPesos.format(valor)}`;
+
+/** El mayor precio unitario que acepta el servidor. */
+const PRECIO_MAXIMO = 1_000_000_000;
+
+/**
+ * Lee pesos enteros como se escriben en Colombia: "4.800", "$ 4.800", "4800" o "4800,00". Vacío es null;
+ * lo que no es un entero de pesos (centavos, "4.8", texto) es undefined.
+ */
+export function leerPesos(texto: string): number | null | undefined {
+  const limpio = texto.replace(/[$\s]/g, "");
+  if (limpio === "") return null;
+  const partes = /^(\d{1,3}(?:\.\d{3})+|\d+)(?:,0+)?$/.exec(limpio);
+  if (!partes) return undefined;
+  const valor = Number(partes[1]!.replace(/\./g, ""));
+  return Number.isSafeInteger(valor) && valor <= PRECIO_MAXIMO ? valor : undefined;
 }

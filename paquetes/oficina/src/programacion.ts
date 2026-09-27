@@ -9,6 +9,7 @@ export const hoyLocal = () => new Date().toLocaleDateString("en-CA");
 
 export const consultasDeProgramacion = {
   clientes: () => queryOptions({ queryKey: ["programacion", "clientes"], queryFn: () => cliente.llamar("listarClientes") }),
+  cliente: (id: string) => queryOptions({ queryKey: ["programacion", "cliente", id], queryFn: () => cliente.llamar("obtenerCliente", { parametros: { id } }) }),
   tecnicos: () => queryOptions({ queryKey: ["programacion", "tecnicos"], queryFn: () => cliente.llamar("listarTecnicos"), staleTime: 5 * 60_000 }),
   visitas: (vista: Vista, hoy: string) =>
     queryOptions({ queryKey: ["programacion", "visitas", vista, hoy], queryFn: () => cliente.llamar("listarVisitas", { consulta: { vista, hoy } }), refetchInterval: 60_000 }),

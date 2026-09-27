@@ -4,6 +4,7 @@
  */
 import { aDecimalColombiano, resumirCantidades } from "@teins/dominio";
 import type { Respuesta } from "@teins/protocolo";
+import { leerPesos } from "./formato";
 
 type CantidadesDeVisita = Respuesta<"cantidadesDeVisita">;
 
@@ -86,7 +87,7 @@ function leerFilas(texto: string, separador: string): string[][] {
 const sinTildes = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").trim().toLowerCase();
 
 export interface CatalogoLeido {
-  items: { codigo: string; descripcion: string; unidad: string }[];
+  items: { codigo: string; descripcion: string; unidad: string; precio?: number }[];
   /** Filas que no se pueden importar, con su número tal como lo ve Excel. */
   errores: string[];
 }
@@ -105,8 +106,14 @@ export function leerCatalogo(texto: string): CatalogoLeido {
   const columna = (nombres: string[]) => encabezado.findIndex((c) => nombres.includes(c));
   const conEncabezado = columna(["codigo", "cod", "code"]) >= 0;
   const indices = conEncabezado
-    ? { codigo: columna(["codigo", "cod", "code"]), descripcion: columna(["descripcion", "nombre", "item"]), unidad: columna(["unidad", "und", "unidad de medida"]) }
-    : { codigo: 0, descripcion: 1, unidad: 2 };
+    ? {
+        codigo: columna(["codigo", "cod", "code"]),
+        descripcion: columna(["descripcion", "nombre", "item"]),
+        unidad: columna(["unidad", "und", "unidad de medida"]),
+        // La lista de precios de TEINS (ADR-0029): opcional.
+        precio: columna(["precio", "valor", "precio unitario", "precio sin iva", "price"]),
+      }
+    : { codigo: 0, descripcion: 1, unidad: 2, precio: 3 };
 
   const items: CatalogoLeido["items"] = [];
   const errores: string[] = [];
@@ -120,7 +127,11 @@ export function leerCatalogo(texto: string): CatalogoLeido {
     const numero = i + 1;
     if (!codigo || !descripcion || !unidad) errores.push(`Fila ${numero}: le falta el código, la descripción o la unidad.`);
     else if (codigo.length > 40 || descripcion.length > 200 || unidad.length > 20) errores.push(`Fila ${numero}: el código admite 40 caracteres, la descripción 200 y la unidad 20.`);
-    else items.push({ codigo, descripcion, unidad });
+    else {
+      const precio = indices.precio >= 0 ? leerPesos(fila[indices.precio] ?? "") : null;
+      if (precio === undefined) errores.push(`Fila ${numero}: el precio va en pesos enteros, como 4.800.`);
+      else items.push({ codigo, descripcion, unidad, ...(precio === null ? {} : { precio }) });
+    }
   });
   return { items, errores };
 }

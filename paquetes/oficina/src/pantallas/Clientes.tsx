@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import {
   Aviso,
@@ -17,6 +18,7 @@ import {
   RefreshCw,
   Search,
   Tabla,
+  TriangleAlert,
   useNotificar,
 } from "@teins/ui";
 import { cliente } from "../api";
@@ -72,10 +74,18 @@ export function Clientes() {
               Revise cómo lo escribió o busque por el nombre de uno de sus sitios.
             </EstadoVacio>
           ) : (
-            <Tabla etiqueta="Clientes y sus sitios" columnas={[{ titulo: "Cliente" }, { titulo: "Sitios" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
+            <Tabla etiqueta="Clientes y sus sitios" columnas={[{ titulo: "Cliente" }, { titulo: "Sitios" }, { titulo: "Reciben el informe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
               {visibles.map((c) => (
-                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)}>
-                  <CeldaTabla principal>{c.nombre}</CeldaTabla>
+                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)} abrir>
+                  <CeldaTabla>
+                    <Link
+                      to="/clientes/$id"
+                      params={{ id: c.id }}
+                      className="font-bold text-superficie underline-offset-2 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie"
+                    >
+                      {c.nombre}
+                    </Link>
+                  </CeldaTabla>
                   <CeldaTabla>
                     <ul aria-label={`Sitios de ${c.nombre}`} className="flex flex-col gap-0.5">
                       {c.sitios.map((s) => (
@@ -84,6 +94,19 @@ export function Clientes() {
                         </li>
                       ))}
                     </ul>
+                  </CeldaTabla>
+                  <CeldaTabla>
+                    {/* "Nadie" avisa antes de publicar: ese informe solo quedaría en el portal (ADR-0028). */}
+                    {c.reciben === 0 ? (
+                      <span className="inline-flex items-center gap-1.5 font-bold text-alerta-texto [&_svg]:size-4">
+                        <TriangleAlert aria-hidden="true" />
+                        Nadie
+                      </span>
+                    ) : c.reciben === 1 ? (
+                      "1 contacto"
+                    ) : (
+                      `${c.reciben} contactos`
+                    )}
                   </CeldaTabla>
                   <CeldaTabla derecha>
                     <Boton variante="fantasma" tamano="pequeno" icono={Plus} aria-label={`Agregar sitio a ${c.nombre}`} onClick={() => setAgregandoA(c)}>
@@ -179,7 +202,7 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
   );
 }
 
-function AgregarSitio({ c, alCerrar, alAgregar }: { c: Cliente; alCerrar: () => void; alAgregar: () => void }) {
+export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nombre: string }; alCerrar: () => void; alAgregar: () => void }) {
   const formulario = useId();
   const [nombre, setNombre] = useState("");
   const [direccion, setDireccion] = useState("");

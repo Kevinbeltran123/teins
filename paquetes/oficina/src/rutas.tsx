@@ -6,7 +6,10 @@ import { consultas } from "./api";
 import { Administracion } from "./pantallas/Administracion";
 import { Bandeja } from "./pantallas/Bandeja";
 import { Catalogo } from "./pantallas/Catalogo";
+import { DetalleCliente } from "./pantallas/Cliente";
 import { Clientes } from "./pantallas/Clientes";
+import { DetalleCotizacion } from "./pantallas/Cotizacion";
+import { Cotizaciones } from "./pantallas/Cotizaciones";
 import { Detalle } from "./pantallas/Detalle";
 import { InformeDeVisita } from "./pantallas/Informe";
 import { Informes } from "./pantallas/Informes";
@@ -71,7 +74,24 @@ const informe = createRoute({
 
 const visitas = createRoute({ getParentRoute: () => raiz, path: "visitas", component: Visitas });
 const clientes = createRoute({ getParentRoute: () => raiz, path: "clientes", component: Clientes });
+const detalleDeCliente = createRoute({
+  getParentRoute: () => raiz,
+  path: "clientes/$id",
+  component: function RutaCliente() {
+    const { id } = detalleDeCliente.useParams();
+    return <DetalleCliente id={id} />;
+  },
+});
 const catalogo = createRoute({ getParentRoute: () => raiz, path: "catalogo", component: Catalogo });
+const cotizaciones = createRoute({ getParentRoute: () => raiz, path: "cotizaciones", component: Cotizaciones });
+const cotizacion = createRoute({
+  getParentRoute: () => raiz,
+  path: "cotizaciones/$id",
+  component: function RutaCotizacion() {
+    const { id } = cotizacion.useParams();
+    return <DetalleCotizacion id={id} />;
+  },
+});
 
 const cuenta = createRoute({
   getParentRoute: () => raiz,
@@ -91,7 +111,7 @@ const administracion = createRoute({
   },
 });
 
-export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, visitas, clientes, catalogo, listaDeInformes, informe, cuenta, administracion]) });
+export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, visitas, clientes, detalleDeCliente, catalogo, listaDeInformes, informe, cotizaciones, cotizacion, cuenta, administracion]) });
 
 declare module "@tanstack/react-router" {
   interface Register {
