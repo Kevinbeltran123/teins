@@ -1,19 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
+import { arrastrar, filaDeLaBandeja, fotoDePrueba, iniciarSesion } from "./ayudas";
 
-/** Arrastra sobre el lienzo, en proporciones de su tamaño (0 a 1). */
-async function arrastrar(page: Page, puntos: [number, number][]) {
-  const caja = (await page.getByLabel("Lienzo del boceto").boundingBox())!;
-  const en = ([x, y]: [number, number]) => [caja.x + x * caja.width, caja.y + y * caja.height] as const;
-  await page.mouse.move(...en(puntos[0]!));
-  await page.mouse.down();
-  for (const p of puntos.slice(1)) await page.mouse.move(...en(p), { steps: 5 });
-  await page.mouse.up();
-}
-
-test("bocetos: el técnico dibuja trazo, línea y texto, deshace y rehace, envía; oficina ve el croquis (iteración 10)", async ({ page, browser }) => {
+test("bocetos: el técnico dibuja un trazo, una línea enderezada y texto, deshace y rehace, envía; oficina ve el croquis (iteraciones 10 y 18)", async ({ page, browser }) => {
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
   const revisora = nuevoUsuario("oficina", "oficina");
   const { cliente } = nuevaVisitaConCliente(tecnico);
@@ -32,21 +22,22 @@ test("bocetos: el técnico dibuja trazo, línea y texto, deshace y rehace, enví
   const editor = page.getByRole("dialog", { name: "Boceto: Croquis del cuarto" });
   const hoja = editor.getByRole("img", { name: "Croquis del cuarto" });
   await arrastrar(page, [[0.1, 0.2], [0.2, 0.35], [0.3, 0.3], [0.4, 0.5]]);
-  await editor.getByRole("radio", { name: "Línea" }).check();
-  await arrastrar(page, [[0.1, 0.8], [0.9, 0.8]]);
+  // Una línea a mano, con el dedo quieto al terminar, queda recta (ADR-0026).
+  await arrastrar(page, [[0.1, 0.8], [0.5, 0.81], [0.9, 0.8]], { quieto: 700 });
   await expect(hoja.locator("line")).toHaveCount(1);
-  await editor.getByRole("radio", { name: "Texto" }).check();
+  await editor.getByRole("button", { name: "Texto" }).click();
   await arrastrar(page, [[0.5, 0.6], [0.5, 0.6]]);
-  await editor.getByRole("textbox", { name: "Texto del boceto" }).fill("Tablero");
-  await editor.getByRole("button", { name: "Poner texto" }).click();
+  const texto = page.getByRole("dialog", { name: "Poner texto" });
+  await texto.getByRole("textbox", { name: "Texto del boceto" }).fill("Tablero");
+  await texto.getByRole("button", { name: "Poner texto" }).click();
   await expect(hoja.getByText("Tablero")).toBeVisible();
 
   await editor.getByRole("button", { name: "Deshacer" }).click();
   await expect(hoja.getByText("Tablero")).toHaveCount(0);
   await editor.getByRole("button", { name: "Rehacer" }).click();
   await expect(hoja.getByText("Tablero")).toBeVisible();
-  await expect(editor.getByText("Guardado en este teléfono")).toBeVisible();
-  await editor.getByRole("button", { name: "Listo" }).click();
+  await expect(editor.getByText("Guardado en este teléfono")).toBeAttached();
+  await editor.getByRole("button", { name: "Volver a la captura" }).click();
 
   // La miniatura en el formulario, y el boceto sube al enviar.
   const miniatura = page.getByRole("img", { name: "Boceto de croquis del cuarto" });

@@ -101,3 +101,17 @@ export function pdfDePrueba(texto = `Plano ficticio ${randomInt(1_000_000)}`): B
   pdf += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(pdf, "latin1");
 }
+
+/**
+ * Arrastra sobre el lienzo del boceto, en proporciones de su tamaño (0 a 1). Con `quieto`, el dedo se queda
+ * quieto esos milisegundos antes de soltar: así se endereza el trazo (ADR-0026).
+ */
+export async function arrastrar(page: Page, puntos: [number, number][], { quieto = 0 } = {}) {
+  const caja = (await page.getByLabel("Lienzo del boceto").boundingBox())!;
+  const en = ([x, y]: [number, number]) => [caja.x + x * caja.width, caja.y + y * caja.height] as const;
+  await page.mouse.move(...en(puntos[0]!));
+  await page.mouse.down();
+  for (const p of puntos.slice(1)) await page.mouse.move(...en(p), { steps: 5 });
+  if (quieto) await page.waitForTimeout(quieto);
+  await page.mouse.up();
+}
