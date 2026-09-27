@@ -10,10 +10,12 @@ import {
   esCantidades,
   esFirma,
   esNoObtenido,
+  hojasDe,
   nombreDeDato,
   normalizarDecimal,
   rutaLegible,
   type DefinicionCampo,
+  type DocumentoBoceto,
   type LineaCantidad,
   type Valor,
   type ValorFirma,
@@ -22,7 +24,7 @@ import {
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
-  Boceto,
+  HojasDeBoceto,
   Boton,
   BotonIcono,
   CampoFotos,
@@ -736,7 +738,7 @@ function Historial({ l }: { l: Levantamiento }) {
   );
 }
 
-/** Boceto (ADR-0019): el servidor entrega el documento ya verificado y se dibuja con los tokens. */
+/** Boceto (ADR-0019): el servidor entrega el documento ya verificado y se dibuja con los tokens, hoja por hoja (ADR-0026). */
 function BocetoDeCampo({ etiqueta, huella }: { etiqueta: string; huella: string }) {
   const boceto = useQuery(consultas.boceto(huella));
   return (
@@ -752,12 +754,18 @@ function BocetoDeCampo({ etiqueta, huella }: { etiqueta: string; huella: string 
           </Boton>
         </Aviso>
       ) : (
-        <div className="max-w-xl">
-          <Boceto ancho={boceto.data.ancho} alto={boceto.data.alto} cuadricula={boceto.data.cuadricula} elementos={boceto.data.elementos} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} className="rounded-control border border-division" />
+        <div className="max-w-2xl">
+          <HojasDeBoceto hojas={hojasDe(boceto.data)} cuadricula={boceto.data.cuadricula} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} />
         </div>
       )}
     </div>
   );
+}
+
+/** La firma es un boceto de una sola hoja (ADR-0024). */
+function FirmaDibujada({ documento, etiqueta }: { documento: DocumentoBoceto; etiqueta: string }) {
+  const trazos = hojasDe(documento)[0]!;
+  return <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={etiqueta} className="max-h-28" />;
 }
 
 /** Firma de quien recibe la visita (ADR-0024): la firma, quién y cuándo, y la constancia que leyó. */
@@ -777,7 +785,7 @@ function FirmaDeCampo({ etiqueta, valor, tecnico }: { etiqueta: string; valor: V
         </Aviso>
       ) : (
         <div className="max-w-sm rounded-control border border-division p-2">
-          <Firma ancho={trazos.data.ancho} alto={trazos.data.alto} elementos={trazos.data.elementos} etiqueta={`Firma de ${valor.nombre}`} className="max-h-28" />
+          <FirmaDibujada documento={trazos.data} etiqueta={`Firma de ${valor.nombre}`} />
         </div>
       )}
       <div className="flex flex-col gap-0.5 text-cuerpo">
