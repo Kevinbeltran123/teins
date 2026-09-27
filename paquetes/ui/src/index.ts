@@ -6,6 +6,7 @@ export { Boton, BotonIcono, claseBoton } from "./Boton";
 export type { TamanoBoton, VarianteBoton } from "./Boton";
 export { BotonCopiar } from "./BotonCopiar";
 export { CampoBusqueda } from "./CampoBusqueda";
+export { CampoEnTabla } from "./CampoEnTabla";
 export { CampoFotos } from "./CampoFotos";
 export { EditorCantidades, TablaCantidades } from "./Cantidades";
 export type { LineaEditable } from "./Cantidades";

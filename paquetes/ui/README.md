@@ -21,6 +21,7 @@ Los tokens de tamaño son neutros (`texto-cuerpo`, `control`, `fondo`): cada sup
 | `Aviso` | Mensajes en el flujo: info, éxito, alerta, error |
 | `EstadoVacio`, `EsqueletoTabla`, `EsqueletoBloques` | Vacío y cargando con la forma real |
 | `CampoBusqueda` | Buscar en listas que crecen sin límite |
+| `CampoEnTabla` | Un campo compacto dentro de una fila (cantidad y precio de una cotización), con su nombre accesible y su error debajo |
 | `BotonCopiar` | Copiar claves y códigos, con la confirmación en el mismo botón |
 | `VisorFotos` | Foto a pantalla completa con anterior y siguiente; en campo, "Eliminar foto" |
 | `CampoTexto`, `CampoTextoLargo`, `CampoSeleccion`, `CampoMedida`, `Casilla`, `GrupoDeOpciones`, `SelectorDeArchivo`, `MarcaNoObtenido` | Campos de formulario, con su mensaje de error por campo |
@@ -28,4 +29,4 @@ Los tokens de tamaño son neutros (`texto-cuerpo`, `control`, `fondo`): cada sup
 | `HojasDeBoceto` | Leer un boceto: sus hojas de a dos (una apaisada a lo ancho), con su nombre si hay varias y, con `alAbrir`, cada una como botón |
 | `CampoFotos`, `EditorCantidades`, `TablaCantidades`, `Boceto`, `Firma` | Tipos de campo de los formatos. `Firma` dibuja los trazos sin cuadrícula: recortada a la firma o, con `recortar={false}`, como el recuadro donde se firma |
 
-Historia: iteración 6 (`GrupoDeOpciones`, `modoEntrada="numeric"`), 7 (`CampoSeleccion`, `tipo="date"`), 10 (`Boceto`), 11 (`EditorCantidades`, `TablaCantidades`), 14 (el juego completo de la dirección Consola; `Marquilla` se retiró), 16 (`Firma`), 17 (`EditorCantidades` con líneas del catálogo y "Del catálogo"), 18 (`Pastilla`, `BotonHerramienta`, `HojasDeBoceto`, `CampoTexto` con `seleccionarAlEnfocar`, y las animaciones CSS de pasar de hoja y del anillo de enderezar), 19 (`Boceto` dibuja símbolos; `Dialogo` con `focoEnElDialogo`, para listas que se eligen con un toque sin abrir el teclado).
+Historia: iteración 6 (`GrupoDeOpciones`, `modoEntrada="numeric"`), 7 (`CampoSeleccion`, `tipo="date"`), 10 (`Boceto`), 11 (`EditorCantidades`, `TablaCantidades`), 14 (el juego completo de la dirección Consola; `Marquilla` se retiró), 16 (`Firma`), 17 (`EditorCantidades` con líneas del catálogo y "Del catálogo"), 18 (`Pastilla`, `BotonHerramienta`, `HojasDeBoceto`, `CampoTexto` con `seleccionarAlEnfocar`, y las animaciones CSS de pasar de hoja y del anillo de enderezar), 19 (`Boceto` dibuja símbolos; `Dialogo` con `focoEnElDialogo`, para listas que se eligen con un toque sin abrir el teclado), 20 (iconos `Mail` y `MessageCircle`), 21 (`CampoEnTabla`, icono `Receipt`).
