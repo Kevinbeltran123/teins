@@ -10,9 +10,15 @@ export const LIMITES = {
 
 /** Bocetos (ADR-0019): suficiente para un croquis de campo, acotado para el teléfono y el servidor. */
 export const LIMITES_BOCETO = {
+  /** Elementos por hoja. */
   elementos: 2_000,
   puntosPorTrazo: 4_000,
   texto: 200,
+  /** Vértices de una polilínea (versión 2, ADR-0026). */
+  puntosPorPolilinea: 200,
+  /** Hojas de un boceto y largo de su nombre (versión 2): pisos, cuartos y detalles de un mismo sitio. */
+  hojas: 12,
+  nombreDeHoja: 60,
   /** Tamaño máximo del archivo del boceto. */
   bytes: 2_000_000,
 } as const;

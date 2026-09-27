@@ -13,8 +13,27 @@ export type {
   ValorNoObtenido,
 } from "./levantamiento";
 export { DECLARACION_POR_DEFECTO, firmaASvg, LIMITES_FIRMA, llenarDeclaracion, VERSION_APP_FIRMA } from "./firma";
-export type { DocumentoBoceto, ElementoBoceto, OpcionesSvg, Punto, PuntoConPresion } from "./boceto";
-export { bocetoASvg, bocetoVacio, LIENZO, leerBoceto, serializarBoceto, TIPO_ARCHIVO_BOCETO, validarBoceto, VERSION_APP_BOCETOS } from "./boceto";
+export type { BocetoV1, BocetoV2, DocumentoBoceto, ElementoBoceto, HojaBoceto, OpcionesSvg, Punto, PuntoConPresion } from "./boceto";
+export {
+  altoDeHoja,
+  aVersion2,
+  bocetoNuevo,
+  bocetoVacio,
+  geometriaDeCota,
+  HOJA,
+  hojaASvg,
+  hojaNueva,
+  hojasDe,
+  LIENZO,
+  leerBoceto,
+  puntosDeElemento,
+  serializarBoceto,
+  TAMANO_COTA,
+  TIPO_ARCHIVO_BOCETO,
+  validarBoceto,
+  VERSION_APP_BOCETOS,
+  VERSION_APP_FORMAS,
+} from "./boceto";
 export { LIMITES_BOCETO, LIMITES_CANTIDADES } from "./limites";
 export type { FilaDeResumen, LineaCantidad, LineaParaResumir, ValorCantidades } from "./cantidades";
 export { aDecimalColombiano, esCantidades, ID_LINEA, lineasValidas, resumirCantidades, sumarDecimales, VERSION_APP_CANTIDADES, VERSION_APP_CATALOGO } from "./cantidades";
