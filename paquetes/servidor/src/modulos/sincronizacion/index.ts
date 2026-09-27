@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { VERSION_APP_CATALOGO } from "@teins/dominio";
+import { VERSION_APP_CATALOGO, VERSION_APP_SIMBOLOS } from "@teins/dominio";
 import type { Cambio } from "@teins/protocolo";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { politicas } from "../../plataforma/politicas";
@@ -9,6 +9,7 @@ import { leerCambios, type CambioLeido } from "../cambios";
 import { leerIdDeVersion, type Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
+import type { Simbolos } from "../simbolos";
 import type { Visitas } from "../visitas";
 
 interface Dependencias {
@@ -18,6 +19,7 @@ interface Dependencias {
   levantamientos: Pick<Levantamientos, "estados">;
   identidad: Pick<Identidad, "permisoLocalHasta" | "nombres">;
   catalogo: Pick<Catalogo, "items">;
+  simbolos: Pick<Simbolos, "porId">;
 }
 
 interface Pedido {
@@ -96,6 +98,11 @@ export async function armarBajada(tx: TxOrganizacion, deps: Omit<Dependencias, "
   if (app >= VERSION_APP_CATALOGO) {
     const items = await deps.catalogo.items(tx, de("item_catalogo"));
     for (const item of items.values()) cambios.push({ tipo: "item_catalogo", item });
+  }
+
+  // Símbolos de los bocetos (ADR-0027): igual que el catálogo, desde la app 10.
+  if (app >= VERSION_APP_SIMBOLOS) {
+    for (const simbolo of await deps.simbolos.porId(tx, de("simbolo"))) cambios.push({ tipo: "simbolo", simbolo });
   }
 
   return { cambios, puntoDeControl, hayMas };

@@ -2,7 +2,7 @@ import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { registro } from "./esquema";
 
-export type Entidad = "formato" | "visita" | "levantamiento" | "item_catalogo";
+export type Entidad = "formato" | "visita" | "levantamiento" | "item_catalogo" | "simbolo";
 /** `fuera_de_alcance`: el destinatario deja de ver la entidad (por ejemplo, una visita reasignada). */
 export type Operacion = "cambio" | "fuera_de_alcance";
 

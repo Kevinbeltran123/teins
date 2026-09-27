@@ -17,6 +17,7 @@
     "crear-visita": "tsx --env-file=.env src/cli/crear-visita.ts",
     "reasignar-visita": "tsx --env-file=.env src/cli/reasignar-visita.ts",
     "publicar-formato": "tsx --env-file=.env src/cli/publicar-formato.ts",
+    "publicar-simbolos": "tsx --env-file=.env src/cli/publicar-simbolos.ts",
     "crear-acceso-cliente": "tsx --env-file=.env src/cli/crear-acceso-cliente.ts",
     "regenerar-acceso-cliente": "tsx --env-file=.env src/cli/crear-acceso-cliente.ts --regenerar",
     "marcar-administrador": "tsx --env-file=.env src/cli/marcar-administrador.ts",

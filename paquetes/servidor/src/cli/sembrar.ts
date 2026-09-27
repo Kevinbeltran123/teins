@@ -8,6 +8,7 @@ import { conectar, enOrganizacion } from "../plataforma/base-de-datos";
 import { clientesYSitios } from "../modulos/clientes";
 import { crearFormatos } from "../modulos/formatos";
 import { crearIdentidad } from "../modulos/identidad";
+import { crearSimbolos } from "../modulos/simbolos";
 import { crearVisitas } from "../modulos/visitas";
 import { organizaciones, usuarios } from "../modulos/identidad/esquema";
 
@@ -35,6 +36,10 @@ try {
     const r = await enOrganizacion(app.bd, ORGANIZACION_DE_DESARROLLO, (tx) => formatos.publicar(tx, ORGANIZACION_DE_DESARROLLO, leerFormato(archivo)));
     console.log(`Formato ${archivo}: ${r === "publicada" ? "publicado" : "ya existía"}`);
   }
+
+  // Biblioteca de símbolos de prueba (ADR-0027), hasta tener la de TEINS.
+  const simbolos = await enOrganizacion(app.bd, ORGANIZACION_DE_DESARROLLO, (tx) => crearSimbolos().publicar(tx, ORGANIZACION_DE_DESARROLLO, leerFormato("simbolos-prueba.json")));
+  console.log(`Símbolos de prueba: ${simbolos.nuevos} nuevos, ${simbolos.cambiados} cambiados`);
 
   const identidad = crearIdentidad(app.bd, config);
   for (const [usuario, nombre, rol] of [

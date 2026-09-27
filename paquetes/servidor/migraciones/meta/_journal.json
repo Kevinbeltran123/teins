@@ -155,6 +155,20 @@
       "when": 1790462532434,
       "tag": "0021_catalogo_en_la_bajada",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790479258965,
+      "tag": "0022_simbolos",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790479267221,
+      "tag": "0023_permisos_simbolos",
+      "breakpoints": true
     }
   ]
 }

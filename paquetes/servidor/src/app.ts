@@ -20,6 +20,7 @@ import { crearVisitas } from "./modulos/visitas";
 import { crearInformes } from "./modulos/informes";
 import { crearAccesosDeClientes, crearPortal } from "./modulos/portal";
 import { crearCatalogo } from "./modulos/catalogo";
+import { crearSimbolos } from "./modulos/simbolos";
 import { crearAvisos } from "./modulos/avisos";
 
 export interface Dependencias {
@@ -134,7 +135,7 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   const visitas = crearVisitas(clientesYSitios);
   const catalogo = crearCatalogo(bd);
   const levantamientos = crearLevantamientos({ bd, formatos, archivos, visitas, identidad, catalogo });
-  const sincronizacion = crearSincronizacion({ bd, formatos, visitas, levantamientos, identidad, catalogo });
+  const sincronizacion = crearSincronizacion({ bd, formatos, visitas, levantamientos, identidad, catalogo, simbolos: crearSimbolos() });
   const informes = crearInformes({ bd, almacenamiento, config, archivos, levantamientos, visitas, identidad, formatos });
 
   registrarRutaPublica(app, {

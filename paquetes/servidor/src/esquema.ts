@@ -12,3 +12,4 @@ export * from "./modulos/informes/esquema";
 export * from "./modulos/portal/esquema";
 export * from "./modulos/catalogo/esquema";
 export * from "./modulos/avisos/esquema";
+export * from "./modulos/simbolos/esquema";
