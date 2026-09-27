@@ -322,6 +322,33 @@ Antes: en oficina, en **Catálogo**, cree dos ítems ficticios con unidad `m` (p
 
 **Anotar:** si la búsqueda se sintió lenta, y si el teclado tapaba los resultados.
 
+## Fase 18 · Croquis a pantalla completa, con hojas (iteración 18)
+
+Con la app 9 instalada en el iPhone. Todo sin señal salvo el envío.
+
+1. Inicie un levantamiento con croquis y toque **Dibujar boceto**.
+   - Debe: la hoja cuadriculada en toda la pantalla; arriba, una sola barra de iconos (volver, deshacer, rehacer, trazo, cota, texto, mover, borrador); abajo, la pastilla "Hoja 1 1/1". Sin textos de ayuda.
+2. Dibuje con el dedo, desde el borde izquierdo de la hoja hacia adentro.
+   - Debe: el trazo sale; la app **no** vuelve a la captura.
+3. Dibuje a mano un rectángulo y, al cerrarlo, deje el dedo quieto.
+   - Debe: un anillo se llena y, al soltar, queda un rectángulo recto. Igual con una línea, una pared en L y un círculo. Sin dejar el dedo quieto, el trazo queda a mano.
+4. **Cota**: trace una línea a lo largo de una pared y escriba "4,50 m".
+   - Debe: la cota con topes y la medida sobre la línea, legible.
+5. **Mover**: toque el rectángulo, arrástrelo, gírelo con el círculo y agrándelo con la esquina; **Duplicar** y **Quitar**.
+   - Debe: todo con el dedo, sin que la página se desplace; **Deshacer** vuelve cada paso.
+6. Con dos dedos, acerque y aleje; toque "200 %".
+   - Debe: la hoja sigue a los dedos y "200 %" vuelve a la hoja completa.
+7. Con la hoja completa, deslice dos dedos hacia la izquierda.
+   - Debe: "Suelta para agregar la hoja 2"; al soltar, la hoja nueva y su nombre. Escriba "Segundo piso" y **Guardar**. Deslice dos dedos a la derecha: vuelve a la primera.
+8. Toque la pastilla de abajo.
+   - Debe: las dos hojas con miniatura, **Agregar hoja**, **Cambiar nombre** y **Quitar esta hoja**.
+9. Vuelva a la captura.
+   - Debe: las dos hojas con su nombre; tocar "Segundo piso" abre esa hoja.
+10. Envíe. En oficina, abra el levantamiento; publique el informe y descargue el PDF.
+    - Debe: las dos hojas con su nombre en oficina y en el PDF, de a dos por fila.
+
+**Anotar:** si la barra de arriba se alcanza con una mano, si el medio segundo para enderezar se siente largo o corto, y si alguna vez un trazo se volvió forma sin querer.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.

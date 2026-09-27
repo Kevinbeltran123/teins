@@ -79,7 +79,7 @@ Cada estado lleva siempre su **texto**; el color nunca es la única señal. Mín
 - Base de 4 px.
 - Radio 8 px en controles, 12 px en paneles, 16 px en diálogos.
 - **Sombras solo en capas** (diálogos, hojas, menús, notificaciones). **Sin degradados. Sin fondos de cuadrícula.**
-- Alto de controles: en oficina 40 px normal y 32 px pequeño (filas, barras de herramientas); en campo 58 px normal y 44 px pequeño. Zonas táctiles de campo: mínimo 58 px.
+- Alto de controles: en oficina 40 px normal y 32 px pequeño (filas, barras de herramientas); en campo 58 px normal y 44 px pequeño. Zonas táctiles de campo: mínimo 58 px, salvo en el editor de bocetos: allí la hoja manda y la barra es compacta, de iconos de 44 px (ADR-0026).
 - Oficina: menú lateral de 248 px (se reduce a iconos bajo 1024 px) y contenido de hasta 1200 px; los detalles usan dos columnas, contenido y panel lateral fijo con el estado y la acción.
 
 ## Componentes y cuándo usarlos
@@ -105,6 +105,8 @@ Todos viven en `paquetes/ui`; ninguna pantalla define colores ni estilos propios
 | `EstadoVacio` | Lista sin nada: qué aparecerá y cómo llega |
 | `EsqueletoTabla`, `EsqueletoBloques` | Cargando, con la forma de lo que viene |
 | `VisorFotos` | Una foto a pantalla completa; en campo, con "Eliminar foto" |
+| `Pastilla` y `BotonHerramienta` | La barra del editor de bocetos, como GoodNotes: iconos sin texto, la herramienta elegida con la superficie de marca |
+| `HojasDeBoceto` | Leer un boceto (captura, revisión): las hojas de a dos, cada una con su nombre si hay varias |
 | `BotonCopiar` | Claves y códigos que se entregan o se guardan |
 
 ## Qué se confirma y qué se deshace
@@ -146,6 +148,7 @@ Cuatro pasos numerados en una misma pantalla: confirmar la contraseña; escanear
 |---|---|
 | Campo · Mis visitas | La siguiente visita, en la primera tarjeta, con la fecha grande y la única acción principal |
 | Campo · Captura | El dato que se está llenando, con el halo amarillo del foco, y la barra de envío abajo |
+| Campo · Boceto | La hoja, en toda la pantalla: una barra de iconos arriba y, abajo, la hoja en que se está |
 | Oficina · Levantamientos | "Esperando revisión": cuántos hay, el que más lleva esperando y "Tomar para revisar" |
 | Oficina · Visitas | Las próximas visitas, empezando por las de hoy, con "Programar visita" |
 | Oficina · Administración | La tabla de la pestaña elegida; al crear una credencial, el diálogo que la entrega |
@@ -165,6 +168,8 @@ Cada animación tiene un propósito escrito. En `campo` **todo el movimiento es 
 | Cargando | Esqueleto con la forma real | Evitar saltos |
 | Error de validación | Sacudida corta del campo | Señalar dónde está |
 | Trabajando | Giro del icono en el botón | Mostrar que la acción corre |
+| Pasar de hoja (boceto) | La hoja entra desde su lado | Mostrar hacia dónde se fue |
+| Dedo quieto al dibujar | Un anillo que se llena en medio segundo | Avisar que el trazo se va a enderezar |
 
 **Duraciones:** 120 ms (pulsación), 200 ms (capas), 280 ms (hojas), 2,4 s (resaltado). **Curva:** `cubic-bezier(0.2, 0, 0, 1)`. Con `prefers-reduced-motion`, todo se desactiva.
 
