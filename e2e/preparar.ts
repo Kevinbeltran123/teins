@@ -24,7 +24,8 @@ export default function preparar() {
 
   if (REMOTO) return;
   // El worker no tiene puerto que esperar: se arranca aquí y se detiene al terminar la corrida.
-  const worker = spawn("npx", ["tsx", "--env-file=.env", "src/worker.ts"], { cwd: servidor.cwd, stdio: "ignore" });
+  // Envíos al cliente simulados (ADR-0028): nada sale del equipo y "rebota" se rechaza. El .env no los pisa.
+  const worker = spawn("npx", ["tsx", "--env-file=.env", "src/worker.ts"], { cwd: servidor.cwd, stdio: "ignore", env: { ...process.env, ENVIOS_SIMULADOS: "true" } });
   return async () => {
     worker.kill("SIGTERM");
   };
