@@ -8,7 +8,8 @@
  * perfect-freehand al terminarlo: así oficina y el PDF lo dibujan con este mismo código, sin depender
  * de la biblioteca de dibujo.
  */
-import { LIMITES_BOCETO } from "./limites";
+import { LIMITES_BOCETO, LIMITES_SIMBOLO } from "./limites";
+import { esTrazadoValido, GROSOR_SIMBOLO, type DefinicionSimbolo } from "./simbolos";
 
 export type Punto = readonly [number, number];
 export type PuntoConPresion = readonly [number, number, number];
@@ -22,7 +23,23 @@ export type ElementoBoceto =
   /** Versión 2: círculos y elipses; `giro` en grados. */
   | { tipo: "elipse"; grosor: number; centro: Punto; radios: Punto; giro: number }
   /** Versión 2: una medida escrita por el técnico sobre una línea con topes ("4,50 m"); no se calcula. */
-  | { tipo: "cota"; grosor: number; desde: Punto; hasta: Punto; texto: string };
+  | { tipo: "cota"; grosor: number; desde: Punto; hasta: Punto; texto: string }
+  /**
+   * Versión 2, desde la app 10 (ADR-0027): un símbolo de la biblioteca, copiado con su dibujo para que el boceto
+   * se vea igual aunque la biblioteca cambie. Su caja de 100 × 100 se centra en `centro`, mide `tamano` y gira `giro`°.
+   */
+  | {
+      tipo: "simbolo";
+      simbolo: string;
+      nombre: string;
+      trazado: string;
+      relleno?: string | undefined;
+      texto?: string | undefined;
+      codigo?: string | undefined;
+      centro: Punto;
+      tamano: number;
+      giro: number;
+    };
 
 /** Una hoja del boceto (versión 2, ADR-0026): un piso, un cuarto, un detalle; su nombre sale en el informe. */
 export interface HojaBoceto {
@@ -93,6 +110,7 @@ export const aVersion2 = (d: DocumentoBoceto): BocetoV2 =>
 const esNumero = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
 const grosorValido = (g: unknown) => esNumero(g) && g > 0 && g <= 40;
 const dentro = (n: unknown, max: number) => esNumero(n) && n >= -max && n <= 2 * max;
+const textoCorto = (t: unknown, max: number) => typeof t === "string" && t.trim() !== "" && t.length <= max;
 const objeto = (v: unknown) => (typeof v === "object" && v !== null ? v : {}) as Record<string, unknown>;
 
 /** Los elementos de una hoja de `ancho` × `alto`; los de la versión 2 no existen en un documento de la versión 1. */
@@ -134,6 +152,17 @@ function validarElementos(elementos: unknown, { ancho, alto }: { ancho: number; 
           return (
             version2 && grosorValido(el.grosor) && esPunto(el.desde, false) && esPunto(el.hasta, false) &&
             typeof el.texto === "string" && el.texto.trim() !== "" && el.texto.length <= LIMITES_BOCETO.texto
+          );
+        // Desde la app 10 (ADR-0027): el dibujo copiado de la biblioteca se valida como ella.
+        case "simbolo":
+          return (
+            version2 && typeof el.simbolo === "string" && el.simbolo.length <= 36 &&
+            textoCorto(el.nombre, LIMITES_SIMBOLO.nombre) && esTrazadoValido(el.trazado) &&
+            (el.relleno === undefined || esTrazadoValido(el.relleno)) &&
+            (el.texto === undefined || textoCorto(el.texto, LIMITES_SIMBOLO.texto)) &&
+            (el.codigo === undefined || textoCorto(el.codigo, LIMITES_SIMBOLO.codigo)) &&
+            esPunto(el.centro, false) && esNumero(el.tamano) && el.tamano >= LIMITES_SIMBOLO.tamanoMinimo && el.tamano <= LIMITES_SIMBOLO.tamanoMaximo &&
+            esNumero(el.giro) && el.giro >= -360 && el.giro <= 360
           );
         default:
           return false;
@@ -190,6 +219,19 @@ function serializarElementos(elementos: readonly ElementoBoceto[]) {
         return { tipo: e.tipo, grosor: r(e.grosor), centro: punto(e.centro), radios: punto(e.radios), giro: r(e.giro) };
       case "cota":
         return { tipo: e.tipo, grosor: r(e.grosor), desde: punto(e.desde), hasta: punto(e.hasta), texto: e.texto };
+      case "simbolo":
+        return {
+          tipo: e.tipo,
+          simbolo: e.simbolo,
+          nombre: e.nombre,
+          trazado: e.trazado,
+          ...(e.relleno === undefined ? {} : { relleno: e.relleno }),
+          ...(e.texto === undefined ? {} : { texto: e.texto }),
+          ...(e.codigo === undefined ? {} : { codigo: e.codigo }),
+          centro: punto(e.centro),
+          tamano: r(e.tamano),
+          giro: r(e.giro),
+        };
     }
   });
 }
@@ -223,6 +265,14 @@ export function puntosDeElemento(e: ElementoBoceto): readonly Punto[] {
       return [e.en];
     case "polilinea":
       return e.puntos;
+    case "simbolo": {
+      // Girado, la caja cabe en el círculo que la contiene.
+      const medio = e.giro % 90 === 0 ? e.tamano / 2 : (e.tamano / 2) * Math.SQRT2;
+      return [
+        [e.centro[0] - medio, e.centro[1] - medio],
+        [e.centro[0] + medio, e.centro[1] + medio],
+      ];
+    }
     case "elipse": {
       // Girada, la caja de la elipse cabe en la del radio mayor.
       const [rx, ry] = e.giro % 180 === 0 ? e.radios : [Math.max(...e.radios), Math.max(...e.radios)];
@@ -232,6 +282,22 @@ export function puntosDeElemento(e: ElementoBoceto): readonly Punto[] {
       ];
     }
   }
+}
+
+/** Un símbolo de la biblioteca puesto en la hoja: se copia su dibujo (ADR-0027). */
+export function elementoDeSimbolo(s: DefinicionSimbolo, centro: Punto, tamano: number): Extract<ElementoBoceto, { tipo: "simbolo" }> {
+  return {
+    tipo: "simbolo",
+    simbolo: s.id,
+    nombre: s.nombre,
+    trazado: s.trazado,
+    ...(s.relleno === undefined ? {} : { relleno: s.relleno }),
+    ...(s.texto === undefined ? {} : { texto: s.texto }),
+    ...(s.codigo === undefined ? {} : { codigo: s.codigo }),
+    centro,
+    tamano,
+    giro: 0,
+  };
 }
 
 /** Tamaño del texto de una cota, en unidades del lienzo. */
@@ -293,6 +359,16 @@ export function hojaASvg(d: Pick<HojaBoceto, "ancho" | "alto" | "elementos">, op
       partes.push(`<${etiqueta} points="${e.puntos.map(([x, y]) => `${x},${y}`).join(" ")}" fill="none" stroke="${tinta}" stroke-width="${e.grosor}" stroke-linejoin="round" stroke-linecap="round"/>`);
     } else if (e.tipo === "elipse") {
       partes.push(`<ellipse cx="${e.centro[0]}" cy="${e.centro[1]}" rx="${e.radios[0]}" ry="${e.radios[1]}" transform="rotate(${e.giro} ${e.centro[0]} ${e.centro[1]})" fill="none" stroke="${tinta}" stroke-width="${e.grosor}"/>`);
+    } else if (e.tipo === "simbolo") {
+      // La caja de 100 × 100 a su tamaño; el trazo mide lo mismo en la hoja a cualquier tamaño.
+      const k = e.tamano / 100;
+      partes.push(
+        `<g transform="translate(${e.centro[0]} ${e.centro[1]}) rotate(${e.giro}) scale(${k}) translate(-50 -50)">` +
+          `<path d="${escaparXml(e.trazado)}" fill="none" stroke="${tinta}" stroke-width="${r(GROSOR_SIMBOLO / k)}" stroke-linecap="round" stroke-linejoin="round"/>` +
+          (e.relleno ? `<path d="${escaparXml(e.relleno)}" fill="${tinta}"/>` : "") +
+          (e.texto ? `<text x="50" y="${e.texto.length > 2 ? 58 : 60}" font-size="${e.texto.length > 2 ? 22 : 28}" font-weight="700" font-family="${fuente}" fill="${tinta}" text-anchor="middle">${escaparXml(e.texto)}</text>` : "") +
+          "</g>",
+      );
     } else {
       const g = geometriaDeCota(e.desde, e.hasta);
       const linea = (a: Punto, b: Punto) => `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${tinta}" stroke-width="${e.grosor}" stroke-linecap="round"/>`;

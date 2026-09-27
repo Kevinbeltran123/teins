@@ -11,3 +11,5 @@ Definiciones **ficticias** (R5) para desarrollo y pruebas. El servidor las siemb
 - `v7`: v6 más la sección "Cierre de la visita" con "Firma de quien recibe la visita" (tipo `firma`, opcional para no obligar a firmar en cada prueba; iteración 16). Exige la app 7.
 
 Una versión publicada no se modifica: un cambio es una versión nueva.
+
+`simbolos-prueba.json`: biblioteca **ficticia** de 21 símbolos de los bocetos (iteración 19, ADR-0027) en tres categorías (Energía, Datos, Obra), dibujados en una caja de 100 × 100, hasta tener la lista de TEINS. Los ids son fijos: volver a publicarla no duplica nada. Se publica con `pnpm publicar-simbolos` y `sembrar` la publica en la organización de desarrollo.

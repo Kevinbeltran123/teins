@@ -23,6 +23,21 @@ export const LIMITES_BOCETO = {
   bytes: 2_000_000,
 } as const;
 
+/** Símbolos de los bocetos (iteración 19, ADR-0027): una biblioteca por organización. */
+export const LIMITES_SIMBOLO = {
+  nombre: 60,
+  categoria: 40,
+  /** Largo del trazado SVG, en caracteres. */
+  trazado: 2_000,
+  /** La sigla del centro ("UPS", "kWh"). */
+  texto: 4,
+  codigo: 40,
+  porBiblioteca: 300,
+  /** Tamaño de un símbolo en la hoja, en unidades del lienzo. */
+  tamanoMinimo: 10,
+  tamanoMaximo: 1_000,
+} as const;
+
 /** Cantidades (F9): una tabla por campo, con líneas cortas. */
 export const LIMITES_CANTIDADES = {
   lineas: 200,

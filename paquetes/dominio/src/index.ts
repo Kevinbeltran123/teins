@@ -19,6 +19,7 @@ export {
   aVersion2,
   bocetoNuevo,
   bocetoVacio,
+  elementoDeSimbolo,
   geometriaDeCota,
   HOJA,
   hojaASvg,
@@ -34,7 +35,9 @@ export {
   VERSION_APP_BOCETOS,
   VERSION_APP_FORMAS,
 } from "./boceto";
-export { LIMITES_BOCETO, LIMITES_CANTIDADES } from "./limites";
+export { LIMITES_BOCETO, LIMITES_CANTIDADES, LIMITES_SIMBOLO } from "./limites";
+export type { DefinicionSimbolo } from "./simbolos";
+export { esTrazadoValido, GROSOR_SIMBOLO, validarBiblioteca, validarSimbolo, VERSION_APP_SIMBOLOS } from "./simbolos";
 export type { FilaDeResumen, LineaCantidad, LineaParaResumir, ValorCantidades } from "./cantidades";
 export { aDecimalColombiano, esCantidades, ID_LINEA, lineasValidas, resumirCantidades, sumarDecimales, VERSION_APP_CANTIDADES, VERSION_APP_CATALOGO } from "./cantidades";
 export { agregarFoto, agregarRepeticion, crearLevantamiento, esBoceto, esFirma, esNoObtenido, LevantamientoNoEditable, quitarRepeticion, renombrarRepeticion, responder } from "./levantamiento";
