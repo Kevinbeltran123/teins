@@ -65,8 +65,8 @@ export function Diagnostico() {
     <>
       {/* Sin instalar, el aviso de instalación de Inicio ya lo explica. */}
       {estado && !estado.persistente && estaInstalada() && <Aviso tono="alerta">El teléfono no garantiza conservar los datos. Avísale a soporte antes de capturar.</Aviso>}
-      <details className="group rounded-panel border border-division bg-panel" onToggle={() => setAvisos(estadoAvisos())}>
-        <summary className="flex min-h-tactil cursor-pointer items-center justify-between gap-3 rounded-panel px-4 text-cuerpo font-bold focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-panel bg-panel-hundido" onToggle={() => setAvisos(estadoAvisos())}>
+        <summary className="flex min-h-tactil cursor-pointer items-center justify-between gap-3 rounded-panel px-4 text-cuerpo font-bold focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&::-webkit-details-marker]:hidden">
           Diagnóstico del teléfono
           <ChevronRight aria-hidden className="size-5 shrink-0 text-texto-secundario transition-transform group-open:rotate-90" />
         </summary>

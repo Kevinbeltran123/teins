@@ -118,6 +118,7 @@ export default function EditorBoceto({
   simbolos,
   guardar,
   cerrar,
+  listo,
 }: {
   etiqueta: string;
   inicial: DocumentoBoceto | null;
@@ -126,6 +127,8 @@ export default function EditorBoceto({
   simbolos: readonly SimboloLocal[] | undefined;
   guardar: (documento: DocumentoBoceto) => Promise<void>;
   cerrar: () => void;
+  /** Como paso del recorrido (rediseño): "Listo" abajo al centro sigue al paso siguiente. */
+  listo?: (() => void) | undefined;
 }) {
   // Un boceto nuevo espera a medir la pantalla: su primera hoja tiene el alto del espacio libre.
   const [hojas, setHojas] = useState<readonly HojaBoceto[] | null>(() => (inicial ? aVersion2(inicial).hojas : null));
@@ -566,6 +569,7 @@ export default function EditorBoceto({
       role="dialog"
       aria-modal="true"
       aria-label={`Boceto: ${etiqueta}`}
+      data-tema="claro"
       className="fixed inset-0 z-50 flex flex-col bg-fondo pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] select-none [-webkit-touch-callout:none]"
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2 py-1.5 max-[383px]:gap-0.5 max-[383px]:px-1.5 max-[383px]:[&_button]:size-10">
@@ -743,7 +747,7 @@ export default function EditorBoceto({
               aria-haspopup="menu"
               aria-expanded={menuHojas}
               aria-label={`Hojas: ${hoja.nombre}, hoja ${actual + 1} de ${hojas.length}`}
-              className="absolute bottom-2.5 left-1/2 flex h-control-sm max-w-[calc(100%-160px)] -translate-x-1/2 items-center gap-1.5 rounded-panel border border-division bg-panel pr-2.5 pl-3.5 text-ayuda font-bold whitespace-nowrap shadow-menu [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:text-texto-secundario"
+              className={`absolute bottom-2.5 flex h-control-sm items-center gap-1.5 rounded-panel ${listo ? "left-2 max-w-[34%]" : "left-1/2 max-w-[calc(100%-160px)] -translate-x-1/2"} border border-division bg-panel pr-2.5 pl-3.5 text-ayuda font-bold whitespace-nowrap shadow-menu [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:text-texto-secundario`}
               onClick={() => setMenuHojas((abierto) => !abierto)}
             >
               <span className="truncate">{hoja.nombre}</span>
@@ -764,11 +768,21 @@ export default function EditorBoceto({
             >
               <Shapes aria-hidden />
             </button>
+            {listo && (
+              <button
+                type="button"
+                onClick={listo}
+                className="absolute bottom-2.5 left-1/2 flex h-13 -translate-x-1/2 items-center gap-2 rounded-control bg-superficie px-5.5 text-cuerpo font-extrabold text-sobre-superficie shadow-menu active:scale-95 [&_svg]:size-5"
+              >
+                Listo
+                <Check aria-hidden />
+              </button>
+            )}
             {vista.escala > 1 && (
               <button
                 type="button"
                 aria-label="Ver la hoja completa"
-                className="absolute bottom-2.5 left-2 h-control-sm rounded-panel border border-division bg-panel px-3 text-ayuda font-bold shadow-menu"
+                className={`absolute left-2 h-control-sm rounded-panel border border-division bg-panel px-3 text-ayuda font-bold shadow-menu ${listo ? "bottom-16" : "bottom-2.5"}`}
                 onClick={() => setVista(VISTA_COMPLETA)}
               >
                 {Math.round(vista.escala * 100)} %

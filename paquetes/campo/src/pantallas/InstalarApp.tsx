@@ -5,7 +5,7 @@ import { alCambiarInstalacion, instalar, omitirInstalacion, plataforma, puedeIns
 /** El ícono tal como la persona lo busca en su pantalla: el mismo botón que ve en el navegador. */
 function Tecla({ icono: Icono, nombre }: { icono: LucideIcon; nombre: string }) {
   return (
-    <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-control border-[1.5px] border-borde-suave bg-panel text-superficie [&_svg]:size-5">
+    <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-panel-hundido text-texto [&_svg]:size-5">
       <Icono role="img" aria-label={nombre} />
     </span>
   );
@@ -13,8 +13,8 @@ function Tecla({ icono: Icono, nombre }: { icono: LucideIcon; nombre: string }) 
 
 function Paso({ numero, titulo, ayuda }: { numero: number; titulo: ReactNode; ayuda: ReactNode }) {
   return (
-    <li className="flex gap-3.5 border-b border-division p-4 last:border-b-0">
-      <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-superficie text-cuerpo font-extrabold text-sobre-superficie">
+    <li className="flex gap-3.5 border-b border-division px-4.5 py-4 last:border-b-0">
+      <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-acento text-cuerpo font-extrabold text-sobre-acento">
         {numero}
       </span>
       <div className="flex min-w-0 flex-col gap-1.5">
@@ -49,7 +49,7 @@ export function GuiaDeInstalacion() {
 
   if (plataforma() === "iphone") {
     return (
-      <ol aria-label="Pasos para instalar" className="flex flex-col rounded-panel border border-division bg-panel">
+      <ol aria-label="Pasos para instalar" className="flex flex-col rounded-panel bg-panel">
         <Paso
           numero={1}
           titulo={
@@ -89,7 +89,7 @@ export function GuiaDeInstalacion() {
     );
   }
   return (
-    <ol aria-label="Pasos para instalar" className="flex flex-col rounded-panel border border-division bg-panel">
+    <ol aria-label="Pasos para instalar" className="flex flex-col rounded-panel bg-panel">
       <Paso numero={1} titulo="Abre el menú del navegador" ayuda="Los tres puntos, arriba o abajo de la pantalla." />
       <Paso numero={2} titulo="Elige “Instalar app” o “Agregar a pantalla principal”" ayuda="El nombre cambia según el navegador." />
       {Abrir}
@@ -104,14 +104,15 @@ export function GuiaDeInstalacion() {
 export default function InstalarApp({ alSeguir }: { alSeguir: () => void }) {
   const enIphone = plataforma() === "iphone";
   return (
-    <main className="flex min-h-dvh flex-col bg-fondo px-4 pt-10 pb-6">
+    <main className="flex min-h-dvh flex-col bg-fondo px-5 pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <div className="mx-auto flex w-full max-w-md grow flex-col gap-5">
-        <div className="flex flex-col gap-1">
-          <p className="text-ayuda text-texto-secundario">
-            <span className="font-extrabold tracking-wide text-superficie">TEINS</span> · Campo
-          </p>
-          <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Instala la app</h1>
-          <p className="mt-1 text-cuerpo">Instalada, el teléfono no borra lo que capturas sin señal y te avisa de visitas nuevas.</p>
+        <div className="flex items-center gap-3 pt-4">
+          <span aria-hidden className="h-10 w-1.5 rounded-full bg-acento" />
+          <span className="text-titulo leading-none font-extrabold tracking-[0.08em]">TEINS</span>
+        </div>
+        <div className="flex flex-col gap-2 pt-4">
+          <h1 className="text-[40px] leading-[1.05] font-extrabold tracking-tight">Instala la app</h1>
+          <p className="text-cuerpo text-texto-secundario">Instalada, el teléfono no borra lo que capturas sin señal y te avisa de visitas nuevas.</p>
         </div>
         {/* Solo en iPhone: Android comparte los datos entre el navegador y la app instalada. */}
         {enIphone && (

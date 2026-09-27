@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
-const PRESUPUESTO_JS_KB = 120;
+// ADR-0030: 135 KB desde el rediseño Recorrido (antes 120, ADR-0011).
+const PRESUPUESTO_JS_KB = 135;
 const carpeta = "paquetes/campo/dist";
 
 const html = readFileSync(join(carpeta, "index.html"), "utf8");

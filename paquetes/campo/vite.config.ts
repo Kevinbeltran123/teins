@@ -25,8 +25,8 @@ export default defineConfig({
         lang: "es-CO",
         display: "standalone",
         orientation: "portrait",
-        background_color: "#FFFFFF",
-        theme_color: "#002B81",
+        background_color: "#0B0F17",
+        theme_color: "#0B0F17",
         // Íconos provisionales hasta tener el logo de TEINS.
         icons: [
           { src: "icono-192.png", sizes: "192x192", type: "image/png" },
