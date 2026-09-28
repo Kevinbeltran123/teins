@@ -72,7 +72,6 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
       <aside className="menu">
         <div className="marca">
           <b>TEINS</b>
-          <small>Oficina</small>
         </div>
         <nav aria-label="Secciones">
           {SECCIONES.map(enlace)}

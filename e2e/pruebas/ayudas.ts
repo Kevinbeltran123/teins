@@ -43,7 +43,8 @@ export async function iniciarSesion(page: Page, u: { usuario: string; contrasena
   if (await seguir.isVisible()) await seguir.click();
   await usuario.fill(u.usuario);
   await page.getByLabel("Contraseña").fill(u.contrasena);
-  await page.getByRole("button", { name: "Iniciar sesión" }).click();
+  // Campo dice "Iniciar sesión"; oficina, "Ingresar".
+  await page.getByRole("button", { name: /^(Iniciar sesión|Ingresar)$/ }).click();
 }
 
 /**

@@ -31,14 +31,14 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
 
   // Desde entonces, el ingreso pide el código.
   await page.getByRole("button", { name: "Cerrar sesión" }).click();
-  await expect(page.getByRole("heading", { name: "Hola de nuevo" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ingresar", exact: true })).toBeVisible();
   await iniciarSesion(page, admin);
   await expect(page.getByRole("heading", { name: "Código de verificación" })).toBeVisible();
   await page.getByLabel("Código").fill("000000");
-  await page.getByRole("button", { name: "Verificar código" }).click();
+  await page.getByRole("button", { name: "Verificar", exact: true }).click();
   await expect(page.getByText("El código no es correcto", { exact: false })).toBeVisible();
   await page.getByLabel("Código").fill(codigoTotp(clave));
-  await page.getByRole("button", { name: "Verificar código" }).click();
+  await page.getByRole("button", { name: "Verificar", exact: true }).click();
   await page.getByRole("link", { name: "Administración" }).click();
 
   // Crear un técnico: la contraseña temporal se muestra una vez.

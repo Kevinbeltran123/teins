@@ -42,5 +42,5 @@ export type { Columna } from "./Tabla";
 export { ValorLeido } from "./ValorLeido";
 export { VisorFotos } from "./VisorFotos";
 export type { FotoVisible } from "./VisorFotos";
-export { PlanoEnLuz } from "./PlanoEnLuz";
+export { PanelDeMarca } from "./PanelDeMarca";
 export { BarraLista, Buscador, coincide, EsqueletoLista, Marcado, normalizarTexto, PieLista, SinResultados } from "./Lista";

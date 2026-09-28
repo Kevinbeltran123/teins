@@ -772,3 +772,36 @@ dialog.capa-lateral input[name="precio"] { font-size: 24px; font-weight: 800; mi
 .subrayado, .mini-tabs, .nav-secciones, .pestanas { scrollbar-width: none; }
 .subrayado::-webkit-scrollbar, .mini-tabs::-webkit-scrollbar, .nav-secciones::-webkit-scrollbar, .pestanas::-webkit-scrollbar { display: none; }
 .subrayado { overflow-y: hidden; }
+
+/* Entrada, segunda versión: sobria, sin animación. Trama de puntos quieta (Neon) y formulario con etiquetas encima */
+.entrada.dividida { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr); }
+.lado-marca { position: relative; overflow: hidden; border-right: 1px solid var(--borde); background: #070A10; display: flex; align-items: flex-start; padding: 44px; }
+.lado-marca .trama { position: absolute; inset: 0; width: 100%; height: 100%; }
+.marca-grande { position: relative; font-size: 44px; font-weight: 800; letter-spacing: .14em; line-height: 1; color: #F3F5F9; display: flex; flex-direction: column; gap: 10px; }
+.marca-grande small { font-size: 13px; font-weight: 800; letter-spacing: .32em; text-transform: uppercase; color: #FFC21A; }
+.form-entrada { display: flex; flex-direction: column; gap: 18px; width: min(360px, 100%); }
+.cab-entrada { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.cab-entrada h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
+.cab-entrada p { margin: 0; color: var(--sec); font-size: 14px; line-height: 1.5; }
+.campo-e { display: flex; flex-direction: column; gap: 7px; }
+.campo-e label { font-size: 13px; font-weight: 700; color: var(--texto); }
+.etq-fila { display: flex; justify-content: space-between; align-items: baseline; }
+.campo-e input { height: 44px; border-radius: 10px; border: 1px solid var(--borde); background: #0F141E; padding: 0 12px; color: var(--texto); font-size: 15px; transition: border-color .15s, box-shadow .15s; }
+.campo-e input:hover { border-color: #3A465C; }
+.campo-e input:focus { outline: none; border-color: var(--senal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--senal) 20%, transparent); }
+.campo-e input.error { border-color: var(--peligro); }
+.mostrar { background: none; border: 0; padding: 0; color: var(--sec); font-size: 13px; font-weight: 700; }
+.mostrar:hover { color: var(--texto); }
+.mostrar.centrado { align-self: center; }
+.con-ojo { position: relative; }
+.con-ojo input { width: 100%; padding-right: 44px; }
+.ojo-e { position: absolute; right: 4px; top: 4px; width: 36px; height: 36px; border: 0; background: none; color: var(--sec); border-radius: 8px; display: grid; place-items: center; }
+.ojo-e:hover { color: var(--texto); background: var(--sup); }
+.btn-e { height: 44px; border-radius: 10px; border: 1px solid var(--borde); background: transparent; color: var(--texto); font-weight: 800; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn-e:hover { background: var(--sup); }
+.btn-e.principal { background: #F3F5F9; color: #0B0F17; border-color: #F3F5F9; }
+.btn-e.principal:hover { background: #FFFFFF; }
+.form-entrada .separador { margin: 2px 0; }
+.form-entrada .digitos input { height: 52px; border-radius: 10px; border: 1px solid var(--borde); background: #0F141E; font-size: 22px; }
+.lado-form .pie-entrada { text-align: center; }
+@media (max-width: 900px) { .lado-marca { display: none; } }
