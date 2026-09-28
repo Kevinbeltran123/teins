@@ -62,6 +62,8 @@ export interface Visitas {
   clienteDe(tx: TxOrganizacion, visitaId: string): Promise<string | undefined>;
   /** Cliente, sitio, motivo y fecha de cada visita, sin importar a quién esté asignada (oficina). */
   resumenes(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, VisitaAsignada>>;
+  /** Visitas cuyo cliente o sitio contienen el texto: para buscar levantamientos por cliente (iteración 23). */
+  coincidentes(tx: TxOrganizacion, texto: string): Promise<string[]>;
   registrarRutas(app: FastifyInstance, deps: { bd: BaseDeDatos; identidad: Pick<Identidad, "nombres" | "tecnicosActivos">; conteos: ConteosPorVisita }): void;
 }
 
@@ -170,6 +172,13 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
 
     asignadas: (tx, ids, tecnicoId) => leer(tx, ids, tecnicoId),
     resumenes: (tx, ids) => leer(tx, ids),
+
+    async coincidentes(tx, texto) {
+      const sitios = await clientes.buscarSitios(tx, texto);
+      if (sitios.length === 0) return [];
+      const filas = await tx.select({ id: visitas.id }).from(visitas).where(inArray(visitas.sitioId, sitios));
+      return filas.map((f) => f.id);
+    },
 
     async canceladas(tx, ids) {
       if (ids.length === 0) return new Set();

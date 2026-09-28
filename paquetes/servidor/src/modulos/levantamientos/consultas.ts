@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, or, type SQL } from "drizzle-orm";
 import type { EstadoRevision } from "@teins/dominio";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
@@ -19,7 +19,8 @@ function leerCursor(cursor: string | undefined): { recibidoEn: Date; id: string 
 
 const escribirCursor = (recibidoEn: Date, id: string) => Buffer.from(JSON.stringify([recibidoEn.toISOString(), id])).toString("base64url");
 
-export async function paginaPorEstado(tx: TxOrganizacion, estado: EstadoRevision, cursor: string | undefined, limite: number) {
+/** `filtro`: la búsqueda (iteración 23), ya resuelta a una condición; cuenta también en el total. */
+export async function paginaPorEstado(tx: TxOrganizacion, estado: EstadoRevision, cursor: string | undefined, limite: number, filtro?: SQL) {
   const desde = leerCursor(cursor);
   // Por revisar y en revisión: el que más lleva esperando primero (DESIGN.md, punto focal de oficina). Los
   // revisados ya no esperan a nadie: se buscan los últimos, para abrir su informe.
@@ -43,6 +44,7 @@ export async function paginaPorEstado(tx: TxOrganizacion, estado: EstadoRevision
     .where(
       and(
         eq(levantamientos.estado, estado),
+        filtro,
         desde
           ? or(despues(levantamientos.recibidoEn, desde.recibidoEn), and(eq(levantamientos.recibidoEn, desde.recibidoEn), despues(levantamientos.id, desde.id)))
           : undefined,
@@ -50,7 +52,7 @@ export async function paginaPorEstado(tx: TxOrganizacion, estado: EstadoRevision
     )
     .orderBy(orden(levantamientos.recibidoEn), orden(levantamientos.id))
     .limit(limite + 1);
-  const [{ total } = { total: 0 }] = await tx.select({ total: count() }).from(levantamientos).where(eq(levantamientos.estado, estado));
+  const [{ total } = { total: 0 }] = await tx.select({ total: count() }).from(levantamientos).where(and(eq(levantamientos.estado, estado), filtro));
   const hayMas = filas.length > limite;
   const pagina = hayMas ? filas.slice(0, limite) : filas;
   const ultimo = pagina.at(-1);

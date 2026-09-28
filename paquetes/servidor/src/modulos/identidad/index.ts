@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Config } from "../../config";
+import { contieneTexto } from "../../plataforma/busqueda";
 import { ROLES, type Actor, type Rol } from "../../plataforma/actor";
 import { enOrganizacion, esViolacionUnica, type BaseDeDatos } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
@@ -27,6 +28,8 @@ export interface Identidad {
   auth: Auth;
   resolverActor(solicitud: FastifyRequest): Promise<Actor | null>;
   nombres(organizacionId: string, ids: readonly string[]): Promise<Map<string, string>>;
+  /** Personas cuyo nombre contiene el texto: para buscar por técnico (iteración 23). */
+  buscarPorNombre(organizacionId: string, texto: string): Promise<string[]>;
   crearUsuario(datos: NuevoUsuario): Promise<{ id: string }>;
   /** Recuperación de acceso por el administrador (ADR-0009): cambia la contraseña y cierra todas sus sesiones. */
   restablecerContrasena(usuario: string, contrasena: string): Promise<void>;
@@ -238,6 +241,14 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         .from(usuarios)
         .where(and(eq(usuarios.organizacionId, organizacionId), inArray(usuarios.id, [...ids])));
       return new Map(filas.map((f) => [f.id, f.nombre]));
+    },
+
+    async buscarPorNombre(organizacionId, texto) {
+      const filas = await bd
+        .select({ id: usuarios.id })
+        .from(usuarios)
+        .where(and(eq(usuarios.organizacionId, organizacionId), contieneTexto(usuarios.name, texto)));
+      return filas.map((f) => f.id);
     },
 
     async crearUsuario({ organizacionId, usuario, nombre, rol, contrasena }) {

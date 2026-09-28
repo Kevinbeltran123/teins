@@ -45,6 +45,17 @@ const get = (cookie: string, url: string) => app.inject({ method: "GET", url, he
 const getSync = (cookie: string, url: string) => app.inject({ method: "GET", url, headers: { cookie, ...cabecerasSync } });
 
 describe("revisión (QA-8, I-1)", () => {
+  it("la bandeja busca por formato y por técnico, sin tildes ni mayúsculas, y cuenta solo lo que coincide (iteración 23)", async () => {
+    const { oficina } = await levantamientoEnviado();
+    const buscar = async (texto: string) => (await get(oficina.cookie, `/api/levantamientos?estado=enviado&buscar=${encodeURIComponent(texto)}`)).json();
+    expect((await buscar("PRUEBA-UPS")).total).toBe(1);
+    expect((await buscar("tecnico de prueba")).total).toBe(1);
+    const nada = await buscar("no existe 100%");
+    expect(nada).toMatchObject({ total: 0, elementos: [] });
+    // Sin texto, la bandeja completa del estado.
+    expect((await buscar("   ")).total).toBe(1);
+  });
+
   it("tomar, corregir y marcar revisado dejan historial por campo con la cadena íntegra", async () => {
     const { oficina, tecnico, organizacionId, id } = await levantamientoEnviado();
 

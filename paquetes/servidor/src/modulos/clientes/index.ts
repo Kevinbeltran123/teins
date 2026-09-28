@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
+import { contieneTexto } from "../../plataforma/busqueda";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
@@ -95,6 +96,16 @@ export const clientesYSitios = {
       sitios: deEllos.filter((s) => s.clienteId === c.id).map(({ id, nombre, direccion }) => ({ id, nombre, direccion })),
       reciben: conteos.find((x) => x.clienteId === c.id)?.reciben ?? 0,
     }));
+  },
+
+  /** Sitios cuyo cliente, nombre o dirección contienen el texto: para buscar en otras listas (iteración 23). */
+  async buscarSitios(tx: TxOrganizacion, texto: string): Promise<string[]> {
+    const filas = await tx
+      .select({ id: sitios.id })
+      .from(sitios)
+      .innerJoin(clientes, eq(clientes.id, sitios.clienteId))
+      .where(or(contieneTexto(clientes.nombre, texto), contieneTexto(sitios.nombre, texto), contieneTexto(sitios.direccion, texto)));
+    return filas.map((f) => f.id);
   },
 
   async sitios(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, Sitio>> {

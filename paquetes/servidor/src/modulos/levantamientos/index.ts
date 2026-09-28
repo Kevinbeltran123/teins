@@ -1,7 +1,9 @@
+import { inArray, or, sql, type AnyColumn } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { rutaLegible, type EstadoRevision, type Repeticiones, type Respuestas } from "@teins/dominio";
 import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { enOrganizacion } from "../../plataforma/base-de-datos";
+import { contieneTexto } from "../../plataforma/busqueda";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
@@ -18,6 +20,7 @@ import { comentar, corregirCampos, marcar, tomar, vincular, type DependenciasRev
 import { cantidadesRevisadas, comentariosDe, conteosPorVisita, detalle, deVisita, estadosDe, lineasDeVisita, paginaPorEstado, vinculosDe, type ConteoDeVisita, type LineaRevisadaDeVisita } from "./consultas";
 
 export type { LineaRevisadaDeVisita } from "./consultas";
+import { levantamientos } from "./esquema";
 import { repositorioDrizzle, repositorioRevision } from "./repositorio";
 
 export interface ComentarioParaElTecnico {
@@ -65,12 +68,15 @@ interface Dependencias {
   bd: BaseDeDatos;
   formatos: Formatos;
   archivos: Archivos;
-  visitas: Pick<Visitas, "existe" | "resumenes">;
-  identidad: Pick<Identidad, "nombres">;
+  visitas: Pick<Visitas, "existe" | "resumenes" | "coincidentes">;
+  identidad: Pick<Identidad, "nombres" | "buscarPorNombre">;
   catalogo: Pick<Catalogo, "items">;
 }
 
 const SIN_NOMBRE = "[Usuario no disponible]";
+
+/** `inArray` con una lista vacía no coincide con nada. */
+const inArrayONada = (columna: AnyColumn, ids: string[]) => (ids.length ? inArray(columna, ids) : sql`false`);
 
 /** Interfaz pública del módulo de levantamientos: núcleo del sistema. */
 export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad, catalogo }: Dependencias): Levantamientos {
@@ -102,11 +108,19 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
       registrarOperacion(app, "listarLevantamientos", {
         politica: politicas.oficina,
         manejar: async ({ consulta, actor }) => {
-          const { filas, siguienteCursor, total, visitasDe } = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
-            const pagina = await paginaPorEstado(tx, consulta.estado, consulta.cursor, consulta.limite);
+          const { filas, siguienteCursor, total, visitasDe, nombresFormato } = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            // Búsqueda: formato aquí; cliente y sitio por la interfaz de visitas; técnico por la de identidad.
+            const texto = consulta.buscar?.trim();
+            const filtro = texto
+              ? or(contieneTexto(levantamientos.formato, texto), inArrayONada(levantamientos.visitaId, await visitas.coincidentes(tx, texto)), inArrayONada(levantamientos.tecnicoId, await identidad.buscarPorNombre(actor.organizacionId, texto)))
+              : undefined;
+            const pagina = await paginaPorEstado(tx, consulta.estado, consulta.cursor, consulta.limite, filtro);
             // Cliente y sitio de toda la página en una consulta, por la interfaz del módulo de visitas.
             const ids = [...new Set(pagina.filas.flatMap((f) => (f.visitaId ? [f.visitaId] : [])))];
-            return { ...pagina, visitasDe: await visitas.resumenes(tx, ids) };
+            // Nombre de cada formato de la página: se ve "Levantamiento UPS", no su clave.
+            const pares = [...new Map(pagina.filas.map((f) => [`${f.formato}@${f.versionFormato}`, f])).values()];
+            const nombresFormato = new Map(await Promise.all(pares.map(async (f) => [`${f.formato}@${f.versionFormato}`, (await formatos.obtener(tx, f.formato, f.versionFormato))?.nombre] as const)));
+            return { ...pagina, visitasDe: await visitas.resumenes(tx, ids), nombresFormato };
           });
           const persona = await personas(actor.organizacionId, filas.flatMap((f) => [f.tecnicoId, f.revisorId]));
           return {
@@ -114,6 +128,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
               id: f.id,
               formato: f.formato,
               versionFormato: f.versionFormato,
+              ...(nombresFormato.get(`${f.formato}@${f.versionFormato}`) ? { nombreFormato: `${nombresFormato.get(`${f.formato}@${f.versionFormato}`)} v${f.versionFormato}` } : {}),
               estado: f.estado as EstadoRevision,
               tecnico: persona(f.tecnicoId)!,
               revisor: persona(f.revisorId),

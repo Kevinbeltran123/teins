@@ -238,6 +238,8 @@ const ResumenLevantamiento = z.object({
   id: Uuid,
   formato: z.string(),
   versionFormato: z.int(),
+  /** Nombre del formato que ve la persona ("Levantamiento UPS"), si la versión lo tiene (iteración 23). */
+  nombreFormato: z.string().optional(),
   estado: EstadoLevantamiento,
   tecnico: Persona,
   /** Quién tiene la revisión (I-1): visible para todos. */
@@ -745,6 +747,8 @@ export const operaciones = {
     resumen: "Levantamientos por estado, del que más lleva esperando al más reciente",
     consulta: z.object({
       estado: EstadoLevantamiento.default("enviado"),
+      /** Cliente, sitio, técnico o formato (iteración 23). Sin él, la bandeja completa del estado. */
+      buscar: z.string().trim().max(100).optional(),
       cursor: z.string().max(200).optional(),
       limite: z.coerce.number().int().min(1).max(100).default(50),
     }),
