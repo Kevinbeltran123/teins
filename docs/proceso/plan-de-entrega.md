@@ -29,10 +29,13 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 20 | Contactos del cliente e informe por correo y WhatsApp | El informe le llega al cliente por donde lo espera, con PDF adjunto (P17) | Terminada y desplegada en el entorno de pruebas; el correo sale de verdad por Resend, WhatsApp sigue simulado hasta tener el número de prueba de Meta |
 | Iteración 21 | Cotizaciones desde las cantidades | De la visita a la cotización sin volver a digitar (P27, QA-12) | Terminada y desplegada en el entorno de pruebas (precios de prueba; faltan los de TEINS) |
 | Iteración 22 | Campo rehecho con la dirección Recorrido (`DESIGN.md`) | Una app que los técnicos quieran usar: la captura sigue la visita paso a paso en vez de una lista interminable | Terminada, desplegada en el entorno de pruebas y aprobada por Kevin en su iPhone |
+| Iteración 23 | Oficina con la identidad Recorrido (`DESIGN.md`) | Oficina clara y sin recuadros: cada pantalla ordenada por lo que hace la persona, con búsqueda en las listas | Construida y verificada en local; falta desplegarla y que Kevin la apruebe |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
+
+**Oficina con la identidad Recorrido (iteración 23, 2026-09-27).** Kevin pidió llevar a oficina la identidad de campo. Se hizo el prototipo (`prototipos/oficina/prototipo.html`); Kevin rechazó la primera versión por agobiante (todo en recuadros) y se rehízo ordenando primero la información de cada pantalla. Aprobado el prototipo, la app quedó igual a él, pantalla por pantalla, sin tocar funciones: solo se agregó al servidor la búsqueda opcional de la bandeja y el nombre del formato en la lista. Siguiente: desplegarla en el entorno de pruebas y que Kevin la revise.
 
 **Rediseño de campo (iteración 22, 2026-09-27).** Kevin dijo que todo funciona pero que la app es "demasiado fea". Se hizo una línea base con 21 problemas, una crítica con impeccable, referencias de Mobbin y un prototipo navegable (`prototipos/campo/prototipo.html`). Kevin aprobó la dirección Recorrido y quedó construida en campo y desplegada en el entorno de pruebas. Kevin la probó en el iPhone y aprobó el resultado. La identidad visual quedó anotada en `DESIGN.md` ("Identidad visual Recorrido") para llevarla a oficina más adelante; oficina no se toca hasta que Kevin lo pida. Siguiente: oficina con el mismo método, empezando por cotizaciones, cuando Kevin lo decida.
 
@@ -943,6 +946,44 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **El AIU no aplica a la instalación ni al mantenimiento de redes eléctricas** según la doctrina de la DIAN: la cotización admite IVA sobre el subtotal o AIU con IVA sobre la utilidad, y el contador de TEINS decide en cada caso.
 - **En iPhone, la app instalada no comparte datos con Safari** y los avisos solo llegan a la app instalada: la instalación va antes de iniciar sesión.
 - **La biblioteca `web-push` es MPL-2.0,** que la verificación de licencias ya admite.
+
+## Iteración 23 · Oficina con la identidad Recorrido
+
+**Estado:** construida y verificada en local el 2026-09-27; falta desplegarla en el entorno de pruebas y que Kevin la apruebe.
+
+**Para qué:** llevar a oficina la identidad que Kevin aprobó en campo, sin repetir lo que no funcionaba: pantallas llenas de recuadros y listas sin búsqueda.
+
+### Cómo se hizo
+
+1. **Inventario** de las 15 pantallas de oficina: datos, acciones, diálogos y estados, con sus textos exactos.
+2. **Prototipo navegable** (`prototipos/oficina/prototipo.html`, https://claude.ai/artifact/XwTGDmPxCJ1wFFpqcBGycX) con tema oscuro y claro, los estados vacío, cargando, error y sin conexión, y los flujos de revisión, informe, cotización y administración.
+3. **Corrección de Kevin:** "que en cada módulo haya tantos recuadros resulta agobiante... piensa cómo se puede reorganizar esta información". Se rehízo: primero qué hace la persona en cada pantalla y en qué orden lee, después Mobbin para validar (Stripe, Linear, Xero, Squarespace, Frame.io, entre otras). Cada pantalla del prototipo lo explica.
+4. **Detalles que pidió Kevin sobre el prototipo:** impuestos como dos opciones en lista, comentario escrito debajo del dato (sin subir y bajar), búsqueda en todas las listas, y un inicio de sesión con el plano de un cuarto eléctrico dibujado en luz, sin textos de venta.
+5. **Construcción módulo por módulo**, comparando cada pantalla de la app con la del prototipo en capturas del mismo tamaño.
+
+### Terminado cuando
+
+| Criterio | Evidencia |
+|---|---|
+| Cada pantalla igual al prototipo | Capturas lado a lado de inicio de sesión, bandeja, detalle, confirmaciones, visitas, clientes, catálogo, informes, informe, cotizaciones, cotización, administración y mi cuenta |
+| El CSS del prototipo, sin estilos en las pantallas (regla 11) | `paquetes/ui/oficina.css`, importado solo por oficina; los componentes compartidos llevan clases gancho que en campo y en el portal no pintan nada |
+| La bandeja busca en el servidor | `buscar` opcional en `listarLevantamientos` (cliente y sitio por la interfaz de visitas, técnico por la de identidad, formato en el propio módulo), sin tildes ni mayúsculas; prueba en `revision.test.ts` |
+| Sin romper funciones ni el servidor | Las operaciones, validaciones, confirmaciones y textos de error siguen iguales; el protocolo solo ganó dos campos opcionales (`buscar`, `nombreFormato`) |
+| Verificación | Tipos, arquitectura y licencias; extremo a extremo en Chromium (21 pruebas) con los selectores del diseño nuevo |
+
+### Decisiones tomadas al construirlo
+
+- El título del detalle es el cliente y el sitio: es lo que oficina reconoce. El estado va junto al título pero fuera del `h1`, así el título se lee solo.
+- La acción de la revisión va en el carril, que queda fijo al bajar.
+- "Lleva esperando" cuenta días de calendario: "Hoy", "Desde ayer", "3 días"; en ámbar desde dos días.
+- Las visitas se agrupan por día; "Hoy" va en la cabecera del día.
+- Guardar borrador aparece solo cuando hay cambios; si no, se lee "Todo guardado".
+- `Dialogo` ignora un `close` que quedó en cola de un montaje anterior: en desarrollo (StrictMode) cerraba las confirmaciones apenas se abrían.
+
+### Fuera de la iteración 23
+
+- El tema claro: está en el prototipo, pero oficina queda en oscuro como campo.
+- El portal del cliente sigue con Consola.
 
 ## Iteración 22 · Campo rehecho con la dirección Recorrido
 

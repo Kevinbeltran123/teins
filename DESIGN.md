@@ -1,6 +1,6 @@
-# DESIGN.md · Consola
+# DESIGN.md · Recorrido
 
-Dirección visual de TEINS desde la iteración 14. Todo trabajo de interfaz parte de este archivo y pasa después por el filtro antislop (ver `AGENTS.md`). Los valores de código viven en [`paquetes/ui/tokens.css`](paquetes/ui/tokens.css) y los componentes en [`paquetes/ui`](paquetes/ui/README.md); este archivo explica qué son y por qué.
+Dirección visual de TEINS: Consola desde la iteración 14; Recorrido en campo desde la iteración 22 y en oficina desde la iteración 23 (el portal sigue con Consola). Todo trabajo de interfaz parte de este archivo y pasa después por el filtro antislop (ver `AGENTS.md`). Los valores de código viven en [`paquetes/ui/tokens.css`](paquetes/ui/tokens.css) y los componentes en [`paquetes/ui`](paquetes/ui/README.md); este archivo explica qué son y por qué.
 
 Lienzo de referencia: https://claude.ai/artifact/A77tYXi713xNbTMacNzM8v (privado), página "v0.3 · Direcciones", dirección A. La página "v0.2 · Marquilla" guarda la dirección anterior.
 
@@ -39,9 +39,20 @@ Kevin juzgó la interfaz de campo "demasiado fea": todo era una lista larga de c
   - Inicio de sesión e instalación con la marca arriba y la acción abajo.
   - Los valores comunes y los puestos son datos del formato (`valoresComunes`, `puestos`, `largo`; formato de prueba v8).
 
-## Identidad visual Recorrido (para llevarla a oficina)
+## Oficina · identidad Recorrido (desde el 2026-09-27, iteración 23)
 
-Kevin aprobó el resultado de campo el 2026-09-27 y pidió dejar anotada la identidad para aplicarla después a oficina. **Oficina todavía no se toca:** sigue con Consola hasta que Kevin lo pida. Esta es la identidad, en el orden en que se decide:
+Kevin pidió llevar la identidad de campo a oficina. El primer prototipo repetía el error de Consola: cada bloque en su propio recuadro, y la pantalla se volvía agobiante. Se rehízo al revés: **primero se ordenó la información por lo que hace la persona en cada pantalla, y solo después se buscaron referencias en Mobbin para validar.** El prototipo aprobado es `prototipos/oficina/prototipo.html` (https://claude.ai/artifact/XwTGDmPxCJ1wFFpqcBGycX); cada pantalla dice qué hace ahí la persona, cómo se ordenó y de dónde sale. La app es igual al prototipo: su CSS vive en `paquetes/ui/oficina.css`, que solo importa oficina.
+
+- **La página es la superficie.** Se agrupa con espacio, títulos y líneas finas. Solo flota lo que es una capa (hojas laterales, confirmaciones, menús, notificaciones) o un objeto (una foto, un croquis, una firma). Nada de tarjetas para agrupar.
+- **El encabezado resume.** Debajo del título, una línea de datos cortos ("4 esperan revisión · el más antiguo lleva 2 días") reemplaza a las tarjetas de resumen; a la derecha, la acción de la pantalla y, en los documentos, el estado de guardado.
+- **Las listas:** pestañas subrayadas con su contador y el buscador a la derecha, en la misma barra; la tabla sobre el fondo; el texto que coincide con la búsqueda, resaltado; si en otra pestaña hay coincidencias, se dice cuántas. La bandeja busca en el servidor (llega por páginas, `buscar` en `listarLevantamientos`); las demás listas llegan completas y se buscan en la pantalla.
+- **Los documentos** (levantamiento, informe, cotización): el contenido a la izquierda y un carril fijo a la derecha, separado por una línea. El levantamiento se lee como documento con las secciones del recorrido de campo y "Corregir" y "Comentar" al pasar por la fila; el comentario se escribe debajo del dato. El informe sigue el orden del PDF (introducción, levantamientos, conclusiones, planos). La cotización es la cotización: líneas, "+ Agregar línea" como última fila y los totales bajo la columna Total. Los envíos van dentro de su versión.
+- **El inicio de sesión:** el formulario sobre el fondo y, a la derecha, el plano de un cuarto eléctrico dibujado en luz (UPS, baterías, tablero y la energía por la bandeja), sin textos más allá de "TEINS" (`PlanoEnLuz`).
+- **Tema:** oscuro, con la paleta de campo. El prototipo tiene también un claro con el azul de TEINS como acción, listo si algún día se pide.
+
+## Identidad visual Recorrido (la de campo, llevada a oficina en la iteración 23)
+
+Kevin aprobó el resultado de campo el 2026-09-27 y pidió dejar anotada la identidad para aplicarla después a oficina; se aplicó en la iteración 23 (sección anterior). Esta es la identidad, en el orden en que se decide:
 
 **Método.** Primero una línea base de la pantalla actual con sus problemas numerados. Después una crítica con impeccable, referencias de Mobbin y un prototipo navegable en un artifact que Kevin aprueba. Solo entonces se construye, y la app debe quedar igual al prototipo, sin recortar nada. Cada pantalla se compara lado a lado con el prototipo antes de mostrarla.
 
