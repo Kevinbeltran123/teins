@@ -1,17 +1,20 @@
 import { useId, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Aviso, Boton, CeldaTabla, Dialogo, EncabezadoPagina, EsqueletoTabla, EstadoVacio, FilaTabla, Insignia, Plus, Receipt, RefreshCw, Tabla } from "@teins/ui";
+import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, coincide, Dialogo, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, Insignia, Marcado, PieLista, Plus, Receipt, RefreshCw, SinResultados, Tabla } from "@teins/ui";
 import { cliente } from "../api";
 import { consultasDeCotizaciones, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
-import { pesos } from "../formato";
+import { aDiaCorto, pesos } from "../formato";
 
-const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
+const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
 
-/** Cotizaciones (iteración 21, ADR-0029): número, cliente, total de la versión vigente y su estado. */
+/** Cotizaciones (iteración 21, ADR-0029; prototipos/oficina): número, cliente, estado y total publicado, con buscador. */
 export function Cotizaciones() {
   const consulta = useQuery(consultasDeCotizaciones.lista());
   const [creando, setCreando] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const todas = consulta.data?.cotizaciones ?? [];
+  const lista = todas.filter((c) => coincide(busqueda, c.numero, c.visita.cliente, c.visita.sitio));
 
   return (
     <>
@@ -23,48 +26,53 @@ export function Cotizaciones() {
           </Boton>
         }
       />
+      <BarraLista buscador={<Buscador etiqueta="Buscar cotizaciones" ejemplo="Buscar por número, cliente o sitio" valor={busqueda} onCambio={setBusqueda} />} />
       {consulta.isPending ? (
-        <EsqueletoTabla etiqueta="Cargando las cotizaciones" columnas={5} />
+        <EsqueletoLista etiqueta="Cargando las cotizaciones" />
       ) : consulta.isError ? (
         <Aviso tono="error">
-          <p>No se pudieron cargar las cotizaciones.</p>
-          <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-            Reintentar
-          </Boton>
+          <b>No se pudieron cargar las cotizaciones.</b>
+          <div>
+            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
+              Reintentar
+            </Boton>
+          </div>
         </Aviso>
-      ) : consulta.data.cotizaciones.length === 0 ? (
+      ) : todas.length === 0 ? (
         <EstadoVacio icono={Receipt} titulo="Todavía no hay cotizaciones">
           Se crean con "Nueva cotización", desde una visita con levantamientos revisados: las líneas salen de sus cantidades.
         </EstadoVacio>
+      ) : lista.length === 0 ? (
+        <SinResultados texto={busqueda.trim()} onQuitar={() => setBusqueda("")} />
       ) : (
-        <div className="flex flex-col gap-2">
-          <Tabla etiqueta="Cotizaciones" columnas={[{ titulo: "Número" }, { titulo: "Cliente" }, { titulo: "Sitio y visita" }, { titulo: "Total", derecha: true }, { titulo: "Estado" }]}>
-            {consulta.data.cotizaciones.map((c) => (
-              <FilaTabla key={c.id} abrir>
+        <div>
+          <Tabla etiqueta="Cotizaciones" columnas={[{ titulo: "Número" }, { titulo: "Cliente y visita" }, { titulo: "Estado" }, { titulo: "Total", derecha: true }]}>
+            {lista.map((c, k) => (
+              <FilaTabla key={c.id} abrir indice={k}>
                 <CeldaTabla>
-                  <Link
-                    to="/cotizaciones/$id"
-                    params={{ id: c.id }}
-                    className="font-bold whitespace-nowrap text-superficie underline-offset-2 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie"
-                  >
-                    {c.numero}
+                  <Link to="/cotizaciones/$id" params={{ id: c.id }} className="enlace" style={{ whiteSpace: "nowrap" }}>
+                    <Marcado texto={c.numero} busqueda={busqueda} />
                   </Link>
                 </CeldaTabla>
-                <CeldaTabla>{c.visita.cliente}</CeldaTabla>
                 <CeldaTabla>
-                  {c.visita.sitio} <span className="text-ayuda text-texto-secundario">{`· ${dia(c.visita.programadaPara)}`}</span>
+                  <span className="fuerte">
+                    <Marcado texto={c.visita.cliente} busqueda={busqueda} />
+                  </span>
+                  <span className="sub">
+                    <Marcado texto={c.visita.sitio} busqueda={busqueda} /> · {aDiaCorto(`${c.visita.programadaPara}T12:00:00-05:00`)}
+                  </span>
                 </CeldaTabla>
-                <CeldaTabla derecha>{c.total === null ? <span className="text-texto-secundario">Borrador</span> : <strong className="tabular-nums">{pesos(c.total)}</strong>}</CeldaTabla>
                 <CeldaTabla>
-                  <span className="flex flex-wrap gap-1.5">
+                  <span className="fila-flex" style={{ gap: 6 }}>
                     {c.vigente ? <Insignia tono="publicado">{`Versión ${c.vigente}`}</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}
                     {c.envioSinEntregar && <Insignia tono="peligro">Envío sin entregar</Insignia>}
                   </span>
                 </CeldaTabla>
+                <CeldaTabla derecha>{c.total === null ? <span className="sec fuerte" style={{ fontWeight: 700 }}>Borrador</span> : <span className="fuerte">{pesos(c.total)}</span>}</CeldaTabla>
               </FilaTabla>
             ))}
           </Tabla>
-          <p className="text-ayuda text-texto-secundario">El total de un borrador se ve al abrirlo: todavía puede cambiar.</p>
+          <PieLista>El total de un borrador se ve al abrirlo: todavía puede cambiar.</PieLista>
         </div>
       )}
       {creando && <NuevaCotizacion alCerrar={() => setCreando(false)} />}
@@ -111,7 +119,7 @@ function NuevaCotizacion({ alCerrar }: { alCerrar: () => void }) {
         </>
       }
     >
-      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+      <form id={formulario} onSubmit={enviar} noValidate className="col" style={{ gap: 18 }}>
         {visitas.isPending ? (
           <p className="text-ayuda text-texto-secundario">Buscando las visitas con levantamientos revisados…</p>
         ) : visitas.isError ? (
@@ -126,37 +134,39 @@ function NuevaCotizacion({ alCerrar }: { alCerrar: () => void }) {
             Cuando oficina marque revisado un levantamiento con materiales, su visita aparece aquí.
           </EstadoVacio>
         ) : (
-          <fieldset className="flex flex-col gap-2">
-            <legend className="pb-2 text-cuerpo font-bold">Visita</legend>
+          <fieldset className="col" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
+            <legend className="etq" style={{ marginBottom: 8 }}>
+              Visita
+            </legend>
             {visitas.data.visitas.map((v) => (
-              <label
-                key={v.visitaId}
-                className={`flex cursor-pointer gap-3 rounded-control border-[1.5px] px-4 py-3 has-checked:border-borde-activo has-checked:bg-superficie-suave has-focus-visible:outline-3 has-focus-visible:outline-superficie ${falta ? "border-error" : "border-borde-suave"}`}
-              >
+              <label key={v.visitaId} className="casilla" style={falta ? { boxShadow: "inset 0 0 0 2px var(--peligro)" } : undefined}>
                 <input
                   type="radio"
                   name={`${formulario}-visita`}
-                  className="mt-1 size-5 shrink-0 accent-superficie"
                   checked={elegida === v.visitaId}
                   onChange={() => {
                     setElegida(v.visitaId);
                     setFalta(false);
                   }}
                 />
-                <span className="flex flex-col gap-0.5">
-                  <strong>{`${v.cliente} · ${v.sitio}`}</strong>
-                  <span className="text-ayuda text-texto-secundario">
+                <span>
+                  <b>{v.cliente}</b> · {v.sitio}
+                  <span style={{ display: "block", color: "var(--sec)", fontSize: 13 }}>
                     {`Visita del ${dia(v.programadaPara)} · ${v.materiales} ${v.materiales === 1 ? "material" : "materiales"} de ${v.levantamientosRevisados} ${v.levantamientosRevisados === 1 ? "levantamiento revisado" : "levantamientos revisados"}`}
                     {v.cotizaciones.length > 0 ? ` · ya tiene la ${v.cotizaciones.join(", la ")}` : ""}
                   </span>
-                  {v.sinPrecio > 0 && <span className="text-ayuda font-bold text-alerta-texto">{`${v.sinPrecio} sin precio en el catálogo`}</span>}
+                  {v.sinPrecio > 0 && (
+                    <span style={{ display: "inline-flex", marginTop: 6 }}>
+                      <Insignia tono="alerta">{`${v.sinPrecio} sin precio en el catálogo`}</Insignia>
+                    </span>
+                  )}
                 </span>
               </label>
             ))}
-            {falta && <p className="text-ayuda font-bold text-error">Elija la visita que va a cotizar.</p>}
+            {falta && <p className="msj-error">Elija la visita que va a cotizar.</p>}
           </fieldset>
         )}
-        <p className="text-ayuda text-texto-secundario">Solo aparecen visitas con levantamientos revisados. Un levantamiento que falta revisar no entra: sus cantidades todavía pueden cambiar.</p>
+        <p className="ayuda">Solo aparecen visitas con levantamientos revisados. Un levantamiento que falta revisar no entra: sus cantidades todavía pueden cambiar.</p>
         {crear.isError && <Aviso tono="error">{mensajeDeCotizacion(crear.error)}</Aviso>}
       </form>
     </Dialogo>

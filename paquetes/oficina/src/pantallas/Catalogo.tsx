@@ -4,26 +4,27 @@ import type { Respuesta } from "@teins/protocolo";
 import {
   Aviso,
   Boton,
-  CampoBusqueda,
+  BarraLista,
+  Buscador,
   CampoTexto,
-  Casilla,
   CeldaTabla,
   Confirmacion,
   Dialogo,
   EncabezadoPagina,
-  EsqueletoTabla,
+  EsqueletoLista,
   EstadoVacio,
   FilaTabla,
-  Insignia,
+    Insignia,
   MenuAcciones,
   Package,
   Pencil,
+  PieLista,
   Plus,
   RefreshCw,
   Search,
+  UserRound,
   SelectorDeArchivo,
   Tabla,
-  TriangleAlert,
   Upload,
   useNotificar,
 } from "@teins/ui";
@@ -69,7 +70,7 @@ export function Catalogo() {
     <>
       <EncabezadoPagina
         titulo="Catálogo"
-        descripcion="Los ítems con los que oficina vincula las líneas de cantidad que anota el técnico."
+        descripcion={<span>Los ítems con los que oficina vincula las líneas de cantidad que anota el técnico.</span>}
         acciones={
           <>
             <Boton icono={Upload} onClick={() => setImportando(true)}>
@@ -82,64 +83,62 @@ export function Catalogo() {
         }
       />
       {consulta.isPending ? (
-        <EsqueletoTabla etiqueta="Cargando el catálogo" columnas={4} />
+        <EsqueletoLista etiqueta="Cargando el catálogo" />
       ) : consulta.isError ? (
         <Aviso tono="error">
-          <p>No se pudo cargar el catálogo.</p>
-          <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-            Reintentar
-          </Boton>
+          <b>No se pudo cargar el catálogo.</b>
+          <span className="sec">Puede ser la conexión o el servidor. Lo que ya estaba guardado no se perdió.</span>
+          <div>
+            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
+              Reintentar
+            </Boton>
+          </div>
         </Aviso>
       ) : todos.length === 0 ? (
         <EstadoVacio icono={Package} titulo="El catálogo está vacío">
           Importe la lista que ya tienen en Excel con "Importar CSV", o cree el primer ítem con "Nuevo ítem".
         </EstadoVacio>
       ) : (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
-            <div className="w-full max-w-md">
-              <CampoBusqueda etiqueta="Buscar por código o descripción" ejemplo="Código o descripción" valor={busqueda} onCambio={setBusqueda} />
-            </div>
-            {(sinPrecio > 0 || soloSinPrecio) && (
-              <Casilla marcada={soloSinPrecio} onCambio={setSoloSinPrecio}>
-                {`Solo los que no tienen precio (${sinPrecio})`}
-              </Casilla>
-            )}
-          </div>
+        <div className="col" style={{ gap: 28 }}>
+          <BarraLista buscador={<Buscador etiqueta="Buscar por código o descripción" ejemplo="Buscar por código o descripción" valor={busqueda} onCambio={setBusqueda} />}>
+            {sinPrecio > 0 || soloSinPrecio ? (
+              <label className="opcion" style={{ marginBottom: 10 }}>
+                <input type="checkbox" checked={soloSinPrecio} onChange={(e) => setSoloSinPrecio(e.target.checked)} />
+                {`Solo sin precio (${sinPrecio})`}
+              </label>
+            ) : undefined}
+          </BarraLista>
           {errorFila && <Aviso tono="error">{errorFila}</Aviso>}
           {filtrados.length === 0 ? (
             <EstadoVacio icono={Search} titulo="Ningún ítem coincide con la búsqueda">
               Revise cómo lo escribió, o busque por una parte del código.
             </EstadoVacio>
           ) : (
-            <>
+            <div>
               <Tabla
                 etiqueta="Ítems del catálogo"
                 columnas={[{ titulo: "Código" }, { titulo: "Descripción" }, { titulo: "Unidad" }, { titulo: "Precio sin IVA", derecha: true }, { titulo: "Estado" }, { titulo: "Acciones", oculto: true, derecha: true }]}
               >
-                {filtrados.slice(0, VISIBLES).map((i) => (
-                  <FilaTabla key={i.id} resaltada={recientes.includes(i.id)}>
+                {filtrados.slice(0, VISIBLES).map((i, k) => (
+                  <FilaTabla key={i.id} indice={k} resaltada={recientes.includes(i.id)}>
                     <CeldaTabla principal>{i.codigo}</CeldaTabla>
                     <CeldaTabla>
-                      <span className={i.activo ? "" : "text-texto-secundario"}>{i.descripcion}</span>
+                      <span className={i.activo ? "" : "sec"}>{i.descripcion}</span>
                     </CeldaTabla>
-                    <CeldaTabla>{i.unidad}</CeldaTabla>
+                    <CeldaTabla clase="sec">{i.unidad}</CeldaTabla>
                     <CeldaTabla derecha>
                       {i.precio ? (
-                        <span className="flex flex-col items-end">
-                          <strong className="tabular-nums">{pesos(i.precio.valor)}</strong>
-                          <span className="text-ayuda text-texto-secundario">{`desde ${aFecha(i.precio.desde)}`}</span>
-                        </span>
+                        <>
+                          <span className="fuerte">{pesos(i.precio.valor)}</span>
+                          <span className="sub">{`desde el ${aFecha(i.precio.desde)}`}</span>
+                        </>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 font-bold text-alerta-texto [&_svg]:size-4">
-                          <TriangleAlert aria-hidden="true" />
-                          Sin precio
-                        </span>
+                        <Insignia tono="peligro">Sin precio</Insignia>
                       )}
                     </CeldaTabla>
                     <CeldaTabla>{i.activo ? <Insignia tono="exito">Activo</Insignia> : <Insignia tono="neutro">Inactivo</Insignia>}</CeldaTabla>
                     <CeldaTabla derecha>
-                      <span className="inline-flex items-center gap-1">
+                      <span className="fila-flex" style={{ justifyContent: "flex-end", flexWrap: "nowrap", gap: 4 }}>
                         {administrador && (
                           <Boton variante="fantasma" tamano="pequeno" aria-label={`Cambiar el precio de ${i.codigo}`} onClick={() => setCambiandoPrecio(i)}>
                             Cambiar precio
@@ -171,8 +170,8 @@ export function Catalogo() {
                   </FilaTabla>
                 ))}
               </Tabla>
-              {filtrados.length > VISIBLES && <p className="text-ayuda text-texto-secundario">{`Se muestran ${VISIBLES} de ${filtrados.length}. Afine la búsqueda para ver los demás.`}</p>}
-            </>
+              <PieLista>{filtrados.length > VISIBLES ? `Se muestran ${VISIBLES} de ${filtrados.length}. Afine la búsqueda para ver los demás.` : `${filtrados.length} ${filtrados.length === 1 ? "ítem" : "ítems"}`}</PieLista>
+            </div>
           )}
         </div>
       )}
@@ -328,28 +327,28 @@ function CambiarPrecio({ item, alCerrar, alGuardar }: { item: Item; alCerrar: ()
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
         <CampoTexto etiqueta="Precio unitario sin IVA" nombre="precio" valorInicial={texto} onCambio={setTexto} error={errorCampo} />
-        <p className="text-ayuda text-texto-secundario">Rige desde hoy para las cotizaciones nuevas y los borradores. Las versiones ya publicadas conservan su precio.</p>
+        <Aviso>Rige desde hoy para las cotizaciones nuevas y los borradores. Las versiones ya publicadas conservan su precio.</Aviso>
         {guardar.isError && <Aviso tono="error">{mensajeDeAdministracion(guardar.error)}</Aviso>}
       </form>
-      <section aria-labelledby={`${formulario}-historia`} className="mt-6 flex flex-col gap-2">
-        <h3 id={`${formulario}-historia`} className="text-cuerpo font-bold">
+      <section aria-labelledby={`${formulario}-historia`} className="col" style={{ gap: 8 }}>
+        <span id={`${formulario}-historia`} className="etq">
           Historia del precio
-        </h3>
+        </span>
         {historia.isPending ? (
-          <p className="text-ayuda text-texto-secundario">Cargando la historia…</p>
+          <p className="ayuda">Cargando la historia…</p>
         ) : historia.isError ? (
-          <p className="text-ayuda text-texto-secundario">No se pudo cargar la historia.</p>
+          <p className="ayuda">No se pudo cargar la historia.</p>
         ) : historia.data.precios.length === 0 ? (
-          <p className="text-ayuda text-texto-secundario">Todavía no tiene precio.</p>
+          <p className="ayuda">Todavía no tiene precio.</p>
         ) : (
-          <ul className="flex flex-col divide-y divide-division rounded-panel border border-division">
+          <ul className="historial">
             {historia.data.precios.map((p) => (
-              <li key={`${p.desde}-${p.valor}`} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                <span className="flex flex-col">
-                  <span>{`Desde el ${aFechaHora(p.desde)}`}</span>
-                  <span className="text-ayuda text-texto-secundario">{`${p.por?.nombre ?? "[Usuario no disponible]"}${p.origen === "importado" ? " · importado del CSV" : ""}`}</span>
-                </span>
-                <strong className="tabular-nums">{pesos(p.valor)}</strong>
+              <li key={`${p.desde}-${p.valor}`}>
+                <span className="ico">{p.origen === "importado" ? <Upload aria-hidden size={15} /> : <UserRound aria-hidden size={15} />}</span>
+                <div className="que">
+                  <b>{pesos(p.valor)}</b> {`desde el ${aFechaHora(p.desde)}`}
+                  <div className="cuando">{`${p.por?.nombre ?? "[Usuario no disponible]"}${p.origen === "importado" ? " · importado del CSV" : ""}`}</div>
+                </div>
               </li>
             ))}
           </ul>
@@ -387,6 +386,7 @@ function ImportarCatalogo({ administrador, alCerrar, alImportar }: { administrad
   const cuantos = leido?.items.length ?? 0;
   return (
     <Dialogo
+      forma="lateral"
       titulo="Importar desde un archivo"
       cerrable={!importar.isPending}
       alCerrar={alCerrar}

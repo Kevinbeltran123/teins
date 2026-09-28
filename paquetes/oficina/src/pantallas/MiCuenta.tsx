@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Bell, Boton, BotonIcono, Confirmacion, EncabezadoPagina, Insignia, KeyRound, Plus, RefreshCw, Trash, useNotificar } from "@teins/ui";
-import { cliente } from "../api";
+import { Aviso, Bell, Boton, BotonIcono, Confirmacion, EncabezadoPagina, Insignia, KeyRound, LogOut, Plus, RefreshCw, ShieldCheck, Trash, useNotificar } from "@teins/ui";
+import { cliente, consultas } from "../api";
 import { activarAvisos, desactivarAvisos, estadoAvisos, type EstadoAvisos } from "../avisos";
 import { aFechaHora } from "../formato";
 import { mensajeDeError } from "../mensajes";
@@ -26,50 +26,45 @@ export function MiCuenta({ nombre }: { nombre: string }) {
 
   return (
     <>
-      <EncabezadoPagina titulo="Mi cuenta" descripcion={nombre} />
-      <section aria-labelledby="titulo-llaves" className="flex max-w-3xl flex-col gap-4 rounded-panel border border-division bg-panel p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex max-w-xl flex-col gap-1">
-            <h2 id="titulo-llaves" className="text-subtitulo font-extrabold">
-              Llaves de acceso
-            </h2>
-            <p className="text-cuerpo text-texto-secundario">
-              Con una llave de acceso entra sin escribir la contraseña: con la huella, el rostro o el PIN de este computador, o con su celular. Nadie puede usarla desde otro sitio web.
-            </p>
-          </div>
-          <Boton variante="principal" icono={Plus} cargando={crear.isPending} onClick={() => crear.mutate(undefined, { onSuccess: () => notificar({ texto: 'Llave creada. La próxima vez use "Entrar con llave de acceso".' }) })}>
+      <EncabezadoPagina titulo="Mi cuenta" descripcion={<span>{nombre}</span>} />
+      <div className="doc estrecho">
+      <section aria-labelledby="titulo-llaves">
+        <div className="cab-sec">
+            <h2 id="titulo-llaves">Llaves de acceso</h2>
+          <Boton tamano="pequeno" icono={Plus} cargando={crear.isPending} onClick={() => crear.mutate(undefined, { onSuccess: () => notificar({ texto: 'Llave creada. La próxima vez use "Entrar con llave de acceso".' }) })}>
             Crear llave de acceso
           </Boton>
         </div>
+        <p className="ayuda">Con una llave de acceso entra sin escribir la contraseña: con la huella, el rostro o el PIN de este computador, o con su celular. Nadie puede usarla desde otro sitio web.</p>
         {crear.isError && !esLlaveCancelada(crear.error) && <Aviso tono="error">No se pudo crear la llave de acceso. Intente de nuevo.</Aviso>}
         {llaves.isPending ? (
-          <div aria-busy="true" aria-label="Cargando sus llaves de acceso" className="h-20 rounded-panel bg-fondo motion-safe:animate-pulse" />
+          <div aria-busy="true" aria-label="Cargando sus llaves de acceso" className="esq" style={{ height: 56 }} />
         ) : llaves.isError ? (
           <Aviso tono="error">
-            <p>No se pudieron cargar sus llaves de acceso.</p>
-            <Boton className="mt-3" icono={RefreshCw} onClick={() => void llaves.refetch()}>
-              Reintentar
-            </Boton>
+            <b>No se pudieron cargar sus llaves de acceso.</b>
+            <div>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void llaves.refetch()}>
+                Reintentar
+              </Boton>
+            </div>
           </Aviso>
         ) : cuantas === 0 ? (
-          <p className="text-cuerpo text-texto-secundario">Todavía no tiene llaves de acceso.</p>
+          <p className="sec">Todavía no tiene llaves de acceso.</p>
         ) : (
-          <ul aria-label="Sus llaves de acceso" className="flex flex-col divide-y divide-division rounded-panel border border-division">
+          <ul aria-label="Sus llaves de acceso" className="filas" style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {llaves.data.map((l, i) => {
               const nombreLlave = l.nombre ?? `Llave de acceso ${i + 1}`;
               return (
-                <li key={l.id} className="flex items-center gap-4 px-4 py-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-superficie-suave text-superficie [&_svg]:size-5">
-                    <KeyRound aria-hidden />
-                  </span>
-                  <div className="min-w-0 grow">
-                    <p className="text-cuerpo font-bold">{nombreLlave}</p>
-                    <p className="text-ayuda text-texto-secundario">
+                <li key={l.id} className="fila">
+                  <KeyRound aria-hidden size={18} />
+                  <div className="txt">
+                    <b>{nombreLlave}</b>
+                    <small>
                       {`Creada el ${aFechaHora(l.creadaEn)}`}
                       {l.sincronizada && " · Se sincroniza entre sus dispositivos"}
-                    </p>
+                    </small>
                   </div>
-                  <BotonIcono icono={Trash} etiqueta={`Quitar la llave ${i + 1}`} onClick={() => setQuitando({ id: l.id, nombre: nombreLlave })} />
+                  <BotonIcono tamano="pequeno" icono={Trash} etiqueta={`Quitar la llave ${i + 1}`} onClick={() => setQuitando({ id: l.id, nombre: nombreLlave })} />
                 </li>
               );
             })}
@@ -78,6 +73,8 @@ export function MiCuenta({ nombre }: { nombre: string }) {
       </section>
 
       <AvisosDelNavegador />
+      <SesionActual />
+      </div>
 
       {quitando && (
         <Confirmacion
@@ -128,28 +125,72 @@ function AvisosDelNavegador() {
   }
 
   return (
-    <section aria-labelledby="titulo-avisos" className="flex max-w-3xl flex-col gap-4 rounded-panel border border-division bg-panel p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex max-w-xl flex-col gap-1">
-          <h2 id="titulo-avisos" className="flex items-center gap-2.5 text-subtitulo font-extrabold">
-            Avisos en este navegador
-            {estado === "activos" && <Insignia tono="exito">Activos</Insignia>}
-          </h2>
-          <p className="text-cuerpo text-texto-secundario">Le avisamos cuando un técnico envía un levantamiento, aunque la pestaña de TEINS esté cerrada.</p>
-        </div>
+    <section aria-labelledby="titulo-avisos">
+      <div className="cab-sec">
+        <h2 id="titulo-avisos">Avisos en este navegador</h2>
+        {estado === "activos" && <Insignia tono="exito">Activos</Insignia>}
+      </div>
+      <div className="filas">
+        <div className="fila">
+          <Bell aria-hidden size={18} />
+          <div className="txt">
+            <b>Levantamientos enviados</b>
+            <small>Le avisamos cuando un técnico envía un levantamiento, aunque la pestaña de TEINS esté cerrada.</small>
+          </div>
         {estado === "activos" ? (
-          <Boton variante="fantasma" cargando={trabajando} onClick={() => void cambiar(false)}>
+          <Boton variante="fantasma" tamano="pequeno" cargando={trabajando} onClick={() => void cambiar(false)}>
             Desactivar
           </Boton>
         ) : estado === "sin_activar" ? (
-          <Boton icono={Bell} cargando={trabajando} onClick={() => void cambiar(true)}>
+          <Boton variante="principal" tamano="pequeno" cargando={trabajando} onClick={() => void cambiar(true)}>
             Activar avisos
           </Boton>
         ) : null}
+        </div>
       </div>
       {/* Bloqueados, la página ya no puede volver a preguntar: solo la persona los permite. */}
       {estado === "bloqueados" && <Aviso tono="alerta">Los bloqueó en este navegador. Para recibirlos, permita las notificaciones de este sitio desde el candado junto a la dirección.</Aviso>}
       {error && <Aviso tono="error">No se pudieron cambiar los avisos. Intente de nuevo.</Aviso>}
+    </section>
+  );
+}
+
+/** La sesión en este navegador: el segundo factor y cerrar sesión (prototipos/oficina, "Sesión"). */
+function SesionActual() {
+  const consultasCliente = useQueryClient();
+  const sesion = useQuery(consultas.sesion());
+  const [saliendo, setSaliendo] = useState(false);
+
+  async function cerrarSesion() {
+    setSaliendo(true);
+    // Con la sesión todavía abierta: este navegador deja de recibir los avisos de la persona.
+    await desactivarAvisos().catch(() => undefined);
+    await cliente.cerrarSesion().catch(() => undefined);
+    await consultasCliente.resetQueries();
+  }
+
+  return (
+    <section aria-labelledby="titulo-sesion">
+      <h2 id="titulo-sesion">Sesión</h2>
+      <div className="filas">
+        <div className="fila">
+          <ShieldCheck aria-hidden size={18} />
+          <div className="txt">
+            <b>Segundo factor</b>
+            <small>{sesion.data?.usuario.segundoFactor ? "Activo: el ingreso le pide el código de su app autenticadora" : "Sin activar"}</small>
+          </div>
+        </div>
+        <div className="fila">
+          <LogOut aria-hidden size={18} />
+          <div className="txt">
+            <b>Cerrar sesión</b>
+            <small>En este navegador</small>
+          </div>
+          <Boton tamano="pequeno" cargando={saliendo} onClick={() => void cerrarSesion()}>
+            Cerrar sesión
+          </Boton>
+        </div>
+      </div>
     </section>
   );
 }

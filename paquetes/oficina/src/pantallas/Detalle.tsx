@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from "react";
+import { useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -24,43 +24,43 @@ import {
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
-  HojasDeBoceto,
   Boton,
-  BotonIcono,
-  CampoFotos,
   CampoMedida,
   CampoSeleccion,
   CampoTexto,
-  CampoTextoLargo,
+  Check,
+  ChevronLeft,
   Confirmacion,
   EditorCantidades,
   EncabezadoPagina,
-  EsqueletoBloques,
+  EsqueletoLista,
   FileText,
   Firma,
+  HojasDeBoceto,
   Insignia,
+  Link2,
   MarcaNoObtenido,
   MessageSquare,
   Pencil,
   RefreshCw,
-  TablaCantidades,
-  ValorLeido,
-  X,
+  Send,
+  Smartphone,
+  TriangleAlert,
+  UserRound,
+  VisorFotos,
   type LineaEditable,
+  type LucideIcon,
 } from "@teins/ui";
 import { consultas } from "../api";
 import { consultasDeCatalogo, useVincular } from "../catalogo";
-import { aFechaHora } from "../formato";
+import { aFechaCorta } from "../formato";
+import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
 import { useComentar, useCorregir, useMarcarRevisado, useTomar } from "../revision";
-import { useAbrirInformeDeVisita } from "../informes";
 
 type Levantamiento = Respuesta<"obtenerLevantamiento">;
-interface Destino {
-  seccion: string;
-  campo: string;
-  etiqueta: string;
-}
+type Historial = Respuesta<"historialLevantamiento">;
+type Evento = Historial["eventos"][number];
 
 const ESTADOS = {
   enviado: { texto: "Enviado", tono: "enviado" },
@@ -69,22 +69,44 @@ const ESTADOS = {
 } as const;
 
 const migas = (
-  <Link to="/" className="hover:text-texto hover:underline focus-visible:outline-3 focus-visible:outline-superficie">
+  <Link to="/" className="migas">
+    <ChevronLeft aria-hidden size={16} />
     Levantamientos
   </Link>
 );
 
+const claveDato = (seccion: string, campo: string) => `${seccion}|${campo}`;
+const idDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`.replace(/[^a-zA-Z0-9_-]/g, "");
+
+/** La última corrección de cada dato y su valor original, para mostrar antes y después en la fila. */
+function correccionesDe(historial: Historial | undefined) {
+  const porDato = new Map<string, { original: unknown; autor: string; motivo: string | undefined }>();
+  for (const e of historial?.eventos ?? []) {
+    if (e.tipo !== "campo_corregido" || !e.seccion || !e.campo) continue;
+    const clave = claveDato(e.seccion, e.campo);
+    const previa = porDato.get(clave);
+    porDato.set(clave, { original: previa ? previa.original : e.anterior, autor: e.autor.nombre, motivo: e.motivo ?? undefined });
+  }
+  return porDato;
+}
+
+/**
+ * Detalle de un levantamiento (prototipos/oficina): se lee como un documento, con las secciones del recorrido de
+ * campo; "Corregir" y "Comentar" aparecen al pasar por cada fila y el comentario se escribe debajo del dato. A la
+ * derecha, un carril fijo con la revisión y su acción, los comentarios y el historial.
+ */
 export function Detalle({ id }: { id: string }) {
   const consulta = useQuery(consultas.levantamiento(id));
   const sesion = useQuery(consultas.sesion());
-  const [comentandoSobre, setComentandoSobre] = useState<Destino | null>(null);
-  const formularioComentario = useRef<HTMLTextAreaElement | null>(null);
+  const historial = useQuery(consultas.historial(id));
+  const [comentandoEn, setComentandoEn] = useState<string | null>(null);
+  const [pestana, setPestana] = useState<"comentarios" | "historial">("comentarios");
 
   if (consulta.isPending) {
     return (
       <>
         <EncabezadoPagina migas={migas} titulo="Levantamiento" />
-        <EsqueletoBloques etiqueta="Cargando el levantamiento" altos={["bajo", "alto", "medio"]} />
+        <EsqueletoLista etiqueta="Cargando el levantamiento" />
       </>
     );
   }
@@ -94,11 +116,13 @@ export function Detalle({ id }: { id: string }) {
       <>
         <EncabezadoPagina migas={migas} titulo="Levantamiento" />
         <Aviso tono="error">
-          <p>{noExiste ? "Este levantamiento no existe o no pertenece a su organización." : "No se pudo cargar el levantamiento."}</p>
+          <b>{noExiste ? "Este levantamiento no existe o no pertenece a su organización." : "No se pudo cargar el levantamiento."}</b>
           {!noExiste && (
-            <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-              Reintentar
-            </Boton>
+            <div>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
+                Reintentar
+              </Boton>
+            </div>
           )}
         </Aviso>
       </>
@@ -109,71 +133,99 @@ export function Detalle({ id }: { id: string }) {
   // Regla 4: solo quien tomó la revisión corrige, y solo mientras está en revisión.
   const mia = l.estado === "en_revision" && l.revisor?.id === sesion.data?.usuario.id;
   const estado = ESTADOS[l.estado];
+  const correcciones = correccionesDe(historial.data);
+  const recargar = () => void consulta.refetch();
 
-  function comentarSobre(destino: Destino) {
-    setComentandoSobre(destino);
-    // El comentario se escribe en el panel lateral, que sigue a la vista: el foco va ahí sin mover la página.
-    requestAnimationFrame(() => formularioComentario.current?.focus({ preventScroll: true }));
-  }
+  // Las secciones del formato, con sus repeticiones juntas bajo el mismo título (prototipo: "Tableros").
+  const todos = bloques(l.formatoDefinicion, l.repeticiones);
+  const secciones = l.formatoDefinicion.secciones.map((s) => ({ seccion: s, bloques: todos.filter((b) => b.seccion.clave === s.clave) }));
+  const conCambios = (clave: string) => [...correcciones.keys()].some((k) => k.split("|")[0]!.startsWith(clave));
+  const conFaltantes = (bs: typeof todos) => bs.some((b) => b.seccion.campos.some((c) => esNoObtenido(l.respuestas[b.clave]?.[c.clave])));
+
+  const irA = (seccion: string) => document.getElementById(`sec-${seccion}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const nombreFormato = `${l.formatoDefinicion.nombre ?? l.formato} v${l.versionFormato}`;
 
   return (
     <>
       <EncabezadoPagina
         migas={migas}
-        titulo={`Levantamiento de ${l.tecnico.nombre}`}
+        titulo={l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : `Levantamiento de ${l.tecnico.nombre}`}
         estado={<Insignia tono={estado.tono}>{estado.texto}</Insignia>}
-        descripcion={`${l.formatoDefinicion.nombre ?? l.formato} · ${l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : "Sin visita (capturado antes de las visitas)"}`}
+        descripcion={
+          <>
+            <span>
+              {nombreFormato} de <b>{l.tecnico.nombre}</b>
+            </span>
+            <span>Recibido {aFechaCorta(l.recibidoEn)}</span>
+            {/* La hora del teléfono es declarativa (regla 16): la oficial es la del servidor. */}
+            <span>Enviado desde el teléfono {aFechaCorta(l.enviadoEnDispositivo)}</span>
+            {!l.visita && <span>Sin visita (capturado antes de las visitas)</span>}
+          </>
+        }
       />
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex min-w-0 flex-col gap-6">
-          {/* Cada sección, y cada repetición de las repetibles con su nombre (iteración 9). */}
-          {bloques(l.formatoDefinicion, l.repeticiones).map(({ seccion, clave, titulo, repeticion }) => (
-            <section key={clave} aria-labelledby={`seccion-${clave}`} className="flex flex-col gap-4 rounded-panel border border-division bg-panel p-6">
-              <h2 id={`seccion-${clave}`} className="text-subtitulo font-extrabold">
-                {titulo}
-              </h2>
-              <div className="flex flex-col divide-y divide-division">
-                {seccion.campos.map((campo) => (
-                  <FilaCampo
-                    key={campo.clave}
-                    l={l}
-                    seccion={clave}
-                    campo={campo}
-                    mia={mia}
-                    recargar={() => void consulta.refetch()}
-                    comentar={() => comentarSobre({ seccion: clave, campo: campo.clave, etiqueta: repeticion ? `${repeticion.nombre} · ${campo.etiqueta}` : campo.etiqueta })}
-                  />
+      <div className="con-carril">
+        <div className="principal">
+          <nav className="nav-secciones" aria-label="Secciones del levantamiento">
+            {secciones.map(({ seccion, bloques: bs }) => (
+              <button key={seccion.clave} type="button" onClick={() => irA(seccion.clave)}>
+                {conCambios(seccion.clave) ? <i className="m-cambio" aria-label="con correcciones" /> : conFaltantes(bs) ? <i className="m-falta" aria-label="con datos no obtenidos" /> : null}
+                {seccion.titulo}
+              </button>
+            ))}
+          </nav>
+          <div className="doc">
+            {secciones.map(({ seccion, bloques: bs }, k) => (
+              <section key={seccion.clave} id={`sec-${seccion.clave}`} aria-labelledby={`titulo-${seccion.clave}`}>
+                <h2 id={`titulo-${seccion.clave}`}>
+                  <span className="n">{k + 1}</span>
+                  {seccion.titulo}
+                </h2>
+                {seccion.repetible && bs.length === 0 && <p className="ayuda">El técnico no agregó ninguno.</p>}
+                {bs.map((b) => (
+                  <div key={b.clave} role={b.repeticion ? "region" : undefined} aria-label={b.repeticion ? b.titulo : undefined}>
+                    {b.repeticion && <div className="rep-titulo">{b.repeticion.nombre}</div>}
+                    <div className="datos">
+                      {b.seccion.campos.map((campo) => (
+                        <FilaCampo
+                          key={campo.clave}
+                          l={l}
+                          seccion={b.clave}
+                          campo={campo}
+                          mia={mia}
+                          correccion={correcciones.get(claveDato(b.clave, campo.clave))}
+                          recargar={recargar}
+                          comentando={comentandoEn === claveDato(b.clave, campo.clave)}
+                          comentar={() => setComentandoEn(claveDato(b.clave, campo.clave))}
+                          dejarDeComentar={() => setComentandoEn(null)}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
-              </div>
-            </section>
-          ))}
-          {l.formatoDefinicion.secciones
-            .filter((s) => s.repetible && (l.repeticiones[s.clave]?.length ?? 0) === 0)
-            .map((s) => (
-              <section key={s.clave} aria-label={s.titulo} className="rounded-panel border border-division bg-panel p-6">
-                <h2 className="text-subtitulo font-extrabold">{s.titulo}</h2>
-                <p className="mt-2 text-cuerpo text-texto-secundario">El técnico no agregó ninguno.</p>
               </section>
             ))}
-          <Historial l={l} />
+          </div>
         </div>
-        <aside aria-label="Revisión y comentarios" className="flex flex-col gap-4 lg:sticky lg:top-8 lg:max-h-[calc(100dvh-4rem)] lg:overflow-y-auto">
-          <PanelRevision l={l} mia={mia} recargar={() => void consulta.refetch()} />
-          <section aria-label="Datos del levantamiento" className="rounded-panel border border-division bg-panel p-5">
-            <dl className="flex flex-col gap-3">
-              <ValorLeido etiqueta="Recibido en oficina">{aFechaHora(l.recibidoEn)}</ValorLeido>
-              {/* La hora del teléfono es declarativa (regla 16): la oficial es la del servidor. */}
-              <ValorLeido etiqueta="Enviado desde el teléfono">{aFechaHora(l.enviadoEnDispositivo)}</ValorLeido>
-            </dl>
-          </section>
-          <Comentarios l={l} destino={comentandoSobre} quitarDestino={() => setComentandoSobre(null)} refCampo={formularioComentario} />
+        <aside className="carril" aria-label="Revisión y comentarios">
+          <PanelRevision l={l} mia={mia} correcciones={correcciones.size} recargar={recargar} />
+          <div className="grupo-c">
+            <div className="mini-tabs" role="tablist" aria-label="Comentarios e historial">
+              <button type="button" role="tab" aria-selected={pestana === "comentarios"} onClick={() => setPestana("comentarios")}>
+                Comentarios{l.comentarios.length > 0 ? ` · ${l.comentarios.length}` : ""}
+              </button>
+              <button type="button" role="tab" aria-selected={pestana === "historial"} onClick={() => setPestana("historial")}>
+                Historial
+              </button>
+            </div>
+            {pestana === "comentarios" ? <Comentarios l={l} /> : <HistorialDeCambios l={l} historial={historial} />}
+          </div>
         </aside>
       </div>
     </>
   );
 }
 
-function PanelRevision({ l, mia, recargar }: { l: Levantamiento; mia: boolean; recargar: () => void }) {
+function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; mia: boolean; correcciones: number; recargar: () => void }) {
   const tomar = useTomar();
   const marcar = useMarcarRevisado(l.id);
   const [confirmando, setConfirmando] = useState<"revisado" | "reasignar" | null>(null);
@@ -182,53 +234,61 @@ function PanelRevision({ l, mia, recargar }: { l: Levantamiento; mia: boolean; r
   const etiqueta = (seccion: string, campo?: string) => (campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo) : rutaLegible(l.formatoDefinicion, l.repeticiones, seccion));
   const nombre = l.revisor?.nombre ?? "otra persona";
 
-  let contenido;
+  let texto: ReactNode;
+  let accion: ReactNode = null;
   if (l.estado === "enviado") {
-    contenido = (
-      <>
-        <p className="text-cuerpo">Nadie ha tomado este levantamiento. Tómelo para corregirlo y marcarlo revisado.</p>
-        <Boton variante="principal" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version })}>
-          Tomar para revisar
-        </Boton>
-      </>
+    texto = "Nadie ha tomado este levantamiento. Tómelo para corregirlo y marcarlo revisado.";
+    accion = (
+      <Boton variante="principal" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version })}>
+        Tomar para revisar
+      </Boton>
     );
   } else if (l.estado === "revisado") {
-    contenido = (
+    texto = (
       <>
-        <p className="text-cuerpo">
-          Revisado por {l.revisor?.nombre ?? "[Sin responsable]"}.{" "}
-          {l.visita ? "Ya se puede incluir en el informe de su visita." : "No tiene visita, así que no entra en un informe."}
-        </p>
-        {l.visita && <AbrirInforme visitaId={l.visita.id} />}
+        Revisado por <b>{l.revisor?.nombre ?? "[Sin responsable]"}</b>. {l.visita ? "Ya se puede incluir en el informe de su visita." : "No tiene visita, así que no entra en un informe."}
       </>
     );
+    accion = l.visita && <AbrirInforme visitaId={l.visita.id} />;
   } else if (mia) {
-    contenido = (
-      <>
-        <p className="text-cuerpo">Usted tiene la revisión. Corrija lo que haga falta y márquelo revisado cuando esté listo.</p>
-        <Boton variante="principal" onClick={() => setConfirmando("revisado")}>
-          Marcar revisado
-        </Boton>
-      </>
+    texto = "Usted tiene la revisión. Corrija lo que haga falta y márquelo revisado cuando esté listo.";
+    accion = (
+      <Boton variante="principal" icono={Check} onClick={() => setConfirmando("revisado")}>
+        Marcar revisado
+      </Boton>
     );
   } else {
-    contenido = (
+    texto = (
       <>
-        <p className="text-cuerpo">La revisión la tiene {nombre}.</p>
-        <Boton onClick={() => setConfirmando("reasignar")}>Tomar la revisión de {nombre}</Boton>
+        La revisión la tiene <b>{nombre}</b>.
       </>
     );
+    accion = <Boton onClick={() => setConfirmando("reasignar")}>Tomar la revisión de {nombre}</Boton>;
   }
 
   return (
-    <section aria-label="Revisión" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-5 [&>button]:self-start">
-      <h2 className="text-subtitulo font-extrabold">Revisión</h2>
-      {contenido}
+    <section className="grupo-c" aria-label="Revisión">
+      <h2>Revisión</h2>
+      <p className="ayuda" style={{ fontSize: 14 }}>
+        {texto}
+      </p>
+      {accion && <div>{accion}</div>}
+      {correcciones > 0 && (
+        <span className="corregido" style={{ margin: 0 }}>
+          <Pencil aria-hidden size={13} />
+          {correcciones === 1 ? "1 dato corregido" : `${correcciones} datos corregidos`}
+        </span>
+      )}
+      {l.estado === "revisado" && (
+        <svg className="chulo" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--exito)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ "--largo": 24 } as CSSProperties} aria-hidden>
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      )}
       {error && (
         <Aviso tono="error">
-          <p>{mensajeDeError(error)}</p>
+          <b>{mensajeDeError(error)}</b>
           {invalidos.length > 0 && (
-            <ul className="mt-2 list-disc pl-5">
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
               {invalidos.map((e) => (
                 <li key={`${e.seccion}.${e.campo ?? ""}`}>
                   {etiqueta(e.seccion, e.campo)}: {mensajeDeValidacion[e.codigo as keyof typeof mensajeDeValidacion] ?? e.codigo}
@@ -237,20 +297,16 @@ function PanelRevision({ l, mia, recargar }: { l: Levantamiento; mia: boolean; r
             </ul>
           )}
           {pideRecargar(error) && (
-            <Boton className="mt-3" icono={RefreshCw} onClick={recargar}>
-              Recargar
-            </Boton>
+            <div>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargar}>
+                Recargar
+              </Boton>
+            </div>
           )}
         </Aviso>
       )}
       {confirmando === "revisado" && (
-        <Confirmacion
-          titulo="¿Marcar revisado?"
-          confirmar="Marcar revisado"
-          mensajeDeError={mensajeDeError}
-          alCerrar={() => setConfirmando(null)}
-          accion={() => marcar.mutateAsync(l.version)}
-        >
+        <Confirmacion titulo="¿Marcar revisado?" confirmar="Marcar revisado" mensajeDeError={mensajeDeError} alCerrar={() => setConfirmando(null)} accion={() => marcar.mutateAsync(l.version)}>
           <p>Ya no se podrá corregir desde oficina, y queda listo para el informe de su visita.</p>
         </Confirmacion>
       )}
@@ -273,18 +329,12 @@ function AbrirInforme({ visitaId }: { visitaId: string }) {
   const abrir = useAbrirInformeDeVisita();
   const navegar = useNavigate();
   return (
-    <div className="flex flex-col gap-2">
-      <Boton
-        variante="principal"
-        icono={FileText}
-        className="self-start"
-        cargando={abrir.isPending}
-        onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}
-      >
+    <>
+      <Boton variante="principal" icono={FileText} cargando={abrir.isPending} onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}>
         Abrir el informe de esta visita
       </Boton>
       {abrir.isError && <Aviso tono="error">{mensajeDeError(abrir.error)}</Aviso>}
-    </div>
+    </>
   );
 }
 
@@ -293,91 +343,173 @@ function FilaCampo({
   seccion,
   campo,
   mia,
+  correccion,
   recargar,
+  comentando,
   comentar,
+  dejarDeComentar,
 }: {
   l: Levantamiento;
   seccion: string;
   campo: DefinicionCampo;
   mia: boolean;
+  correccion: { original: unknown; autor: string; motivo: string | undefined } | undefined;
   recargar: () => void;
+  comentando: boolean;
   comentar: () => void;
+  dejarDeComentar: () => void;
 }) {
   const [corrigiendo, setCorrigiendo] = useState(false);
   const valor = l.respuestas[seccion]?.[campo.clave];
+  const hilo = l.comentarios.filter((c) => c.seccion === seccion && c.campo === campo.clave);
+  const nombreEnFrase = campo.etiqueta.toLowerCase();
 
-  const acciones = !corrigiendo && (
-    <div className="flex shrink-0 gap-1">
-      {/* Fotos, bocetos y firmas son de campo: oficina no los corrige (la firma, de quien recibió la visita). */}
-      {mia && campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "firma" && (
-        <Boton variante="fantasma" tamano="pequeno" icono={Pencil} aria-label={`Corregir ${campo.etiqueta.toLowerCase()}`} onClick={() => setCorrigiendo(true)}>
-          Corregir
-        </Boton>
-      )}
-      <Boton variante="fantasma" tamano="pequeno" icono={MessageSquare} aria-label={`Comentar ${campo.etiqueta.toLowerCase()}`} onClick={comentar}>
-        Comentar
-      </Boton>
-    </div>
-  );
+  if (corrigiendo) {
+    return (
+      <div className="dato editando" id={idDato(seccion, campo.clave)}>
+        <span className="nombre">{campo.etiqueta}</span>
+        <EditorCorreccion l={l} seccion={seccion} campo={campo} valor={valor} cerrar={() => setCorrigiendo(false)} recargar={recargar} />
+      </div>
+    );
+  }
+
+  // Fotos, bocetos y firmas son de campo: oficina no los corrige (la firma, de quien recibió la visita).
+  const corregible = mia && campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "firma";
 
   return (
-    <div className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 grow">
-      {campo.tipo === "foto" && Array.isArray(valor) ? (
-        <Fotos etiqueta={campo.etiqueta} huellas={valor as readonly string[]} />
-      ) : campo.tipo === "boceto" && esBoceto(valor) ? (
-        <BocetoDeCampo etiqueta={campo.etiqueta} huella={valor.boceto} />
-      ) : campo.tipo === "firma" && esFirma(valor) ? (
-        <FirmaDeCampo etiqueta={campo.etiqueta} valor={valor} tecnico={l.tecnico.nombre} />
-      ) : campo.tipo === "cantidades" && esCantidades(valor) ? (
-        <LineasDeCantidad l={l} seccion={seccion} campo={campo} lineas={valor} mia={mia} recargar={recargar} />
-      ) : (
-        <ValorLeido etiqueta={campo.etiqueta}>
-          <span className={valor === undefined || esNoObtenido(valor) ? "text-texto-secundario" : ""}>{describirValor(campo, valor)}</span>
-        </ValorLeido>
-      )}
-        </div>
-        {acciones}
+    <div className="dato" id={idDato(seccion, campo.clave)}>
+      <span className="nombre">
+        {campo.etiqueta}
+        {hilo.length > 0 && (
+          <>
+            <br />
+            <span className="n-com">
+              <MessageSquare aria-hidden size={12} />
+              {hilo.length}
+            </span>
+          </>
+        )}
+      </span>
+      <div>
+        <ValorDelCampo l={l} seccion={seccion} campo={campo} valor={valor} mia={mia} correccion={correccion} recargar={recargar} />
       </div>
-      {corrigiendo && <EditorCorreccion l={l} seccion={seccion} campo={campo} valor={valor} cerrar={() => setCorrigiendo(false)} recargar={recargar} />}
+      <div className="acc">
+        {corregible && (
+          <Boton variante="fantasma" tamano="pequeno" icono={Pencil} aria-label={`Corregir ${nombreEnFrase}`} onClick={() => setCorrigiendo(true)}>
+            Corregir
+          </Boton>
+        )}
+        <button type="button" className="icono-btn limpio chico" title={`Comentar sobre ${nombreEnFrase}`} aria-label={`Comentar ${nombreEnFrase}`} onClick={comentar}>
+          <MessageSquare aria-hidden size={16} />
+        </button>
+      </div>
+      {hilo.length > 0 && (
+        <div className="hilo">
+          {hilo.map((c) => (
+            <div key={c.id} className="burbuja">
+              <small>
+                {c.autor.nombre} · {aFechaCorta(c.creadoEn)} · para el técnico
+              </small>
+              <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {comentando && <ComentarAqui l={l} seccion={seccion} campo={campo.clave} nombre={nombreEnFrase} cerrar={dejarDeComentar} />}
     </div>
   );
 }
 
-/** Corrección de un campo, con las mismas reglas del envío (QA-8: queda con valor anterior y nuevo). */
-function EditorCorreccion({
+/** El valor, como lo lee una persona. Una medida se ve grande con su unidad; lo corregido, con el valor anterior tachado. */
+function ValorDelCampo({
   l,
   seccion,
   campo,
   valor,
-  cerrar,
+  mia,
+  correccion,
   recargar,
 }: {
   l: Levantamiento;
   seccion: string;
   campo: DefinicionCampo;
   valor: Valor | undefined;
-  cerrar: () => void;
+  mia: boolean;
+  correccion: { original: unknown; autor: string; motivo: string | undefined } | undefined;
   recargar: () => void;
 }) {
+  if (campo.tipo === "foto" && Array.isArray(valor)) return <Fotos etiqueta={campo.etiqueta} huellas={valor as readonly string[]} puestos={campo.puestos} />;
+  if (campo.tipo === "boceto" && esBoceto(valor)) return <BocetoDeCampo etiqueta={campo.etiqueta} huella={valor.boceto} />;
+  if (campo.tipo === "firma" && esFirma(valor)) return <FirmaDeCampo valor={valor} tecnico={l.tecnico.nombre} />;
+  if (campo.tipo === "cantidades" && esCantidades(valor)) return <LineasDeCantidad l={l} seccion={seccion} campo={campo} lineas={valor} mia={mia} recargar={recargar} />;
+  if (esNoObtenido(valor)) {
+    return (
+      <span className="no-obtenido">
+        <TriangleAlert aria-hidden size={18} />
+        No obtenido{valor.motivo ? <span> · {valor.motivo}</span> : null}
+      </span>
+    );
+  }
+
+  const antes = correccion ? <span className="antes">{describirValor(campo, correccion.original as Valor | undefined)}</span> : null;
+  const marca = correccion && (
+    <span className="corregido">
+      <Pencil aria-hidden size={13} />
+      Corregido por {correccion.autor}
+      {correccion.motivo ? ` · ${correccion.motivo}` : ""}
+    </span>
+  );
+  if (valor === undefined || valor === null) {
+    return (
+      <>
+        <div className="sec">
+          {antes}
+          {describirValor(campo, valor)}
+        </div>
+        {marca}
+      </>
+    );
+  }
+  if (campo.tipo === "medida" && typeof valor === "object" && "valor" in valor) {
+    const m = valor as ValorMedida;
+    return (
+      <>
+        <div className="valor-medida">
+          {antes}
+          <span>
+            {m.valor.replace(".", ",")} <small>{m.unidad}</small>
+          </span>
+        </div>
+        {marca}
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="fuerte" style={{ whiteSpace: "pre-line" }}>
+        {antes}
+        <span>{describirValor(campo, valor)}</span>
+      </div>
+      {marca}
+    </>
+  );
+}
+
+/** Corrección de un campo, con las mismas reglas del envío (QA-8: queda con valor anterior y nuevo). */
+function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: Levantamiento; seccion: string; campo: DefinicionCampo; valor: Valor | undefined; cerrar: () => void; recargar: () => void }) {
   const corregir = useCorregir(l.id);
   const noObtenidoAntes = esNoObtenido(valor);
   const [nuevo, setNuevo] = useState<Valor | undefined>(valor);
   const [valido, setValido] = useState(true);
   const [motivo, setMotivo] = useState("");
-  const errorDelCampo =
-    corregir.error instanceof ErrorApi ? corregir.error.problema.errores?.find((e) => e.seccion === seccion && e.campo === campo.clave) : undefined;
+  const errorDelCampo = corregir.error instanceof ErrorApi ? corregir.error.problema.errores?.find((e) => e.seccion === seccion && e.campo === campo.clave) : undefined;
   const mensajeCampo = errorDelCampo ? mensajeDeValidacion[errorDelCampo.codigo as keyof typeof mensajeDeValidacion] : undefined;
   const marcado = esNoObtenido(nuevo);
 
-  async function guardar() {
+  async function guardar(evento: FormEvent) {
+    evento.preventDefault();
     try {
-      await corregir.mutateAsync({
-        version: l.version,
-        correcciones: [{ seccion, campo: campo.clave, valor: nuevo ?? null }],
-        ...(motivo.trim() ? { motivo: motivo.trim() } : {}),
-      });
+      await corregir.mutateAsync({ version: l.version, correcciones: [{ seccion, campo: campo.clave, valor: nuevo ?? null }], ...(motivo.trim() ? { motivo: motivo.trim() } : {}) });
       cerrar();
     } catch {
       // El error queda a la vista en el formulario.
@@ -422,16 +554,7 @@ function EditorCorreccion({
       }
       case "cantidades": {
         const lineas = esCantidades(valor) ? valor : [];
-        return (
-          <CorregirCantidades
-            etiqueta={`Líneas corregidas de ${campo.etiqueta.toLowerCase()}`}
-            inicial={lineas}
-            unidades={campo.unidades}
-            deshabilitado={marcado}
-            error={marcado ? undefined : mensajeCampo}
-            onCambio={setNuevo}
-          />
-        );
+        return <CorregirCantidades etiqueta={`Líneas corregidas de ${campo.etiqueta.toLowerCase()}`} inicial={lineas} unidades={campo.unidades} deshabilitado={marcado} error={marcado ? undefined : mensajeCampo} onCambio={setNuevo} />;
       }
       default:
         return null;
@@ -439,7 +562,7 @@ function EditorCorreccion({
   })();
 
   return (
-    <div className="flex flex-col gap-4 rounded-panel border-2 border-borde-activo bg-panel-hundido p-4">
+    <form className="editor-inline" onSubmit={(e) => void guardar(e)} noValidate>
       {control}
       {campo.obligatorio && (
         <MarcaNoObtenido
@@ -450,91 +573,157 @@ function EditorCorreccion({
           onCambio={(m, motivoNoObtenido) => setNuevo(m ? { noObtenido: true, motivo: motivoNoObtenido } : undefined)}
         />
       )}
-      <CampoTextoLargo etiqueta="Motivo de la corrección" ayuda="Opcional. Queda en el historial junto al cambio." valor={motivo} onCambio={setMotivo} filas={2} maximo={500} />
+      <div className="campo">
+        <label htmlFor={`motivo-${seccion}-${campo.clave}`}>
+          Motivo de la corrección <small className="sec" style={{ fontWeight: 700, fontSize: 12 }}>opcional</small>
+        </label>
+        <input id={`motivo-${seccion}-${campo.clave}`} className="control" placeholder="Queda en el historial junto al cambio" maxLength={500} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+      </div>
       {corregir.isError && !errorDelCampo && (
         <Aviso tono="error">
-          <p>{mensajeDeError(corregir.error)}</p>
+          <b>{mensajeDeError(corregir.error)}</b>
           {pideRecargar(corregir.error) && (
-            <Boton className="mt-3" icono={RefreshCw} onClick={recargar}>
-              Recargar
-            </Boton>
+            <div>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargar}>
+                Recargar
+              </Boton>
+            </div>
           )}
         </Aviso>
       )}
-      <div className="flex flex-wrap justify-end gap-2">
+      <div className="fila-botones">
         <Boton onClick={cerrar} disabled={corregir.isPending}>
           Cancelar
         </Boton>
-        <Boton variante="principal" cargando={corregir.isPending} disabled={!valido} onClick={() => void guardar()}>
+        <Boton type="submit" variante="principal" cargando={corregir.isPending} disabled={!valido}>
           Guardar corrección
         </Boton>
       </div>
-    </div>
+    </form>
   );
 }
 
-function Comentarios({
-  l,
-  destino,
-  quitarDestino,
-  refCampo,
-}: {
-  l: Levantamiento;
-  destino: Destino | null;
-  quitarDestino: () => void;
-  /** Recibe el foco cuando se elige comentar un dato. */
-  refCampo: RefObject<HTMLTextAreaElement | null>;
-}) {
+/** El comentario sobre un dato se escribe debajo de su fila: no hay que subir al carril y volver a bajar. */
+function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento; seccion: string; campo: string; nombre: string; cerrar: () => void }) {
   const comentar = useComentar(l.id);
   const [texto, setTexto] = useState("");
-  const etiqueta = (seccion?: string, campo?: string) => (seccion && campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo, true) : undefined);
+  const [vacio, setVacio] = useState(false);
 
-  async function enviar() {
-    if (!texto.trim()) return;
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    if (!texto.trim()) {
+      setVacio(true);
+      return;
+    }
     try {
-      await comentar.mutateAsync({ texto: texto.trim(), ...(destino ? { seccion: destino.seccion, campo: destino.campo } : {}) });
-      setTexto("");
-      quitarDestino();
+      await comentar.mutateAsync({ texto: texto.trim(), seccion, campo });
+      cerrar();
     } catch {
       // El error queda a la vista.
     }
   }
 
   return (
-    <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-4 rounded-panel border border-division bg-panel p-5">
-      <h2 id="titulo-comentarios" className="text-subtitulo font-extrabold">
-        Comentarios al técnico
-      </h2>
-      {l.comentarios.length === 0 ? (
-        <p className="text-ayuda text-texto-secundario">Sin comentarios. El técnico los ve en su teléfono en la siguiente sincronización.</p>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {l.comentarios.map((c) => (
-            <li key={c.id} className="flex flex-col gap-1 rounded-control bg-panel-hundido px-3 py-2">
-              <p className="text-ayuda text-texto-secundario">
-                {c.autor.nombre} · {aFechaHora(c.creadoEn)}
-                {c.campo && ` · Sobre ${etiqueta(c.seccion, c.campo) ?? c.campo}`}
-              </p>
-              <p className="text-cuerpo whitespace-pre-line">{c.texto}</p>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex flex-col gap-3">
-        {destino && (
-          <p className="flex items-center justify-between gap-2 rounded-control bg-superficie-suave py-1 pr-1 pl-3 text-ayuda">
-            <span>
-              Sobre <strong>{destino.etiqueta.toLowerCase()}</strong>
-            </span>
-            <BotonIcono icono={X} etiqueta="Comentar en general" tamano="pequeno" onClick={quitarDestino} />
-          </p>
-        )}
-        <CampoTextoLargo ref={refCampo} etiqueta="Nuevo comentario" valor={texto} onCambio={setTexto} maximo={2000} />
-        {comentar.isError && <Aviso tono="error">{mensajeDeError(comentar.error)}</Aviso>}
-        <Boton className="self-start" icono={MessageSquare} cargando={comentar.isPending} disabled={!texto.trim()} onClick={() => void enviar()}>
+    <form className="comentar-aqui" onSubmit={(e) => void enviar(e)} noValidate>
+      <label className="sr-only" htmlFor={`comentario-${seccion}-${campo}`}>
+        Nuevo comentario
+      </label>
+      <textarea
+        id={`comentario-${seccion}-${campo}`}
+        // eslint-disable-next-line jsx-a11y/no-autofocus -- se abre con el globo de la fila: el foco va donde se escribe
+        autoFocus
+        className={`control ${vacio ? "error" : ""}`}
+        maxLength={2000}
+        placeholder={`Qué debe revisar el técnico sobre ${nombre}`}
+        style={{ minHeight: 70 }}
+        value={texto}
+        onChange={(e) => {
+          setTexto(e.target.value);
+          setVacio(false);
+        }}
+      />
+      {comentar.isError && <Aviso tono="error">{mensajeDeError(comentar.error)}</Aviso>}
+      <div className="fila-botones">
+        <Boton tamano="pequeno" onClick={cerrar}>
+          Cancelar
+        </Boton>
+        <Boton type="submit" tamano="pequeno" variante="principal" icono={Send} cargando={comentar.isPending}>
           Enviar comentario
         </Boton>
       </div>
+    </form>
+  );
+}
+
+/** Todos los comentarios; cada uno lleva a su fila. El campo de aquí es para lo general. */
+function Comentarios({ l }: { l: Levantamiento }) {
+  const comentar = useComentar(l.id);
+  const [texto, setTexto] = useState("");
+  const etiqueta = (seccion?: string, campo?: string) => (seccion && campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo, true) : undefined);
+
+  function irALaFila(seccion: string, campo: string) {
+    const fila = document.getElementById(idDato(seccion, campo));
+    fila?.scrollIntoView({ behavior: "smooth", block: "center" });
+    fila?.classList.remove("recien");
+    void fila?.offsetWidth;
+    fila?.classList.add("recien");
+  }
+
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    if (!texto.trim()) return;
+    try {
+      await comentar.mutateAsync({ texto: texto.trim() });
+      setTexto("");
+    } catch {
+      // El error queda a la vista.
+    }
+  }
+
+  return (
+    <section aria-label="Comentarios al técnico" className="col" style={{ gap: 10 }}>
+      <div>
+        {l.comentarios.length === 0 ? (
+          <p className="ayuda">Sin comentarios. El técnico los ve en su teléfono en la siguiente sincronización.</p>
+        ) : (
+          l.comentarios.map((c) => (
+            <div key={c.id} className="nota-c">
+              <small>
+                {c.autor.nombre} · {aFechaCorta(c.creadoEn)}
+                {c.seccion && c.campo && (
+                  <>
+                    {" · Sobre "}
+                    <button type="button" className="ir-dato" onClick={() => irALaFila(c.seccion!, c.campo!)}>
+                      {etiqueta(c.seccion, c.campo) ?? c.campo}
+                    </button>
+                  </>
+                )}
+              </small>
+              <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
+            </div>
+          ))
+        )}
+      </div>
+      <form className="col" style={{ gap: 8 }} onSubmit={(e) => void enviar(e)} noValidate>
+        <label className="sr-only" htmlFor="comentario-general">
+          Comentario general
+        </label>
+        <textarea
+          id="comentario-general"
+          className="control"
+          maxLength={2000}
+          placeholder="Comentario general. Para uno sobre un dato, use el globo de su fila"
+          style={{ minHeight: 76 }}
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+        />
+        {comentar.isError && <Aviso tono="error">{mensajeDeError(comentar.error)}</Aviso>}
+        <div>
+          <Boton type="submit" tamano="pequeno" icono={Send} cargando={comentar.isPending} disabled={!texto.trim()}>
+            Enviar comentario
+          </Boton>
+        </div>
+      </form>
     </section>
   );
 }
@@ -587,46 +776,32 @@ function CorregirCantidades({
  * Tabla de cantidades con su vínculo al catálogo (iteración 11). Quien tiene la revisión elige el ítem
  * de cada línea; el técnico escribió texto libre y no lo elige (regla 6).
  */
-function LineasDeCantidad({
-  l,
-  seccion,
-  campo,
-  lineas,
-  mia,
-  recargar,
-}: {
-  l: Levantamiento;
-  seccion: string;
-  campo: DefinicionCampo;
-  lineas: readonly LineaCantidad[];
-  mia: boolean;
-  recargar: () => void;
-}) {
+function LineasDeCantidad({ l, seccion, campo, lineas, mia, recargar }: { l: Levantamiento; seccion: string; campo: DefinicionCampo; lineas: readonly LineaCantidad[]; mia: boolean; recargar: () => void }) {
   const catalogo = useQuery({ ...consultasDeCatalogo.items(), enabled: mia });
   const vincular = useVincular(l.id);
   const vinculoDe = (linea: string) => l.vinculos.find((v) => v.seccion === seccion && v.campo === campo.clave && v.linea === linea);
   // Lo eligió el técnico y nadie lo ha cambiado (ADR-0025): quien revisa sabe qué confirmar.
-  const deCampo = (linea: string) => vinculoDe(linea)?.elegidoEnCampo && <span className="block text-ayuda text-texto-secundario">Elegido en campo</span>;
+  const deCampo = (linea: string) => vinculoDe(linea)?.elegidoEnCampo && <span className="sub">Elegido en campo</span>;
 
   function celda(linea: string) {
     const actual = vinculoDe(linea)?.item;
     if (!mia) {
       return actual ? (
         <>
-          {`${actual.codigo} · ${actual.descripcion}`}
+          <span className="fuerte">{`${actual.codigo} · ${actual.descripcion}`}</span>
           {deCampo(linea)}
         </>
       ) : (
-        <span className="text-texto-secundario">Sin vincular</span>
+        <Insignia tono="alerta">Sin vincular</Insignia>
       );
     }
-    if (catalogo.isPending) return <span className="text-texto-secundario">Cargando el catálogo…</span>;
-    if (catalogo.isError) return <span className="text-error">No se pudo cargar el catálogo</span>;
+    if (catalogo.isPending) return <span className="sec">Cargando el catálogo…</span>;
+    if (catalogo.isError) return <span className="msj-error">No se pudo cargar el catálogo</span>;
     const activos = catalogo.data.items.filter((i) => i.activo || i.id === actual?.id);
-    if (activos.length === 0) return <span className="text-texto-secundario">El catálogo está vacío</span>;
+    if (activos.length === 0) return <span className="sec">El catálogo está vacío</span>;
     const numero = lineas.findIndex((x) => x.id === linea) + 1;
     return (
-      <div className="flex flex-col gap-1">
+      <div style={{ maxWidth: 300 }}>
         <CampoSeleccion
           etiqueta={`Ítem del catálogo para la línea ${numero}`}
           etiquetaOculta
@@ -642,15 +817,43 @@ function LineasDeCantidad({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <TablaCantidades etiqueta={campo.etiqueta} lineas={lineas} extra={{ titulo: "Catálogo", celda }} />
+    <div className="col" style={{ gap: 10 }}>
+      <div className="tabla-caja">
+        <table className="tabla" aria-label={campo.etiqueta}>
+          <thead>
+            <tr>
+              <th scope="col">Material</th>
+              <th scope="col" className="num">
+                Cantidad
+              </th>
+              <th scope="col">Catálogo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lineas.map((x, j) => (
+              <tr key={x.id} style={{ "--i": j } as CSSProperties}>
+                <td>
+                  <span className="fuerte">{x.descripcion}</span>
+                  {x.observacion && <span className="sub">{x.observacion}</span>}
+                </td>
+                <td className="num">
+                  <span className="fuerte">{x.cantidad.replace(".", ",")}</span> <span className="sec">{x.unidad}</span>
+                </td>
+                <td>{celda(x.id)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {vincular.isError && (
         <Aviso tono="error">
-          <p>{mensajeDeError(vincular.error)}</p>
+          <b>{mensajeDeError(vincular.error)}</b>
           {pideRecargar(vincular.error) && (
-            <Boton className="mt-3" icono={RefreshCw} onClick={recargar}>
-              Recargar
-            </Boton>
+            <div>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargar}>
+                Recargar
+              </Boton>
+            </div>
           )}
         </Aviso>
       )}
@@ -658,21 +861,20 @@ function LineasDeCantidad({
   );
 }
 
-const QUE_PASO: Record<string, string> = {
-  levantamiento_creado: "Creó el levantamiento en el teléfono",
-  levantamiento_enviado: "Envió el levantamiento",
-  revision_tomada: "Tomó la revisión",
-  revision_reasignada: "Tomó la revisión",
-  campo_corregido: "Corrigió",
-  levantamiento_revisado: "Marcó el levantamiento revisado",
-  comentario_agregado: "Comentó",
-  linea_vinculada: "Vinculó al catálogo",
+const QUE_PASO: Record<string, { texto: string; icono: LucideIcon }> = {
+  levantamiento_creado: { texto: "Creó el levantamiento en el teléfono", icono: Smartphone },
+  levantamiento_enviado: { texto: "Envió el levantamiento", icono: Send },
+  revision_tomada: { texto: "Tomó la revisión", icono: UserRound },
+  revision_reasignada: { texto: "Tomó la revisión", icono: UserRound },
+  campo_corregido: { texto: "Corrigió", icono: Pencil },
+  levantamiento_revisado: { texto: "Marcó el levantamiento revisado", icono: Check },
+  comentario_agregado: { texto: "Comentó", icono: MessageSquare },
+  linea_vinculada: { texto: "Vinculó al catálogo", icono: Link2 },
 };
 
 /** Historial legible por campo (ADR-0008), con la verificación de la cadena. */
-function Historial({ l }: { l: Levantamiento }) {
-  const { id, formatoDefinicion: formato, repeticiones } = l;
-  const historial = useQuery(consultas.historial(id));
+function HistorialDeCambios({ l, historial }: { l: Levantamiento; historial: ReturnType<typeof useQuery<Historial>> }) {
+  const { formatoDefinicion: formato, repeticiones } = l;
   const vinculadas = historial.data?.eventos.some((e) => e.tipo === "linea_vinculada") ?? false;
   const catalogo = useQuery({ ...consultasDeCatalogo.items(), enabled: vinculadas });
   const codigoDe = (itemId: string | null | undefined) => (itemId ? (catalogo.data?.items.find((i) => i.id === itemId)?.codigo ?? "un ítem") : "sin vincular");
@@ -681,83 +883,94 @@ function Historial({ l }: { l: Levantamiento }) {
     return (esCantidades(valor) ? valor.find((x) => x.id === linea)?.descripcion : undefined) ?? "una línea quitada";
   };
   const campo = (seccion?: string, clave?: string) => (seccion && clave ? campoDeRuta(formato, repeticiones, seccion, clave) : undefined);
-  const nombreDe = (seccion: string | undefined, definicion: DefinicionCampo) =>
-    seccion ? nombreDeDato(formato, repeticiones, seccion, definicion.clave, true) : definicion.etiqueta.toLowerCase();
+  const nombreDe = (seccion: string | undefined, definicion: DefinicionCampo) => (seccion ? nombreDeDato(formato, repeticiones, seccion, definicion.clave, true) : definicion.etiqueta.toLowerCase());
+
+  function detalle(e: Evento): ReactNode {
+    const definicion = campo(e.seccion, e.campo);
+    const revisorAnterior = (e.anterior as { revisor?: string } | undefined)?.revisor;
+    if (e.tipo === "campo_corregido" && definicion) {
+      return (
+        <>
+          <br />
+          <span className="cambio">
+            {nombreDe(e.seccion, definicion)}: <del>{describirValor(definicion, e.anterior as Valor | undefined)}</del> → <ins>{describirValor(definicion, e.nuevo as Valor | undefined)}</ins>
+          </span>
+        </>
+      );
+    }
+    if (e.tipo === "revision_reasignada" && revisorAnterior) return ` que tenía ${revisorAnterior}`;
+    if (e.tipo === "linea_vinculada") {
+      const antes = e.anterior as { linea?: string; item?: string | null } | undefined;
+      const despues = e.nuevo as { linea?: string; item?: string | null } | undefined;
+      return ` “${descripcionDeLinea(e.seccion, e.campo, despues?.linea)}”: ${codigoDe(antes?.item)} → ${codigoDe(despues?.item)}`;
+    }
+    if (e.tipo === "comentario_agregado") return ` ${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
+    return null;
+  }
 
   return (
-    <section aria-labelledby="titulo-historial" className="flex flex-col gap-4 rounded-panel border border-division bg-panel p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="titulo-historial" className="text-subtitulo font-extrabold">
-          Historial de cambios
-        </h2>
-        {historial.data && (
-          <Insignia tono={historial.data.integra ? "exito" : "peligro"}>{historial.data.integra ? "Historial íntegro" : "El historial fue alterado fuera del sistema"}</Insignia>
-        )}
+    <section aria-label="Historial de cambios" className="col" style={{ gap: 10 }}>
+      <div className="fila-flex entre">
+        <span className="ayuda">Todo cambio queda con autor y fecha.</span>
+        {historial.data && <Insignia tono={historial.data.integra ? "exito" : "peligro"}>{historial.data.integra ? "Historial íntegro" : "El historial fue alterado fuera del sistema"}</Insignia>}
       </div>
       {historial.isPending ? (
-        <div aria-busy="true" aria-label="Cargando el historial" className="h-28 rounded-panel bg-fondo motion-safe:animate-pulse" />
+        <EsqueletoLista etiqueta="Cargando el historial" filas={3} />
       ) : historial.isError ? (
         <Aviso tono="error">
-          <p>No se pudo cargar el historial.</p>
-          <Boton className="mt-3" icono={RefreshCw} onClick={() => void historial.refetch()}>
-            Reintentar
-          </Boton>
+          <b>No se pudo cargar el historial.</b>
+          <div>
+            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void historial.refetch()}>
+              Reintentar
+            </Boton>
+          </div>
         </Aviso>
       ) : (
-        <ol className="flex flex-col gap-3">
-          {historial.data.eventos.map((e) => {
-            const definicion = campo(e.seccion, e.campo);
-            const revisorAnterior = (e.anterior as { revisor?: string } | undefined)?.revisor;
-            let detalle = "";
-            if (e.tipo === "campo_corregido" && definicion) {
-              detalle = `${nombreDe(e.seccion, definicion)}: ${describirValor(definicion, e.anterior as Valor | undefined)} → ${describirValor(definicion, e.nuevo as Valor | undefined)}`;
-            } else if (e.tipo === "revision_reasignada" && revisorAnterior) {
-              detalle = `que tenía ${revisorAnterior}`;
-            } else if (e.tipo === "linea_vinculada") {
-              const antes = e.anterior as { linea?: string; item?: string | null } | undefined;
-              const despues = e.nuevo as { linea?: string; item?: string | null } | undefined;
-              detalle = `“${descripcionDeLinea(e.seccion, e.campo, despues?.linea)}”: ${codigoDe(antes?.item)} → ${codigoDe(despues?.item)}`;
-            } else if (e.tipo === "comentario_agregado") {
-              detalle = `${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
-            }
+        <ul className="historial">
+          {[...historial.data.eventos].reverse().map((e) => {
+            const que = QUE_PASO[e.tipo];
+            const Icono = que?.icono ?? Pencil;
             return (
-              <li key={e.secuencia} className="flex flex-col gap-0.5">
-                <p className="text-cuerpo">
-                  <strong>{e.autor.nombre}</strong> {QUE_PASO[e.tipo]?.toLowerCase() ?? e.tipo} {detalle}
-                </p>
-                <p className="text-ayuda text-texto-secundario">
-                  {aFechaHora(e.hora)}
-                  {e.motivo && ` · Motivo: ${e.motivo}`}
-                </p>
+              <li key={e.secuencia}>
+                <span className="ico">
+                  <Icono aria-hidden size={15} />
+                </span>
+                <div className="que">
+                  <b>{e.autor.nombre}</b> {que?.texto.toLowerCase() ?? e.tipo}
+                  {detalle(e)}
+                  <div className="cuando">
+                    {aFechaCorta(e.hora)}
+                    {e.motivo && ` · Motivo: ${e.motivo}`}
+                  </div>
+                </div>
               </li>
             );
           })}
-        </ol>
+        </ul>
       )}
     </section>
   );
 }
 
-/** Boceto (ADR-0019): el servidor entrega el documento ya verificado y se dibuja con los tokens, hoja por hoja (ADR-0026). */
+/** Boceto (ADR-0019): el servidor entrega el documento ya verificado y se dibuja en papel claro, hoja por hoja (ADR-0026). */
 function BocetoDeCampo({ etiqueta, huella }: { etiqueta: string; huella: string }) {
   const boceto = useQuery(consultas.boceto(huella));
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-cuerpo font-bold">{etiqueta}</span>
-      {boceto.isPending ? (
-        <div aria-busy="true" aria-label="Cargando el boceto" className="aspect-[4/3] max-w-xl rounded-control bg-fondo motion-safe:animate-pulse" />
-      ) : boceto.isError ? (
-        <Aviso tono="error">
-          <p>No se pudo cargar el boceto.</p>
-          <Boton className="mt-3" icono={RefreshCw} onClick={() => void boceto.refetch()}>
+  if (boceto.isPending) return <div aria-busy="true" aria-label="Cargando el boceto" className="esq" style={{ height: 200, marginTop: 10 }} />;
+  if (boceto.isError) {
+    return (
+      <Aviso tono="error">
+        <b>No se pudo cargar el boceto.</b>
+        <div>
+          <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void boceto.refetch()}>
             Reintentar
           </Boton>
-        </Aviso>
-      ) : (
-        <div className="max-w-2xl">
-          <HojasDeBoceto hojas={hojasDe(boceto.data)} cuadricula={boceto.data.cuadricula} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} />
         </div>
-      )}
+      </Aviso>
+    );
+  }
+  return (
+    <div className="hojas-papel">
+      <HojasDeBoceto hojas={hojasDe(boceto.data)} cuadricula={boceto.data.cuadricula} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} />
     </div>
   );
 }
@@ -768,60 +981,68 @@ function FirmaDibujada({ documento, etiqueta }: { documento: DocumentoBoceto; et
   return <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={etiqueta} className="max-h-28" />;
 }
 
-/** Firma de quien recibe la visita (ADR-0024): la firma, quién y cuándo, y la constancia que leyó. */
-function FirmaDeCampo({ etiqueta, valor, tecnico }: { etiqueta: string; valor: ValorFirma; tecnico: string }) {
+/** Firma de quien recibe la visita (ADR-0024): la firma en papel, quién y cuándo, y la constancia que leyó. */
+function FirmaDeCampo({ valor, tecnico }: { valor: ValorFirma; tecnico: string }) {
   const trazos = useQuery(consultas.boceto(valor.firma));
   return (
-    <div className="flex flex-col gap-2.5">
-      <span className="text-ayuda text-texto-secundario">{etiqueta}</span>
+    <div style={{ display: "grid", gap: 8, maxWidth: 420 }}>
       {trazos.isPending ? (
-        <div aria-busy="true" aria-label="Cargando la firma" className="h-28 max-w-sm rounded-control bg-fondo motion-safe:animate-pulse" />
+        <div aria-busy="true" aria-label="Cargando la firma" className="esq" style={{ height: 112 }} />
       ) : trazos.isError ? (
         <Aviso tono="error">
-          <p>No se pudo cargar la firma.</p>
-          <Boton className="mt-3" icono={RefreshCw} onClick={() => void trazos.refetch()}>
-            Reintentar
-          </Boton>
+          <b>No se pudo cargar la firma.</b>
+          <div>
+            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void trazos.refetch()}>
+              Reintentar
+            </Boton>
+          </div>
         </Aviso>
       ) : (
-        <div className="max-w-sm rounded-control border border-division p-2">
+        <div className="papel" data-tema="claro">
           <FirmaDibujada documento={trazos.data} etiqueta={`Firma de ${valor.nombre}`} />
         </div>
       )}
-      <div className="flex flex-col gap-0.5 text-cuerpo">
-        <strong>
-          {valor.nombre}
-          {valor.cargo ? ` · ${valor.cargo}` : ""}
-        </strong>
-        <span className="text-texto-secundario">
-          Firmó el {aFechaHora(valor.firmadoEn)}, en el teléfono de {tecnico}.
-        </span>
-        <span className="text-texto-secundario">“{valor.declaracion}”</span>
-      </div>
+      <span className="sec" style={{ fontSize: 13 }}>
+        <b style={{ color: "var(--texto)" }}>{`${valor.nombre}${valor.cargo ? ` · ${valor.cargo}` : ""}`}</b>
+        <br />
+        Firmó {aFechaCorta(valor.firmadoEn)}, en el teléfono de {tecnico}.
+      </span>
+      <span className="sec" style={{ fontSize: 13 }}>
+        “{valor.declaracion}”
+      </span>
     </div>
   );
 }
 
-function Fotos({ etiqueta, huellas }: { etiqueta: string; huellas: readonly string[] }) {
+function Fotos({ etiqueta, huellas, puestos }: { etiqueta: string; huellas: readonly string[]; puestos?: readonly string[] | undefined }) {
   const urls = useQueries({ queries: huellas.map((h) => consultas.urlDeArchivo(h)) });
-  if (urls.some((u) => u.isPending)) {
-    return (
-      <div aria-busy="true" className="flex flex-col gap-2">
-        <span className="text-cuerpo font-bold">{etiqueta}</span>
-        <p className="text-ayuda text-texto-secundario">Cargando fotos…</p>
-      </div>
-    );
-  }
+  const [viendo, setViendo] = useState<number | null>(null);
+  if (urls.some((u) => u.isPending)) return <p className="ayuda">Cargando fotos…</p>;
   if (urls.some((u) => u.isError)) {
     return (
       <Aviso tono="error">
-        <p>No se pudieron cargar las fotos de {etiqueta.toLowerCase()}.</p>
-        <Boton className="mt-3" icono={RefreshCw} onClick={() => urls.forEach((u) => void u.refetch())}>
-          Reintentar
-        </Boton>
+        <b>No se pudieron cargar las fotos de {etiqueta.toLowerCase()}.</b>
+        <div>
+          <Boton tamano="pequeno" icono={RefreshCw} onClick={() => urls.forEach((u) => void u.refetch())}>
+            Reintentar
+          </Boton>
+        </div>
       </Aviso>
     );
   }
   const fotos = urls.map((u, i) => ({ id: huellas[i]!, url: u.data!.url }));
-  return <CampoFotos etiqueta={etiqueta} fotos={fotos} procesando={false} onAgregar={() => undefined} soloLectura />;
+  return (
+    <>
+      <div className="fotos">
+        {fotos.map((f, i) => (
+          <figure key={f.id} className="foto" style={{ margin: 0 }}>
+            <img src={f.url} alt={`Foto ${i + 1} de ${etiqueta}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            <figcaption>{puestos?.[i] ?? `Foto ${i + 1}`}</figcaption>
+            <button type="button" className="ver-foto" aria-label={`Ver ${puestos?.[i] ?? `la foto ${i + 1}`} de ${etiqueta.toLowerCase()}`} onClick={() => setViendo(i)} />
+          </figure>
+        ))}
+      </div>
+      {viendo !== null && <VisorFotos etiqueta={etiqueta} fotos={fotos} inicial={viendo} alCerrar={() => setViendo(null)} />}
+    </>
+  );
 }

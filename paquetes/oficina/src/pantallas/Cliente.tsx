@@ -6,12 +6,15 @@ import {
   Aviso,
   Boton,
   CampoTexto,
-  Casilla,
   CeldaTabla,
   Confirmacion,
   Dialogo,
   EncabezadoPagina,
-  EsqueletoBloques,
+  EsqueletoLista,
+  ChevronLeft,
+  Mail,
+  MapPin,
+  Smartphone,
   EstadoVacio,
   FilaTabla,
   Insignia,
@@ -32,7 +35,8 @@ type Detalle = Respuesta<"obtenerCliente">;
 type Contacto = Detalle["contactos"][number];
 
 const migas = (
-  <Link to="/clientes" className="hover:text-texto hover:underline focus-visible:outline-3 focus-visible:outline-superficie">
+  <Link to="/clientes" className="migas">
+    <ChevronLeft aria-hidden size={16} />
     Clientes
   </Link>
 );
@@ -65,7 +69,7 @@ export function DetalleCliente({ id }: { id: string }) {
     return (
       <>
         <EncabezadoPagina migas={migas} titulo="Cliente" />
-        <EsqueletoBloques etiqueta="Cargando el cliente" altos={["medio", "bajo"]} />
+        <EsqueletoLista etiqueta="Cargando el cliente" />
       </>
     );
   }
@@ -101,69 +105,75 @@ export function DetalleCliente({ id }: { id: string }) {
       <EncabezadoPagina
         migas={migas}
         titulo={detalle.nombre}
+        descripcion={
+          <>
+            <span>
+              <b>{detalle.sitios.length}</b> {detalle.sitios.length === 1 ? "sitio" : "sitios"}
+            </span>
+            <span>
+              <b>{detalle.contactos.length}</b> {detalle.contactos.length === 1 ? "contacto" : "contactos"}
+            </span>
+          </>
+        }
         acciones={
           <Boton variante="principal" icono={Plus} onClick={() => setEditando("nuevo")}>
             Nuevo contacto
           </Boton>
         }
       />
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section aria-labelledby="titulo-contactos" className="flex min-w-0 flex-col gap-4 rounded-panel border border-division bg-panel p-6">
-          <div className="flex flex-col gap-1">
-            <h2 id="titulo-contactos" className="text-subtitulo font-extrabold">
-              Contactos
-            </h2>
-            <p className="text-ayuda text-texto-secundario">Cada contacto recibe lo que tiene marcado, informes o cotizaciones, con el PDF adjunto, por sus canales.</p>
+      <div className="doc">
+        <section aria-labelledby="titulo-contactos">
+          <div className="cab-sec">
+            <h2 id="titulo-contactos">Contactos</h2>
           </div>
+          <p className="ayuda">Cada contacto recibe lo que tiene marcado, informes o cotizaciones, con el PDF adjunto, por sus canales.</p>
           {detalle.contactos.length === 0 ? (
             <EstadoVacio icono={Users} titulo="Nadie de este cliente recibe los informes">
               Con "Nuevo contacto" registra a quien los recibe por correo o WhatsApp. Mientras tanto, cada informe solo queda en el portal.
             </EstadoVacio>
           ) : (
-            <Tabla
-              etiqueta={`Contactos de ${detalle.nombre}`}
-              columnas={[{ titulo: "Contacto" }, { titulo: "Correo" }, { titulo: "Celular" }, { titulo: "Recibe" }, { titulo: "Acciones", oculto: true, derecha: true }]}
-            >
-              {contactos.map((c) => (
-                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)}>
+            <Tabla etiqueta={`Contactos de ${detalle.nombre}`} columnas={[{ titulo: "Contacto" }, { titulo: "Cómo le llega" }, { titulo: "Recibe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
+              {contactos.map((c, k) => (
+                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)} indice={k}>
                   <CeldaTabla>
-                    <span className="flex flex-col">
-                      <strong className="whitespace-nowrap">{c.nombre}</strong>
-                      {c.cargo && <span className="text-ayuda text-texto-secundario">{c.cargo}</span>}
-                    </span>
+                    <span className="fuerte">{c.nombre}</span>
+                    {c.cargo && <span className="sub">{c.cargo}</span>}
                   </CeldaTabla>
                   <CeldaTabla>
-                    <span className="flex flex-col gap-1">
-                      <span className="whitespace-nowrap">{c.correo ?? <span className="text-texto-secundario">Sin correo</span>}</span>
+                    <div className="contacto-medio">
+                      <span className={c.correo ? "" : "sec"}>
+                        <Mail aria-hidden size={15} />
+                        {c.correo ?? "Sin correo"}
+                      </span>
                       {c.correoRebotado && (
-                        <span className="flex items-center gap-1.5 text-ayuda font-bold text-error [&_svg]:size-4">
-                          <TriangleAlert aria-hidden="true" />
+                        <span style={{ color: "var(--alerta)", fontWeight: 700, fontSize: 13 }}>
+                          <TriangleAlert aria-hidden size={14} />
                           {`El correo rebotó el ${dia(c.correoRebotado.en)}: revíselo`}
                         </span>
                       )}
-                    </span>
+                      <span className={c.celular ? "" : "sec"}>
+                        <Smartphone aria-hidden size={15} />
+                        {c.celular ? celularLegible(c.celular) : "Sin celular"}
+                      </span>
+                    </div>
                   </CeldaTabla>
-                  <CeldaTabla>{c.celular ? <span className="whitespace-nowrap">{celularLegible(c.celular)}</span> : <span className="text-texto-secundario">Sin celular</span>}</CeldaTabla>
                   <CeldaTabla>
                     {(c.recibeCorreo || c.recibeWhatsapp) && (c.recibeInformes || c.recibeCotizaciones) ? (
-                      <span className="flex flex-col gap-1">
-                        <span>{[c.recibeInformes && "Informes", c.recibeCotizaciones && "Cotizaciones"].filter(Boolean).join(" y ")}</span>
-                        <span className="flex flex-wrap gap-1.5">
-                          {c.recibeCorreo && <Insignia tono="neutro">Correo</Insignia>}
-                          {c.recibeWhatsapp && <Insignia tono="neutro">WhatsApp</Insignia>}
-                        </span>
-                      </span>
+                      <>
+                        <span className="fuerte">{c.recibeInformes && c.recibeCotizaciones ? "Informes y cotizaciones" : c.recibeInformes ? "Informes" : "Cotizaciones"}</span>
+                        <span className="sub">por {[c.recibeCorreo && "correo", c.recibeWhatsapp && "WhatsApp"].filter(Boolean).join(" y ")}</span>
+                      </>
                     ) : (
-                      <span className="text-texto-secundario">Nada</span>
+                      <span className="sec">Nada</span>
                     )}
                   </CeldaTabla>
                   <CeldaTabla derecha>
-                    <span className="inline-flex items-center gap-1">
+                    <div className="fila-flex" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
                       <Boton variante="fantasma" tamano="pequeno" aria-label={`Editar a ${c.nombre}`} onClick={() => setEditando(c)}>
                         Editar
                       </Boton>
                       <MenuAcciones etiqueta={`Más acciones de ${c.nombre}`} opciones={[{ texto: "Quitar contacto", peligro: true, alElegir: () => setQuitando(c) }]} />
-                    </span>
+                    </div>
                   </CeldaTabla>
                 </FilaTabla>
               ))}
@@ -171,20 +181,21 @@ export function DetalleCliente({ id }: { id: string }) {
           )}
         </section>
 
-        <section aria-labelledby="titulo-sitios" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-5">
-          <div className="flex items-center justify-between gap-2">
-            <h2 id="titulo-sitios" className="text-subtitulo font-extrabold">
-              Sitios
-            </h2>
+        <section aria-labelledby="titulo-sitios">
+          <div className="cab-sec">
+            <h2 id="titulo-sitios">Sitios</h2>
             <Boton variante="fantasma" tamano="pequeno" icono={Plus} aria-label={`Agregar sitio a ${detalle.nombre}`} onClick={() => setAgregandoSitio(true)}>
               Agregar sitio
             </Boton>
           </div>
-          <ul className="flex flex-col gap-2">
+          <ul className="filas estrecho" style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {detalle.sitios.map((s) => (
-              <li key={s.id} className="flex flex-col">
-                <strong>{s.nombre}</strong>
-                <span className="text-ayuda text-texto-secundario">{s.direccion}</span>
+              <li key={s.id} className="fila">
+                <MapPin aria-hidden size={18} />
+                <div className="txt">
+                  <b>{s.nombre}</b>
+                  <small>{s.direccion}</small>
+                </div>
               </li>
             ))}
           </ul>
@@ -327,39 +338,50 @@ function FormularioContacto({
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
         <CampoTexto etiqueta="Nombre" nombre="nombre" valorInicial={nombre} onCambio={setNombre} error={errores.nombre} autoComplete="off" />
         <CampoTexto etiqueta="Cargo (opcional)" nombre="cargo" valorInicial={cargo} onCambio={setCargo} />
-        <CampoTexto etiqueta="Correo" nombre="correo" valorInicial={correo} onCambio={setCorreo} error={errores.correo} />
-        <CampoTexto etiqueta="Celular" nombre="celular" valorInicial={contacto?.celular ? celularLegible(contacto.celular) : ""} onCambio={setCelular} error={errores.celular} modoEntrada="text" />
-        <fieldset className="flex flex-col gap-1">
-          <legend className="pb-1 text-cuerpo font-bold">Recibe</legend>
-          <Casilla marcada={recibeInformes} onCambio={setRecibeInformes}>
-            Los informes
-          </Casilla>
-          <Casilla marcada={recibeCotizaciones} onCambio={setRecibeCotizaciones}>
-            Las cotizaciones
-          </Casilla>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <CampoTexto etiqueta="Correo" nombre="correo" valorInicial={correo} onCambio={setCorreo} error={errores.correo} />
+          <CampoTexto etiqueta="Celular" nombre="celular" valorInicial={contacto?.celular ? celularLegible(contacto.celular) : ""} onCambio={setCelular} error={errores.celular} modoEntrada="text" />
+        </div>
+        <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend className="etq" style={{ marginBottom: 6 }}>Recibe</legend>
+          <div className="opciones">
+            <label className="opcion">
+              <input type="checkbox" checked={recibeInformes} onChange={(e) => setRecibeInformes(e.target.checked)} />
+              Los informes
+            </label>
+            <label className="opcion">
+              <input type="checkbox" checked={recibeCotizaciones} onChange={(e) => setRecibeCotizaciones(e.target.checked)} />
+              Las cotizaciones
+            </label>
+          </div>
         </fieldset>
-        <fieldset className="flex flex-col gap-1">
-          <legend className="pb-1 text-cuerpo font-bold">Por</legend>
-          <Casilla marcada={recibeCorreo} onCambio={setRecibeCorreo}>
-            Correo
-          </Casilla>
-          <Casilla marcada={recibeWhatsapp} onCambio={setRecibeWhatsapp}>
-            WhatsApp
-          </Casilla>
-          {recibeWhatsapp && (
-            <div className={`ml-8 flex flex-col gap-1 rounded-control border-[1.5px] px-4 py-2 ${errores.autorizacion ? "border-error" : "border-borde-control"}`}>
-              <Casilla marcada={autorizado} onCambio={setAutorizado}>
-                {`${quien} autorizó recibir el informe por WhatsApp`}
-              </Casilla>
-              <p className="pb-2 text-ayuda text-texto-secundario">
+        <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend className="etq" style={{ marginBottom: 6 }}>Por</legend>
+          <div className="opciones">
+            <label className="opcion">
+              <input type="checkbox" checked={recibeCorreo} onChange={(e) => setRecibeCorreo(e.target.checked)} />
+              Correo
+            </label>
+            <label className="opcion">
+              <input type="checkbox" checked={recibeWhatsapp} onChange={(e) => setRecibeWhatsapp(e.target.checked)} />
+              WhatsApp
+            </label>
+          </div>
+        </fieldset>
+        {recibeWhatsapp && (
+          <label className="casilla" style={{ boxShadow: errores.autorizacion ? "inset 0 0 0 2px var(--peligro)" : undefined }}>
+            <input type="checkbox" checked={autorizado} onChange={(e) => setAutorizado(e.target.checked)} />
+            <span>
+              <b>{`${quien} autorizó recibir el informe por WhatsApp`}</b>
+              <span style={{ display: "block", color: "var(--sec)", fontSize: 13 }}>
                 {autorizacionVigente && autorizado
                   ? `Lo confirmó ${autorizacionVigente.por.nombre} el ${aFechaHora(autorizacionVigente.en)}.`
                   : "WhatsApp lo exige. Queda registrado que usted lo confirmó, y cuándo."}
-              </p>
-              {errores.autorizacion && <p className="pb-2 text-ayuda font-bold text-error">{errores.autorizacion}</p>}
-            </div>
-          )}
-        </fieldset>
+              </span>
+              {errores.autorizacion && <span className="msj-error">{errores.autorizacion}</span>}
+            </span>
+          </label>
+        )}
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>

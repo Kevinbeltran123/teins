@@ -6,19 +6,21 @@ import {
   Aviso,
   Boton,
   Building,
-  CampoBusqueda,
   CampoTexto,
   CeldaTabla,
   Dialogo,
   EncabezadoPagina,
-  EsqueletoTabla,
+  EsqueletoLista,
+  BarraLista,
+  Buscador,
+  Insignia,
+  Marcado,
+  SinResultados,
   EstadoVacio,
   FilaTabla,
   Plus,
   RefreshCw,
-  Search,
   Tabla,
-  TriangleAlert,
   useNotificar,
 } from "@teins/ui";
 import { cliente } from "../api";
@@ -47,6 +49,20 @@ export function Clientes() {
     <>
       <EncabezadoPagina
         titulo="Clientes"
+        descripcion={
+          consulta.data && (
+            <>
+              <span>
+                <b>{todos.length}</b> {todos.length === 1 ? "cliente" : "clientes"}
+              </span>
+              {todos.some((c) => c.reciben === 0) && (
+                <span>
+                  <b>{todos.filter((c) => c.reciben === 0).length}</b> sin nadie que reciba el informe
+                </span>
+              )}
+            </>
+          )
+        }
         acciones={
           <Boton variante="principal" icono={Plus} onClick={() => setCreando(true)}>
             Nuevo cliente
@@ -54,43 +70,48 @@ export function Clientes() {
         }
       />
       {consulta.isPending ? (
-        <EsqueletoTabla etiqueta="Cargando clientes" columnas={3} />
+        <EsqueletoLista etiqueta="Cargando clientes" />
       ) : consulta.isError ? (
         <Aviso tono="error">
-          <p>No se pudieron cargar los clientes.</p>
-          <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-            Reintentar
-          </Boton>
+          <b>No se pudieron cargar los clientes.</b>
+          <div>
+            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
+              Reintentar
+            </Boton>
+          </div>
         </Aviso>
       ) : todos.length === 0 ? (
         <EstadoVacio icono={Building} titulo="Todavía no hay clientes">
           Cree el primero con "Nuevo cliente", con su sede principal. Después podrá programarle visitas.
         </EstadoVacio>
       ) : (
-        <div className="flex flex-col gap-4">
-          <CampoBusqueda etiqueta="Buscar cliente" ejemplo="Cliente, sitio o dirección" valor={busqueda} onCambio={setBusqueda} />
+        <>
+          <BarraLista buscador={<Buscador etiqueta="Buscar cliente" ejemplo="Cliente, sitio o dirección" valor={busqueda} onCambio={setBusqueda} />} />
           {visibles.length === 0 ? (
-            <EstadoVacio icono={Search} titulo="Ningún cliente coincide con la búsqueda">
-              Revise cómo lo escribió o busque por el nombre de uno de sus sitios.
-            </EstadoVacio>
+            <SinResultados texto={busqueda.trim()} onQuitar={() => setBusqueda("")} />
           ) : (
             <Tabla etiqueta="Clientes y sus sitios" columnas={[{ titulo: "Cliente" }, { titulo: "Sitios" }, { titulo: "Reciben el informe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
-              {visibles.map((c) => (
-                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)} abrir>
+              {visibles.map((c, k) => (
+                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)} abrir indice={k}>
                   <CeldaTabla>
                     <Link
                       to="/clientes/$id"
                       params={{ id: c.id }}
-                      className="font-bold text-superficie underline-offset-2 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie"
+                      className="enlace"
                     >
-                      {c.nombre}
+                      <Marcado texto={c.nombre} busqueda={busqueda} />
                     </Link>
                   </CeldaTabla>
                   <CeldaTabla>
-                    <ul aria-label={`Sitios de ${c.nombre}`} className="flex flex-col gap-0.5">
+                    <ul aria-label={`Sitios de ${c.nombre}`} style={{ listStyle: "none", margin: 0, padding: 0 }}>
                       {c.sitios.map((s) => (
                         <li key={s.id}>
-                          {s.nombre} <span className="text-ayuda text-texto-secundario">· {s.direccion}</span>
+                          <span className="fuerte">
+                            <Marcado texto={s.nombre} busqueda={busqueda} />
+                          </span>{" "}
+                          <span className="sec">
+                            · <Marcado texto={s.direccion} busqueda={busqueda} />
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -98,10 +119,7 @@ export function Clientes() {
                   <CeldaTabla>
                     {/* "Nadie" avisa antes de publicar: ese informe solo quedaría en el portal (ADR-0028). */}
                     {c.reciben === 0 ? (
-                      <span className="inline-flex items-center gap-1.5 font-bold text-alerta-texto [&_svg]:size-4">
-                        <TriangleAlert aria-hidden="true" />
-                        Nadie
-                      </span>
+                      <Insignia tono="alerta">Nadie</Insignia>
                     ) : c.reciben === 1 ? (
                       "1 contacto"
                     ) : (
@@ -117,7 +135,7 @@ export function Clientes() {
               ))}
             </Tabla>
           )}
-        </div>
+        </>
       )}
 
       {creando && (
@@ -191,8 +209,9 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
         <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" valorInicial="" onCambio={setNombre} error={errores.nombre} />
-        <fieldset className="flex flex-col gap-4">
-          <legend className="pb-1 text-ayuda text-texto-secundario">La sede principal, donde se programan las visitas. Después puede agregar más sitios.</legend>
+        <fieldset className="flex flex-col gap-4" style={{ border: 0, padding: 16, margin: 0, background: "var(--sup2)", borderRadius: 18 }}>
+          <legend className="sr-only">Sede principal</legend>
+          <span className="ayuda" style={{ fontSize: 14 }}>La sede principal, donde se programan las visitas. Después puede agregar más sitios.</span>
           <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" valorInicial="" onCambio={setSitio} error={errores.sitio} />
           <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={setDireccion} error={errores.direccion} />
         </fieldset>
@@ -229,6 +248,7 @@ export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nomb
 
   return (
     <Dialogo
+      forma="lateral"
       titulo="Agregar sitio"
       subtitulo={c.nombre}
       cerrable={!agregar.isPending}

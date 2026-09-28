@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { cloneElement, isValidElement, useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useBlocker } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
@@ -8,14 +8,12 @@ import {
   Aviso,
   Boton,
   BotonIcono,
-  CampoTexto,
   CampoTextoLargo,
-  Casilla,
+  ChevronLeft,
   Confirmacion,
-  Dialogo,
   Download,
   EncabezadoPagina,
-  EsqueletoBloques,
+  EsqueletoLista,
   Insignia,
   RefreshCw,
   SelectorDeArchivo,
@@ -24,7 +22,7 @@ import {
   useNotificar,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
-import { aFechaHora } from "../formato";
+import { aFechaCorta } from "../formato";
 import { mensajeDeAdministracion } from "../administracion";
 import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
 import { consultasDeProgramacion } from "../programacion";
@@ -43,7 +41,7 @@ const ESTADO_LEVANTAMIENTO = { enviado: "Enviado: falta revisarlo", en_revision:
 /** La que ve el cliente: la más reciente sin retirar (regla 10). */
 const vigenteDe = (informe: Informe) => informe.versiones.find((v) => v.retirada === null);
 
-const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
+const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
 
 function mover<T>(lista: T[], i: number, paso: -1 | 1): T[] {
   const j = i + paso;
@@ -54,7 +52,8 @@ function mover<T>(lista: T[], i: number, paso: -1 | 1): T[] {
 }
 
 const migas = (
-  <Link to="/informes" className="hover:text-texto hover:underline focus-visible:outline-3 focus-visible:outline-superficie">
+  <Link to="/informes" className="migas">
+    <ChevronLeft aria-hidden size={16} />
     Informes
   </Link>
 );
@@ -76,7 +75,7 @@ export function InformeDeVisita({ id }: { id: string }) {
     return (
       <>
         <EncabezadoPagina migas={migas} titulo="Informe" />
-        <EsqueletoBloques etiqueta="Cargando el informe" altos={["medio", "alto"]} />
+        <EsqueletoLista etiqueta="Cargando el informe" />
       </>
     );
   }
@@ -86,11 +85,13 @@ export function InformeDeVisita({ id }: { id: string }) {
       <>
         <EncabezadoPagina migas={migas} titulo="Informe" />
         <Aviso tono="error">
-          <p>{noExiste ? "Este informe no existe o no pertenece a su organización." : "No se pudo cargar el informe."}</p>
+          <b>{noExiste ? "Este informe no existe o no pertenece a su organización." : "No se pudo cargar el informe."}</b>
           {!noExiste && (
-            <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-              Reintentar
-            </Boton>
+            <div>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
+                Reintentar
+              </Boton>
+            </div>
           )}
         </Aviso>
       </>
@@ -127,6 +128,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   // Salir con cambios sin guardar pregunta antes, también al cerrar la pestaña (DESIGN.md).
   const salida = useBlocker({ shouldBlockFn: () => cambiado, enableBeforeUnload: () => cambiado, withResolver: true });
   const vigente = vigenteDe(informe);
+  const reciben = contactos.data ? contactos.data.contactos.filter((c) => receptores(contactos.data.contactos, "informes").includes(c.id)).map((c) => c.nombre) : [];
 
   async function agregarPlanos(archivos: File[]) {
     setSubiendo(true);
@@ -149,147 +151,185 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
     await publicar.mutateAsync({ version, destinatarios: elegidos });
   }
 
+  const incluidos = borrador.levantamientos.map((lid) => informe.candidatos.find((c) => c.id === lid)).filter((c): c is Informe["candidatos"][number] => Boolean(c));
+  const fuera = informe.candidatos.filter((c) => !borrador.levantamientos.includes(c.id));
+
+  function capitulo(c: Informe["candidatos"][number], pos: number) {
+    const dentro = pos >= 0;
+    const revisado = c.estado === "revisado";
+    return (
+      <label key={c.id} className={`capitulo ${dentro ? "" : "fuera"}`}>
+        <input
+          type="checkbox"
+          checked={dentro}
+          disabled={!revisado && !dentro}
+          onChange={(e) => actualizar({ levantamientos: e.target.checked ? [...borrador.levantamientos, c.id] : borrador.levantamientos.filter((x) => x !== c.id) })}
+        />
+        <span className="n">{dentro ? `2.${pos + 1}` : ""}</span>
+        <span className="txt">
+          <b>{c.formato}</b> de {c.tecnico}
+          <small>
+            recibido {aFechaCorta(c.recibidoEn)} · {ESTADO_LEVANTAMIENTO[c.estado]}
+          </small>
+        </span>
+        {dentro ? (
+          borrador.levantamientos.length > 1 && (
+            <>
+              <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir ${c.formato} de ${c.tecnico}`} disabled={pos === 0} onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, pos, -1) })} />
+              <BotonIcono icono={ArrowDown} tamano="pequeno" etiqueta={`Bajar ${c.formato} de ${c.tecnico}`} disabled={pos === borrador.levantamientos.length - 1} onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, pos, 1) })} />
+            </>
+          )
+        ) : revisado ? null : (
+          <Insignia tono={c.estado === "en_revision" ? "revision" : "enviado"}>{c.estado === "en_revision" ? "En revisión" : "Enviado"}</Insignia>
+        )}
+      </label>
+    );
+  }
+
   return (
     <>
       <EncabezadoPagina
         migas={migas}
         titulo={`Informe de ${informe.visita.cliente}`}
-        estado={vigente ? <Insignia tono="publicado">{`Versión ${vigente.numero} vigente`}</Insignia> : <Insignia tono="borrador">{informe.versiones.length > 0 ? "Retirado del portal" : "Sin publicar"}</Insignia>}
-        descripcion={`${informe.visita.sitio} · ${informe.visita.direccion} · visita del ${dia(informe.visita.programadaPara)} · ${informe.visita.motivo}`}
+        estado={vigente ? <Insignia tono="publicado">{`Versión ${vigente.numero} vigente`}</Insignia> : <Insignia tono={informe.versiones.length > 0 ? "anulado" : "borrador"}>{informe.versiones.length > 0 ? "Retirado del portal" : "Sin publicar"}</Insignia>}
+        descripcion={
+          <>
+            <span>{informe.visita.sitio}</span>
+            <span>Visita del {dia(informe.visita.programadaPara)}</span>
+            <span>{informe.visita.motivo}</span>
+            {contactos.data && (
+              <span>
+                Recibe el PDF: <b>{reciben.length > 0 ? enLista(reciben) : "nadie"}</b>
+              </span>
+            )}
+          </>
+        }
+        acciones={
+          <>
+            <span className={`guardado ${cambiado ? "cambios" : ""}`} aria-live="polite">
+              <i />
+              {cambiado ? "Cambios sin guardar" : "Todo guardado"}
+            </span>
+            {cambiado && (
+              <Boton cargando={guardar.isPending} disabled={subiendo} onClick={() => guardar.mutate({ version: informe.version, ...borrador })}>
+                Guardar borrador
+              </Boton>
+            )}
+            <Boton
+              variante="principal"
+              icono={Send}
+              disabled={subiendo}
+              onClick={() => {
+                // Todos los que reciben el informe, marcados por omisión (ADR-0028, parte 3).
+                setDestinatarios(null);
+                setConfirmando(true);
+              }}
+            >
+              Publicar versión {siguiente}
+            </Boton>
+          </>
+        }
       />
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex min-w-0 flex-col gap-6">
-          <section aria-labelledby="titulo-incluidos" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-6">
-            <div className="flex flex-col gap-1">
-              <h2 id="titulo-incluidos" className="text-subtitulo font-extrabold">
-                Levantamientos de la visita
-              </h2>
-              <p className="text-ayuda text-texto-secundario">Solo entran levantamientos revisados, en el orden de esta lista.</p>
-            </div>
-            {informe.candidatos.length === 0 ? (
-              <p className="text-cuerpo text-texto-secundario">Esta visita todavía no tiene levantamientos enviados.</p>
-            ) : (
-              <ul className="flex flex-col divide-y divide-division">
-                {informe.candidatos.map((c) => {
-                  const indice = borrador.levantamientos.indexOf(c.id);
-                  return (
-                    <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-1">
-                      <Casilla
-                        marcada={indice >= 0}
-                        deshabilitada={c.estado !== "revisado" && indice < 0}
-                        onCambio={(m) => actualizar({ levantamientos: m ? [...borrador.levantamientos, c.id] : borrador.levantamientos.filter((x) => x !== c.id) })}
-                      >
-                        <strong>{c.formato}</strong> de {c.tecnico} · recibido {aFechaHora(c.recibidoEn)} · {ESTADO_LEVANTAMIENTO[c.estado]}
-                      </Casilla>
-                      {indice >= 0 && borrador.levantamientos.length > 1 && (
-                        <div className="flex gap-1">
-                          <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir ${c.formato} de ${c.tecnico}`} disabled={indice === 0} onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, indice, -1) })} />
-                          <BotonIcono
-                            icono={ArrowDown}
-                            tamano="pequeno"
-                            etiqueta={`Bajar ${c.formato} de ${c.tecnico}`}
-                            disabled={indice === borrador.levantamientos.length - 1}
-                            onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, indice, 1) })}
-                          />
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-
-          <section aria-labelledby="titulo-textos" className="flex flex-col gap-5 rounded-panel border border-division bg-panel p-6">
-            <h2 id="titulo-textos" className="text-subtitulo font-extrabold">
-              Textos de oficina
-            </h2>
-            <CampoTextoLargo etiqueta="Introducción" valor={borrador.introduccion} onCambio={(v) => actualizar({ introduccion: v })} filas={4} maximo={20_000} />
-            <CampoTextoLargo etiqueta="Conclusiones" valor={borrador.conclusiones} onCambio={(v) => actualizar({ conclusiones: v })} filas={4} maximo={20_000} />
-          </section>
-
-          <section aria-labelledby="titulo-planos" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-6">
-            <div className="flex flex-col gap-1">
-              <h2 id="titulo-planos" className="text-subtitulo font-extrabold">
-                Planos
-              </h2>
-              <p className="text-ayuda text-texto-secundario">Los planos que elabora oficina, en PDF. Se anexan al final del informe en este orden.</p>
-            </div>
-            {borrador.planos.length > 0 && (
-              <ul className="flex flex-col divide-y divide-division">
-                {borrador.planos.map((p, i) => (
-                  <li key={p.huella} className="flex flex-wrap items-end gap-2 py-3">
-                    <div className="min-w-60 grow">
-                      <CampoTexto
-                        etiqueta={`Nombre del plano ${i + 1}`}
-                        valorInicial={p.nombre}
-                        onCambio={(nombre) => actualizar({ planos: borrador.planos.map((x) => (x.huella === p.huella ? { ...x, nombre } : x)) })}
-                      />
-                    </div>
-                    <div className="flex gap-1 pb-1">
-                      <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir el plano ${i + 1}`} disabled={i === 0} onClick={() => actualizar({ planos: mover(borrador.planos, i, -1) })} />
-                      <BotonIcono icono={ArrowDown} tamano="pequeno" etiqueta={`Bajar el plano ${i + 1}`} disabled={i === borrador.planos.length - 1} onClick={() => actualizar({ planos: mover(borrador.planos, i, 1) })} />
-                      {/* Quitar un plano del borrador no pierde nada: el archivo sigue subido y se vuelve a agregar igual. */}
-                      <BotonIcono icono={Trash} tamano="pequeno" etiqueta={`Quitar el plano ${i + 1}`} onClick={() => actualizar({ planos: borrador.planos.filter((x) => x.huella !== p.huella) })} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <SelectorDeArchivo etiqueta={subiendo ? "Subiendo…" : "Agregar planos en PDF"} aceptar="application/pdf" deshabilitado={subiendo} onElegir={(a) => void agregarPlanos(a)} />
-          </section>
-        </div>
-
-        <aside aria-label="Publicación" className="flex flex-col gap-4 lg:sticky lg:top-8">
-          <section aria-labelledby="titulo-publicar" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-5">
-            <h2 id="titulo-publicar" className="text-subtitulo font-extrabold">
-              Publicación
-            </h2>
-            <p className={`text-ayuda ${cambiado ? "font-bold text-alerta-texto" : "text-texto-secundario"}`} aria-live="polite">
-              {cambiado ? "Hay cambios sin guardar." : "Todo está guardado."}
-            </p>
-            {error !== null && error !== undefined && (
-              <Aviso tono="error">
-                <ul className="flex flex-col gap-1">
-                  {mensajeDeInforme(error, nombreDe).map((m) => (
-                    <li key={m}>{m}</li>
-                  ))}
-                </ul>
-                {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
-                  <Boton className="mt-3" icono={RefreshCw} onClick={recargar}>
-                    Recargar
-                  </Boton>
-                )}
-              </Aviso>
-            )}
-            <div className="flex flex-col gap-2">
-              <Boton
-                variante="principal"
-                icono={Send}
-                disabled={subiendo}
-                onClick={() => {
-                  // Todos los que reciben el informe, marcados por omisión (ADR-0028, parte 3).
-                  setDestinatarios(null);
-                  setConfirmando(true);
-                }}
-              >
-                Publicar versión {siguiente}
-              </Boton>
-              <Boton disabled={!cambiado || subiendo} cargando={guardar.isPending} onClick={() => guardar.mutate({ version: informe.version, ...borrador })}>
-                {cambiado ? "Guardar borrador" : "Borrador guardado"}
+      {error !== null && error !== undefined && (
+        <Aviso tono="error">
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {mensajeDeInforme(error, nombreDe).map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+          {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
+            <div>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargar}>
+                Recargar
               </Boton>
             </div>
-          </section>
-          {vigente && (
-            <PanelEnvios
-              cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }}
-              version={vigente}
-              contactos={contactos.data?.contactos}
-              enviar={(destinos) => cliente.llamar("enviarVersion", { parametros: { id: informe.id, numero: vigente.numero }, cuerpo: { destinos } })}
-              recargar={recargar}
-            />
           )}
-          <Versiones informe={informe} recargar={recargar} />
+        </Aviso>
+      )}
+      <div className="con-carril">
+        <div className="principal">
+          {/* En el orden del PDF: introducción, un capítulo por levantamiento, conclusiones y planos anexos. */}
+          <div className="doc">
+            <section aria-labelledby="titulo-intro">
+              <h2 id="titulo-intro">
+                <span className="n">1</span>Introducción
+              </h2>
+              <textarea className="texto-doc" aria-labelledby="titulo-intro" maxLength={20_000} value={borrador.introduccion} onChange={(e) => actualizar({ introduccion: e.target.value })} placeholder="Qué se visitó y para qué" />
+            </section>
+            <section aria-labelledby="titulo-incluidos">
+              <h2 id="titulo-incluidos">
+                <span className="n">2</span>Levantamientos
+              </h2>
+              <p className="ayuda">Cada uno es un capítulo del PDF, en este orden. Solo entran los revisados.</p>
+              {informe.candidatos.length === 0 ? (
+                <p className="sec">Esta visita todavía no tiene levantamientos enviados.</p>
+              ) : (
+                <>
+                  <div>{incluidos.map((c, k) => capitulo(c, k))}</div>
+                  {fuera.length > 0 && (
+                    <>
+                      <h3>No entran</h3>
+                      <div>{fuera.map((c) => capitulo(c, -1))}</div>
+                    </>
+                  )}
+                </>
+              )}
+            </section>
+            <section aria-labelledby="titulo-concl">
+              <h2 id="titulo-concl">
+                <span className="n">3</span>Conclusiones
+              </h2>
+              <textarea className="texto-doc" aria-labelledby="titulo-concl" maxLength={20_000} value={borrador.conclusiones} onChange={(e) => actualizar({ conclusiones: e.target.value })} placeholder="Qué se recomienda" />
+            </section>
+            <section aria-labelledby="titulo-planos">
+              <h2 id="titulo-planos">
+                <span className="n">4</span>Planos anexos
+              </h2>
+              <p className="ayuda">Los planos que elabora oficina, en PDF. Van al final del informe, en este orden.</p>
+              {borrador.planos.map((p, i) => (
+                <div key={p.huella} className="plano-fila">
+                  <span className="pdf" aria-hidden>
+                    PDF
+                  </span>
+                  <label className="sr-only" htmlFor={`plano-${p.huella}`}>
+                    {`Nombre del plano ${i + 1}`}
+                  </label>
+                  <input
+                    id={`plano-${p.huella}`}
+                    className="control chico"
+                    style={{ flex: 1, background: "transparent" }}
+                    value={p.nombre}
+                    onChange={(e) => actualizar({ planos: borrador.planos.map((x) => (x.huella === p.huella ? { ...x, nombre: e.target.value } : x)) })}
+                  />
+                  <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir el plano ${i + 1}`} disabled={i === 0} onClick={() => actualizar({ planos: mover(borrador.planos, i, -1) })} />
+                  <BotonIcono icono={ArrowDown} tamano="pequeno" etiqueta={`Bajar el plano ${i + 1}`} disabled={i === borrador.planos.length - 1} onClick={() => actualizar({ planos: mover(borrador.planos, i, 1) })} />
+                  {/* Quitar un plano del borrador no pierde nada: el archivo sigue subido y se vuelve a agregar igual. */}
+                  <BotonIcono icono={Trash} tamano="pequeno" etiqueta={`Quitar el plano ${i + 1}`} onClick={() => actualizar({ planos: borrador.planos.filter((x) => x.huella !== p.huella) })} />
+                </div>
+              ))}
+              <SelectorDeArchivo fila etiqueta={subiendo ? "Subiendo…" : "Agregar planos en PDF"} aceptar="application/pdf" deshabilitado={subiendo} onElegir={(a) => void agregarPlanos(a)} />
+            </section>
+          </div>
+        </div>
+        <aside className="carril" aria-label="Versiones publicadas">
+          <Versiones
+            informe={informe}
+            recargar={recargar}
+            envios={
+              vigente && (
+                <PanelEnvios
+                  cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }}
+                  version={vigente}
+                  contactos={contactos.data?.contactos}
+                  enviar={(destinos) => cliente.llamar("enviarVersion", { parametros: { id: informe.id, numero: vigente.numero }, cuerpo: { destinos } })}
+                  recargar={recargar}
+                />
+              )
+            }
+          />
+          <div className="grupo-c">
+            <p className="ayuda">Una versión publicada queda congelada. Para corregir algo se publica otra y la anterior se conserva.</p>
+          </div>
         </aside>
       </div>
 
@@ -305,48 +345,27 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           }
           accion={guardarYPublicar}
         >
-          <p>
-            El cliente la verá en el portal. Queda congelada: no se podrá modificar. Para corregir algo después se publica una versión nueva, y la anterior se conserva.
-          </p>
+          <p>El cliente la verá en el portal. Queda congelada: no se podrá modificar. Para corregir algo después se publica una versión nueva, y la anterior se conserva.</p>
           {contactos.isPending ? (
-            <p className="text-ayuda text-texto-secundario">Cargando los contactos del cliente…</p>
+            <p className="ayuda">Cargando los contactos del cliente…</p>
           ) : contactos.isError ? (
             <Aviso tono="error">No se pudieron cargar los contactos: se publicará sin enviar. Podrá enviarla después desde "Envíos".</Aviso>
           ) : (
-            <Destinatarios
-              contactos={contactos.data.contactos}
-              elegidos={elegidos}
-              alCambiar={setDestinatarios}
-              cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }}
-              titulo="Enviar el PDF cuando esté listo"
-            />
+            <Destinatarios contactos={contactos.data.contactos} elegidos={elegidos} alCambiar={setDestinatarios} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} titulo="Enviar el PDF cuando esté listo" />
           )}
-          {elegidos.length > 0 && (
-            <p className="text-ayuda text-texto-secundario">Lo enviado no se puede recuperar, ni retirando la versión del portal.</p>
-          )}
+          {elegidos.length > 0 && <p className="ayuda">Lo enviado no se puede recuperar, ni retirando la versión del portal.</p>}
         </Confirmacion>
       )}
       {salida.status === "blocked" && (
-        <Dialogo
-          titulo="¿Salir sin guardar?"
-          alCerrar={salida.reset}
-          pie={
-            <>
-              <Boton onClick={salida.reset}>Seguir editando</Boton>
-              <Boton variante="peligro" onClick={salida.proceed}>
-                Salir sin guardar
-              </Boton>
-            </>
-          }
-        >
-          <p className="text-cuerpo">Los cambios del borrador que no guardó se pierden.</p>
-        </Dialogo>
+        <Confirmacion titulo="¿Salir sin guardar?" confirmar="Salir sin guardar" descartar="Seguir editando" peligro mensajeDeError={() => ""} alCerrar={salida.reset} accion={async () => salida.proceed()}>
+          <p>Los cambios del borrador que no guardó se pierden.</p>
+        </Confirmacion>
       )}
     </>
   );
 }
 
-function Versiones({ informe, recargar }: { informe: Informe; recargar: () => void }) {
+function Versiones({ informe, recargar, envios }: { informe: Informe; recargar: () => void; envios: ReactNode }) {
   const [descargando, setDescargando] = useState<number | null>(null);
   const [errorDescarga, setErrorDescarga] = useState(false);
   const [retirando, setRetirando] = useState<number | null>(null);
@@ -369,57 +388,66 @@ function Versiones({ informe, recargar }: { informe: Informe; recargar: () => vo
   }
 
   return (
-    <section aria-labelledby="titulo-versiones" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-5">
-      <h2 id="titulo-versiones" className="text-subtitulo font-extrabold">
-        Versiones publicadas
-      </h2>
+    <section className="grupo-c" aria-labelledby="titulo-versiones">
+      <h2 id="titulo-versiones">Versiones publicadas</h2>
       {informe.versiones.length === 0 ? (
-        <p className="text-ayuda text-texto-secundario">Todavía no se ha publicado ninguna versión.</p>
+        <p className="ayuda">Todavía no se ha publicado ninguna versión.</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-division">
+        <div>
           {informe.versiones.map((v) => (
-            <li key={v.numero} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
-              <div className="flex items-center justify-between gap-2">
-                <p className="flex items-center gap-2 text-cuerpo font-bold">
-                  Versión {v.numero}
-                  {v.numero === vigente && <Insignia tono="exito">Vigente</Insignia>}
-                  {v.retirada && <Insignia tono="neutro">Retirada</Insignia>}
-                </p>
+            <div key={v.numero} className="ver">
+              <div className="ver-cab">
+                <b>Versión {v.numero}</b>
+                {v.numero === vigente && <Insignia tono="publicado">Vigente</Insignia>}
+                {v.retirada && <Insignia tono="anulado">Retirada</Insignia>}
                 {v.pdf === "listo" ? (
                   <Boton variante="fantasma" tamano="pequeno" icono={Download} aria-label={`Descargar PDF de la versión ${v.numero}`} cargando={descargando === v.numero} onClick={() => void descargar(v.numero)}>
                     PDF
                   </Boton>
                 ) : v.pdf === "generando" ? (
-                  <span className="text-ayuda font-bold text-sync-pendiente" aria-live="polite">
+                  <span className="sec" style={{ fontSize: 13 }} aria-live="polite">
                     Generando el PDF…
                   </span>
                 ) : (
-                  <span className="text-ayuda font-bold text-error">No se generó el PDF. Avísele a soporte.</span>
+                  <span className="msj-error">No se generó el PDF. Avísele a soporte.</span>
                 )}
               </div>
-              <p className="text-ayuda text-texto-secundario">{`Publicada el ${aFechaHora(v.publicadaEn)} por ${v.publicadaPor.nombre}${v.envios.length > 0 ? ` · ${v.envios.length === 1 ? "1 envío" : `${v.envios.length} envíos`}` : ""}`}</p>
-              {v.retirada && <p className="text-ayuda text-texto-secundario">{`Retirada el ${aFechaHora(v.retirada.en)} por ${v.retirada.por.nombre}: ${v.retirada.motivo}`}</p>}
-              {administrador && !v.retirada && (
-                <Boton variante="fantasma" tamano="pequeno" className="self-start" aria-label={`Retirar la versión ${v.numero} del portal`} onClick={() => setRetirando(v.numero)}>
-                  Retirar del portal
-                </Boton>
-              )}
-            </li>
+              <span className="meta">{`Publicada ${aFechaCorta(v.publicadaEn)} por ${v.publicadaPor.nombre}${v.envios.length > 0 ? ` · ${v.envios.length === 1 ? "1 envío" : `${v.envios.length} envíos`}` : ""}`}</span>
+              {v.retirada && <span className="meta">{`Retirada ${aFechaCorta(v.retirada.en)} por ${v.retirada.por.nombre}: ${v.retirada.motivo}`}</span>}
+              {v.numero === vigente
+                ? envios && (
+                    <PanelConRetiro envios={envios} retirar={administrador && !v.retirada ? () => setRetirando(v.numero) : undefined} numero={v.numero} />
+                  )
+                : administrador &&
+                  !v.retirada && (
+                    <div>
+                      <Boton variante="fantasma" tamano="pequeno" className="texto-peligro" aria-label={`Retirar la versión ${v.numero} del portal`} onClick={() => setRetirando(v.numero)}>
+                        Retirar del portal
+                      </Boton>
+                    </div>
+                  )}
+            </div>
           ))}
-        </ul>
+        </div>
       )}
       {errorDescarga && <Aviso tono="error">No se pudo preparar la descarga. Intente de nuevo.</Aviso>}
       {retirando !== null && (
-        <RetirarVersion
-          informeId={informe.id}
-          numero={retirando}
-          envios={informe.versiones.find((v) => v.numero === retirando)?.envios ?? []}
-          alCerrar={() => setRetirando(null)}
-          alRetirar={recargar}
-        />
+        <RetirarVersion informeId={informe.id} numero={retirando} envios={informe.versiones.find((v) => v.numero === retirando)?.envios ?? []} alCerrar={() => setRetirando(null)} alRetirar={recargar} />
       )}
     </section>
   );
+}
+
+/** Los envíos de la vigente, con "Retirar del portal" junto a "Enviar a otro contacto" (solo quien administra). */
+function PanelConRetiro({ envios, retirar, numero }: { envios: ReactNode; retirar: (() => void) | undefined; numero: number }) {
+  if (!retirar || !isValidElement<{ acciones?: ReactNode }>(envios)) return <>{envios}</>;
+  return cloneElement(envios, {
+    acciones: (
+      <Boton variante="fantasma" tamano="pequeno" className="texto-peligro" aria-label={`Retirar la versión ${numero} del portal`} onClick={retirar}>
+        Retirar del portal
+      </Boton>
+    ),
+  });
 }
 
 /** Solo quien administra: el cliente deja de ver la versión; se conserva y queda registrado. */

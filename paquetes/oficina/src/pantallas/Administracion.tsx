@@ -15,7 +15,11 @@ import {
   Dialogo,
   Download,
   EncabezadoPagina,
-  EsqueletoTabla,
+  EsqueletoLista,
+  BarraLista,
+  Buscador,
+  coincide,
+  Marcado,
   EstadoVacio,
   FilaTabla,
   GrupoDeOpciones,
@@ -57,6 +61,8 @@ function primeroLosNuevos<T extends { id: string }>(lista: readonly T[], nuevos:
 
 export function Administracion({ sesion }: { sesion: Sesion }) {
   const [seccion, setSeccion] = useState<Seccion>("usuarios");
+  const [creando, setCreando] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
   if (!sesion.usuario.administrador) {
     return (
       <>
@@ -68,14 +74,23 @@ export function Administracion({ sesion }: { sesion: Sesion }) {
   if (!sesion.usuario.segundoFactor) return <ActivarSegundoFactor />;
   return (
     <>
-      <EncabezadoPagina titulo="Administración" />
-      <div className="flex flex-col gap-5">
+      <EncabezadoPagina
+        titulo="Administración"
+        acciones={
+          seccion === "usuarios" && (
+            <Boton variante="principal" icono={Plus} onClick={() => setCreando(true)}>
+              Nuevo usuario
+            </Boton>
+          )
+        }
+      />
+      <BarraLista buscador={seccion === "usuarios" && <Buscador etiqueta="Buscar usuarios" ejemplo="Buscar por nombre o usuario" valor={busqueda} onCambio={setBusqueda} />}>
         <Pestanas etiqueta="Qué administrar" activa={seccion} onCambio={setSeccion} pestanas={SECCIONES} />
-        <div role="tabpanel" aria-label={SECCIONES.find((s) => s.valor === seccion)!.etiqueta}>
-          {seccion === "usuarios" && <Usuarios propioId={sesion.usuario.id} />}
-          {seccion === "dispositivos" && <Dispositivos />}
-          {seccion === "accesos" && <Accesos />}
-        </div>
+      </BarraLista>
+      <div role="tabpanel" aria-label={SECCIONES.find((s) => s.valor === seccion)!.etiqueta}>
+        {seccion === "usuarios" && <Usuarios propioId={sesion.usuario.id} creando={creando} setCreando={setCreando} busqueda={busqueda} />}
+        {seccion === "dispositivos" && <Dispositivos />}
+        {seccion === "accesos" && <Accesos />}
       </div>
     </>
   );
@@ -84,10 +99,12 @@ export function Administracion({ sesion }: { sesion: Sesion }) {
 function ErrorDeCarga({ texto, reintentar }: { texto: string; reintentar: () => void }) {
   return (
     <Aviso tono="error">
-      <p>{texto}</p>
-      <Boton className="mt-3" icono={RefreshCw} onClick={reintentar}>
-        Reintentar
-      </Boton>
+      <b>{texto}</b>
+      <div>
+        <Boton tamano="pequeno" icono={RefreshCw} onClick={reintentar}>
+          Reintentar
+        </Boton>
+      </div>
     </Aviso>
   );
 }
@@ -98,22 +115,17 @@ type Etapa = "contrasena" | "escanear" | "respaldo";
 
 /** Pasos numerados en una misma pantalla (GitHub, Microsoft): se ve qué viene y en qué va. */
 function Paso({ numero, titulo, estado, children }: { numero: number; titulo: string; estado: "hecho" | "actual" | "pendiente"; children?: ReactNode }) {
-  const marca = {
-    hecho: "bg-exito-fondo text-exito-texto",
-    actual: "bg-superficie text-sobre-superficie",
-    pendiente: "bg-division text-texto-secundario",
-  }[estado];
   return (
-    <li className="grid grid-cols-[32px_minmax(0,1fr)] gap-4">
-      <span aria-hidden className={`flex size-8 items-center justify-center rounded-full text-ayuda font-extrabold [&_svg]:size-4 ${marca}`}>
-        {estado === "hecho" ? <Check /> : numero}
+    <li className={estado}>
+      <span className="n" aria-hidden>
+        {estado === "hecho" ? <Check size={18} /> : numero}
       </span>
-      <div className="flex flex-col gap-3 pt-1">
-        <h3 className={`text-cuerpo font-bold ${estado === "pendiente" ? "text-texto-secundario" : ""}`}>
+      <div>
+        <h3>
           {titulo}
           {estado === "hecho" && <span className="sr-only"> (hecho)</span>}
         </h3>
-        {estado === "actual" && children}
+        {estado === "actual" && <div className="col">{children}</div>}
       </div>
     </li>
   );
@@ -173,9 +185,9 @@ function ActivarSegundoFactor() {
   return (
     <>
       <EncabezadoPagina titulo="Administración" />
-      <section aria-labelledby="titulo-segundo-factor" className="flex max-w-3xl flex-col gap-5 rounded-panel border border-division bg-panel p-6">
+      <section aria-labelledby="titulo-segundo-factor" className="estrecho col" style={{ gap: 18 }}>
         <div className="flex flex-col gap-1">
-          <h2 id="titulo-segundo-factor" className="text-subtitulo font-extrabold">
+          <h2 id="titulo-segundo-factor" className="h2">
             Active el segundo factor para administrar
           </h2>
           <p className="text-cuerpo text-texto-secundario">
@@ -183,7 +195,7 @@ function ActivarSegundoFactor() {
             ingreso a oficina también se lo pedirá.
           </p>
         </div>
-        <ol className="flex flex-col gap-6">
+        <ol className="pasos-2fa">
           <Paso numero={1} titulo="Confirme su contraseña" estado={estadoDe("contrasena")}>
             <form onSubmit={empezar} noValidate className="flex max-w-md flex-col gap-4">
               <CampoTexto etiqueta="Su contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setContrasena} />
@@ -199,13 +211,13 @@ function ActivarSegundoFactor() {
             {enrolamiento && (
               <div className="flex flex-col gap-5">
                 <div className="flex flex-wrap items-start gap-6">
-                  <img src={enrolamiento.qr} alt="Código QR para la app autenticadora" className="size-44 rounded-control border border-division bg-panel p-2" />
+                  <img src={enrolamiento.qr} alt="Código QR para la app autenticadora" className="qr" />
                   {secreto && (
                     <details className="max-w-sm text-cuerpo">
                       <summary className="min-h-control cursor-pointer font-bold text-superficie">¿No puede escanearlo?</summary>
                       <div className="flex flex-col gap-3 pt-2">
                         <p className="text-texto-secundario">Escriba esta clave en la app, sin los espacios:</p>
-                        <code className="text-subtitulo font-extrabold tracking-wider break-all">{enBloques(secreto)}</code>
+                        <code className="clave">{enBloques(secreto)}</code>
                         <div>
                           <BotonCopiar texto={secreto} etiqueta="Copiar la clave de la app" />
                         </div>
@@ -227,7 +239,7 @@ function ActivarSegundoFactor() {
           </Paso>
           <Paso numero={3} titulo="Guarde los códigos de respaldo" estado={estadoDe("respaldo")}>
             <p className="text-cuerpo text-texto-secundario">Cada uno sirve una vez para entrar si pierde el celular. No se vuelven a mostrar.</p>
-            <ul aria-label="Códigos de respaldo" className="grid max-w-md grid-cols-2 gap-x-8 gap-y-1.5 rounded-control bg-panel-hundido p-4">
+            <ul aria-label="Códigos de respaldo" className="codigos" style={{ listStyle: "none", margin: 0 }}>
               {codigos.map((c) => (
                 <li key={c}>
                   <code className="text-cuerpo font-bold tracking-wide">{c}</code>
@@ -291,9 +303,8 @@ const ROL: Record<Rol, string> = { tecnico: "Técnico", oficina: "Oficina" };
 
 type Pendiente = { accion: "restablecer" | "administracion" | "desactivar"; u: Usuario };
 
-function Usuarios({ propioId }: { propioId: string }) {
+function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: string; creando: boolean; setCreando: (v: boolean) => void; busqueda: string }) {
   const consulta = useQuery(consultasDeAdministracion.usuarios());
-  const [creando, setCreando] = useState(false);
   const [nuevos, setNuevos] = useState<string[]>([]);
   const [pendiente, setPendiente] = useState<Pendiente | null>(null);
   const [credencial, setCredencial] = useState<{ nombre: string; usuario: string; contrasena: string; nuevo: boolean } | null>(null);
@@ -303,33 +314,39 @@ function Usuarios({ propioId }: { propioId: string }) {
   const marcar = useAccion((e: { u: Usuario; administrador: boolean }) => cliente.llamar("marcarAdministrador", { parametros: { id: e.u.id }, cuerpo: { administrador: e.administrador } }));
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <Boton variante="principal" icono={Plus} onClick={() => setCreando(true)}>
-          Nuevo usuario
-        </Boton>
-      </div>
+    <div>
       {consulta.isPending ? (
-        <EsqueletoTabla etiqueta="Cargando usuarios" columnas={5} />
+        <EsqueletoLista etiqueta="Cargando usuarios" />
       ) : consulta.isError ? (
         <ErrorDeCarga texto="No se pudieron cargar los usuarios." reintentar={() => void consulta.refetch()} />
       ) : (
-        <Tabla etiqueta="Usuarios de la organización" columnas={[{ titulo: "Nombre" }, { titulo: "Usuario" }, { titulo: "Rol" }, { titulo: "Estado" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
-          {primeroLosNuevos(consulta.data.usuarios, nuevos).map((u) => {
+        <Tabla etiqueta="Usuarios de la organización" columnas={[{ titulo: "Nombre" }, { titulo: "Rol" }, { titulo: "Estado" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
+          {primeroLosNuevos(consulta.data.usuarios, nuevos).filter((u) => coincide(busqueda, u.nombre, u.usuario)).map((u, k) => {
             const propio = u.id === propioId;
             const activo = !u.desactivadoEn;
             return (
-              <FilaTabla key={u.id} resaltada={nuevos.includes(u.id)}>
-                <CeldaTabla principal>
-                  {u.nombre}
-                  {propio && <span className="font-normal text-texto-secundario"> (usted)</span>}
+              <FilaTabla key={u.id} resaltada={nuevos.includes(u.id)} indice={k}>
+                <CeldaTabla>
+                  <span className="fila-flex" style={{ flexWrap: "nowrap" }}>
+                    <span className="avatar" aria-hidden>
+                      {u.nombre.split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase()).join("")}
+                    </span>
+                    <span>
+                      <span className="fuerte">
+                        <Marcado texto={u.nombre} busqueda={busqueda} />
+                        {propio && <span className="sec" style={{ fontWeight: 400 }}> (usted)</span>}
+                      </span>
+                      <span className="sub">
+                        <Marcado texto={u.usuario} busqueda={busqueda} />
+                      </span>
+                    </span>
+                  </span>
                 </CeldaTabla>
-                <CeldaTabla>{u.usuario}</CeldaTabla>
                 <CeldaTabla>
                   {ROL[u.rol]}
                   {u.administrador && (
-                    <span className="block text-ayuda text-texto-secundario">
-                      Administra{u.segundoFactor ? "" : <strong className="text-alerta-texto"> · sin segundo factor</strong>}
+                    <span className="sub">
+                      Administra{u.segundoFactor ? "" : <strong style={{ color: "var(--alerta)" }}> · sin segundo factor</strong>}
                     </span>
                   )}
                 </CeldaTabla>
@@ -339,7 +356,7 @@ function Usuarios({ propioId }: { propioId: string }) {
                   ) : (
                     <>
                       <Insignia tono="neutro">Desactivado</Insignia>
-                      <span className="block pt-1 text-ayuda text-texto-secundario">{aFechaHora(u.desactivadoEn!)}</span>
+                      <span className="sub">{`desde ${aFechaHora(u.desactivadoEn!)}`}</span>
                     </>
                   )}
                 </CeldaTabla>
@@ -500,7 +517,7 @@ const megas = (bytes: number) => `${Math.round(bytes / 1_000_000)} MB`;
 
 function Dispositivos() {
   const consulta = useQuery({ ...consultasDeAdministracion.dispositivos(), refetchInterval: 60_000 });
-  if (consulta.isPending) return <EsqueletoTabla etiqueta="Cargando teléfonos" columnas={5} />;
+  if (consulta.isPending) return <EsqueletoLista etiqueta="Cargando teléfonos" />;
   if (consulta.isError) return <ErrorDeCarga texto="No se pudieron cargar los teléfonos." reintentar={() => void consulta.refetch()} />;
   const lista = consulta.data.dispositivos;
   if (lista.length === 0) {
@@ -521,27 +538,27 @@ function Dispositivos() {
             <CeldaTabla principal>{d.usuario.nombre}</CeldaTabla>
             <CeldaTabla>
               {haceCuanto(d.ultimoContacto)}
-              <span className="block text-ayuda text-texto-secundario">{`App versión ${s?.versionApp ?? "[N]"}`}</span>
+              <span className="sub">{`App versión ${s?.versionApp ?? "[N]"}`}</span>
             </CeldaTabla>
             <CeldaTabla>
               {s ? (s.pendientes === 0 ? "Nada" : `${s.pendientes}`) : "[N]"}
-              {atrasado && <span className="block text-ayuda font-bold text-error">{`El más antiguo espera desde ${aFechaHora(s!.pendienteMasAntiguo!)}. Llame al técnico.`}</span>}
-              {s?.ultimoError && <span className="block text-ayuda text-texto-secundario">{`Último error: ${s.ultimoError}`}</span>}
+              {atrasado && <span className="sub" style={{ color: "var(--alerta)", fontWeight: 700 }}>{`El más antiguo espera desde ${aFechaHora(s!.pendienteMasAntiguo!)}. Llame al técnico.`}</span>}
+              {s?.ultimoError && <span className="sub">{`Último error: ${s.ultimoError}`}</span>}
             </CeldaTabla>
             <CeldaTabla>
-              {s?.persistente === false ? <span className="font-bold text-error">No persistente: el sistema puede borrar los datos</span> : s?.persistente ? "Persistente" : "Sin dato"}
-              {s?.bytesUsados != null && s.bytesDisponibles != null && <span className="block text-ayuda text-texto-secundario">{`${megas(s.bytesUsados)} de ${megas(s.bytesDisponibles)}`}</span>}
+              {s?.persistente === false ? <span style={{ color: "var(--alerta)", fontWeight: 700 }}>No persistente: el sistema puede borrar los datos</span> : s?.persistente ? "Persistente" : "Sin dato"}
+              {s?.bytesUsados != null && s.bytesDisponibles != null && <span className="sub">{`${megas(s.bytesUsados)} de ${megas(s.bytesDisponibles)}`}</span>}
             </CeldaTabla>
             <CeldaTabla>
               {d.borradoConfirmadoEn ? (
                 <>
                   <Insignia tono="neutro">Datos borrados</Insignia>
-                  <span className="block pt-1 text-ayuda text-texto-secundario">{aFechaHora(d.borradoConfirmadoEn)}</span>
+                  <span className="sub">{aFechaHora(d.borradoConfirmadoEn)}</span>
                 </>
               ) : d.ordenDeBorradoEn ? (
                 <>
                   <Insignia tono="alerta">Borrado pendiente</Insignia>
-                  <span className="block pt-1 text-ayuda text-texto-secundario">Se hará al conectarse</span>
+                  <span className="sub">Se hará al conectarse</span>
                 </>
               ) : (
                 <Insignia tono="exito">En uso</Insignia>
@@ -581,7 +598,7 @@ function Accesos() {
     }
   }
 
-  if (consulta.isPending) return <EsqueletoTabla etiqueta="Cargando clientes" columnas={4} />;
+  if (consulta.isPending) return <EsqueletoLista etiqueta="Cargando clientes" />;
   if (consulta.isError) return <ErrorDeCarga texto="No se pudieron cargar los clientes." reintentar={() => void consulta.refetch()} />;
   if (consulta.data.clientes.length === 0) {
     return (
@@ -657,7 +674,7 @@ function Accesos() {
         >
           <div className="grid gap-6 md:grid-cols-[232px_minmax(0,1fr)]">
             <div className="flex flex-col items-center gap-3 rounded-panel border border-division p-4">
-              <img src={credencial.qr} alt={`Código QR del acceso de ${credencial.cliente}`} className="size-50" />
+              <img src={credencial.qr} alt={`Código QR del acceso de ${credencial.cliente}`} className="qr" />
               <p className="flex flex-col items-center text-center">
                 <span className="text-ayuda text-texto-secundario">Código de acceso (va en el QR)</span>
                 <code className="text-cuerpo font-bold tracking-wide break-all">{credencial.identificador}</code>

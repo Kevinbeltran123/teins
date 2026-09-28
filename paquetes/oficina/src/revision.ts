@@ -5,10 +5,12 @@ import { cliente, REFRESCO_BANDEJA_MS } from "./api";
 export type Estado = "enviado" | "en_revision" | "revisado";
 
 /** Una pestaña de la bandeja: levantamientos de un estado, del que más lleva esperando al más reciente. */
-export function useBandeja(estado: Estado) {
+/** `buscar`: cliente, sitio, técnico o formato; la busca el servidor, porque la bandeja llega por páginas. */
+export function useBandeja(estado: Estado, buscar = "") {
+  const texto = buscar.trim();
   return useInfiniteQuery({
-    queryKey: ["bandeja", estado],
-    queryFn: ({ pageParam }) => cliente.llamar("listarLevantamientos", { consulta: { estado, ...(pageParam ? { cursor: pageParam } : {}) } }),
+    queryKey: ["bandeja", estado, texto],
+    queryFn: ({ pageParam }) => cliente.llamar("listarLevantamientos", { consulta: { estado, ...(texto ? { buscar: texto } : {}), ...(pageParam ? { cursor: pageParam } : {}) } }),
     initialPageParam: null as string | null,
     getNextPageParam: (ultima) => ultima.siguienteCursor,
     refetchInterval: REFRESCO_BANDEJA_MS,

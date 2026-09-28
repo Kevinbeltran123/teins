@@ -22,6 +22,29 @@ export function haceCuanto(iso: string, ahora = Date.now()): string {
   return "hace un momento";
 }
 
+const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const enBogota = (d: Date) => new Date(d.toLocaleString("en-US", { timeZone: "America/Bogota" }));
+const diasEntre = (a: Date, b: Date) => Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86_400_000);
+
+/** "jue 25 sep": el día corto de una fecha; "hoy" y "ayer" cuando lo son. */
+export function aDiaCorto(iso: string, ahora = Date.now()): string {
+  const d = enBogota(new Date(iso));
+  const dias = diasEntre(d, enBogota(new Date(ahora)));
+  if (dias === 0) return "hoy";
+  if (dias === 1) return "ayer";
+  return `${DIAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]}`;
+}
+
+/** "jue 25 sep · 4:12 p. m.". */
+export const aFechaCorta = (iso: string, ahora = Date.now()) => `${aDiaCorto(iso, ahora)} · ${hora.format(new Date(iso))}`;
+
+/** Cuánto lleva esperando, por días de calendario: "Hoy", "Desde ayer", "3 días". */
+export function cuantoLleva(iso: string, ahora = Date.now()): { texto: string; dias: number } {
+  const dias = Math.max(0, diasEntre(enBogota(new Date(iso)), enBogota(new Date(ahora))));
+  return { texto: dias === 0 ? "Hoy" : dias === 1 ? "Desde ayer" : `${dias} días`, dias };
+}
+
 const formatoPesos = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 });
 /** "$ 1.234.567": pesos colombianos enteros (ADR-0029). */
 export const pesos = (valor: number) => `$ ${formatoPesos.format(valor)}`;

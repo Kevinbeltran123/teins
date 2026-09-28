@@ -4,7 +4,14 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import {
   Aviso,
+  BarraLista,
   Boton,
+  Buscador,
+  coincide,
+  CuerpoTabla,
+  EsqueletoLista,
+  Marcado,
+  SinResultados,
   CalendarDays,
   CampoSeleccion,
   CampoTexto,
@@ -15,7 +22,6 @@ import {
   Dialogo,
   Download,
   EncabezadoPagina,
-  EsqueletoTabla,
   EstadoVacio,
   FilaTabla,
   FileText,
@@ -72,70 +78,123 @@ const VACIO: Record<Vista, { titulo: string; texto: string }> = {
 
 type Edicion = { tipo: "reasignar" | "reprogramar" | "cancelar" | "exportar"; v: Visita };
 
+/** Encabezado de un día: "Hoy · sábado 27 de septiembre", "Lunes 29 de septiembre". */
+function tituloDia(aaaaMmDd: string, hoy: string) {
+  const largo = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", ...(aaaaMmDd.slice(0, 4) === hoy.slice(0, 4) ? {} : { year: "numeric" }), timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
+  const texto = largo.replace(",", "");
+  return aaaaMmDd === hoy ? `Hoy · ${texto}` : texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/**
+ * Visitas (prototipos/oficina): agrupadas por día sobre el fondo, "Hoy" en amarillo, con buscador por cliente,
+ * sitio o técnico (la lista llega completa, se busca aquí) y el avance de los levantamientos en una barra.
+ */
 export function Visitas() {
   const [vista, setVista] = useState<Vista>("proximas");
+  const [busqueda, setBusqueda] = useState("");
   const [programando, setProgramando] = useState(false);
   const [edicion, setEdicion] = useState<Edicion | null>(null);
   const [recientes, setRecientes] = useState<string[]>([]);
   const notificar = useNotificar();
   const hoy = hoyLocal();
   const consulta = useQuery(consultasDeProgramacion.visitas(vista, hoy));
+  const proximas = useQuery(consultasDeProgramacion.visitas("proximas", hoy));
   const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
   const cerrarEdicion = () => setEdicion(null);
+
+  const todas = consulta.data?.visitas ?? [];
+  const filtradas = todas.filter((v) => coincide(busqueda, v.cliente.nombre, v.sitio.nombre, v.sitio.direccion, ...v.tecnicos.map((t) => t.nombre)));
+  // Por día, en el orden en que llegan (el servidor ya las ordena).
+  const dias: { fecha: string; visitas: Visita[] }[] = [];
+  for (const v of filtradas) {
+    const clave = vista === "canceladas" ? "canceladas" : v.programadaPara;
+    const grupo = dias.at(-1);
+    if (grupo?.fecha === clave) grupo.visitas.push(v);
+    else dias.push({ fecha: clave, visitas: [v] });
+  }
+  const deHoy = proximas.data?.visitas.filter((v) => v.programadaPara === hoy).length;
+  const cantidadProximas = proximas.data?.visitas.length;
+  let k = 0;
 
   return (
     <>
       <EncabezadoPagina
         titulo="Visitas"
+        descripcion={
+          cantidadProximas !== undefined && (
+            <>
+              <span>
+                <b>{deHoy}</b> hoy
+              </span>
+              <span>
+                <b>{cantidadProximas}</b> programadas desde hoy
+              </span>
+            </>
+          )
+        }
         acciones={
           <Boton variante="principal" icono={Plus} onClick={() => setProgramando(true)}>
             Programar visita
           </Boton>
         }
       />
-      <div className="flex flex-col gap-5">
+      <BarraLista buscador={<Buscador etiqueta="Buscar visitas" ejemplo="Buscar por cliente, sitio o técnico" valor={busqueda} onCambio={setBusqueda} />}>
         <Pestanas
           etiqueta="Qué visitas ver"
           activa={vista}
           onCambio={setVista}
           pestanas={[
-            { valor: "proximas", etiqueta: "Próximas", cantidad: vista === "proximas" ? consulta.data?.visitas.length : undefined },
+            { valor: "proximas", etiqueta: "Próximas", cantidad: cantidadProximas },
             { valor: "anteriores", etiqueta: "Anteriores" },
             { valor: "canceladas", etiqueta: "Canceladas" },
           ]}
         />
-        <div role="tabpanel" aria-label={{ proximas: "Próximas", anteriores: "Anteriores", canceladas: "Canceladas" }[vista]}>
-          {consulta.isPending ? (
-            <EsqueletoTabla etiqueta="Cargando visitas" columnas={5} />
-          ) : consulta.isError ? (
-            <Aviso tono="error">
-              <p>No se pudieron cargar las visitas.</p>
-              <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
+      </BarraLista>
+      <div role="tabpanel" aria-label={{ proximas: "Próximas", anteriores: "Anteriores", canceladas: "Canceladas" }[vista]}>
+        {consulta.isPending ? (
+          <EsqueletoLista etiqueta="Cargando visitas" />
+        ) : consulta.isError ? (
+          <Aviso tono="error">
+            <b>No se pudieron cargar las visitas.</b>
+            <span className="sec">Puede ser la conexión o el servidor. Lo que ya estaba guardado no se perdió.</span>
+            <div>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
                 Reintentar
               </Boton>
-            </Aviso>
-          ) : consulta.data.visitas.length === 0 ? (
-            <EstadoVacio icono={CalendarDays} titulo={VACIO[vista].titulo}>
-              {VACIO[vista].texto}
-            </EstadoVacio>
-          ) : (
-            <Tabla
-              etiqueta="Visitas"
-              columnas={[
-                { titulo: "Fecha" },
-                { titulo: "Cliente y sitio" },
-                { titulo: "Técnicos" },
-                { titulo: "Motivo" },
-                { titulo: vista === "canceladas" ? "Cancelación" : "Levantamientos" },
-                { titulo: "Acciones", oculto: true, derecha: true },
-              ]}
-            >
-              {consulta.data.visitas.map((v) => (
-                <FilaVisita key={v.id} visita={v} hoy={hoy} resaltada={recientes.includes(v.id)} editar={(tipo) => setEdicion({ tipo, v })} />
-              ))}
-            </Tabla>
-          )}
-        </div>
+            </div>
+          </Aviso>
+        ) : todas.length === 0 ? (
+          <EstadoVacio icono={CalendarDays} titulo={VACIO[vista].titulo}>
+            {VACIO[vista].texto}
+          </EstadoVacio>
+        ) : filtradas.length === 0 ? (
+          <SinResultados texto={busqueda.trim()} onQuitar={() => setBusqueda("")} />
+        ) : (
+          <Tabla
+            etiqueta="Visitas"
+            agrupada
+            columnas={[
+              { titulo: "Cliente y sitio" },
+              { titulo: "Técnicos" },
+              { titulo: "Motivo" },
+              { titulo: vista === "canceladas" ? "Cancelación" : "Levantamientos" },
+              { titulo: "Acciones", oculto: true, derecha: true },
+            ]}
+          >
+            {dias.map((d) => (
+              <CuerpoTabla key={d.fecha}>
+                <tr>
+                  <td colSpan={5} className={`dia ${d.fecha === hoy ? "hoy" : ""}`}>
+                    {vista === "canceladas" ? "Canceladas" : tituloDia(d.fecha, hoy)}
+                  </td>
+                </tr>
+                {d.visitas.map((v) => (
+                  <FilaVisita key={v.id} visita={v} indice={k++} busqueda={busqueda} resaltada={recientes.includes(v.id)} editar={(tipo) => setEdicion({ tipo, v })} />
+                ))}
+              </CuerpoTabla>
+            ))}
+          </Tabla>
+        )}
       </div>
 
       {programando && (
@@ -177,35 +236,50 @@ export function Visitas() {
   );
 }
 
-function FilaVisita({ visita: v, hoy, resaltada, editar }: { visita: Visita; hoy: string; resaltada: boolean; editar: (tipo: Edicion["tipo"]) => void }) {
-  const esHoy = v.programadaPara === hoy;
+/** El avance de los levantamientos: una barra con el color de cada estado y el texto. */
+function Avance({ v }: { v: Visita }) {
+  const { enviados, enRevision, revisados } = v.levantamientos;
+  if (enviados + enRevision + revisados === 0) return <span className="sec">Sin levantamientos recibidos</span>;
   return (
-    <FilaTabla resaltada={resaltada}>
+    <div className="col" style={{ gap: 6 }}>
+      <span className="avance" aria-hidden>
+        {enviados > 0 && <i className="a1" style={{ flex: enviados }} />}
+        {enRevision > 0 && <i className="a2" style={{ flex: enRevision }} />}
+        {revisados > 0 && <i className="a3" style={{ flex: revisados }} />}
+      </span>
+      <span style={{ fontSize: 13 }}>{avance(v)}</span>
+    </div>
+  );
+}
+
+function FilaVisita({ visita: v, indice, busqueda, resaltada, editar }: { visita: Visita; indice: number; busqueda: string; resaltada: boolean; editar: (tipo: Edicion["tipo"]) => void }) {
+  return (
+    <FilaTabla resaltada={resaltada} indice={indice}>
       <CeldaTabla>
-        {/* Hoy primero y a la vista: es el punto focal de la pantalla (DESIGN.md). */}
-        <span className={`whitespace-nowrap ${esHoy ? "font-extrabold text-superficie" : ""}`}>{esHoy ? "Hoy" : dia(v.programadaPara)}</span>
-      </CeldaTabla>
-      <CeldaTabla>
-        <span className="block font-bold">{v.cliente.nombre}</span>
-        <span className="block text-ayuda text-texto-secundario">
-          {v.sitio.nombre} · {v.sitio.direccion}
+        <span className="fuerte">
+          <Marcado texto={v.cliente.nombre} busqueda={busqueda} />
+        </span>
+        <span className="sub">
+          <Marcado texto={`${v.sitio.nombre} · ${v.sitio.direccion}`} busqueda={busqueda} />
         </span>
       </CeldaTabla>
-      <CeldaTabla>{v.tecnicos.map((t) => t.nombre).join(", ")}</CeldaTabla>
-      <CeldaTabla>{v.motivo}</CeldaTabla>
+      <CeldaTabla>
+        <Marcado texto={v.tecnicos.map((t) => t.nombre).join(", ")} busqueda={busqueda} />
+      </CeldaTabla>
+      <CeldaTabla clase="sec">{v.motivo}</CeldaTabla>
       <CeldaTabla>
         {v.cancelada ? (
-          <span className="text-ayuda">
+          <span style={{ fontSize: 13 }}>
             {`${aFechaHora(v.cancelada.en)} por ${v.cancelada.por.nombre}: `}
-            <span className="text-texto-secundario">{v.cancelada.motivo}</span>
+            <span className="sec">{v.cancelada.motivo}</span>
           </span>
         ) : (
-          <span className={v.levantamientos.enviados > 0 ? "font-bold" : "text-texto-secundario"}>{avance(v)}</span>
+          <Avance v={v} />
         )}
       </CeldaTabla>
       <CeldaTabla derecha>
         {!v.cancelada && (
-          <div className="flex items-center justify-end gap-1">
+          <div className="fila-flex" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
             {v.levantamientos.revisados > 0 && <AbrirInforme visitaId={v.id} cliente={v.cliente.nombre} />}
             <MenuAcciones
               etiqueta={`Más acciones para la visita de ${v.cliente.nombre}`}
@@ -245,7 +319,7 @@ function AbrirInforme({ visitaId, cliente: nombre }: { visitaId: string; cliente
 function ElegirTecnicos({ tecnicos, elegidos, onCambio, error }: { tecnicos: Tecnico[]; elegidos: string[]; onCambio: (ids: string[]) => void; error?: string | undefined }) {
   if (tecnicos.length === 0) return <Aviso tono="alerta">No hay técnicos activos. Quien administra los crea en Administración.</Aviso>;
   return (
-    <fieldset className="flex flex-col gap-1">
+    <fieldset className="casillas-filas flex flex-col gap-1">
       <legend className="mb-1.5 text-cuerpo font-bold">Técnicos</legend>
       <div className="flex flex-col">
         {tecnicos.map((t) => (
@@ -341,7 +415,9 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
           opciones={sitios.map((s) => ({ valor: s.id, texto: `${s.nombre} · ${s.direccion}` }))}
         />
         <CampoTexto etiqueta="Fecha" tipo="date" nombre="fecha" valorInicial={hoy} onCambio={setFecha} error={errores.fecha} />
-        <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+        <div className="opciones-pastilla">
+          <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+        </div>
         <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} error={errores.tecnicos} />
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
@@ -470,7 +546,9 @@ function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => vo
         <div className="max-w-xs">
           <CampoTexto etiqueta="Fecha nueva" tipo="date" valorInicial={v.programadaPara} onCambio={setFecha} error={errorFecha} />
         </div>
-        <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+        <div className="opciones-pastilla">
+          <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+        </div>
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>

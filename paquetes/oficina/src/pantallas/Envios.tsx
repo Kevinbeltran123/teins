@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
-import { Aviso, Boton, Casilla, Confirmacion, Insignia, Mail, MessageCircle, RefreshCw, Send, useNotificar } from "@teins/ui";
-import { aFechaHora } from "../formato";
+import { Aviso, Boton, Confirmacion, Insignia, Mail, MessageCircle, RefreshCw, Send, useNotificar } from "@teins/ui";
+import { aFechaCorta } from "../formato";
 
 type Contacto = Respuesta<"obtenerCliente">["contactos"][number];
 type Envio = Respuesta<"obtenerInforme">["versiones"][number]["envios"][number];
@@ -44,40 +44,53 @@ export function Destinatarios({
 }) {
   const conCanal = contactos.filter((x) => x.recibeCorreo || x.recibeWhatsapp);
   const enlace = (
-    <Link to="/clientes/$id" params={{ id: c.id }} className="font-bold text-superficie underline underline-offset-2 focus-visible:outline-3 focus-visible:outline-superficie">
+    <Link to="/clientes/$id" params={{ id: c.id }} className="migas">
       {`Agregar contactos a ${c.nombre}`}
     </Link>
   );
   if (conCanal.length === 0) {
     return (
       <Aviso tono="alerta">
-        <p>{`Nadie de ${c.nombre} recibe el informe: solo quedará en el portal y habrá que avisarles.`}</p>
-        <p className="mt-2">{enlace}</p>
+        <span>{`Nadie de ${c.nombre} recibe el informe: solo quedará en el portal y habrá que avisarles.`}</span>
+        {enlace}
       </Aviso>
     );
   }
   return (
-    <fieldset className="flex flex-col">
-      <legend className="pb-1 text-cuerpo font-bold">{titulo}</legend>
-      <ul className="flex flex-col divide-y divide-division">
-        {contactos.map((x) => {
-          const canales = canalesDe(x);
-          return (
-            <li key={x.id} className="flex flex-wrap items-center justify-between gap-2">
-              <Casilla
-                marcada={elegidos.includes(x.id)}
-                deshabilitada={canales.length === 0}
-                onCambio={(m) => alCambiar(m ? [...elegidos, x.id] : elegidos.filter((id) => id !== x.id))}
-              >
-                <strong>{x.nombre}</strong>
-              </Casilla>
-              <span className="flex gap-1.5">
-                {canales.length === 0 ? <span className="text-ayuda text-texto-secundario">Sin canal: edítelo en Clientes</span> : canales.map((t) => <Insignia key={t} tono="neutro">{t}</Insignia>)}
+    <fieldset className="col" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
+      <legend className="etq" style={{ marginBottom: 8 }}>
+        {titulo}
+      </legend>
+      {contactos.map((x) => {
+        const canales = canalesDe(x);
+        return (
+          <label key={x.id} className={`casilla ${canales.length === 0 ? "apagada" : ""}`}>
+            <input
+              type="checkbox"
+              checked={elegidos.includes(x.id)}
+              disabled={canales.length === 0}
+              onChange={(e) => alCambiar(e.target.checked ? [...elegidos, x.id] : elegidos.filter((id) => id !== x.id))}
+            />
+            <span>
+              <b>{x.nombre}</b>{" "}
+              <span className="fila-flex" style={{ display: "inline-flex", gap: 4 }}>
+                {canales.length === 0 ? (
+                  <span className="sec" style={{ fontSize: 13 }}>
+                    Sin canal: edítelo en Clientes
+                  </span>
+                ) : (
+                  canales.map((t) => (
+                    <span key={t} className="ins canal">
+                      {t}
+                    </span>
+                  ))
+                )}
               </span>
-            </li>
-          );
-        })}
-      </ul>
+            </span>
+          </label>
+        );
+      })}
+      {enlace}
     </fieldset>
   );
 }
@@ -109,13 +122,15 @@ interface PropsEnvios {
   contactos: readonly Contacto[] | undefined;
   enviar: (destinos: Destino[]) => Promise<unknown>;
   recargar: () => void;
+  /** Acciones de la versión que van junto a "Enviar a otro contacto" (retirar del portal). */
+  acciones?: ReactNode;
 }
 
 /**
- * Envíos de una versión (ADR-0028; la cotización, ADR-0029): el estado de cada copia y, junto a lo que no
- * llegó, cómo resolverlo.
+ * Envíos de una versión (ADR-0028; la cotización, ADR-0029), dentro de su versión en el carril (prototipos/oficina):
+ * el estado de cada copia y, junto a lo que no llegó, cómo resolverlo.
  */
-export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar }: PropsEnvios) {
+export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, acciones }: PropsEnvios) {
   const notificar = useNotificar();
   const [eligiendo, setEligiendo] = useState(false);
   const [reenviando, setReenviando] = useState<string | null>(null);
@@ -139,67 +154,63 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar }
   }
 
   return (
-    <section aria-labelledby="titulo-envios" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-5">
-      <div className="flex flex-col gap-1">
-        <h2 id="titulo-envios" className="text-subtitulo font-extrabold">
-          {`Envíos de la versión ${version.numero}`}
-        </h2>
-        {esperando && (
-          <p className="text-ayuda text-texto-secundario" aria-live="polite">
-            {version.pdf === "fallido" ? "No se generó el PDF: los envíos esperan. Avísele a soporte." : "Salen cuando el PDF esté listo."}
-          </p>
-        )}
-      </div>
+    <section aria-label={`Envíos de la versión ${version.numero}`} className="col" style={{ gap: 6 }}>
+      {esperando && (
+        <span className="meta" aria-live="polite">
+          {version.pdf === "fallido" ? "No se generó el PDF: los envíos esperan. Avísele a soporte." : "Salen cuando el PDF esté listo."}
+        </span>
+      )}
       {sinLlegar.length > 0 && (
         <Aviso tono="error">
-          <p>
-            <strong>{sinLlegar.length === 1 ? "Un envío no llegó." : `${sinLlegar.length} envíos no llegaron.`}</strong>{" "}
-            {"Revise el contacto en "}
-            <Link to="/clientes/$id" params={{ id: c.id }} className="font-bold underline underline-offset-2">
+          <span>
+            <b>{sinLlegar.length === 1 ? "Un envío no llegó." : `${sinLlegar.length} envíos no llegaron.`}</b> Revise el contacto en{" "}
+            <Link to="/clientes/$id" params={{ id: c.id }} className="ir-dato">
               Clientes
-            </Link>
-            {" y vuelva a enviar."}
-          </p>
+            </Link>{" "}
+            y vuelva a enviar.
+          </span>
         </Aviso>
       )}
       {envios.length === 0 ? (
-        <p className="text-ayuda text-texto-secundario">No se envió a nadie: solo está en el portal.</p>
+        <span className="meta">No se envió a nadie: solo está en el portal.</span>
       ) : (
-        <ul className="flex flex-col divide-y divide-division">
+        <ul className="envios-v" style={{ listStyle: "none", margin: "6px 0 0" }}>
           {envios.map((e) => {
             const Icono = e.canal === "correo" ? Mail : MessageCircle;
             return (
-              <li key={e.id} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex min-w-0 items-center gap-2 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-texto-secundario">
-                    <Icono aria-hidden="true" />
-                    <strong className="truncate">{e.contacto.nombre}</strong>
-                    <span className="text-ayuda text-texto-secundario">{e.canal === "correo" ? "Correo" : "WhatsApp"}</span>
-                  </span>
-                  {ESTADO_ENVIO[e.estado]}
-                </div>
+              <li key={e.id} className="env">
+                <Icono aria-hidden size={15} />
+                <span>
+                  {e.contacto.nombre} <span className="sr-only">por {e.canal === "correo" ? "Correo" : "WhatsApp"}</span>
+                </span>
+                {ESTADO_ENVIO[e.estado]}
                 {e.estado === "fallido" ? (
-                  <>
-                    <p className="pl-6 text-ayuda text-texto-secundario">{e.error}</p>
-                    <Boton variante="fantasma" tamano="pequeno" icono={RefreshCw} className="ml-4 self-start" cargando={reenviando === e.id} onClick={() => void volverAEnviar(e)}>
+                  <span className="det mal">
+                    {e.error}
+                    <Boton tamano="pequeno" icono={RefreshCw} cargando={reenviando === e.id} onClick={() => void volverAEnviar(e)}>
                       Volver a enviar
                     </Boton>
-                  </>
+                  </span>
                 ) : e.enviadoEn ? (
-                  <p className="pl-6 text-ayuda text-texto-secundario">
-                    {aFechaHora(e.enviadoEn)}
+                  <span className="det">
+                    {e.canal === "correo" ? "Correo" : "WhatsApp"} · {aFechaCorta(e.enviadoEn)}
                     {e.estado === "enviado" && (e.canal === "whatsapp" ? " · Meta no ha confirmado la entrega" : " · El servidor del cliente no ha confirmado la entrega")}
-                  </p>
-                ) : null}
+                  </span>
+                ) : (
+                  <span className="det">{e.canal === "correo" ? "Correo" : "WhatsApp"}</span>
+                )}
               </li>
             );
           })}
         </ul>
       )}
       {error && <Aviso tono="error">{error}</Aviso>}
-      <Boton variante="fantasma" tamano="pequeno" icono={Send} className="self-start" disabled={!contactos} onClick={() => setEligiendo(true)}>
-        {envios.length === 0 ? "Enviar a un contacto" : "Enviar a otro contacto"}
-      </Boton>
+      <div className="fila-flex" style={{ gap: 4 }}>
+        <Boton variante="fantasma" tamano="pequeno" icono={Send} disabled={!contactos} onClick={() => setEligiendo(true)}>
+          {envios.length === 0 ? "Enviar a un contacto" : "Enviar a otro contacto"}
+        </Boton>
+        {acciones}
+      </div>
       {eligiendo && contactos && <EnviarAContactos cliente={c} numero={version.numero} contactos={contactos} enviar={enviar} alCerrar={() => setEligiendo(false)} alEnviar={recargar} />}
     </section>
   );

@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed, esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Boton, CampoTexto, KeyRound } from "@teins/ui";
+import { CircleAlert, Eye, EyeOff, KeyRound, LoaderCircle, PlanoEnLuz, TriangleAlert } from "@teins/ui";
 import { cliente, consultas } from "../api";
 
 /** En el computador también sirve la llave del celular (con un código QR): basta con que el navegador sepa de llaves. */
@@ -24,6 +24,78 @@ function mensajeDeCodigo(error: unknown): { mensaje: string; volver: boolean } {
 }
 
 type Estado = { tipo: "listo" } | { tipo: "enviando" } | { tipo: "error"; mensaje: string };
+
+/** Campo con la etiqueta dentro, que sube al escribir (igual que en campo). */
+function Flotante({ etiqueta, tipo = "text", autoComplete, nombre, valor, onCambio, error }: { etiqueta: string; tipo?: "text" | "password"; autoComplete: string; nombre: string; valor: string; onCambio: (v: string) => void; error?: boolean }) {
+  const id = useId();
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="flotante">
+      <input
+        id={id}
+        name={nombre}
+        type={tipo === "password" && !visible ? "password" : "text"}
+        autoComplete={autoComplete}
+        autoCapitalize="none"
+        spellCheck={false}
+        placeholder=" "
+        value={valor}
+        onChange={(e) => onCambio(e.target.value)}
+        aria-invalid={error || undefined}
+        className={error ? "error" : undefined}
+      />
+      <label htmlFor={id}>{etiqueta}</label>
+      {tipo === "password" && (
+        <button type="button" className="icono-btn limpio ojo" aria-label={visible ? "Ocultar lo escrito" : "Mostrar lo escrito"} onClick={() => setVisible((v) => !v)}>
+          {visible ? <EyeOff aria-hidden size={18} /> : <Eye aria-hidden size={18} />}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Seis casillas grandes, como en campo. Es un solo campo ("Código") encima de las casillas: se puede pegar el
+ * código entero, el celular lo sugiere (one-time-code) y el lector de pantalla oye un campo, no seis.
+ */
+function Digitos({ valor, onCambio, error }: { valor: string; onCambio: (v: string) => void; error: boolean }) {
+  const id = useId();
+  const [enfocado, setEnfocado] = useState(false);
+  return (
+    <div className={`digitos ${error ? "error" : ""}`} style={{ position: "relative" }}>
+      <label htmlFor={id} className="sr-only">
+        Código
+      </label>
+      {Array.from({ length: 6 }, (_, i) => (
+        <span key={i} aria-hidden className={`digito ${enfocado && i === Math.min(valor.length, 5) ? "actual" : ""}`}>
+          {valor[i] ?? ""}
+        </span>
+      ))}
+      <input
+        id={id}
+        name="codigo"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={10}
+        value={valor}
+        onFocus={() => setEnfocado(true)}
+        onBlur={() => setEnfocado(false)}
+        onChange={(e) => onCambio(e.target.value.replace(/\s/g, ""))}
+        className="digitos-campo"
+      />
+    </div>
+  );
+}
+
+function AvisoEntrada({ tono, children }: { tono: "peligro" | "alerta"; children: string }) {
+  const Icono = tono === "peligro" ? CircleAlert : TriangleAlert;
+  return (
+    <div className={`aviso ${tono}`} role={tono === "peligro" ? "alert" : "status"}>
+      <Icono aria-hidden size={20} />
+      <span>{children}</span>
+    </div>
+  );
+}
 
 export function IniciarSesion({ aviso }: { aviso?: string }) {
   const consultasCliente = useQueryClient();
@@ -90,44 +162,61 @@ export function IniciarSesion({ aviso }: { aviso?: string }) {
     setEstado({ tipo: "listo" });
   }
 
+  const enviando = estado.tipo === "enviando";
+  const error = estado.tipo === "error" ? estado.mensaje : null;
+
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-fondo px-4 py-12">
-      <p className="flex flex-col items-center">
-        <span className="text-titulo leading-none font-extrabold tracking-wide text-superficie">TEINS</span>
-        <span className="text-ayuda text-texto-secundario">Oficina</span>
-      </p>
-      <main className="flex w-full max-w-md flex-col gap-4">
-        {aviso && <Aviso tono="alerta">{aviso}</Aviso>}
-        {pideCodigo ? (
-          <form key="codigo" onSubmit={verificar} noValidate className="flex flex-col gap-5 rounded-panel border border-division bg-panel p-6">
-            <h1 className="text-subtitulo font-extrabold">Código de verificación</h1>
-            <p className="text-cuerpo text-texto-secundario">Abra su app autenticadora y escriba los 6 dígitos de TEINS. Si no tiene el celular, use uno de sus códigos de respaldo.</p>
-            <CampoTexto etiqueta="Código" nombre="codigo" autoComplete="one-time-code" modoEntrada="numeric" valorInicial="" onCambio={setCodigo} />
-            {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
-            <Boton type="submit" variante="principal" cargando={estado.tipo === "enviando"}>
-              Verificar código
-            </Boton>
-            <Boton type="button" variante="fantasma" onClick={volverAEmpezar}>
-              Volver a la contraseña
-            </Boton>
-          </form>
-        ) : (
-          <form key="contrasena" onSubmit={enviar} noValidate className="flex flex-col gap-5 rounded-panel border border-division bg-panel p-6">
-            <h1 className="text-subtitulo font-extrabold">Iniciar sesión</h1>
-            <CampoTexto etiqueta="Usuario" nombre="usuario" autoComplete="username" valorInicial={usuario} onCambio={setUsuario} />
-            <CampoTexto etiqueta="Contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setContrasena} />
-            {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
-            <Boton type="submit" variante="principal" cargando={estado.tipo === "enviando"}>
-              Iniciar sesión
-            </Boton>
-            {conLlaves && (
-              <Boton type="button" icono={KeyRound} onClick={() => void entrarConLlave()} disabled={estado.tipo === "enviando"}>
-                Entrar con llave de acceso
-              </Boton>
-            )}
-          </form>
-        )}
-      </main>
+    <div className="app sin-marco">
+      <div className="entrada dividida">
+        <div className="lado-form">
+          <span />
+          <div className="centro">
+            <main className="entrada-caja">
+              {pideCodigo ? (
+                <form key="codigo" className="tarjeta" onSubmit={verificar} noValidate>
+                  <h1>Código de verificación</h1>
+                  <p className="sub">Abra su app autenticadora y escriba los 6 dígitos de TEINS. Si no tiene el celular, use uno de sus códigos de respaldo.</p>
+                  {error && <AvisoEntrada tono="peligro">{error}</AvisoEntrada>}
+                  <Digitos valor={codigo} onCambio={setCodigo} error={Boolean(error)} />
+                  <button className="btn principal grande ancho" type="submit" aria-busy={enviando || undefined}>
+                    {enviando && <LoaderCircle aria-hidden size={18} className="motion-safe:animate-spin" />}
+                    Verificar código
+                  </button>
+                  <button className="btn fantasma ancho" type="button" onClick={volverAEmpezar}>
+                    Volver a la contraseña
+                  </button>
+                </form>
+              ) : (
+                <form key="contrasena" className="tarjeta" onSubmit={enviar} noValidate>
+                  <div>
+                    <h1>Hola de nuevo</h1>
+                  </div>
+                  <p className="sub">Entre con su usuario de oficina.</p>
+                  {aviso && <AvisoEntrada tono="alerta">{aviso}</AvisoEntrada>}
+                  {error && <AvisoEntrada tono="peligro">{error}</AvisoEntrada>}
+                  <Flotante etiqueta="Usuario" nombre="usuario" autoComplete="username" valor={usuario} onCambio={setUsuario} />
+                  <Flotante etiqueta="Contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valor={contrasena} onCambio={setContrasena} error={error === "Escriba su usuario y su contraseña." && contrasena === ""} />
+                  <button className="btn principal grande ancho" type="submit" aria-busy={enviando || undefined}>
+                    {enviando && <LoaderCircle aria-hidden size={18} className="motion-safe:animate-spin" />}
+                    Iniciar sesión
+                  </button>
+                  {conLlaves && (
+                    <>
+                      <div className="separador">o</div>
+                      <button className="btn grande ancho" type="button" onClick={() => void entrarConLlave()} disabled={enviando}>
+                        <KeyRound aria-hidden size={20} />
+                        Entrar con llave de acceso
+                      </button>
+                    </>
+                  )}
+                </form>
+              )}
+            </main>
+          </div>
+          <span />
+        </div>
+        <PlanoEnLuz />
+      </div>
     </div>
   );
 }
