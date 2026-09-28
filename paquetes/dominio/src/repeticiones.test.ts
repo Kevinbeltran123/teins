@@ -116,3 +116,27 @@ describe("secciones repetibles (iteración 9)", () => {
     expect(validarDefinicionFormato(malos)).toEqual(expect.arrayContaining(["La sección tableros necesita la etiqueta de sus repeticiones", "Límites imposibles en la sección repetible tableros"]));
   });
 });
+
+describe("rutas mal formadas (revisión de código)", () => {
+  it("una clave con más de un separador no es una repetición ni se puede corregir", () => {
+    const l = crearLevantamiento(formato, "l9", ahora, undefined, nuevoId);
+    const id = l.repeticiones!.tableros![0]!.id;
+    expect(leerClave(`tableros~${id}~x`).repeticion).toBeUndefined();
+    const r = corregir(formato, {}, [{ seccion: `tableros~${id}~x`, campo: "ubicacion", valor: "Sótano" }], l.repeticiones);
+    expect(r).toEqual({ ok: false, errores: [{ seccion: `tableros~${id}~x`, campo: "ubicacion", codigo: "campo_desconocido" }] });
+  });
+
+  it("renombrar a vacío no cambia el nombre, y no se crean listas en secciones ajenas", () => {
+    const l = crearLevantamiento(formato, "l10", ahora, undefined, nuevoId);
+    const id = l.repeticiones!.tableros![0]!.id;
+    expect(renombrarRepeticion(l, "tableros", id, "   ", ahora).repeticiones?.tableros?.[0]?.nombre).toBe("Tablero 1");
+    expect(renombrarRepeticion(l, "tableros", id, "  Principal ", ahora).repeticiones?.tableros?.[0]?.nombre).toBe("Principal");
+    expect(renombrarRepeticion(l, "general", id, "X", ahora).repeticiones).not.toHaveProperty("general");
+    expect(quitarRepeticion(l, "general", id, ahora).repeticiones).not.toHaveProperty("general");
+  });
+
+  it("una lista de repeticiones mal formada da un solo error, no errores en cascada", () => {
+    const errores = validarRespuestas(formato, { "tableros~malo": { ubicacion: "x" } }, { tableros: [{ id: "MALO", nombre: "T" }] });
+    expect(errores).toEqual([{ seccion: "tableros", codigo: "tipo_invalido" }]);
+  });
+});

@@ -22,10 +22,11 @@ export type ResultadoToma =
  * (`reasignar`), y el cambio de responsable queda registrado.
  */
 export function tomarRevision(revision: Revision, actorId: string, reasignar: boolean): ResultadoToma {
-  if (revision.estado === "enviado") return { ok: true, revision: { estado: "en_revision", revisorId: actorId }, anterior: null };
+  // Sin responsable (enviado, o en revisión tras quitar a quien la tenía): la toma quien llegue.
+  if (revision.estado === "enviado" || (revision.estado === "en_revision" && revision.revisorId === null)) return { ok: true, revision: { estado: "en_revision", revisorId: actorId }, anterior: null };
   if (revision.estado !== "en_revision") return { ok: false, motivo: "estado_invalido" };
   if (revision.revisorId === actorId) return { ok: false, motivo: "ya_es_suya" };
-  if (!reasignar) return { ok: false, motivo: "tomado_por_otro", revisorId: revision.revisorId ?? "" };
+  if (!reasignar) return { ok: false, motivo: "tomado_por_otro", revisorId: revision.revisorId! };
   return { ok: true, revision: { estado: "en_revision", revisorId: actorId }, anterior: revision.revisorId };
 }
 
@@ -54,7 +55,15 @@ export interface CambioDeCampo {
 
 export type ResultadoCorreccion = { ok: true; respuestas: Respuestas; cambios: CambioDeCampo[] } | { ok: false; errores: ErrorValidacion[] };
 
-const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** Igualdad por contenido, sin importar el orden de las llaves: PostgreSQL (jsonb) las devuelve reordenadas. */
+function igual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null || Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) return a.length === (b as unknown[]).length && a.every((x, i) => igual(x, (b as unknown[])[i]));
+  const llavesA = Object.keys(a);
+  const llavesB = Object.keys(b);
+  return llavesA.length === llavesB.length && llavesA.every((k) => Object.hasOwn(b, k) && igual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
 
 /**
  * Aplica correcciones de oficina con las mismas reglas del envío (reglas 3 y 5). Devuelve solo los

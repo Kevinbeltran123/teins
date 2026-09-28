@@ -7,6 +7,7 @@
  * sigla opcional en el centro ("UPS").
  */
 import { LIMITES_SIMBOLO } from "./limites";
+import { UUID } from "./patrones";
 
 export interface DefinicionSimbolo {
   id: string;
@@ -26,7 +27,6 @@ export const VERSION_APP_SIMBOLOS = 10;
 /** Ancho de las líneas de un símbolo en la hoja, sea cual sea su tamaño (el mismo de las formas). */
 export const GROSOR_SIMBOLO = 5;
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const TOKEN = /\s*(?:([MmLlHhVvCcSsQqTtAaZz])|([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)|(,))/y;
 
 /**

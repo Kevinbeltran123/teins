@@ -138,8 +138,11 @@ export function agregarFoto(levantamiento: Levantamiento, seccion: string, campo
 function editarRepeticiones(levantamiento: Levantamiento, seccion: string, ahora: Date, cambio: (lista: { id: string; nombre: string }[]) => void): Levantamiento {
   // Regla 4: después del envío el técnico no edita.
   if (levantamiento.estado !== "borrador") throw new LevantamientoNoEditable(levantamiento.id);
-  const lista = [...(levantamiento.repeticiones?.[seccion] ?? [])];
+  const actual = levantamiento.repeticiones?.[seccion];
+  const lista = [...(actual ?? [])];
   cambio(lista);
+  // Renombrar o quitar en una sección sin repeticiones no cambia nada: no se crea una lista que el envío rechazaría.
+  if (actual === undefined && lista.length === 0) return levantamiento;
   return { ...levantamiento, repeticiones: { ...levantamiento.repeticiones, [seccion]: lista }, actualizadoEn: ahora.toISOString() };
 }
 
@@ -158,7 +161,9 @@ export function agregarRepeticion(levantamiento: Levantamiento, formato: Version
 export function renombrarRepeticion(levantamiento: Levantamiento, seccion: string, id: string, nombre: string, ahora: Date): Levantamiento {
   return editarRepeticiones(levantamiento, seccion, ahora, (lista) => {
     const i = lista.findIndex((r) => r.id === id);
-    if (i >= 0) lista[i] = { id, nombre: nombre.slice(0, LIMITES.nombreDeRepeticion) };
+    // Un nombre vacío deja el anterior: el envío exige nombre.
+    const limpio = nombre.trim().slice(0, LIMITES.nombreDeRepeticion);
+    if (i >= 0 && limpio !== "") lista[i] = { id, nombre: limpio };
   });
 }
 

@@ -4,6 +4,7 @@
   decimales exactos y nada pasa por coma flotante (regla de las cantidades).
 */
 import { resumirCantidades } from "./cantidades";
+import { DECIMAL_CANONICO } from "./patrones";
 
 /** Tarifa general de IVA en Colombia. */
 export const TARIFA_IVA = "19";
@@ -49,7 +50,6 @@ export interface Totales {
   sinPrecio: number;
 }
 
-const DECIMAL = /^(0|[1-9]\d*)(\.\d+)?$/;
 /** Porcentaje con hasta dos decimales. */
 export const PORCENTAJE = /^(0|[1-9]\d{0,2})(\.\d{1,2})?$/;
 
@@ -61,7 +61,7 @@ function dividirRedondeando(a: bigint, b: bigint): bigint {
 
 /** "12.5" → 125n y escala 10n. */
 function comoFraccion(decimal: string): { numerador: bigint; escala: bigint } {
-  if (!DECIMAL.test(decimal)) throw new Error(`Decimal inválido: ${decimal}`);
+  if (!DECIMAL_CANONICO.test(decimal)) throw new Error(`Decimal inválido: ${decimal}`);
   const [entero = "0", fraccion = ""] = decimal.split(".");
   return { numerador: BigInt(entero + fraccion), escala: 10n ** BigInt(fraccion.length) };
 }
@@ -83,19 +83,22 @@ export function porcentaje(base: number, pct: string): number {
   return aNumero(dividirRedondeando(BigInt(base) * numerador, escala * 100n));
 }
 
+/** Suma exacta de montos en pesos: falla antes que perder precisión. */
+const sumar = (...montos: number[]) => aNumero(montos.reduce((s, m) => s + BigInt(m), 0n));
+
 export function calcularTotales(lineas: readonly { cantidad: string; precio: number | null }[], impuestos: Impuestos): Totales {
   const totales = lineas.map((l) => (l.precio === null ? null : totalDeLinea(l.cantidad, l.precio)));
-  const subtotal = totales.reduce<number>((s, t) => s + (t ?? 0), 0);
+  const subtotal = sumar(...totales.map((t) => t ?? 0));
   const sinPrecio = totales.filter((t) => t === null).length;
   if (impuestos.tipo === "iva") {
     const iva = porcentaje(subtotal, TARIFA_IVA);
-    return { lineas: totales, subtotal, iva, aiu: null, total: subtotal + iva, sinPrecio };
+    return { lineas: totales, subtotal, iva, aiu: null, total: sumar(subtotal, iva), sinPrecio };
   }
   const administracion = porcentaje(subtotal, impuestos.administracion);
   const imprevistos = porcentaje(subtotal, impuestos.imprevistos);
   const utilidad = porcentaje(subtotal, impuestos.utilidad);
   const ivaUtilidad = porcentaje(utilidad, TARIFA_IVA);
-  return { lineas: totales, subtotal, iva: 0, aiu: { administracion, imprevistos, utilidad, ivaUtilidad }, total: subtotal + administracion + imprevistos + utilidad + ivaUtilidad, sinPrecio };
+  return { lineas: totales, subtotal, iva: 0, aiu: { administracion, imprevistos, utilidad, ivaUtilidad }, total: sumar(subtotal, administracion, imprevistos, utilidad, ivaUtilidad), sinPrecio };
 }
 
 export type ErrorCotizacion = { codigo: "sin_lineas" } | { codigo: "sin_precio"; lineas: string[] } | { codigo: "porcentaje_invalido"; campo: "administracion" | "imprevistos" | "utilidad" };

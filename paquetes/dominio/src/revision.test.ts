@@ -31,6 +31,10 @@ describe("toma de revisión (I-1)", () => {
     expect(tomarRevision({ estado: "revisado", revisorId: "ana" }, "luis", true)).toEqual({ ok: false, motivo: "estado_invalido" });
   });
 
+  it("una revisión en revisión sin responsable se puede tomar sin reasignar", () => {
+    expect(tomarRevision({ estado: "en_revision", revisorId: null }, "ana", false)).toEqual({ ok: true, revision: { estado: "en_revision", revisorId: "ana" }, anterior: null });
+  });
+
   it("solo quien la tomó edita, y solo en revisión", () => {
     expect(puedeEditar({ estado: "en_revision", revisorId: "ana" }, "ana")).toBeNull();
     expect(puedeEditar({ estado: "en_revision", revisorId: "ana" }, "luis")).toBe("no_tomado");
@@ -74,6 +78,21 @@ describe("corregir (QA-8)", () => {
   it("borrar un dato opcional es un cambio con valor nuevo vacío", () => {
     const r = corregir(formato, respuestas, [{ seccion: "s", campo: "nota", valor: undefined }]);
     expect(r).toMatchObject({ ok: true, respuestas: { s: { potencia: { valor: "10", unidad: "kVA" } } }, cambios: [{ campo: "nota", anterior: "antes", nuevo: undefined }] });
+  });
+});
+
+describe("corregir con valores guardados en jsonb", () => {
+  // PostgreSQL devuelve las llaves de un jsonb en otro orden: el mismo valor no es un cambio.
+  const conTabla: VersionFormato = {
+    formato: "prueba",
+    version: 1,
+    secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "potencia", etiqueta: "Potencia", tipo: "medida", unidades: ["kVA"], obligatorio: true }] }],
+  };
+  it("reescribir un valor con las llaves en otro orden no deja registro", () => {
+    const guardadas = { s: { potencia: { unidad: "kVA", valor: "10" } } };
+    expect(corregir(conTabla, guardadas, [{ seccion: "s", campo: "potencia", valor: { valor: "10", unidad: "kVA" } }])).toMatchObject({ ok: true, cambios: [] });
+    const noObtenido = { s: { potencia: { motivo: "Sin acceso", noObtenido: true as const } } };
+    expect(corregir(conTabla, noObtenido, [{ seccion: "s", campo: "potencia", valor: { noObtenido: true, motivo: "Sin acceso" } }])).toMatchObject({ ok: true, cambios: [] });
   });
 });
 

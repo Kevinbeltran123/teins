@@ -4,6 +4,7 @@
  * como la medida (ADR-0006): nada de coma flotante en lo que después se cotiza.
  */
 import { LIMITES_CANTIDADES } from "./limites";
+import { DECIMAL_CANONICO, ID_CORTO, UUID } from "./patrones";
 
 export interface LineaCantidad {
   /** Id estable de la línea (8 caracteres): el vínculo al catálogo y las correcciones la siguen por él. */
@@ -28,9 +29,7 @@ export const VERSION_APP_CANTIDADES = 6;
 /** Primera versión de `campo` que recibe el catálogo en la bajada y elige ítems al anotar (ADR-0025). */
 export const VERSION_APP_CATALOGO = 8;
 
-export const ID_LINEA = /^[a-z0-9]{8}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const DECIMAL = /^(0|[1-9]\d*)(\.\d+)?$/;
+export const ID_LINEA = ID_CORTO;
 
 /** Una tabla de cantidades: un arreglo de líneas (objetos), a diferencia de las fotos (huellas). */
 export const esCantidades = (valor: unknown): valor is ValorCantidades => Array.isArray(valor) && valor.every((l) => typeof l === "object" && l !== null && !Array.isArray(l));
@@ -45,7 +44,7 @@ export function lineasValidas(lineas: readonly unknown[], unidades: readonly str
     if (typeof id !== "string" || !ID_LINEA.test(id) || ids.has(id)) return false;
     ids.add(id);
     if (typeof descripcion !== "string" || descripcion.trim() === "" || descripcion.length > LIMITES_CANTIDADES.descripcion) return false;
-    if (typeof cantidad !== "string" || !DECIMAL.test(cantidad) || /^0(\.0+)?$/.test(cantidad)) return false;
+    if (typeof cantidad !== "string" || !DECIMAL_CANONICO.test(cantidad) || /^0(\.0+)?$/.test(cantidad)) return false;
     if (typeof unidad !== "string" || !unidades.includes(unidad)) return false;
     if (observacion !== undefined && (typeof observacion !== "string" || observacion.length > LIMITES_CANTIDADES.observacion)) return false;
     if (item !== undefined && (typeof item !== "string" || !UUID.test(item))) return false;

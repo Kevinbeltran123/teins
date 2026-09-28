@@ -49,6 +49,13 @@ describe("cálculo en pesos enteros", () => {
   });
 });
 
+describe("montos grandes", () => {
+  it("un subtotal que no se puede representar exacto falla en vez de perder pesos", () => {
+    const lineas = Array.from({ length: 200 }, () => ({ cantidad: "50000", precio: 1_000_000_000 }));
+    expect(() => calcularTotales(lineas, { tipo: "iva" })).toThrow(/excede/);
+  });
+});
+
 describe("para publicar", () => {
   const base: BorradorCotizacion = {
     lineas: [{ id: "a", itemId: null, codigo: null, descripcion: "Cable", cantidad: "3", unidad: "m", precio: 100, precioCatalogo: null, origen: "oficina" }],

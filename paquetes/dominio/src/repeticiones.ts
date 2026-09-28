@@ -1,4 +1,5 @@
 import type { DefinicionSeccion, VersionFormato } from "./formato";
+import { ID_CORTO } from "./patrones";
 
 /**
  * Secciones repetibles (F2, ADR-0006). Cada repetición es una clave más del mapa de respuestas,
@@ -18,13 +19,15 @@ export const VERSION_APP_REPETIBLES = 4;
 
 /** `~` no es válido en una clave de sección: la clave de una repetición nunca choca con otra. */
 const SEPARADOR = "~";
-export const ID_REPETICION = /^[a-z0-9]{8}$/;
+export const ID_REPETICION = ID_CORTO;
 
 export const claveDeRepeticion = (seccion: string, id: string) => `${seccion}${SEPARADOR}${id}`;
 
 export function leerClave(clave: string): { seccion: string; repeticion?: string } {
-  const [seccion = "", repeticion] = clave.split(SEPARADOR, 2);
-  return repeticion === undefined ? { seccion } : { seccion, repeticion };
+  const partes = clave.split(SEPARADOR);
+  // Con más de un separador no es una ruta válida: se devuelve entera, y como lleva `~` no coincide con ninguna sección.
+  if (partes.length !== 2) return { seccion: clave };
+  return { seccion: partes[0]!, repeticion: partes[1]! };
 }
 
 /** "Tablero 3": el primer número que ninguna repetición de la sección usa todavía como nombre. */

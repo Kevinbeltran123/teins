@@ -91,4 +91,12 @@ describe("firma del cliente (iteración 16, ADR-0024)", () => {
     // Vacía: el lienzo completo, sin fallar.
     expect(firmaASvg(bocetoVacio())).toContain('viewBox="0 0 1000 750"');
   });
+
+  it("no falla con muchos puntos ni con trazos fuera del lienzo", () => {
+    const contorno = Array.from({ length: 200_000 }, (_, i): [number, number] => [300 + (i % 400), 400]);
+    const muchos: DocumentoBoceto = { ...bocetoVacio(), elementos: [{ tipo: "trazo", grosor: 6, puntos: [[300, 400, 0.5]], contorno }] };
+    expect(firmaASvg(muchos)).toContain('viewBox="288 388 423 24"');
+    const fuera: DocumentoBoceto = { ...bocetoVacio(), elementos: [{ tipo: "trazo", grosor: 6, puntos: [[1100, 400, 0.5]], contorno: [[1100, 380], [1200, 420]] }] };
+    expect(firmaASvg(fuera)).toContain('viewBox="0 0 1000 750"');
+  });
 });

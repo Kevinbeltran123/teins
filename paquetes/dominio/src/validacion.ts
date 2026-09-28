@@ -4,11 +4,9 @@ import { LIMITES_FIRMA } from "./firma";
 import { LIMITES } from "./limites";
 import { bloques, ID_REPETICION, leerClave, type Repeticiones } from "./repeticiones";
 import { lineasValidas } from "./cantidades";
+import { DECIMAL_CANONICO } from "./patrones";
 
-export { LIMITES };
-
-/** Forma canónica que produce `normalizarDecimal`: sin ceros a la izquierda, punto decimal. */
-export const DECIMAL_CANONICO = /^(0|[1-9]\d*)(\.\d+)?$/;
+export { DECIMAL_CANONICO, LIMITES };
 
 export const HUELLA_SHA256 = /^[0-9a-f]{64}$/;
 
@@ -54,6 +52,8 @@ export function validarRespuestas(formato: VersionFormato, respuestas: Respuesta
 
   // La lista de repeticiones: solo de secciones repetibles, con ids válidos y sin repetir, y nombres.
   const listas = new Map<string, readonly { id: string; nombre: string }[]>();
+  // Secciones cuya lista ya se rechazó: sus conteos y respuestas no se reportan otra vez (un error, no una cascada).
+  const rechazadas = new Set<string>();
   const deRepeticiones = typeof repeticiones === "object" && repeticiones !== null && !Array.isArray(repeticiones) ? repeticiones : {};
   for (const [clave, lista] of Object.entries(deRepeticiones)) {
     const seccion = porClave.get(clave);
@@ -64,6 +64,7 @@ export function validarRespuestas(formato: VersionFormato, respuestas: Respuesta
     const ids = Array.isArray(lista) ? lista.map((r) => (typeof r === "object" && r !== null ? (r as { id?: unknown }).id : undefined)) : [];
     if (!Array.isArray(lista) || ids.some((id) => typeof id !== "string" || !ID_REPETICION.test(id)) || new Set(ids).size !== ids.length) {
       errores.push({ seccion: clave, codigo: "tipo_invalido" });
+      rechazadas.add(clave);
       continue;
     }
     if (lista.some((r) => typeof r.nombre !== "string" || r.nombre.trim() === "" || r.nombre.length > LIMITES.nombreDeRepeticion)) {
@@ -72,7 +73,7 @@ export function validarRespuestas(formato: VersionFormato, respuestas: Respuesta
     listas.set(clave, lista);
   }
   for (const seccion of formato.secciones) {
-    if (!seccion.repetible) continue;
+    if (!seccion.repetible || rechazadas.has(seccion.clave)) continue;
     const cantidad = listas.get(seccion.clave)?.length ?? 0;
     if (cantidad < (seccion.repetible.min ?? 0)) errores.push({ seccion: seccion.clave, codigo: "repeticiones_insuficientes" });
     if (cantidad > (seccion.repetible.max ?? LIMITES.repeticiones)) errores.push({ seccion: seccion.clave, codigo: "repeticiones_excedidas" });
@@ -81,6 +82,7 @@ export function validarRespuestas(formato: VersionFormato, respuestas: Respuesta
   const validos = bloques(formato, Object.fromEntries(listas));
   const clavesValidas = new Set(validos.map((b) => b.clave));
   for (const [clave, valores] of Object.entries(respuestas)) {
+    if (rechazadas.has(leerClave(clave).seccion)) continue;
     if (!clavesValidas.has(clave)) {
       errores.push({ seccion: clave, codigo: "seccion_desconocida" });
     } else if (typeof valores !== "object" || valores === null || Array.isArray(valores)) {
@@ -175,47 +177,34 @@ export function validarCampo(campo: DefinicionCampo, valor: unknown): CodigoErro
 
 const CLAVES_FIRMA = new Set(["firma", "nombre", "cargo", "firmadoEn", "declaracion"]);
 
-/** Huellas de todas las fotos referenciadas, sin repetir. */
-export function fotosReferenciadas(respuestas: Respuestas): string[] {
+/**
+ * Recorre las respuestas una sola vez y junta las huellas de archivos, sin repetir. Un tipo de valor nuevo con
+ * archivo se agrega aquí y lo ven todas las funciones de abajo.
+ */
+function huellasReferenciadas(respuestas: Respuestas, incluir: { fotos: boolean; trazos: boolean }): string[] {
   const huellas = new Set<string>();
   for (const valores of Object.values(respuestas)) {
     if (typeof valores !== "object" || valores === null) continue;
     for (const valor of Object.values(valores)) {
-      if (Array.isArray(valor)) for (const id of valor) if (typeof id === "string") huellas.add(id);
+      if (incluir.fotos && Array.isArray(valor)) for (const id of valor) if (typeof id === "string") huellas.add(id);
+      if (incluir.trazos && esBoceto(valor) && typeof valor.boceto === "string") huellas.add(valor.boceto);
+      if (incluir.trazos && esFirma(valor) && typeof valor.firma === "string") huellas.add(valor.firma);
     }
   }
   return [...huellas];
 }
+
+/** Huellas de todas las fotos referenciadas, sin repetir. */
+export const fotosReferenciadas = (respuestas: Respuestas) => huellasReferenciadas(respuestas, { fotos: true, trazos: false });
 
 /**
  * Huellas de todos los archivos que referencian las respuestas: fotos y bocetos. Son los que deben estar
  * subidos y verificados antes de registrar un envío (QA-2).
  */
-export function archivosReferenciados(respuestas: Respuestas): string[] {
-  const huellas = new Set<string>();
-  for (const valores of Object.values(respuestas)) {
-    if (typeof valores !== "object" || valores === null) continue;
-    for (const valor of Object.values(valores)) {
-      if (Array.isArray(valor)) for (const id of valor) if (typeof id === "string") huellas.add(id);
-      if (esBoceto(valor) && typeof valor.boceto === "string") huellas.add(valor.boceto);
-      if (esFirma(valor) && typeof valor.firma === "string") huellas.add(valor.firma);
-    }
-  }
-  return [...huellas];
-}
+export const archivosReferenciados = (respuestas: Respuestas) => huellasReferenciadas(respuestas, { fotos: true, trazos: true });
 
 /**
  * Huellas de los documentos de trazos (bocetos y firmas): suben al enviar, no antes, porque mientras es
  * borrador se pueden reemplazar (ADR-0019, parte 3; ADR-0024).
  */
-export function bocetosReferenciados(respuestas: Respuestas): string[] {
-  const huellas = new Set<string>();
-  for (const valores of Object.values(respuestas)) {
-    if (typeof valores !== "object" || valores === null) continue;
-    for (const valor of Object.values(valores)) {
-      if (esBoceto(valor) && typeof valor.boceto === "string") huellas.add(valor.boceto);
-      if (esFirma(valor) && typeof valor.firma === "string") huellas.add(valor.firma);
-    }
-  }
-  return [...huellas];
-}
+export const bocetosReferenciados = (respuestas: Respuestas) => huellasReferenciadas(respuestas, { fotos: false, trazos: true });

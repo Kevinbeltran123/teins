@@ -28,12 +28,20 @@ export function firmaASvg(documento: DocumentoBoceto, opciones: Omit<OpcionesSvg
   const puntos = d.elementos.flatMap(puntosDeElemento);
   const completo = hojaASvg(d, { ...opciones, cuadricula: false, fondo: opciones.fondo ?? "none" });
   if (puntos.length === 0) return completo;
+  // Con un ciclo y no con Math.min(...xs): una firma larga pasa de los ~110 000 argumentos que admite la pila.
+  let [minX, minY, maxX, maxY] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [px, py] of puntos) {
+    if (px < minX) minX = px;
+    if (px > maxX) maxX = px;
+    if (py < minY) minY = py;
+    if (py > maxY) maxY = py;
+  }
   const margen = 12;
-  const xs = puntos.map(([x]) => x);
-  const ys = puntos.map(([, y]) => y);
-  const x = Math.max(0, Math.min(...xs) - margen);
-  const y = Math.max(0, Math.min(...ys) - margen);
-  const ancho = Math.min(d.ancho, Math.max(...xs) + margen) - x;
-  const alto = Math.min(d.alto, Math.max(...ys) + margen) - y;
+  const x = Math.max(0, minX - margen);
+  const y = Math.max(0, minY - margen);
+  const ancho = Math.min(d.ancho, maxX + margen) - x;
+  const alto = Math.min(d.alto, maxY + margen) - y;
+  // Trazos fuera del lienzo (la validación admite un margen): no hay qué recortar, va el lienzo completo.
+  if (ancho <= 0 || alto <= 0) return completo;
   return completo.replace(`viewBox="0 0 ${d.ancho} ${d.alto}" width="${d.ancho}" height="${d.alto}"`, `viewBox="${x} ${y} ${ancho} ${alto}" width="${ancho}" height="${alto}"`);
 }
