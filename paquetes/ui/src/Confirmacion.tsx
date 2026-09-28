@@ -2,6 +2,9 @@ import { useState, type ReactNode } from "react";
 import { Aviso } from "./Aviso";
 import { Boton } from "./Boton";
 import { Dialogo } from "./Dialogo";
+import { CircleCheck, TriangleAlert } from "./iconos";
+
+const enOficina = () => typeof document !== "undefined" && document.documentElement.dataset.superficie === "oficina";
 
 interface Props {
   /** Pregunta corta con el verbo y el objeto: "¿Desactivar a Juan Pérez?". Nunca "¿Está seguro?". */
@@ -54,6 +57,9 @@ export function Confirmacion({ titulo, children, confirmar, descartar = "Cancela
       alCerrar={alCerrar}
       cerrable={!ocupado}
       forma={forma}
+      // El icono de la consecuencia es de oficina (prototipos/oficina); campo conserva su confirmación.
+      icono={forma === "centrado" && enOficina() ? (peligro ? TriangleAlert : CircleCheck) : undefined}
+      tono={peligro ? "peligro" : "exito"}
       // En el teléfono se abre sin anillo de foco sobre "Cancelar": se ve como si ya estuviera elegido.
       focoEnElDialogo={forma === "inferior"}
       pie={

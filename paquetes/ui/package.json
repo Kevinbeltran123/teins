@@ -7,7 +7,8 @@
   ],
   "exports": {
     ".": "./src/index.ts",
-    "./tema.css": "./src/tema.css"
+    "./tema.css": "./src/tema.css",
+    "./oficina.css": "./oficina.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -32,6 +32,8 @@ interface Props {
    * campo, para que el teléfono no abra el teclado encima de la lista.
    */
   focoEnElDialogo?: boolean;
+  /** Tono del icono del encabezado (oficina): la consecuencia se reconoce antes de leer. */
+  tono?: "" | "peligro" | "exito";
 }
 
 /**
@@ -53,7 +55,8 @@ export function useModal(cerrable: boolean, alCerrar: () => void, focoEnElDialog
     if (focoEnElDialogo) elemento.focus();
     // El navegador puede cerrarlo por su cuenta (Esc repetido): si no se podía cerrar, vuelve a abrirse.
     const alCerrarse = () => {
-      if (desmontando) return;
+      // Un "close" que quedó en cola de un montaje anterior (StrictMode en desarrollo) llega con el diálogo ya abierto de nuevo.
+      if (desmontando || elemento.open) return;
       if (vigente.current.cerrable) vigente.current.alCerrar();
       else elemento.showModal();
     };
@@ -88,7 +91,7 @@ export function useModal(cerrable: boolean, alCerrar: () => void, focoEnElDialog
  * Esc funciona sin JavaScript de animación (el movimiento es CSS, DESIGN.md). Se abre al montarse: quien lo
  * usa lo muestra u oculta con una condición, y cada apertura empieza limpia.
  */
-export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerrar, cerrable = true, forma = "centrado", amplio = false, focoEnElDialogo = false }: Props) {
+export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerrar, cerrable = true, forma = "centrado", amplio = false, focoEnElDialogo = false, tono = "" }: Props) {
   const modal = useModal(cerrable, alCerrar, focoEnElDialogo);
   const tituloId = useId();
 
@@ -97,13 +100,13 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
       {...modal}
       aria-labelledby={tituloId}
       tabIndex={focoEnElDialogo ? -1 : undefined}
-      className={`bg-panel p-0 text-texto shadow-capa backdrop:bg-velo ${amplio && forma === "centrado" ? "w-[min(820px,calc(100vw-32px))]" : ""} ${focoEnElDialogo ? "outline-none" : ""} ${formas[forma]}`}
+      className={`capa-${forma} bg-panel p-0 text-texto shadow-capa backdrop:bg-velo ${amplio && forma === "centrado" ? "w-[min(820px,calc(100vw-32px))]" : ""} ${focoEnElDialogo ? "outline-none" : ""} ${formas[forma]}`}
     >
       <div className={`flex flex-col ${forma === "lateral" || forma === "hoja" ? "h-full" : "max-h-[inherit]"}`}>
         {forma === "hoja" && <span aria-hidden className="mx-auto mt-2.5 h-1.5 w-11 shrink-0 rounded-full bg-borde-suave" />}
-        <header className="flex items-start gap-3 px-6 pt-6 pb-4">
+        <header className="capa-cabeza flex items-start gap-3 px-6 pt-6 pb-4">
           {Icono && (
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-superficie-suave text-superficie [&_svg]:size-5">
+            <span className={`ic-capa ${tono} flex size-10 shrink-0 items-center justify-center rounded-control bg-superficie-suave text-superficie [&_svg]:size-5`}>
               <Icono aria-hidden />
             </span>
           )}
@@ -114,23 +117,23 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
             {subtitulo && <p className="text-ayuda text-texto-secundario">{subtitulo}</p>}
           </div>
         </header>
-        <div className="flex grow flex-col gap-4 overflow-y-auto px-6 pb-6">{children}</div>
+        <div className="capa-cuerpo flex grow flex-col gap-4 overflow-y-auto px-6 pb-6">{children}</div>
         {pie && (
           <footer
-            className={
+            className={`capa-pie ${
               forma === "inferior"
                 ? // Abajo, en el teléfono: los dos botones en fila y del mismo ancho, "Cancelar" a la izquierda y la acción a
                   // la derecha, al alcance del pulgar (como las alertas de iOS).
                   "grid auto-cols-fr grid-flow-col gap-2.5 px-6 pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))] [&>*]:min-h-14 [&>*]:w-full [&>*]:whitespace-normal"
                 : "flex flex-wrap items-center justify-end gap-2 border-t border-division bg-panel-hundido px-6 py-4"
-            }
+            }`}
           >
             {pie}
           </footer>
         )}
       </div>
       {/* Al final del documento: el foco inicial cae en el primer campo o en "Cancelar", no en la equis. */}
-      {cerrable && <BotonIcono icono={X} etiqueta="Cerrar" tamano="pequeno" className="absolute top-5 right-4" onClick={alCerrar} />}
+      {cerrable && <BotonIcono icono={X} etiqueta="Cerrar" tamano="pequeno" className="capa-cerrar absolute top-5 right-4" onClick={alCerrar} />}
     </dialog>
   );
 }

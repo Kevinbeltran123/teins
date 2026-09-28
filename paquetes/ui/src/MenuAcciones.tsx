@@ -60,7 +60,7 @@ export function MenuAcciones({ etiqueta, opciones }: { etiqueta: string; opcione
       <span ref={ancla} className="inline-flex">
         <BotonIcono icono={Ellipsis} etiqueta={etiqueta} tamano="pequeno" popoverTarget={id} aria-haspopup="menu" aria-expanded={abierto} />
       </span>
-      <div ref={menu} id={id} popover="auto" role="menu" aria-label={etiqueta} onKeyDown={teclado} className="inset-auto m-0 min-w-52 rounded-control border border-division bg-panel p-1 text-texto shadow-menu">
+      <div ref={menu} id={id} popover="auto" role="menu" aria-label={etiqueta} onKeyDown={teclado} className="menu-acc inset-auto m-0 min-w-52 rounded-control border border-division bg-panel p-1 text-texto shadow-menu">
         {visibles.map((o) => (
           <button
             key={o.texto}
@@ -70,7 +70,7 @@ export function MenuAcciones({ etiqueta, opciones }: { etiqueta: string; opcione
               menu.current?.hidePopover();
               o.alElegir();
             }}
-            className={`flex min-h-control-sm w-full items-center gap-2.5 rounded-control px-3 text-left text-cuerpo hover:bg-encima focus:bg-encima focus:outline-none [&_svg]:size-4 [&_svg]:shrink-0 ${o.peligro ? "text-error" : ""}`}
+            className={`flex min-h-control-sm w-full items-center gap-2.5 rounded-control px-3 text-left text-cuerpo hover:bg-encima focus:bg-encima focus:outline-none [&_svg]:size-4 [&_svg]:shrink-0 ${o.peligro ? "text-error peligro" : ""}`}
           >
             {o.icono && <o.icono aria-hidden />}
             {o.texto}

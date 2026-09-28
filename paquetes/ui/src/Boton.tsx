@@ -26,7 +26,10 @@ const base =
   "inline-flex shrink-0 items-center justify-center rounded-control text-center font-bold transition-[background-color,filter,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 aria-busy:opacity-80 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie [&_svg]:shrink-0";
 
 /** Clase del botón, para enlaces que se ven como botón (navegación con forma de acción). */
-export const claseBoton = (variante: VarianteBoton = "secundaria", tamano: TamanoBoton = "normal") => `${base} ${variantes[variante]} ${tamanos[tamano]}`;
+/** Ganchos de oficina.css (identidad Recorrido): en oficina el botón se ve como en el prototipo. */
+const ganchos: Record<VarianteBoton, string> = { principal: "btn principal", secundaria: "btn", fantasma: "btn fantasma", peligro: "btn peligro" };
+
+export const claseBoton = (variante: VarianteBoton = "secundaria", tamano: TamanoBoton = "normal") => `${base} ${variantes[variante]} ${tamanos[tamano]} ${ganchos[variante]}${tamano === "pequeno" ? " chico" : ""}`;
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   variante?: VarianteBoton;
@@ -85,8 +88,9 @@ export function BotonIcono({
   tamano?: TamanoBoton;
 }) {
   const medida = tamano === "normal" ? "size-control [&_svg]:size-5" : "size-control-sm [&_svg]:size-4";
+  const gancho = `icono-btn${variante === "fantasma" ? " limpio" : ""}${tamano === "pequeno" ? " chico" : ""}`;
   return (
-    <button type={type} aria-label={etiqueta} title={etiqueta} className={`${base} ${variantesIcono[variante]} ${medida} ${className}`} {...props}>
+    <button type={type} aria-label={etiqueta} title={etiqueta} className={`${base} ${variantesIcono[variante]} ${medida} ${gancho} ${className}`} {...props}>
       <Icono aria-hidden />
     </button>
   );

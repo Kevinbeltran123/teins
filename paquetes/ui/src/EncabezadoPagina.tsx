@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 /**
- * Encabezado de pantalla (DESIGN.md, jerarquía). El título es la sección elegida en el menú o, en un detalle, lo
- * que se está viendo; nada en la pantalla es más grande. Las migas solo existen cuando hay un nivel superior al
- * que volver; la descripción, solo si explica algo que el título no dice.
+ * Encabezado de pantalla de oficina (DESIGN.md, jerarquía; prototipos/oficina). El título es la sección elegida en
+ * el menú o, en un detalle, lo que se está viendo. Debajo, una línea de datos cortos (`meta`) que reemplaza a las
+ * tarjetas de resumen; a la derecha, la acción principal. Una línea fina lo separa del contenido.
  */
 export function EncabezadoPagina({
   titulo,
@@ -12,26 +12,28 @@ export function EncabezadoPagina({
   descripcion,
   acciones,
 }: {
-  titulo: string;
-  /** El nivel superior, como enlace: "Levantamientos", "Informes". */
+  titulo: ReactNode;
+  /** El nivel superior, como enlace con la clase `migas`: "Levantamientos", "Informes". */
   migas?: ReactNode;
-  /** El estado de lo que se ve, junto al título (Primer). */
+  /** El estado de lo que se ve, junto al título. */
   estado?: ReactNode;
+  /** Datos cortos bajo el título, cada uno en su propio `<span>`. */
   descripcion?: ReactNode;
   /** A la derecha: la acción principal de la pantalla, y a lo sumo una secundaria. */
   acciones?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-      <div className="flex min-w-0 flex-col gap-1.5">
-        {migas && <nav aria-label="Migas de pan" className="text-ayuda text-texto-secundario">{migas}</nav>}
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{titulo}</h1>
+    <header className="cabeza">
+      <div className="cabeza-txt">
+        {migas && <nav aria-label="Migas de pan">{migas}</nav>}
+        {/* El estado va junto al título, pero fuera de él: el título se lee solo ("Cotización COT-2026-0017"). */}
+        <div className="titulo-fila">
+          <h1>{titulo}</h1>
           {estado}
         </div>
-        {descripcion && <div className="max-w-3xl text-cuerpo text-texto-secundario">{descripcion}</div>}
+        {descripcion && <div className="meta">{descripcion}</div>}
       </div>
-      {acciones && <div className="flex flex-wrap items-center gap-2">{acciones}</div>}
+      {acciones && <div className="acciones">{acciones}</div>}
     </header>
   );
 }

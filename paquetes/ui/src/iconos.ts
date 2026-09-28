@@ -9,6 +9,8 @@ export {
   ArrowRight,
   ArrowUp,
   Bell,
+  WifiOff,
+  Link2,
   Building,
   CalendarDays,
   Camera,

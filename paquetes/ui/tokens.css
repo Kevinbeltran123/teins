@@ -129,6 +129,47 @@
   Los componentes no cambian: usan los mismos tokens y la superficie los redefine.
 */
 [data-superficie="oficina"] {
+  /* Identidad Recorrido (iteración 23): la paleta oscura de campo, con la escala de escritorio. */
+  --t-fuente-texto: "Atkinson Hyperlegible Next Variable", "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  color-scheme: dark;
+  --t-superficie: #6E9BFF;
+  --t-superficie-elevada: #86ACFF;
+  --t-superficie-pista: #3A4A6B;
+  --t-superficie-suave: rgb(110 155 255 / 0.16);
+  --t-sobre-superficie: #0B0F17;
+  --t-sobre-superficie-tenue: #3A4A6B;
+  --t-sobre-superficie-suave: #1E2634;
+  --t-resaltado: rgb(255 194 26 / 0.22);
+  --t-fondo: #0B0F17;
+  --t-panel: #151B26;
+  --t-panel-hundido: #1E2634;
+  --t-texto: #F3F5F9;
+  --t-texto-secundario: #AEB6C6;
+  --t-division: #2C3647;
+  --t-borde-suave: #2C3647;
+  --t-borde-control: #5B6780;
+  --t-borde-activo: #F3F5F9;
+  --t-encima: rgb(255 255 255 / 0.06);
+  --t-estado-enviado-fondo: #1B2B4A;      --t-estado-enviado-texto: #9DBBFF;
+  --t-estado-revision-fondo: #2E2342;     --t-estado-revision-texto: #D2B8F5;
+  --t-estado-revisado-fondo: #12372F;     --t-estado-revisado-texto: #8FDCC4;
+  --t-estado-anulado-fondo: #3D1D25;      --t-estado-anulado-texto: #F5A8B8;
+  --t-exito-fondo: #12372F;     --t-exito-texto: #6FE0B4;
+  --t-alerta-fondo: #3A2E12;    --t-alerta-texto: #FFC66B;
+  --t-peligro-fondo: #3D1D25;   --t-error: #FF8A8A;
+  --t-peligro: #FF6B6B;
+  --t-sobre-peligro: #0B0F17;
+  --t-notificacion: #F3F5F9;
+  --t-velo: rgb(5 8 14 / 0.55);
+  --t-sombra-capa: 0 24px 60px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.3);
+  --t-sombra-menu: 0 24px 60px rgb(0 0 0 / 0.45);
+  --t-radio-control: 12px;
+  --t-radio-panel: 20px;
+  --t-radio-capa: 26px;
+  --t-control-borde: transparent;
+  --t-control-fondo: #1E2634;
+  --t-control-borde-foco: var(--t-foco);
+  --t-control-halo: rgb(255 194 26 / 0.22);
   --t-texto-cuerpo: 15px;
   --t-texto-ayuda: 13px;
   --t-subtitulo: 18px;
@@ -213,7 +254,8 @@
   Lo que se dibuja o se firma va sobre papel claro, como hoy: el croquis y la firma conservan la paleta
   clara dentro de campo (el croquis es el modelo de la dirección y la tinta es negra).
 */
-[data-superficie="campo"] [data-tema="claro"] {
+[data-superficie="campo"] [data-tema="claro"],
+[data-superficie="oficina"] [data-tema="claro"] {
   color-scheme: light;
   --t-superficie: var(--marca-superficie);
   --t-superficie-elevada: color-mix(in srgb, var(--marca-superficie), #FFFFFF 12%);

@@ -23,6 +23,9 @@ const tonos = {
 
 export type TonoInsignia = keyof typeof tonos;
 
-export function Insignia({ tono, children }: { tono: TonoInsignia; children: ReactNode }) {
-  return <span className={`inline-flex min-h-6 shrink-0 items-center rounded-control px-2 py-0.5 text-ayuda leading-tight font-bold whitespace-nowrap ${tonos[tono]}`}>{children}</span>;
+/** Gancho de oficina.css: en oficina, la insignia del prototipo (punto y texto del color del estado). */
+const ganchos: Record<TonoInsignia, string> = { borrador: "borrador", enviado: "enviado", revision: "revision", revisado: "revisado", publicado: "publicado", anulado: "anulado", exito: "exito", neutro: "borrador", alerta: "alerta", peligro: "peligro", nuevo: "nuevo" };
+
+export function Insignia({ tono, children, sinPunto = false }: { tono: TonoInsignia; children: ReactNode; /** Etiquetas que no son un estado (canal, motivo). */ sinPunto?: boolean }) {
+  return <span className={`inline-flex min-h-6 shrink-0 items-center rounded-control px-2 py-0.5 text-ayuda leading-tight font-bold whitespace-nowrap ${tonos[tono]} ins ${ganchos[tono]}${sinPunto ? " sin-punto" : ""}`}>{children}</span>;
 }

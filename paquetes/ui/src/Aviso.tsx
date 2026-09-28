@@ -16,9 +16,9 @@ const tonos = {
 export function Aviso({ tono = "info", children }: { tono?: keyof typeof tonos; children: ReactNode }) {
   const { fondo, icono: Icono, color } = tonos[tono];
   return (
-    <div role={tono === "error" ? "alert" : "status"} className={`flex gap-3 rounded-panel px-4 py-3 text-cuerpo text-texto ${fondo}`}>
+    <div role={tono === "error" ? "alert" : "status"} className={`flex gap-3 rounded-panel px-4 py-3 text-cuerpo text-texto ${fondo} aviso ${{ info: "", exito: "exito", alerta: "alerta", error: "peligro" }[tono]}`}>
       <Icono aria-hidden className={`mt-0.5 size-5 shrink-0 ${color}`} />
-      <div className="min-w-0 grow">{children}</div>
+      <div className="cuerpo min-w-0 grow">{children}</div>
     </div>
   );
 }

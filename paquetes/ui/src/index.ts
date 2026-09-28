@@ -37,8 +37,10 @@ export { BarraDePaso, BotonAgregar, BotonRedondo, BotonSiguiente, ChuloDeExito, 
 export { Pestanas } from "./Pestanas";
 export type { Pestana } from "./Pestanas";
 export { SelectorDeArchivo } from "./SelectorDeArchivo";
-export { CeldaTabla, FilaTabla, Tabla } from "./Tabla";
+export { CeldaTabla, CuerpoTabla, FilaTabla, Tabla } from "./Tabla";
 export type { Columna } from "./Tabla";
 export { ValorLeido } from "./ValorLeido";
 export { VisorFotos } from "./VisorFotos";
 export type { FotoVisible } from "./VisorFotos";
+export { PlanoEnLuz } from "./PlanoEnLuz";
+export { BarraLista, Buscador, coincide, EsqueletoLista, Marcado, normalizarTexto, PieLista, SinResultados } from "./Lista";
