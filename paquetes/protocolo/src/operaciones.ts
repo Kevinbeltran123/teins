@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { DECIMAL_CANONICO, LIMITES, PORCENTAJE, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
-import { DocumentoBoceto, Fecha, Huella, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
+import { DECIMAL_CANONICO, ID_LINEA, PORCENTAJE, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
+import { DocumentoBoceto, Fecha, Huella, IdFormato, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
 import type { CodigoProblema } from "./problemas";
 
 /**
@@ -43,7 +43,6 @@ export const Sesion = z
 
 // Archivos (ADR-0007)
 
-/** Fotos desde campo; planos en PDF desde oficina (corte 4). */
 /** Fotos (JPEG), planos (PDF) y bocetos (JSON propio, ADR-0019). */
 export const TIPOS_DE_ARCHIVO = ["image/jpeg", "application/pdf", TIPO_ARCHIVO_BOCETO] as const;
 
@@ -83,7 +82,7 @@ export const EnviarLevantamiento = z
     llave: z.string().regex(/^enviar:[0-9a-f-]{36}$/),
     levantamiento: z.object({
       id: Uuid,
-      formato: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+      formato: IdFormato,
       versionFormato: z.int().positive(),
       /** Opcional: los borradores de los cortes 0 y 1 no tienen visita (ADR-0015, expansión). */
       visitaId: Uuid.optional(),
@@ -492,7 +491,8 @@ export const DetalleCliente = z
   })
   .meta({ id: "DetalleCliente" });
 
-const vacioANulo = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
+/** Recorta el texto pegado; vacío es nulo. */
+const vacioANulo = (v: unknown) => (typeof v === "string" ? v.trim() || null : v);
 
 /** Datos de un contacto. Recibir por un canal exige su dato; por WhatsApp, además, la autorización. */
 export const DatosContacto = z
@@ -562,7 +562,7 @@ export const Impuestos = z
 
 export const LineaDeCotizacion = z
   .object({
-    id: z.string().regex(/^[a-z0-9]{8}$/),
+    id: z.string().regex(ID_LINEA),
     itemId: Uuid.nullable(),
     codigo: z.string().max(40).nullable(),
     descripcion: z.string().trim().min(1).max(200),
@@ -1329,7 +1329,7 @@ export const operaciones = {
     metodo: "POST",
     ruta: "/api/avisos/suscripciones/quitar",
     resumen: "Quita la suscripción de este navegador (al cerrar sesión o al desactivar los avisos)",
-    cuerpo: z.object({ endpoint: z.url() }),
+    cuerpo: SuscripcionAvisos.pick({ endpoint: true }),
     estadoExito: 200,
     respuesta: z.object({}),
     errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
@@ -1355,4 +1355,3 @@ export type RespuestaServidor<N extends NombreOperacion> = z.input<Operaciones[N
 
 /** Tamaño máximo de un archivo de campo: una foto recodificada pesa unos cientos de KB (ADR-0007). */
 export const BYTES_MAXIMOS_ARCHIVO = 10 * 1024 * 1024;
-void LIMITES;

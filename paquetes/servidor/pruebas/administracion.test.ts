@@ -94,6 +94,13 @@ describe("usuarios (iteración 6)", () => {
     expect(cadena).toEqual({ integra: true, eslabones: 1 });
   });
 
+  it("un usuario con guion, permitido al crearlo, también inicia sesión", async () => {
+    const usuario = `ana-${randomUUID().slice(0, 8)}`;
+    const r = await pedir(admin.cookie, "POST", "/api/administracion/usuarios", { usuario, nombre: "Ana Guion", rol: "tecnico" });
+    expect(r.statusCode, r.body).toBe(201);
+    await iniciarSesion(app, usuario, r.json().contrasena);
+  });
+
   it("restablecer da una contraseña nueva y cierra las sesiones; desactivar revoca y no se aplica a sí mismo", async () => {
     const usuario = `luis.${randomUUID().slice(0, 8)}`;
     const { usuario: creado, contrasena } = (await pedir(admin.cookie, "POST", "/api/administracion/usuarios", { usuario, nombre: "Luis Prueba", rol: "oficina" })).json();

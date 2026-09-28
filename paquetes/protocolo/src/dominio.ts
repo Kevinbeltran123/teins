@@ -49,7 +49,7 @@ export const Valor = z
 
 const ClaveEsquema = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);
 /** Identificador de formato: admite guiones (`prueba-ups`); las claves de sección y campo no. */
-const IdFormato = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
+export const IdFormato = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 
 /** Sección o repetición de una sección repetible: `tableros~k3f9x2ab` (iteración 9). */
 export const ClaveDeRespuestas = z.string().regex(/^[a-z][a-z0-9_]{0,63}(~[a-z0-9]{8})?$/);

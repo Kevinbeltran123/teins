@@ -77,7 +77,8 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
       database: { generateId: () => randomUUID() },
     },
     plugins: [
-      username({ minUsernameLength: 3, maxUsernameLength: 30 }),
+      // Mismos caracteres que acepta crearUsuario (con guion): el validador por defecto rechaza el guion al ingresar.
+      username({ minUsernameLength: 3, maxUsernameLength: 30, usernameValidator: (u) => /^[a-zA-Z0-9._-]+$/.test(u) }),
       // Segundo factor TOTP (ADR-0009), obligatorio para administrar. El inicio de sesión de quien lo tiene
       // activo no crea sesión: responde twoFactorRedirect y la sesión nace al verificar el código.
       twoFactor({ issuer: "TEINS", twoFactorTable: "twoFactor" }),

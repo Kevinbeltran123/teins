@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LIMITES } from "@teins/dominio";
 import { documentoOpenApi } from "./openapi";
-import { Bajada, EnviarLevantamiento, llaveDeEnvio, operaciones } from "./operaciones";
+import { Bajada, DatosContacto, EnviarLevantamiento, llaveDeEnvio, operaciones } from "./operaciones";
 import { ESTADO_POR_CODIGO, REINTENTABLE } from "./problemas";
 
 const id = "01927a3e-7c1b-7e2a-9f00-123456789abc";
@@ -136,5 +136,20 @@ describe("catálogo de operaciones", () => {
     const ids = Object.values(doc.paths ?? {}).flatMap((p) => Object.values(p as object).map((o: { operationId?: string }) => o.operationId));
     expect(ids.sort()).toEqual(Object.keys(operaciones).sort());
     expect(doc.components?.schemas).toHaveProperty("Problema");
+  });
+});
+
+describe("correcciones de la revisión de código", () => {
+  it("el contacto tolera espacios pegados al correo y al celular", () => {
+    const datos = DatosContacto.parse({ nombre: "Ana", correo: " ana@cliente.co ", celular: "+573105550142 ", recibeCorreo: true, recibeWhatsapp: false });
+    expect(datos.correo).toBe("ana@cliente.co");
+    expect(datos.celular).toBe("+573105550142");
+  });
+
+  it("quitar la suscripción de avisos exige lo mismo que suscribirse", () => {
+    const cuerpo = operaciones.quitarSuscripcionAvisos.cuerpo;
+    expect(cuerpo.safeParse({ endpoint: "http://push.example.com/x" }).success).toBe(false);
+    expect(cuerpo.safeParse({ endpoint: `https://push.example.com/${"a".repeat(2048)}` }).success).toBe(false);
+    expect(cuerpo.safeParse({ endpoint: "https://push.example.com/x" }).success).toBe(true);
   });
 });
