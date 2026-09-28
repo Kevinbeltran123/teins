@@ -45,7 +45,7 @@ test("llaves de acceso: el técnico y oficina crean una y entran sin contraseña
   await o.getByRole("button", { name: "Crear llave de acceso" }).click();
   await expect(o.getByRole("list", { name: "Sus llaves de acceso" }).getByRole("listitem")).toHaveCount(1);
 
-  await o.getByRole("button", { name: "Cerrar sesión" }).click();
+  await o.getByRole("region", { name: "Sesión" }).getByRole("button", { name: "Cerrar sesión" }).click();
   await o.getByRole("button", { name: "Entrar con llave de acceso" }).click();
   await expect(o.getByRole("link", { name: "Levantamientos" })).toBeVisible();
 

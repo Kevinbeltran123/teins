@@ -53,7 +53,7 @@ test("oficina registra los contactos del cliente, publica con el PDF para ellos 
   const o = await contexto.newPage();
   await o.goto(`${OFICINA}/`);
   await iniciarSesion(o, revisora);
-  await expect(o.getByRole("heading", { name: "Esperando revisión" })).toBeVisible();
+  await expect(o.getByRole("tab", { name: /Esperando revisión/ })).toBeVisible();
 
   // En Clientes, "Nadie" avisa antes de publicar; la fila abre el cliente.
   await o.getByRole("navigation", { name: "Secciones" }).getByRole("link", { name: "Clientes" }).click();
@@ -79,7 +79,7 @@ test("oficina registra los contactos del cliente, publica con el PDF para ellos 
   await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   await o.getByRole("button", { name: "Guardar borrador" }).click();
-  await expect(o.getByRole("button", { name: "Borrador guardado" })).toBeVisible();
+  await expect(o.getByText("Todo guardado")).toBeVisible();
 
   // Publicar: quienes reciben el informe vienen marcados.
   await o.getByRole("button", { name: "Publicar versión 1" }).click();

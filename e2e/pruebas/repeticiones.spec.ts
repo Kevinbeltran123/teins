@@ -62,7 +62,8 @@ test("secciones repetibles: el técnico agrega tableros y quita uno; oficina los
   await segundo.getByRole("textbox", { name: "Nuevo valor de ubicación del tablero" }).fill("Piso 3");
   await segundo.getByRole("textbox", { name: "Motivo de la corrección" }).fill("La placa dice piso 3");
   await segundo.getByRole("button", { name: "Guardar corrección" }).click();
-  await expect(segundo.getByText("Piso 3")).toBeVisible();
+  await expect(segundo.getByText("Piso 3", { exact: true })).toBeVisible();
+  await o.getByRole("tab", { name: "Historial" }).click();
   await expect(o.getByText("Tableros · Tablero 2 · Ubicación del tablero: Piso 2 → Piso 3")).toBeVisible();
 
   // El informe se publica con los dos tableros.

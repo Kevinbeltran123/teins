@@ -31,7 +31,7 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
 
   // Desde entonces, el ingreso pide el código.
   await page.getByRole("button", { name: "Cerrar sesión" }).click();
-  await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hola de nuevo" })).toBeVisible();
   await iniciarSesion(page, admin);
   await expect(page.getByRole("heading", { name: "Código de verificación" })).toBeVisible();
   await page.getByLabel("Código").fill("000000");

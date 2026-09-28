@@ -25,7 +25,7 @@ async function oficina(browser: Browser, usuario: Usuario): Promise<Page> {
   const pagina = await contexto.newPage();
   await pagina.goto(`${OFICINA}/`);
   await iniciarSesion(pagina, usuario);
-  await expect(pagina.getByRole("heading", { name: "Esperando revisión" })).toBeVisible();
+  await expect(pagina.getByRole("tab", { name: /Esperando revisión/ })).toBeVisible();
   return pagina;
 }
 
@@ -50,7 +50,7 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
   await o.locator("input[type=file]").setInputFiles({ name: "Planta del cuarto.pdf", mimeType: "application/pdf", buffer: pdfDePrueba() });
   await expect(o.getByRole("textbox", { name: "Nombre del plano 1" })).toHaveValue("Planta del cuarto");
   await o.getByRole("button", { name: "Guardar borrador" }).click();
-  await expect(o.getByRole("button", { name: "Borrador guardado" })).toBeVisible();
+  await expect(o.getByText("Todo guardado")).toBeVisible();
 
   // El worker verifica el plano en segundos; publicar antes lo avisa y se reintenta.
   // El error queda en el diálogo de confirmación, que sigue abierto: se reintenta desde ahí.

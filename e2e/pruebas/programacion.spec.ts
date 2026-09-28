@@ -33,7 +33,9 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await o.getByRole("checkbox", { name: tecnico.nombre }).check();
   await o.getByRole("button", { name: "Programar la visita", exact: true }).click();
   const fila = o.getByRole("row").filter({ hasText: cliente });
-  await expect(fila.getByText(/^Hoy$/)).toBeVisible();
+  // Las visitas van agrupadas por día: la de hoy queda bajo "Hoy · …" (rediseño de oficina, iteración 23).
+  const diaDe = () => o.locator("tbody").filter({ has: fila }).getByText(/^Hoy · /);
+  await expect(diaDe()).toBeVisible();
 
   // El técnico la ve en su teléfono.
   const telefono = await browser.newContext({ ...zona, viewport: { width: 390, height: 844 } });
@@ -50,7 +52,7 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   const manana = new Date(Date.now() + 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
   await o.getByLabel("Fecha nueva").fill(manana);
   await o.getByRole("button", { name: "Reprogramar la visita", exact: true }).click();
-  await expect(fila.getByText(/^Hoy$/)).toHaveCount(0);
+  await expect(diaDe()).toHaveCount(0);
   await t.reload();
   await expect(siguiente.getByText(cliente)).toBeVisible();
   await expect(siguiente.getByText("Mañana")).toBeVisible();

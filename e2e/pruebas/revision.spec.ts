@@ -9,14 +9,16 @@ async function oficina(browser: Browser, usuario: Usuario): Promise<Page> {
   const pagina = await contexto.newPage();
   await pagina.goto(`${OFICINA}/`);
   await iniciarSesion(pagina, usuario);
-  await expect(pagina.getByRole("heading", { name: "Esperando revisión" })).toBeVisible();
+  await expect(pagina.getByRole("tab", { name: /Esperando revisión/ })).toBeVisible();
   return pagina;
 }
 
 async function abrirLevantamientoDe(pagina: Page, tecnico: Usuario, pestana: string) {
   await pagina.getByRole("tab", { name: pestana }).click();
   await (await filaDeLaBandeja(pagina, tecnico.nombre)).getByRole("link").click();
-  await expect(pagina.getByRole("heading", { name: `Levantamiento de ${tecnico.nombre}` })).toBeVisible();
+  // El título es el cliente y el sitio; el técnico va debajo (rediseño de oficina, iteración 23).
+  await expect(pagina.getByRole("region", { name: "Revisión" })).toBeVisible();
+  await expect(pagina.getByText(`de ${tecnico.nombre}`, { exact: false }).first()).toBeVisible();
 }
 
 test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios (QA-8, QA-25)", async ({ page, browser }) => {
@@ -50,6 +52,8 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await a.getByRole("textbox", { name: "Motivo de la corrección" }).fill("La placa dice 12,5 kVA");
   await a.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(a.getByText("12,5 kVA", { exact: true })).toBeVisible();
+  // El historial va en su pestaña del carril.
+  await a.getByRole("tab", { name: "Historial" }).click();
   const historial = a.getByRole("region", { name: "Historial de cambios" });
   await expect(historial.getByText("potencia nominal: 10 kVA → 12,5 kVA")).toBeVisible();
   await expect(historial.getByText("Motivo: La placa dice 12,5 kVA", { exact: false })).toBeVisible();
@@ -57,7 +61,9 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
 
   await a.getByRole("button", { name: "Comentar potencia nominal" }).click();
   await a.getByRole("textbox", { name: "Nuevo comentario" }).fill("Revisa la placa: la potencia estaba mal");
-  await a.getByRole("button", { name: "Enviar comentario" }).click();
+  // Se escribe debajo de la fila: el primer "Enviar comentario" es el de esa fila.
+  await a.getByRole("button", { name: "Enviar comentario" }).first().click();
+  await a.getByRole("tab", { name: /^Comentarios/ }).click();
   await expect(a.getByRole("region", { name: "Comentarios al técnico" }).getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();
 
   // Luis se lleva la revisión pidiéndolo; el guardado que Ana tenía en curso se rechaza y se avisa (QA-25).
@@ -79,6 +85,7 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await b.getByRole("button", { name: "Marcar revisado" }).click();
   await b.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
   await expect(b.getByText(`Revisado por ${luis.nombre}.`, { exact: false })).toBeVisible();
+  await b.getByRole("tab", { name: "Historial" }).click();
   await expect(b.getByRole("region", { name: "Historial de cambios" }).getByText(`que tenía ${ana.nombre}`, { exact: false })).toBeVisible();
 
   // Campo: la siguiente bajada trae el estado y el comentario.

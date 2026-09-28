@@ -79,6 +79,7 @@ test("cantidades: el técnico anota líneas; oficina importa el catálogo, vincu
   await expect(tabla.getByRole("cell", { name: "Sin vincular" })).toHaveCount(2);
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("combobox", { name: "Ítem del catálogo para la línea 1" }).selectOption({ label: `${cable} · Cable THHN 12 AWG (m)` });
+  await o.getByRole("tab", { name: "Historial" }).click();
   await expect(o.getByText(`“Cable 12 AWG”: sin vincular → ${cable}`)).toBeVisible();
 
   await o.getByRole("button", { name: "Corregir materiales" }).click();
@@ -86,7 +87,8 @@ test("cantidades: el técnico anota líneas; oficina importa el catálogo, vincu
   await expect(cantidad).toHaveValue("2");
   await cantidad.fill("3");
   await o.getByRole("button", { name: "Guardar corrección" }).click();
-  await expect(tabla.getByRole("cell", { name: "3", exact: true })).toBeVisible();
+  // La cantidad va con su unidad en la misma celda ("3 und").
+  await expect(tabla.getByRole("cell", { name: /^3 / })).toBeVisible();
   // El vínculo sigue a la línea por su id: la corrección no lo pierde.
   await expect(o.getByRole("combobox", { name: "Ítem del catálogo para la línea 1" })).toHaveValue(/.+/);
   await expect(o.getByText("materiales: 2 líneas → 2 líneas")).toBeVisible();

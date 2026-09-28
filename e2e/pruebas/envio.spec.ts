@@ -64,14 +64,14 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   const bandeja = await escritorio.newPage();
   await bandeja.goto(`${OFICINA}/`);
   await iniciarSesion(bandeja, oficina);
-  await expect(bandeja.getByRole("heading", { name: "Esperando revisión" })).toBeVisible();
+  await expect(bandeja.getByRole("tab", { name: /Esperando revisión/ })).toBeVisible();
   const fila = (await filaDeLaBandeja(bandeja, tecnico.nombre)).last();
   // La bandeja dice de qué cliente y sitio es, sin abrirlo (iteración 14).
   await expect(fila).toContainText(cliente);
   await expect(fila).toContainText("Sede E2E");
   await fila.getByRole("link").click();
 
-  await expect(bandeja.getByRole("heading", { name: `Levantamiento de ${tecnico.nombre}` })).toBeVisible();
+  await expect(bandeja.getByRole("heading", { name: `${cliente} · Sede E2E`, level: 1 })).toBeVisible();
   await expect(bandeja.getByText("12,5 kVA")).toBeVisible();
   // La visita viaja con el envío desde campo.
   await expect(bandeja.getByText(`${cliente} · Sede E2E`)).toBeVisible();

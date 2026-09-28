@@ -96,7 +96,7 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   // Mano de obra: sin precio no se publica, y lo dice junto a la línea.
   await o.getByRole("button", { name: "Agregar línea" }).click();
   await o.getByRole("textbox", { name: "Descripción de la línea nueva" }).fill("Mano de obra de instalación");
-  await expect(o.getByText("Faltan precios en una línea.")).toBeVisible();
+  await expect(o.getByRole("button", { name: "Falta el precio de 1 línea" })).toBeVisible();
   await expect(o.getByRole("button", { name: "Publicar versión 1" })).toBeDisabled();
   await o.getByRole("textbox", { name: "Precio de Mano de obra de instalación" }).fill("850.000");
 
