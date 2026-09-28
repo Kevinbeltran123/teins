@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { admiteLlaves, ErrorApi, ErrorDeRed, esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Boton, BotonSiguiente, CampoFlotante, KeyRound, ScanFace, UserRound } from "@teins/ui";
+import { Aviso, Boton, Eye, EyeOff, KeyRound, LoaderCircle, TramaDePuntos } from "@teins/ui";
 import { db } from "../datos/instancia";
 import { useConexionDelNavegador } from "../dispositivo/useConexion";
 import { iniciarSesion, iniciarSesionConLlave, RolNoPermitido } from "../sesion/sesion";
@@ -57,50 +57,50 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
   }
 
   return (
-    <main className="flex min-h-dvh flex-col bg-fondo px-5 pt-[max(3rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <div className="mx-auto flex w-full max-w-md grow flex-col gap-6">
-        {/* Rocket Money y Remote (Mobbin): la marca centrada arriba, el saludo y los campos con la acción justo debajo. */}
-        <div className="flex flex-col items-center gap-5 pt-[8vh] text-center motion-safe:animate-subir">
-          <span className="flex items-center gap-2.5">
-            <span aria-hidden className="h-9 w-2 rounded-full bg-acento" />
-            <span className="text-[34px] leading-none font-extrabold tracking-[0.08em]">TEINS</span>
-          </span>
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Hola de nuevo</h1>
-            <p className="text-cuerpo text-texto-secundario">Inicia sesión para ver tus visitas.</p>
-          </div>
+    <main className="flex min-h-dvh flex-col bg-[#070A10]">
+      {/* La franja de la marca: la trama quieta de oficina, en horizontal. No cambia de alto al escribir: si se movería, el toque en "Ingresar" caería fuera. */}
+      <div aria-hidden className="relative h-[34dvh] min-h-[190px] shrink-0 overflow-hidden px-[22px] pt-[max(58px,calc(env(safe-area-inset-top)+24px))]">
+        <TramaDePuntos ancho={390} alto={300} paso={11} radio={4.6} />
+        <span className="relative text-[34px] leading-none font-extrabold tracking-[0.14em] text-[#F3F5F9]">TEINS</span>
+      </div>
+      <div className="relative -mt-[26px] flex grow flex-col gap-4 rounded-t-[28px] border-t border-borde-suave bg-fondo px-[22px] pt-7 pb-[max(1.625rem,env(safe-area-inset-bottom))]">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[26px] leading-tight font-extrabold">Ingresar</h1>
+          <p className="text-[15px] text-texto-secundario">Usa tu usuario de TEINS.</p>
         </div>
         {accesoCerrado && <Aviso tono="alerta">Se cerró el acceso de {accesoCerrado.nombre} en este teléfono y se borraron sus datos.</Aviso>}
         {alCancelar && <Aviso tono="alerta">Tu sesión venció. Inicia sesión para enviar lo pendiente; lo capturado sigue en este teléfono.</Aviso>}
         {!enLinea && <Aviso tono="alerta">Sin conexión. Iniciar sesión necesita señal la primera vez.</Aviso>}
-        <form onSubmit={enviar} noValidate className="flex flex-col gap-3 motion-safe:animate-subir">
-          <CampoFlotante etiqueta="Usuario" nombre="usuario" autoComplete="username" icono={UserRound} onCambio={setUsuario} />
-          <CampoFlotante etiqueta="Contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" icono={KeyRound} onCambio={setContrasena} />
+        <form onSubmit={enviar} noValidate className="flex flex-col gap-4">
+          <Campo etiqueta="Usuario" nombre="usuario" autoComplete="username" valor={usuario} onCambio={setUsuario} />
+          <Campo etiqueta="Contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valor={contrasena} onCambio={setContrasena} />
           {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
-          <div className="flex pt-2">
-            <BotonSiguiente type="submit" cargando={estado.tipo === "enviando"}>
-              Iniciar sesión
-            </BotonSiguiente>
-          </div>
+          <button
+            type="submit"
+            aria-busy={estado.tipo === "enviando" || undefined}
+            className="flex h-[58px] items-center justify-center gap-2.5 rounded-[14px] bg-[#F3F5F9] text-[17px] font-extrabold text-[#0B0F17] active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+          >
+            {estado.tipo === "enviando" && <LoaderCircle aria-hidden className="size-5 motion-safe:animate-spin" />}
+            Ingresar
+          </button>
           {conLlave && (
             <>
-              {/* Oportun (Mobbin): la entrada sin contraseña como alternativa clara, separada. */}
-              <div aria-hidden className="flex items-center gap-3 py-1 text-ayuda font-bold text-texto-secundario">
-                <span className="h-px grow bg-division" />o<span className="h-px grow bg-division" />
+              <div aria-hidden className="flex items-center gap-3 text-[14px] font-bold text-texto-secundario">
+                <span className="h-px grow bg-borde-suave" />o<span className="h-px grow bg-borde-suave" />
               </div>
               <button
                 type="button"
                 onClick={() => void entrarConLlave()}
                 disabled={estado.tipo === "enviando"}
-                className="flex min-h-15 items-center justify-center gap-2.5 rounded-control bg-panel text-cuerpo font-extrabold active:scale-[0.98] disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-6"
+                className="flex h-[58px] items-center justify-center gap-2.5 rounded-[14px] border border-borde-suave text-[17px] font-extrabold active:scale-[0.98] disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-5"
               >
-                <ScanFace aria-hidden />
-                Entrar con llave de acceso
+                <KeyRound aria-hidden />
+                Ingresar con llave de acceso
               </button>
             </>
           )}
         </form>
-        <p className="mt-auto text-center text-ayuda text-texto-secundario">¿Olvidaste tu contraseña? Oficina te da una nueva.</p>
+        <p className="mt-auto pt-4 text-center text-[14px] text-texto-secundario">¿Olvidaste tu contraseña? Pídele a oficina que la restablezca.</p>
         {alCancelar && (
           <Boton variante="fantasma" onClick={alCancelar}>
             Seguir sin enviar
@@ -108,5 +108,43 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
         )}
       </div>
     </main>
+  );
+}
+
+/** Campo con la etiqueta encima; la contraseña empieza oculta y el ojo la muestra (prototipos/campo, "Ingresar"). */
+function Campo({ etiqueta, tipo = "text", autoComplete, nombre, valor, onCambio }: { etiqueta: string; tipo?: "text" | "password"; autoComplete: string; nombre: string; valor: string; onCambio: (v: string) => void }) {
+  const id = useId();
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="flex flex-col gap-[7px]">
+      <label htmlFor={id} className="text-[15px] font-bold">
+        {etiqueta}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          name={nombre}
+          type={tipo === "password" && !visible ? "password" : "text"}
+          autoComplete={autoComplete}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          value={valor}
+          onChange={(e) => onCambio(e.target.value)}
+          className={`h-[58px] w-full rounded-[14px] border border-borde-suave bg-[#0F141E] px-4 text-[17px] text-texto outline-none focus:border-foco focus:shadow-[0_0_0_3px_rgb(255_194_26/0.2)] ${tipo === "password" ? "pr-14" : ""}`}
+        />
+        {tipo === "password" && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? "Ocultar lo escrito" : "Mostrar lo escrito"}
+            aria-pressed={visible}
+            className="absolute top-1.5 right-1.5 grid size-[46px] place-items-center rounded-xl text-texto-secundario focus-visible:outline-3 focus-visible:outline-foco [&_svg]:size-5"
+          >
+            {visible ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

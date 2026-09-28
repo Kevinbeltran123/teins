@@ -91,7 +91,7 @@ test("un técnico revocado pierde el acceso y el teléfono borra sus datos en el
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
   await expect(page.getByText(`Se cerró el acceso de ${tecnico.nombre} en este teléfono y se borraron sus datos.`)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("heading", { name: "Hola de nuevo" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ingresar", exact: true })).toBeVisible();
   expect(await contar(page, "levantamientos")).toBe(0);
   expect(await contar(page, "visitas")).toBe(0);
 

@@ -272,6 +272,33 @@ h1.titulo { margin: 0; font-size: 30px; font-weight: 800; line-height: 1.1; text
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after, ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; transition: none !important; }
 }
+
+/* Ingreso de campo: la franja de marca arriba (trama quieta) y el formulario en una hoja debajo, como oficina */
+.pantalla.ingreso { background: #070A10; }
+.franja-marca { position: relative; height: 34%; min-height: 190px; overflow: hidden; flex: none; padding: 58px 22px 0; transition: height .25s var(--curva); }
+.franja-marca .trama { position: absolute; inset: 0; width: 100%; height: 100%; }
+.marca-franja { position: relative; font-size: 34px; font-weight: 800; letter-spacing: .14em; color: #F3F5F9; }
+.hoja-ingreso { flex: 1; margin-top: -26px; position: relative; background: var(--t-fondo); border-radius: 28px 28px 0 0; padding: 28px 22px 26px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--t-borde); overflow-y: auto; }
+.cab-ingreso h1 { margin: 0; font-size: 26px; font-weight: 800; }
+.cab-ingreso p { margin: 4px 0 0; color: var(--t-sec); font-size: 15px; }
+.campo-i { display: flex; flex-direction: column; gap: 7px; }
+.campo-i label { font-size: 15px; font-weight: 700; }
+.campo-i input { height: 58px; width: 100%; border-radius: 14px; border: 1px solid var(--t-borde); background: #0F141E; color: var(--t-texto); padding: 0 16px; font: inherit; font-size: 17px; }
+.campo-i input:focus { outline: none; border-color: var(--senal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--senal) 20%, transparent); }
+.con-ojo { position: relative; }
+.con-ojo input { padding-right: 56px; }
+.ojo-i { position: absolute; right: 6px; top: 6px; width: 46px; height: 46px; border: 0; background: none; color: var(--t-sec); border-radius: 12px; display: grid; place-items: center; }
+.btn-i svg, .ojo-i svg { width: 20px; height: 20px; flex: none; }
+.btn-i, .campo-i, .cab-ingreso, .o-i, .digitos-i { flex: none; }
+.btn-i { height: 58px; border-radius: 14px; border: 1px solid var(--t-borde); background: transparent; color: var(--t-texto); font-weight: 800; font-size: 17px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.btn-i.principal { background: #F3F5F9; color: #0B0F17; border-color: #F3F5F9; }
+.o-i { display: flex; align-items: center; gap: 12px; color: var(--t-sec); font-size: 14px; font-weight: 700; }
+.o-i::before, .o-i::after { content: ""; flex: 1; height: 1px; background: var(--t-borde); }
+.pie-i { margin: auto 0 0; text-align: center; color: var(--t-sec); font-size: 14px; }
+.digitos-i { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.digitos-i input { height: 62px; min-width: 0; text-align: center; font-size: 26px; font-weight: 800; border-radius: 14px; border: 1px solid var(--t-borde); background: #0F141E; color: var(--t-texto); }
+.digitos-i input:focus { outline: none; border-color: var(--senal); }
+.volver-i { background: none; border: 0; color: var(--t-sec); font-weight: 700; font-size: 15px; padding: 8px; }
 </style>
 
 <div class="escena">
@@ -297,6 +324,8 @@ h1.titulo { margin: 0; font-size: 30px; font-weight: 800; line-height: 1.1; text
 
 <script>
 const I = {
+  ojo: '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
+  llave: '<path d="M2.59 18.41A2 2 0 0 0 2 19.83V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.17a2 2 0 0 0 1.42-.59l.81-.81a6.5 6.5 0 1 0-4.24-4.24z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
   atras: '<path d="m15 18-6-6 6-6"/>',
   mas: '<path d="M12 5v14M5 12h14"/>',
   flecha: '<path d="M5 12h14M13 6l6 6-6 6"/>',
@@ -329,6 +358,8 @@ const PASOS = [
 ];
 
 const ORIGEN = {
+  ingreso: { titulo: "Ingresar", ideas: [["Neon", "https://mobbin.com/screens/c1d730e1-1e71-4354-abe1-7c8ec94dc1e0", "la marca en una trama de puntos quieta, sin animación; etiquetas encima de los campos"], ["Oficina", null, "el mismo ingreso de oficina: en el teléfono la trama es una franja arriba y el formulario una hoja debajo"]] },
+  codigo: { titulo: "Código de verificación", ideas: [["Oficina", null, "la misma franja y seis casillas grandes"]] },
   inicio: { titulo: "Mis visitas", ideas: [["Jobber", "https://mobbin.com/screens/bc7ab501-113a-46c8-8489-92e99140ea45", "tarjeta de la visita de hoy con barra de estado al borde y línea de sincronización"], ["DoorDash Dasher", "https://mobbin.com/screens/5859ffb5-02a0-45ee-9065-2ea87eaf43fa", "las demás paradas como filas con hora"], ["Crítica, problemas 14 y 17", null, "el aviso de instalar se vuelve una línea que se cierra; el diagnóstico sale de la lista"]] },
   recorrido: { titulo: "El recorrido", ideas: [["Lloyds", "https://mobbin.com/screens/f856547c-52ae-4ced-9629-62f2a86f9866", "hechos con chulo, el actual resaltado, los que faltan en gris"], ["Bloom", "https://mobbin.com/screens/f64890e1-45fe-44e0-b00a-ebe385e35638", "conectores punteados que dibujan la ruta"], ["Crítica, problemas 1 y 2", null, "reemplaza el desplazamiento infinito y las pastillas cortadas"]] },
   cuarto: { titulo: "Un paso", ideas: [["Yazio", "https://mobbin.com/screens/93bc52cd-03bc-4ca8-8a1d-8464396f692a", "cifra grande con la unidad al lado y el botón siempre al alcance"], ["Up", "https://mobbin.com/screens/fa028aec-a1b6-4efb-a63a-9a70a41303cd", "valores comunes en pastillas: un toque en vez de escribir"], ["eBay y Grailed", "https://mobbin.com/screens/49d04cd2-e517-4e26-9ab6-0d9f1c047327", "fotos con puestos nombrados: se ve cuál falta"], ["Crítica, problemas 3, 5 y 6", null, "la barra propone Siguiente, la unidad elegida ya no es azul y 'No se pudo obtener' es un enlace discreto"]] },
@@ -341,10 +372,10 @@ const ORIGEN = {
 };
 ORIGEN.llegada = ORIGEN.cuarto; ORIGEN.tablero = ORIGEN.tableros;
 
-const MAPA = [["inicio", "Mis visitas"], ["recorrido", "Recorrido"], ["llegada", "Llegada"], ["cuarto", "Cuarto técnico"], ["tableros", "Tableros"], ["tablero", "Un tablero"], ["materiales", "Materiales"], ["croquis", "Croquis"], ["firma", "Firma"], ["revisar", "Revisar"], ["enviado", "Enviado"]];
+const MAPA = [["ingreso", "Ingresar"], ["codigo", "Código"], ["inicio", "Mis visitas"], ["recorrido", "Recorrido"], ["llegada", "Llegada"], ["cuarto", "Cuarto técnico"], ["tableros", "Tableros"], ["tablero", "Un tablero"], ["materiales", "Materiales"], ["croquis", "Croquis"], ["firma", "Firma"], ["revisar", "Revisar"], ["enviado", "Enviado"]];
 
 const e = {
-  pantalla: "inicio", pila: [], oscuro: true, enLinea: true, origenes: true, avisoInstalar: true,
+  pantalla: "ingreso", pila: [], oscuro: true, enLinea: true, origenes: true, avisoInstalar: true,
   hechos: new Set(["llegada"]),
   potencia: "", unidad: "kVA", distancia: "", unidadDist: "m", descripcion: "",
   fotos: { fachada: true, placa: false, cuarto: false, tablero: false },
@@ -390,7 +421,46 @@ function arriba(titulo, pasoId) {
   </div>`;
 }
 
+
+/* Trama de puntos de la marca: se dibuja con un bucle (pesa casi nada), quieta, azul TEINS que pasa a amarillo hacia una esquina. */
+function trama(W, H, P = 11) {
+  const mezcla = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  const hex = (c) => "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+  const fr = [0x1e, 0x2a, 0x44], az = [0x2f, 0x6b, 0xff], am = [0xff, 0xc2, 0x1a];
+  let puntos = "";
+  for (let y = P / 2; y < H; y += P) for (let x = P / 2; x < W; x += P) {
+    const d = Math.hypot((W - x) / W, (H - y) / H) / Math.SQRT2;
+    const t = Math.max(0, 1 - d * 1.25);
+    const r = Math.max(0.8, 0.8 + t ** 1.2 * 4.6);
+    const c = t < 0.55 ? mezcla(fr, az, Math.min(1, t / 0.55)) : mezcla(az, am, Math.min(1, (t - 0.55) / 0.35));
+    puntos += `<circle cx="${x}" cy="${y}" r="${r.toFixed(2)}" fill="${hex(c)}" opacity="${(0.35 + 0.65 * t).toFixed(2)}"/>`;
+  }
+  return `<svg class="trama" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${puntos}</svg>`;
+}
+const franja = () => `<div class="franja-marca">${trama(390, 300)}<span class="marca-franja">TEINS</span></div>`;
+
 const V = {
+  ingreso() {
+    return `<div class="pantalla ingreso" style="padding-top:0">${franja()}
+      <form class="hoja-ingreso" data-accion-form="ingresar" onsubmit="event.preventDefault()">
+        <div class="cab-ingreso"><h1>Ingresar</h1><p>Usa tu usuario de TEINS.</p></div>
+        <div class="campo-i"><label for="i-usuario">Usuario</label><input id="i-usuario" autocomplete="username" spellcheck="false" value="andres.rojas"></div>
+        <div class="campo-i"><label for="i-clave">Contraseña</label><div class="con-ojo"><input id="i-clave" type="password" autocomplete="current-password" value="secreta123"><button type="button" class="ojo-i" onclick="const c=document.getElementById('i-clave');c.type=c.type==='password'?'text':'password'" aria-label="Mostrar lo escrito">${ic("ojo")}</button></div></div>
+        <button type="button" class="btn-i principal" data-accion="ir" data-a="inicio">Ingresar</button>
+        <div class="o-i">o</div>
+        <button type="button" class="btn-i" data-accion="ir" data-a="inicio">${ic("llave")}Ingresar con llave de acceso</button>
+        <p class="pie-i">¿Olvidaste tu contraseña? Pídele a oficina que la restablezca.</p>
+      </form></div>`;
+  },
+  codigo() {
+    return `<div class="pantalla ingreso" style="padding-top:0">${franja()}
+      <form class="hoja-ingreso" onsubmit="event.preventDefault()">
+        <div class="cab-ingreso"><h1>Código de verificación</h1><p>Escribe los 6 dígitos que muestra tu app autenticadora.</p></div>
+        <div class="digitos-i">${[1, 2, 3, 4, 5, 6].map((n) => `<input inputmode="numeric" maxlength="1" aria-label="Dígito ${n}">`).join("")}</div>
+        <button type="button" class="btn-i principal" data-accion="ir" data-a="inicio">Verificar</button>
+        <button type="button" class="volver-i" data-accion="ir" data-a="ingreso">Volver a la contraseña</button>
+      </form></div>`;
+  },
   inicio() {
     const pasos = PASOS.map((p) => `<i class="${e.hechos.has(p.id) ? "lleno" : p.id === primerPendiente() ? "actual" : ""}"></i>`).join("");
     return `<div class="pantalla">
