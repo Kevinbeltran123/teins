@@ -1,7 +1,17 @@
-import { customType, index, integer, jsonb, pgSchema, smallint, text, unique, uuid } from "drizzle-orm/pg-core";
+import { customType, index, integer, pgSchema, smallint, text, unique, uuid } from "drizzle-orm/pg-core";
 import { aislamientoDelPortal, aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
+
+/**
+ * jsonb que devuelve lo que entrega pg, sin el segundo JSON.parse de drizzle: con él, el texto
+ * "12345" volvía como el número 12345 y la cadena de hashes reportaba una alteración falsa.
+ */
+const jsonb = customType<{ data: unknown; driverData: unknown }>({
+  dataType: () => "jsonb",
+  toDriver: (valor) => JSON.stringify(valor),
+  fromDriver: (valor) => valor,
+});
 
 export const auditoria = pgSchema("auditoria");
 

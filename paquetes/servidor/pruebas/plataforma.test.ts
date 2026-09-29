@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { encolar } from "../src/plataforma/cola";
 import { archivos } from "../src/modulos/archivos/esquema";
-import { registrar, verificarCadena } from "../src/modulos/auditoria";
+import { leerCadena, registrar, verificarCadena } from "../src/modulos/auditoria";
 import { leerCambios, registrarCambios } from "../src/modulos/cambios";
 import { conexionesDePrueba, nuevaOrganizacion } from "./ayudas";
 
@@ -94,6 +94,18 @@ describe("auditoría con cadena de hashes (ADR-0008)", () => {
       integra: false,
       primerEslabonRoto: 2,
     });
+  });
+
+  it("un texto que parece JSON conserva su tipo al leerlo y la cadena sigue íntegra", async () => {
+    const org = await nuevaOrganizacion(propietario);
+    const id = randomUUID();
+    const textos = ["12345", "12.50", "true", "null"];
+    await enOrganizacion(app.bd, org, (tx) =>
+      registrar(tx, textos.map((t, n) => ({ ...evento(org, id, n), valorAnterior: t, valorNuevo: t }))),
+    );
+    expect(await enOrganizacion(app.bd, org, (tx) => verificarCadena(tx, org, "levantamiento", id))).toEqual({ integra: true, eslabones: 4 });
+    const leidos = await enOrganizacion(app.bd, org, (tx) => leerCadena(tx, org, "levantamiento", id));
+    expect(leidos.map((r) => r.valorNuevo)).toEqual(textos);
   });
 
   it("la aplicación no puede actualizar ni borrar registros", async () => {
