@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { eq } from "drizzle-orm";
-import { leerConfig } from "../config";
+import { leerConfig, urlDelPropietario } from "../config";
 import { almacenamientoS3 } from "../plataforma/almacenamiento";
 import { conectar, enOrganizacion } from "../plataforma/base-de-datos";
 import { clientesYSitios } from "../modulos/clientes";
@@ -26,7 +26,7 @@ if (config.NODE_ENV === "production" && !config.ENTORNO_DE_PRUEBAS) {
 const requerir = createRequire(import.meta.url);
 const leerFormato = (archivo: string) => JSON.parse(readFileSync(requerir.resolve(`@teins/dominio/formatos-de-prueba/${archivo}`), "utf8"));
 
-const propietario = conectar(config.DATABASE_URL_PROPIETARIO, 2);
+const propietario = conectar(urlDelPropietario(config), 2);
 const app = conectar(config.DATABASE_URL, 2);
 try {
   await propietario.bd.insert(organizaciones).values({ id: ORGANIZACION_DE_DESARROLLO, nombre: "Organización de desarrollo" }).onConflictDoNothing();

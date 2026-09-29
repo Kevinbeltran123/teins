@@ -1,6 +1,6 @@
 import { run, Logger } from "graphile-worker";
 import pino from "pino";
-import { leerConfig } from "./config";
+import { leerConfig, urlDelPropietario } from "./config";
 import { crearArchivos } from "./modulos/archivos";
 import { crearAvisos, enviadorSegunConfig } from "./modulos/avisos";
 import { crearGeneradorPdfDeCotizaciones } from "./modulos/cotizaciones";
@@ -19,7 +19,7 @@ const config = leerConfig();
 const registro = pino({ level: config.NIVEL_REGISTRO, base: { rol: "worker" } });
 const alFallar = (error: Error) => registro.error({ err: error }, "Error de conexión");
 const negocio = conectar(config.DATABASE_URL, config.POOL_MAXIMO, alFallar);
-const cola = conectar(config.DATABASE_URL_PROPIETARIO, 4, alFallar);
+const cola = conectar(urlDelPropietario(config), 4, alFallar);
 
 const almacenamiento = almacenamientoS3(config);
 const archivos = crearArchivos({ bd: negocio.bd, almacenamiento, config });

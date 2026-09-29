@@ -7,7 +7,8 @@ import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
 import { crearArchivos } from "../src/modulos/archivos";
 import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
-import { cabecerasSync, iniciarSesion, jpegDePrueba, ORIGEN, servidorDePrueba } from "./ayudas";
+import { urlDelPropietario } from "../src/config";
+import { cabecerasSync, configDePrueba, iniciarSesion, jpegDePrueba, ORIGEN, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
@@ -84,6 +85,12 @@ describe("contrato y políticas (ADR-0009, ADR-0014)", () => {
     expect(r.headers["content-type"]).toContain(TIPO_PROBLEMA);
     expect(r.json()).toMatchObject({ codigo: "no_autenticado", status: 401 });
     expect(r.headers["x-correlacion"]).toBeTruthy();
+  });
+
+  it("la correlación la genera el servidor: la que manda quien pide no llega a los registros ni a la auditoría", async () => {
+    const r = await app.inject({ method: "GET", url: "/api/sesion", headers: { "x-correlacion": "correlacion-de-otra-accion" } });
+    expect(r.headers["x-correlacion"]).not.toBe("correlacion-de-otra-accion");
+    expect(r.json()).toMatchObject({ correlacion: r.headers["x-correlacion"] });
   });
 
   it("cada rol solo accede a lo suyo", async () => {
@@ -192,9 +199,44 @@ describe("rutas de autenticación", () => {
     expect((await intento("10.20.0.1")).statusCode).toBe(429);
     expect((await intento("10.20.0.2")).statusCode).toBe(401);
   });
+
+  it("detrás de los proxies de la plataforma, una IP falsa al inicio de X-Forwarded-For no burla el límite", async () => {
+    // La conexión llega de un proxy interno y la cabecera trae el cliente y el borde. Si el borde dejara pasar
+    // la cabecera que manda el cliente, sus IP falsas quedarían antes de la real.
+    const intento = (cliente: string, falsa: string) =>
+      detrasDeProxies.app.inject({
+        method: "POST",
+        url: "/api/auth/sign-in/username",
+        remoteAddress: "100.64.0.3",
+        headers: { origin: ORIGEN, "content-type": "application/json", "x-forwarded-for": `${falsa}, ${cliente}, 100.64.0.9` },
+        payload: { username: "nadie", password: "contrasena-equivocada" },
+      });
+    for (let i = 0; i < 3; i++) expect((await intento("198.51.100.7", `203.0.113.${i}`)).statusCode).toBe(401);
+    expect((await intento("198.51.100.7", "203.0.113.99")).statusCode).toBe(429);
+    expect((await intento("198.51.100.8", "203.0.113.99")).statusCode).toBe(401);
+  });
 });
 
 const conLimite = await servidorDePrueba({ config: { INICIOS_DE_SESION_POR_MINUTO: "3" } });
+const detrasDeProxies = await servidorDePrueba({ config: { INICIOS_DE_SESION_POR_MINUTO: "3", PROXIES_DE_CONFIANZA: "2" } });
+
+describe("configuración (ADR-0016)", () => {
+  it("con orígenes https no arranca en modo de desarrollo: sin NODE_ENV, las cookies saldrían sin Secure", () => {
+    expect(() => configDePrueba({ NODE_ENV: undefined, ORIGENES_CONFIABLES: "https://campo.teins.example" })).toThrow(/NODE_ENV/);
+    expect(() => configDePrueba({ NODE_ENV: "development" })).not.toThrow();
+  });
+
+  it("en producción hay que decir cuántos proxies hay delante: sin el dato, los límites por IP no sirven", () => {
+    expect(() => configDePrueba({ NODE_ENV: "production" })).toThrow(/PROXIES_DE_CONFIANZA/);
+    expect(() => configDePrueba({ NODE_ENV: "production", PROXIES_DE_CONFIANZA: "2" })).not.toThrow();
+  });
+
+  it("el rol web arranca sin la conexión del dueño; quien la usa la exige", () => {
+    const sinDueno = configDePrueba({ DATABASE_URL_PROPIETARIO: undefined });
+    expect(() => urlDelPropietario(sinDueno)).toThrow(/DATABASE_URL_PROPIETARIO/);
+    expect(urlDelPropietario(configDePrueba())).toBe(configDePrueba().DATABASE_URL_PROPIETARIO);
+  });
+});
 
 describe("archivos (ADR-0007)", () => {
   it("autoriza, recibe, verifica y sirve una foto; la segunda autorización no vuelve a subirla", async () => {

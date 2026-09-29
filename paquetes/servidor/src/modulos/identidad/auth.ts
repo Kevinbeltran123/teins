@@ -76,7 +76,7 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
       useSecureCookies: config.NODE_ENV === "production",
       // Detrás del proxy de la plataforma, igual que trustProxy de Fastify: la URL base sale de X-Forwarded-Host.
       // La IP del cliente no: la pone el puente de rutas (index.ts) con la que resolvió Fastify.
-      trustedProxyHeaders: config.NODE_ENV === "production",
+      trustedProxyHeaders: Boolean(config.PROXIES_DE_CONFIANZA),
       database: { generateId: () => randomUUID() },
     },
     plugins: [

@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { leerConfig } from "../config";
+import { leerConfig, urlDelPropietario } from "../config";
 import { conectar } from "../plataforma/base-de-datos";
 import { organizaciones } from "../modulos/identidad/esquema";
 
@@ -17,7 +17,7 @@ if (!values.id || !UUID.test(values.id) || !values.nombre?.trim()) {
 }
 
 const config = leerConfig();
-const propietario = conectar(config.DATABASE_URL_PROPIETARIO, 1);
+const propietario = conectar(urlDelPropietario(config), 1);
 try {
   const [creada] = await propietario.bd.insert(organizaciones).values({ id: values.id, nombre: values.nombre.trim() }).onConflictDoNothing().returning({ id: organizaciones.id });
   console.log(creada ? `Organización creada: ${values.nombre.trim()} (${values.id})` : `La organización ${values.id} ya existía: no se tocó`);

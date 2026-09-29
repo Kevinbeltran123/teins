@@ -59,7 +59,7 @@ Reglas de la estructura:
 
 | Rol | Uso | Permisos |
 |---|---|---|
-| Dueño (`DATABASE_URL_PROPIETARIO`) | Migraciones y cola de trabajos | Dueño de los esquemas |
+| Dueño (`DATABASE_URL_PROPIETARIO`) | Migraciones y cola de trabajos. Solo la reciben el worker, `migrar`, `sembrar` y `crear-organizacion` (la exigen con `urlDelPropietario`); el rol web arranca sin ella | Dueño de los esquemas |
 | `teins_portal` (`DATABASE_URL_PORTAL`) | Rutas del portal del cliente | Solo versiones publicadas con PDF listo del cliente de la sesión, sus accesos, sesiones e intentos, y registrar en auditoría |
 | `teins_app` (`DATABASE_URL`) | Solicitudes y trabajos de negocio | Mínimos por tabla; sujeto a seguridad por fila; solo inserta y lee en auditoría, formatos y el registro de cambios; no borra en ninguna tabla de negocio |
 
@@ -120,8 +120,8 @@ Una imagen para todo: `docker build -t teins .` desde la raíz. Incluye el servi
 | Rol web (por defecto) | `node --enable-source-maps dist/web.js` | Una o más; sin estado |
 | Rol worker | `node --enable-source-maps dist/worker.js` | Una o más |
 
-Variables de entorno: las de `.env.example` más `NODE_ENV=production`, `SUPERFICIE_CAMPO_HOST` y `SUPERFICIE_OFICINA_HOST` (por ejemplo `campo.<dominio>` y `oficina.<dominio>`), con `ORIGENES_CONFIABLES` en `https://` para esos mismos hosts. Las contraseñas y el secreto van en el gestor de secretos de la plataforma, nunca en el repositorio.
+Variables de entorno: las de `.env.example` más `NODE_ENV=production`, `PROXIES_DE_CONFIANZA` (cuántos proxies de la plataforma hay delante; en Railway, `2`), `SUPERFICIE_CAMPO_HOST` y `SUPERFICIE_OFICINA_HOST` (por ejemplo `campo.<dominio>` y `oficina.<dominio>`), con `ORIGENES_CONFIABLES` en `https://` para esos mismos hosts. La configuración no arranca con orígenes `https` en modo de desarrollo (saldrían cookies sin `Secure`) ni en producción sin `PROXIES_DE_CONFIANZA` (todas las solicitudes compartirían un solo límite de intentos). Las contraseñas y el secreto van en el gestor de secretos de la plataforma, nunca en el repositorio.
 
 Antes del primer despliegue en un entorno: crear el rol `teins_app` con `infra/roles.sql` y darle contraseña desde la consola del proveedor. CORS del almacenamiento: `S3_CONFIGURAR_CORS=true` si el token puede administrar el bucket; si no (R2 con token de objetos), en el panel del proveedor. Con Cloudflare R2, `S3_EXIGIR_HUELLA=false` (no admite la huella en la carga; la verifica el worker). `node dist/cli/sembrar.js` solo en pruebas, con `ENTORNO_DE_PRUEBAS=true`; nunca corre en producción. Entorno de pruebas en Railway (servicios, variables, operación): [`docs/proceso/entorno-de-pruebas.md`](../../docs/proceso/entorno-de-pruebas.md). La imagen incluye todo comando de `src/cli/` (`scripts/compilar.mjs`).
 
-Salud: `GET /salud` verifica la base de datos. El rol web detrás de un proxy confía en sus encabezados solo con `NODE_ENV=production`.
+Salud: `GET /salud` verifica la base de datos. El rol web detrás de un proxy confía en sus encabezados solo con `PROXIES_DE_CONFIANZA`: la IP del cliente es la que está justo antes de esos proxies en `X-Forwarded-For`, y lo que el cliente escriba antes se ignora. La correlación de cada solicitud (`x-correlacion`, la que va a la auditoría) la genera siempre el servidor.

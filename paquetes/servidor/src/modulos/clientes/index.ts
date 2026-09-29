@@ -227,12 +227,16 @@ function valoresDeContacto(datos: Cuerpo<"crearContacto">, usuarioId: string, an
   };
 }
 
-/** Lo que se audita de un contacto: con qué datos y canales quedó, y quién registró la autorización. */
+/**
+ * Lo que se audita de un contacto: con qué datos y canales quedó, y quién registró la autorización. La auditoría
+ * no se borra (ADR-0008): el correo y el celular van enmascarados, así quitar el contacto sí borra sus datos
+ * (regla 18) y el registro sigue mostrando cuál cambió.
+ */
 const auditable = (v: Pick<FilaContacto, "nombre" | "cargo" | "correo" | "celular" | "recibeCorreo" | "recibeWhatsapp" | "recibeInformes" | "recibeCotizaciones" | "whatsappAutorizadoPor">) => ({
   nombre: v.nombre,
   cargo: v.cargo,
-  correo: v.correo,
-  celular: v.celular,
+  correo: v.correo && `${v.correo.slice(0, 1)}•••${v.correo.slice(v.correo.lastIndexOf("@"))}`,
+  celular: v.celular && `•••${v.celular.slice(-4)}`,
   recibeCorreo: v.recibeCorreo,
   recibeWhatsapp: v.recibeWhatsapp,
   recibeInformes: v.recibeInformes,

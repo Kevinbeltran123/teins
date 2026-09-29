@@ -14,12 +14,21 @@ const Esquema = z.object({
   ENTORNO_DE_PRUEBAS: booleano.default(false),
   HOST: z.string().default("0.0.0.0"),
   PUERTO: z.coerce.number().int().min(1).max(65535).default(3000),
+  /**
+   * Proxies de la plataforma delante del servidor: la IP del cliente es la que está justo antes de ellos en
+   * X-Forwarded-For, y todo lo anterior lo pudo escribir el cliente. En Railway son dos (.railway/railway.ts).
+   * Sin valor no se confía en ninguno: en desarrollo y pruebas no hay proxy.
+   */
+  PROXIES_DE_CONFIANZA: z.coerce.number().int().min(0).max(5).optional(),
   NIVEL_REGISTRO: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 
   /** Rol de la aplicación: sujeto a seguridad por fila, sin permiso de modificar auditoría. */
   DATABASE_URL: z.url(),
-  /** Rol dueño: migraciones y cola de trabajos. Nunca atiende solicitudes. */
-  DATABASE_URL_PROPIETARIO: z.url(),
+  /**
+   * Rol dueño: migraciones y cola de trabajos. Nunca atiende solicitudes: el rol web no la recibe, y quien la usa
+   * (worker, migrar, sembrar, crear-organizacion) la exige con `urlDelPropietario`.
+   */
+  DATABASE_URL_PROPIETARIO: z.url().optional(),
   POOL_MAXIMO: z.coerce.number().int().min(1).max(100).default(10),
   /**
    * Rol exclusivo del portal (ADR-0009, parte 3): solo ve versiones publicadas del cliente de la sesión.
@@ -110,9 +119,26 @@ const Esquema = z.object({
   .refine((c) => !(c.ENVIOS_SIMULADOS.correo || c.ENVIOS_SIMULADOS.whatsapp) || c.NODE_ENV !== "production" || c.ENTORNO_DE_PRUEBAS, {
     path: ["ENVIOS_SIMULADOS"],
     message: "Los envíos simulados solo se permiten fuera de producción o en el entorno de pruebas",
+  })
+  // Un origen https es un despliegue: en modo de desarrollo saldrían cookies sin Secure, sin HSTS y `sembrar`
+  // quedaría permitido. Si falta NODE_ENV, no se arranca con el valor por defecto.
+  .refine((c) => c.NODE_ENV !== "development" || c.ORIGENES_CONFIABLES.every((o) => new URL(o).protocol === "http:"), {
+    path: ["NODE_ENV"],
+    message: "Con orígenes https, NODE_ENV debe ser production",
+  })
+  // Sin el número de proxies, la IP de cada solicitud sería la del proxy: un solo límite de intentos para todos.
+  .refine((c) => c.NODE_ENV !== "production" || c.PROXIES_DE_CONFIANZA !== undefined, {
+    path: ["PROXIES_DE_CONFIANZA"],
+    message: "En producción, diga cuántos proxies de la plataforma hay delante del servidor",
   });
 
 export type Config = z.infer<typeof Esquema>;
+
+/** La conexión del rol dueño, para quien la usa (worker, migrar, sembrar, crear-organizacion). */
+export function urlDelPropietario(config: Config): string {
+  if (!config.DATABASE_URL_PROPIETARIO) throw new Error("Configuración inválida:\n  DATABASE_URL_PROPIETARIO: este proceso usa el rol dueño y no la recibió");
+  return config.DATABASE_URL_PROPIETARIO;
+}
 
 export function leerConfig(entorno: NodeJS.ProcessEnv = process.env): Config {
   const resultado = Esquema.safeParse(entorno);

@@ -119,8 +119,15 @@ describe("contactos del cliente (iteración 20)", () => {
 
     const quitado = await post(oficina.cookie, `/api/clientes/${clienteId}/contactos/${ana!.id}/quitar`);
     expect(quitado.json().contactos).toEqual([]);
-    const { rows } = await s.propietario.pool.query("select tipo_evento from auditoria.registros where agregado_id = $1 order by secuencia", [clienteId]);
+    const { rows } = await s.propietario.pool.query("select tipo_evento, valor_anterior, valor_nuevo from auditoria.registros where agregado_id = $1 order by secuencia", [clienteId]);
     expect(rows.map((r) => r.tipo_evento)).toEqual(expect.arrayContaining(["contacto_creado", "contacto_editado", "contacto_quitado"]));
+    // La auditoría no se puede borrar: guarda el correo y el celular enmascarados, así quitar el contacto sí los borra.
+    const auditado = JSON.stringify(rows);
+    for (const dato of ["ana@cliente.example", "+573005550117", "+573105550142"]) expect(auditado).not.toContain(dato);
+    expect(rows.find((r) => r.tipo_evento === "contacto_editado")).toMatchObject({
+      valor_anterior: { correo: "a•••@cliente.example", celular: "•••0117" },
+      valor_nuevo: { correo: "a•••@cliente.example", celular: "•••0142" },
+    });
   });
 
   it("el técnico no ve ni cambia contactos", async () => {
@@ -443,7 +450,7 @@ describe("envíos simulados por canal", () => {
   });
 
   it("producción nunca arranca con un canal simulado", () => {
-    expect(() => configDePrueba({ NODE_ENV: "production", ENVIOS_SIMULADOS: "whatsapp" })).toThrow(/ENVIOS_SIMULADOS/);
-    expect(() => configDePrueba({ NODE_ENV: "production", ENTORNO_DE_PRUEBAS: "true", ENVIOS_SIMULADOS: "whatsapp" })).not.toThrow();
+    expect(() => configDePrueba({ NODE_ENV: "production", PROXIES_DE_CONFIANZA: "2", ENVIOS_SIMULADOS: "whatsapp" })).toThrow(/ENVIOS_SIMULADOS/);
+    expect(() => configDePrueba({ NODE_ENV: "production", PROXIES_DE_CONFIANZA: "2", ENTORNO_DE_PRUEBAS: "true", ENVIOS_SIMULADOS: "whatsapp" })).not.toThrow();
   });
 });

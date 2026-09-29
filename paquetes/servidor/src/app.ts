@@ -34,34 +34,34 @@ export interface Dependencias {
 }
 
 const CABECERA_CORRELACION = "x-correlacion";
-const CORRELACION_VALIDA = /^[A-Za-z0-9._-]{8,64}$/;
 
 /**
  * Construye el rol web (ADR-0001). Los módulos se componen aquí y solo se ven entre sí
  * por su interfaz pública.
  */
 export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dependencias): Promise<{ app: FastifyInstance; rutas: Set<string> }> {
+  const proxies = config.PROXIES_DE_CONFIANZA ?? 0;
   const app = Fastify({
     logger: {
       level: config.NIVEL_REGISTRO,
       // Nunca se registran credenciales ni contenido (ADR-0017).
       redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
     },
-    genReqId: (solicitud) => {
-      const recibida = solicitud.headers[CABECERA_CORRELACION];
-      return typeof recibida === "string" && CORRELACION_VALIDA.test(recibida) ? recibida : randomUUID();
-    },
+    // La correlación va a la auditoría encadenada (ADR-0008): la genera el servidor, nunca quien pide.
+    genReqId: () => randomUUID(),
     logController: new LogController({
       requestIdLogLabel: "correlacion",
       // Las verificaciones de disponibilidad llegan cada pocos segundos: no llenan los registros.
       disableRequestLogging: (solicitud) => solicitud.url === "/salud",
     }),
     bodyLimit: 2 * 1024 * 1024,
-    // La IP del cliente es la primera de X-Forwarded-For: el borde de Railway rehace esa cabecera (cliente y un
-    // salto interno) y descarta la que manda el cliente. Verificado el 2026-09-29 con
-    // `curl -H "X-Forwarded-For: 203.0.113.77" <portal>/api/portal/sesion`: el registro muestra la IP real.
-    // Si algún día muestra la enviada, los límites por origen (portal y Better Auth) quedarían burlables.
-    trustProxy: config.NODE_ENV === "production",
+    // Se confía en un número fijo de proxies, contados desde el servidor: la IP del cliente es la que está justo
+    // antes de ellos en X-Forwarded-For. En Railway la conexión llega de un proxy interno y la cabecera trae el
+    // cliente y un salto interno (visto el 2026-09-29). Lo que el cliente escriba en la cabecera queda antes y se
+    // ignora, aunque el borde dejara de descartarlo: los límites por origen (portal y Better Auth) no se burlan.
+    // Va como función: Fastify no acepta un número porque no puede validar quién conecta; en Railway solo se
+    // llega al servicio por su borde o por la red privada del proyecto.
+    trustProxy: proxies > 0 ? (_direccion: string, salto: number) => salto < proxies : false,
   });
 
   // Un cliente real puede enviar content-type JSON sin cuerpo (por ejemplo, al confirmar una subida).
