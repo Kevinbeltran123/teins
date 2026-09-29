@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { llaveDeEnvio } from "@teins/protocolo";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
-import { cabecerasSync, iniciarSesion, servidorDePrueba } from "./ayudas";
+import { crearFormatos } from "../src/modulos/formatos";
+import { cabecerasSync, formatoDePrueba, iniciarSesion, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
@@ -54,6 +55,14 @@ describe("revisión (QA-8, I-1)", () => {
     expect(nada).toMatchObject({ total: 0, elementos: [] });
     // Sin texto, la bandeja completa del estado.
     expect((await buscar("   ")).total).toBe(1);
+  });
+
+  it("la bandeja también busca por el nombre visible del formato, y un cursor alterado es un error de entrada", async () => {
+    const { oficina, organizacionId } = await levantamientoEnviado();
+    await enOrganizacion(s.conexionApp.bd, organizacionId, (tx) => crearFormatos().publicar(tx, organizacionId, { ...formatoDePrueba(2), version: 3, nombre: "Mantenimiento de climatización" }));
+    expect((await get(oficina.cookie, `/api/levantamientos?estado=enviado&buscar=${encodeURIComponent("climatizacion")}`)).json().total).toBe(1);
+    const cursor = Buffer.from(JSON.stringify(["2026-01-01T00:00:00.000Z", "no-es-un-id"])).toString("base64url");
+    expect((await get(oficina.cookie, `/api/levantamientos?estado=enviado&cursor=${cursor}`)).json()).toMatchObject({ codigo: "entrada_invalida" });
   });
 
   it("tomar, corregir y marcar revisado dejan historial por campo con la cadena íntegra", async () => {

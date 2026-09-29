@@ -46,6 +46,9 @@ describe("superficies servidas por el rol web (ADR-0016)", () => {
     expect((await pedir("campo.prueba", "/../secreto.txt")).body).not.toContain("no debe servirse");
     expect((await pedir("campo.prueba", "/%2e%2e/secreto.txt")).body).not.toContain("no debe servirse");
     expect((await pedir("otro.example", "/")).statusCode).toBe(404);
+    // Un "%" que ya llega decodificado no se decodifica otra vez: es una ruta más de la aplicación, nunca un error interno.
+    expect((await pedir("campo.prueba", "/%25")).statusCode).toBe(200);
+    expect((await pedir("campo.prueba", "/%252e%252e/secreto.txt")).body).not.toContain("no debe servirse");
   });
 
   it("una ruta /api desconocida es un 404 del contrato, no la aplicación", async () => {

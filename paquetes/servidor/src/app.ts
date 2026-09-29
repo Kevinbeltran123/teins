@@ -117,6 +117,11 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
     else if ((error as { validation?: unknown }).validation || (error as { statusCode?: number }).statusCode === 400) {
       causa = problema("entrada_invalida", "El cuerpo de la solicitud no es JSON válido");
     } else if ((error as { statusCode?: number }).statusCode === 413) causa = problema("entrada_invalida", "La solicitud es demasiado grande");
+    else if ((error as { statusCode?: number }).statusCode === 415) causa = problema("entrada_invalida", "El cuerpo de la solicitud debe ser JSON");
+    // PostgreSQL no guarda U+0000 en text ni en jsonb (22021, 22P05): es un dato de quien pide, y reintentar no lo arregla.
+    else if (["22021", "22P05"].includes((error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code ?? "")) {
+      causa = problema("entrada_invalida", "El texto tiene un carácter que no se puede guardar");
+    }
     else {
       solicitud.log.error({ err: error }, "Error no controlado");
       causa = problema("error_interno");

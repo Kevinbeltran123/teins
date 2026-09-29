@@ -149,6 +149,24 @@ describe("sesión del personal", () => {
   });
 });
 
+describe("errores de entrada", () => {
+  it("un cuerpo que no es JSON es un error de quien pide, no del servidor", async () => {
+    const { oficina } = await s.nuevaOrganizacionConUsuarios();
+    const r = await app.inject({ method: "POST", url: "/api/clientes", headers: { cookie: oficina.cookie, origin: ORIGEN, "content-type": "application/x-www-form-urlencoded" }, payload: "nombre=x" });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toMatchObject({ codigo: "entrada_invalida" });
+  });
+});
+
+describe("texto con caracteres que la base no guarda", () => {
+  it("un U+0000 en un envío es un error de entrada, no un error interno que se reintenta sin fin", async () => {
+    const { oficina } = await s.nuevaOrganizacionConUsuarios();
+    const r = await app.inject({ method: "POST", url: "/api/clientes", headers: { cookie: oficina.cookie, origin: ORIGEN }, payload: { nombre: "Cliente\u0000", sitio: { nombre: "Sede", direccion: "Calle [N]" } } });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toMatchObject({ codigo: "entrada_invalida" });
+  });
+});
+
 describe("rutas de autenticación", () => {
   it("solo pasan las que usan las aplicaciones: nadie cambia su propio nombre ni ingresa por correo", async () => {
     const { oficina } = await s.nuevaOrganizacionConUsuarios();

@@ -1,6 +1,6 @@
 import { inArray, or, sql, type AnyColumn } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { rutaLegible, type EstadoRevision, type Repeticiones, type Respuestas } from "@teins/dominio";
+import { bloques, rutaLegible, type EstadoRevision, type Repeticiones, type Respuestas } from "@teins/dominio";
 import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { enOrganizacion } from "../../plataforma/base-de-datos";
 import { contieneTexto } from "../../plataforma/busqueda";
@@ -109,10 +109,16 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
         politica: politicas.oficina,
         manejar: async ({ consulta, actor }) => {
           const { filas, siguienteCursor, total, visitasDe, nombresFormato } = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
-            // Búsqueda: formato aquí; cliente y sitio por la interfaz de visitas; técnico por la de identidad.
+            // Búsqueda: clave del formato aquí y su nombre por la interfaz de formatos; cliente y sitio por la
+            // de visitas; técnico por la de identidad.
             const texto = consulta.buscar?.trim();
             const filtro = texto
-              ? or(contieneTexto(levantamientos.formato, texto), inArrayONada(levantamientos.visitaId, await visitas.coincidentes(tx, texto)), inArrayONada(levantamientos.tecnicoId, await identidad.buscarPorNombre(actor.organizacionId, texto, tx)))
+              ? or(
+                  contieneTexto(levantamientos.formato, texto),
+                  inArrayONada(levantamientos.formato, await formatos.coincidentes(tx, texto)),
+                  inArrayONada(levantamientos.visitaId, await visitas.coincidentes(tx, texto)),
+                  inArrayONada(levantamientos.tecnicoId, await identidad.buscarPorNombre(actor.organizacionId, texto, tx)),
+                )
               : undefined;
             const pagina = await paginaPorEstado(tx, consulta.estado, consulta.cursor, consulta.limite, filtro);
             // Cliente y sitio de toda la página en una consulta, por la interfaz del módulo de visitas.
@@ -228,7 +234,22 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
               const k = `${f.formato}@${f.versionFormato}`;
               if (!definiciones.has(k)) definiciones.set(k, await formatos.obtener(tx, f.formato, f.versionFormato));
             }
-            return { visita, filas, items, definiciones };
+            // La consulta agrupa por levantamiento; dentro de cada uno, el orden es el del formato y el de las
+            // repeticiones, no el alfabético de su clave (el id de una repetición es aleatorio).
+            const posicion = (f: (typeof filas)[number]) => {
+              const definicion = definiciones.get(`${f.formato}@${f.versionFormato}`);
+              if (!definicion) return [0, 0];
+              const lista = bloques(definicion, f.repeticiones);
+              const bloque = lista.findIndex((b) => b.clave === f.seccion);
+              return [bloque, bloque < 0 ? 0 : lista[bloque]!.seccion.campos.findIndex((c) => c.clave === f.campo)];
+            };
+            const primera = new Map<string, number>();
+            filas.forEach((f, i) => primera.set(f.levantamientoId, primera.get(f.levantamientoId) ?? i));
+            const ordenadas = filas
+              .map((f, i) => ({ f, llave: [primera.get(f.levantamientoId)!, ...posicion(f), i] }))
+              .sort((a, b) => a.llave.reduce((d, v, k) => d || v - b.llave[k]!, 0))
+              .map(({ f }) => f);
+            return { visita, filas: ordenadas, items, definiciones };
           });
           if (!r) throw problema("no_encontrado", "La visita no existe");
           const persona = await personas(actor.organizacionId, r.filas.map((f) => f.tecnicoId));

@@ -40,7 +40,8 @@ export async function servirSuperficies(app: FastifyInstance, superficies: reado
     const carpeta = porHost.get(solicitud.hostname.toLowerCase());
     if (!carpeta) throw problema("no_encontrado", "Superficie desconocida");
 
-    const pedida = decodeURIComponent((solicitud.params as { "*"?: string })["*"] ?? "");
+    // Fastify ya entrega el parámetro decodificado: decodificarlo otra vez convertía "%25" en un error interno.
+    const pedida = (solicitud.params as { "*"?: string })["*"] ?? "";
     const relativa = normalize(pedida).replace(/^([/\\])+/, "");
     const completa = join(carpeta, relativa);
     if (isAbsolute(relativa) || !(completa === carpeta || completa.startsWith(carpeta + sep))) throw problema("no_encontrado");

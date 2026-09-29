@@ -1,7 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { validarDefinicionFormato, type VersionFormato } from "@teins/dominio";
 import { VersionFormato as EsquemaVersionFormato } from "@teins/protocolo";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
+import { contieneTexto } from "../../plataforma/busqueda";
 import { huellaCanonica } from "../../plataforma/canonico";
 import { problema } from "../../plataforma/errores";
 import { registrarCambios } from "../cambios";
@@ -9,6 +10,8 @@ import { versiones } from "./esquema";
 
 export interface Formatos {
   obtener(tx: TxOrganizacion, formato: string, version: number): Promise<VersionFormato | undefined>;
+  /** Claves de los formatos cuyo nombre visible contiene el texto: la bandeja busca por lo que se ve. */
+  coincidentes(tx: TxOrganizacion, texto: string): Promise<string[]>;
   /**
    * Publica una versión nueva y la deja lista para la bajada de toda la organización (QA-11). Publicar dos
    * veces la misma definición no hace nada; otra con el mismo número es un conflicto.
@@ -34,6 +37,11 @@ export function crearFormatos(): Formatos {
         .from(versiones)
         .where(and(eq(versiones.formato, formato), eq(versiones.version, version)));
       return fila?.definicion;
+    },
+
+    async coincidentes(tx, texto) {
+      const filas = await tx.selectDistinct({ formato: versiones.formato }).from(versiones).where(contieneTexto(sql`${versiones.definicion}->>'nombre'`, texto));
+      return filas.map((f) => f.formato);
     },
 
     async publicar(tx, organizacionId, entrada) {

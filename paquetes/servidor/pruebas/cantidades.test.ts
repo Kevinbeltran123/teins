@@ -123,6 +123,40 @@ describe("cantidades con catálogo en el servidor (iteración 11)", () => {
     ]);
   });
 
+  it("la exportación sigue el orden del levantamiento: cada repetición en el orden en que se creó", async () => {
+    const conTableros: VersionFormato = {
+      formato: "prueba-tableros",
+      version: 1,
+      appMinima: 6,
+      secciones: [{ clave: "tablero", titulo: "Tablero", repetible: { etiqueta: "Tablero", min: 1, max: 3 }, campos: [{ clave: "materiales", etiqueta: "Materiales", tipo: "cantidades", unidades: ["m"] }] }],
+    };
+    await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) => crearFormatos().publicar(tx, org.organizacionId, conTableros));
+    const id = randomUUID();
+    // El id de la primera repetición ordena después del de la segunda.
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/sync/comandos",
+      headers: { cookie: org.tecnico.cookie, ...cabecerasSync },
+      payload: {
+        tipo: "EnviarLevantamiento",
+        llave: llaveDeEnvio(id),
+        levantamiento: {
+          id,
+          formato: "prueba-tableros",
+          versionFormato: 1,
+          visitaId,
+          repeticiones: { tablero: [{ id: "zzzzzzzz", nombre: "Principal" }, { id: "aaaaaaaa", nombre: "Secundario" }] },
+          respuestas: { "tablero~zzzzzzzz": { materiales: [linea("a0000001", "Cable del principal", "5")] }, "tablero~aaaaaaaa": { materiales: [linea("a0000001", "Cable del secundario", "3")] } },
+          creadoEn: "2026-09-25T10:00:00.000Z",
+          enviadoEn: "2026-09-25T11:00:00.000Z",
+        },
+      },
+    });
+    expect(r.statusCode, r.body).toBe(200);
+    const exportadas = (await oficina("GET", `/api/visitas/${visitaId}/cantidades`)).json();
+    expect(exportadas.lineas.filter((l: { levantamientoId: string }) => l.levantamientoId === id).map((l: { descripcion: string }) => l.descripcion)).toEqual(["Cable del principal", "Cable del secundario"]);
+  });
+
   it("un ítem desactivado no se vincula; el catálogo es de oficina", async () => {
     const creado = (await oficina("POST", "/api/catalogo", { codigo: `X-${randomUUID().slice(0, 4)}`, descripcion: "Ítem viejo", unidad: "und" })).json();
     expect((await oficina("POST", `/api/catalogo/${creado.id}`, { descripcion: "Ítem viejo", unidad: "und", activo: false })).json().activo).toBe(false);

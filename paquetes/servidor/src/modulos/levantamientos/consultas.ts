@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, or, type SQL } from "drizzle-orm";
 import type { EstadoRevision } from "@teins/dominio";
+import { Uuid } from "@teins/protocolo";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
 import { comentarios, levantamientos, lineasCantidad } from "./esquema";
@@ -10,7 +11,7 @@ function leerCursor(cursor: string | undefined): { recibidoEn: Date; id: string 
   try {
     const [iso, id] = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as [string, string];
     const recibidoEn = new Date(iso);
-    if (Number.isNaN(recibidoEn.getTime()) || typeof id !== "string") throw new Error();
+    if (Number.isNaN(recibidoEn.getTime()) || typeof id !== "string" || !Uuid.safeParse(id).success) throw new Error();
     return { recibidoEn, id };
   } catch {
     throw problema("entrada_invalida", "Cursor inválido");
