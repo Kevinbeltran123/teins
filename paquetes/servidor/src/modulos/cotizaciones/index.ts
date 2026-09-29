@@ -7,12 +7,12 @@ import type { Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
-import { fuenteIncrustada, imprimirPdf } from "../../plataforma/pdf";
+import { fuenteIncrustada, imprimirPdf, PlanoIlegible } from "../../plataforma/pdf";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
 import type { Catalogo } from "../catalogo";
-import { enviarAlQuedarListo, enviosDeVersiones, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeCotizacion } from "../envios";
+import { enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeCotizacion } from "../envios";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
 import type { Visitas } from "../visitas";
@@ -28,9 +28,13 @@ interface Dependencias {
   identidad: Pick<Identidad, "nombres" | "nombreDeOrganizacion">;
 }
 
-export interface Cotizaciones {
+/** El PDF de una versión, en el worker. */
+export interface GeneradorPdfCotizaciones {
   /** Trabajo del worker (cola `pdf`, de a uno). Idempotente: un PDF listo nunca se vuelve a generar. */
   generarPdf(datos: { organizacionId: string; versionId: string }, contexto: { ultimoIntento: boolean }): Promise<void>;
+}
+
+export interface Cotizaciones {
   registrarRutas(app: FastifyInstance): void;
 }
 
@@ -50,7 +54,7 @@ const CONDICIONES_INICIALES = { validezDias: 30, formaPago: "", notas: "" };
 const anioEnColombia = (ahora = new Date()) => Number(ahora.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }).slice(0, 4));
 
 /** Lo único que necesita el worker: el PDF de una versión desde su copia congelada. */
-export function crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }: { bd: BaseDeDatos; almacenamiento: Almacenamiento; config: Config }): Pick<Cotizaciones, "generarPdf"> {
+export function crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }: { bd: BaseDeDatos; almacenamiento: Almacenamiento; config: Config }): GeneradorPdfCotizaciones {
   return {
     async generarPdf({ organizacionId, versionId }, { ultimoIntento }) {
       const [version] = await enOrganizacion(bd, organizacionId, (tx) => tx.select().from(versionesCotizacion).where(eq(versionesCotizacion.id, versionId)));
@@ -77,13 +81,17 @@ export function crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }: 
         });
       } catch (error) {
         const mensaje = (error instanceof Error ? error.message : String(error)).slice(0, 500);
-        await enOrganizacion(bd, organizacionId, (tx) =>
-          tx
+        // Un plano ilegible no se arregla reintentando. Con reintentos pendientes sigue "generando";
+        // al agotarlos, queda "fallido" y los envíos en cola se dan por no llegados, con aviso.
+        const definitivo = ultimoIntento || error instanceof PlanoIlegible;
+        await enOrganizacion(bd, organizacionId, async (tx) => {
+          await tx
             .update(versionesCotizacion)
-            .set({ pdfError: mensaje, ...(ultimoIntento ? { pdfEstado: "fallido" as EstadoPdfCotizacion } : {}) })
-            .where(eq(versionesCotizacion.id, versionId)),
-        );
-        throw error;
+            .set({ pdfError: mensaje, ...(definitivo ? { pdfEstado: "fallido" as EstadoPdfCotizacion } : {}) })
+            .where(eq(versionesCotizacion.id, versionId));
+          if (definitivo) await fallarEnviosDeVersion(tx, versionId);
+        });
+        if (!definitivo) throw error;
       }
     },
   };
@@ -156,7 +164,6 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
   }
 
   return {
-    generarPdf: crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }).generarPdf,
 
     registrarRutas(app) {
       registrarOperacion(app, "listarCotizaciones", {
@@ -343,7 +350,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
                 valorNuevo: { version: contenido.version, total: contenido.totales.total, destinatarios: cuerpo.destinatarios },
               },
             ]);
-            await encolar(tx, "cotizaciones.generarPdf", { organizacionId: actor.organizacionId, versionId }, { cola: "pdf", llave: `cotizaciones.generarPdf:${versionId}`, intentosMaximos: 5 });
+            await encolar(tx, "cotizaciones.generarPdf", { organizacionId: actor.organizacionId, versionId }, { cola: "pdf", llave: `cotizaciones.generarPdf:${versionId}` });
             await programarEnvios(tx, {
               organizacionId: actor.organizacionId,
               versionId,
@@ -382,7 +389,9 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
             const [version] = await tx
               .select()
               .from(versionesCotizacion)
-              .where(and(eq(versionesCotizacion.cotizacionId, id), eq(versionesCotizacion.numero, numero)));
+              .where(and(eq(versionesCotizacion.cotizacionId, id), eq(versionesCotizacion.numero, numero)))
+              // Bloquea la fila: si el PDF queda listo al mismo tiempo, uno espera al otro y ningún envío queda en cola sin salir.
+              .for("update");
             if (!version) throw problema("no_encontrado", "La versión no existe");
             await programarEnvios(tx, {
               organizacionId: actor.organizacionId,

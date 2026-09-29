@@ -12,12 +12,12 @@ import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Archivos } from "../archivos";
 import { registrar } from "../auditoria";
-import { enviarAlQuedarListo, enviosDeVersiones, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeInforme } from "../envios";
+import { cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeInforme } from "../envios";
 import type { Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
 import type { Visitas } from "../visitas";
-import { fuenteIncrustada, imprimirPdf } from "../../plataforma/pdf";
+import { fuenteIncrustada, imprimirPdf, PlanoIlegible } from "../../plataforma/pdf";
 import { piePagina, plantillaInforme, type HojaDelInforme } from "./pdf/plantilla";
 import { informes, versionesPublicadas, type EstadoPdf } from "./esquema";
 
@@ -78,9 +78,13 @@ export const informesParaElPortal = {
   },
 };
 
-export interface Informes {
+/** El PDF de una versión, en el worker. */
+export interface GeneradorPdf {
   /** Trabajo del worker (cola `pdf`, de a uno). Idempotente: un PDF listo nunca se vuelve a generar (QA-17). */
   generarPdf(datos: { organizacionId: string; versionId: string }, contexto: { ultimoIntento: boolean }): Promise<void>;
+}
+
+export interface Informes {
   registrarRutas(app: FastifyInstance): void;
 }
 
@@ -130,7 +134,7 @@ const mensajeDe = (c: ContenidoVersion): MensajeDeInforme => ({
 const invalido = (errores: ErrorInforme[]) => problema("informe_invalido", "El informe no cumple sus reglas", { erroresInforme: errores.map((e) => ({ ...e })) });
 
 /** Lo único que necesita el worker: generar el PDF de una versión desde su copia congelada. */
-export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependencias, "bd" | "almacenamiento" | "config">): Pick<Informes, "generarPdf"> {
+export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependencias, "bd" | "almacenamiento" | "config">): GeneradorPdf {
   return {
     async generarPdf({ organizacionId, versionId }, { ultimoIntento }) {
       const [version] = await enOrganizacion(bd, organizacionId, (tx) => tx.select().from(versionesPublicadas).where(eq(versionesPublicadas.id, versionId)));
@@ -175,14 +179,17 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         });
       } catch (error) {
         const mensaje = (error instanceof Error ? error.message : String(error)).slice(0, 500);
-        // Con reintentos pendientes sigue "generando"; al agotarlos, el fallo queda a la vista de oficina.
-        await enOrganizacion(bd, organizacionId, (tx) =>
-          tx
+        // Un plano ilegible no se arregla reintentando. Con reintentos pendientes sigue "generando";
+        // al agotarlos, queda "fallido" y los envíos en cola se dan por no llegados, con aviso.
+        const definitivo = ultimoIntento || error instanceof PlanoIlegible;
+        await enOrganizacion(bd, organizacionId, async (tx) => {
+          await tx
             .update(versionesPublicadas)
-            .set({ pdfError: mensaje, ...(ultimoIntento ? { pdfEstado: "fallido" as EstadoPdf } : {}) })
-            .where(eq(versionesPublicadas.id, versionId)),
-        );
-        throw error;
+            .set({ pdfError: mensaje, ...(definitivo ? { pdfEstado: "fallido" as EstadoPdf } : {}) })
+            .where(eq(versionesPublicadas.id, versionId));
+          if (definitivo) await fallarEnviosDeVersion(tx, versionId);
+        });
+        if (!definitivo) throw error;
       }
     },
 
@@ -222,7 +229,6 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
   }
 
   return {
-    generarPdf: crearGeneradorPdf({ bd, almacenamiento, config }).generarPdf,
 
     registrarRutas(app) {
       registrarOperacion(app, "listarInformes", {
@@ -425,7 +431,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               por: actor.usuarioId,
             });
             // El PDF se genera en segundo plano, de a uno (ADR-0012); si la transacción se revierte, el trabajo no existe.
-            await encolar(tx, "informes.generarPdf", { organizacionId: actor.organizacionId, versionId }, { cola: "pdf", llave: `informes.generarPdf:${versionId}`, intentosMaximos: 5 });
+            await encolar(tx, "informes.generarPdf", { organizacionId: actor.organizacionId, versionId }, { cola: "pdf", llave: `informes.generarPdf:${versionId}` });
             return { numero: contenido.numero, publicadaEn, publicadaPor: contenido.publicadaPor };
           });
           return {
@@ -449,10 +455,14 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             if (!existe) throw problema("no_encontrado", "La versión no existe");
             // Retirar es definitivo: para volver a entregar se publica una versión nueva (regla 10).
             if (existe.retiradaEn) throw problema("estado_invalido", "La versión ya estaba retirada");
-            await tx
+            const [retiro] = await tx
               .update(versionesPublicadas)
               .set({ retiradaEn: new Date(), retiradaPor: actor.usuarioId, motivoRetiro: cuerpo.motivo })
-              .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero), isNull(versionesPublicadas.retiradaEn)));
+              .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero), isNull(versionesPublicadas.retiradaEn)))
+              .returning({ id: versionesPublicadas.id });
+            // Otra persona la retiró al mismo tiempo: un solo evento en la auditoría.
+            if (!retiro) throw problema("estado_invalido", "La versión ya estaba retirada");
+            await cancelarEnviosDeVersion(tx, retiro.id);
             await registrar(tx, [
               { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "version_retirada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero }, motivo: cuerpo.motivo },
             ]);
@@ -471,7 +481,9 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             const [fila] = await tx
               .select()
               .from(versionesPublicadas)
-              .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero)));
+              .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero)))
+              // Bloquea la fila: si el PDF queda listo al mismo tiempo, uno espera al otro y ningún envío queda en cola sin salir.
+              .for("update");
             if (!fila) throw problema("no_encontrado", "La versión no existe");
             // Lo retirado no se vuelve a entregar (regla 10): para eso se publica una versión nueva.
             if (fila.retiradaEn) throw problema("estado_invalido", "La versión está retirada del portal: publique una nueva para enviarla");

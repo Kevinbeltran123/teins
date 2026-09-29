@@ -13,7 +13,7 @@ import { contactosDelCliente } from "../clientes";
 import { envios, type CanalDeEnvio, type FilaEnvio, type MensajeDeEnvio } from "./esquema";
 import { eventoDeResend, eventosDeWhatsapp, firmaMetaValida, firmaSvixValida, type EventoDeEnvio } from "./eventos";
 import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "./mensajes";
-import { RechazoDefinitivo, type Proveedores } from "./proveedores";
+import { NoAceptado, RechazoDefinitivo, type Proveedores } from "./proveedores";
 
 export type { MensajeDeCotizacion, MensajeDeEnvio, MensajeDeInforme } from "./esquema";
 export { proveedoresSegunConfig, proveedoresSimulados, RechazoDefinitivo, type Proveedores, type ProveedorDeCorreo, type ProveedorDeWhatsapp } from "./proveedores";
@@ -55,6 +55,23 @@ export async function programarEnvios(tx: TxOrganizacion, p: Programacion): Prom
 export async function enviarAlQuedarListo(tx: TxOrganizacion, { organizacionId, versionId, pdfRuta }: { organizacionId: string; versionId: string; pdfRuta: string }): Promise<void> {
   const pendientes = await tx.select({ id: envios.id }).from(envios).where(and(eq(envios.versionId, versionId), eq(envios.estado, "en_cola")));
   for (const { id } of pendientes) await encolarEnvio(tx, { organizacionId, envioId: id, pdfRuta });
+}
+
+/**
+ * La versión se retiró: sus envíos en cola no salen. Quedan "No llegó" con el motivo y sin aviso,
+ * porque lo decidió oficina (regla 10).
+ */
+export async function cancelarEnviosDeVersion(tx: TxOrganizacion, versionId: string): Promise<void> {
+  await tx
+    .update(envios)
+    .set({ estado: "fallido", error: "La versión se retiró antes de enviarla", actualizadoEn: new Date() })
+    .where(and(eq(envios.versionId, versionId), eq(envios.estado, "en_cola")));
+}
+
+/** El PDF de la versión no se pudo generar: sus envíos en cola no van a salir, y se avisa a quien los pidió (ADR-0012). */
+export async function fallarEnviosDeVersion(tx: TxOrganizacion, versionId: string): Promise<void> {
+  const pendientes = await tx.select().from(envios).where(and(eq(envios.versionId, versionId), eq(envios.estado, "en_cola")));
+  for (const fila of pendientes) await marcarFallido(tx, fila, "No se pudo generar el PDF: publique una versión nueva");
 }
 
 const encolarEnvio = (tx: TxOrganizacion, datos: Trabajos["envios.enviar"]) => encolar(tx, "envios.enviar", datos, { llave: `envios.enviar:${datos.envioId}`, intentosMaximos: 5 });
@@ -101,6 +118,13 @@ async function leerTodo(almacenamiento: Almacenamiento, ruta: string): Promise<B
   return Buffer.concat(partes);
 }
 
+async function marcarEnviado(tx: TxOrganizacion, envioId: string, proveedorId: string | null): Promise<void> {
+  await tx
+    .update(envios)
+    .set({ estado: "enviado", proveedorId, actualizadoEn: new Date() })
+    .where(and(eq(envios.id, envioId), eq(envios.estado, "en_cola")));
+}
+
 /** "No llegó": queda el motivo y se avisa a quien lo pidió. Un rebote de correo marca al contacto. */
 async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string, rebote = false): Promise<void> {
   const [cambiado] = await tx
@@ -110,7 +134,7 @@ async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string
     .returning({ id: envios.id });
   if (!cambiado) return;
   if (rebote && fila.canal === "correo") await contactosDelCliente.marcarRebote(tx, fila.contactoId, fila.destino, motivo);
-  await avisar(tx, { tipo: "envio_fallido", organizacionId: fila.organizacionId, usuarioId: fila.creadoPor, versionId: fila.versionId });
+  await avisar(tx, { tipo: "envio_fallido", organizacionId: fila.organizacionId, usuarioId: fila.creadoPor, versionId: fila.versionId, documento: fila.mensaje.documento ?? "informe" });
 }
 
 export interface Envios {
@@ -169,22 +193,49 @@ export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { 
 
   return {
     async enviar({ organizacionId, envioId, pdfRuta }, { ultimoIntento }) {
-      const [fila] = await enOrganizacion(bd, organizacionId, (tx) => tx.select().from(envios).where(eq(envios.id, envioId)));
-      if (!fila || fila.estado !== "en_cola") return;
+      const fila = await enOrganizacion(bd, organizacionId, async (tx) => {
+        const [fila] = await tx.select().from(envios).where(eq(envios.id, envioId));
+        if (!fila || fila.estado !== "en_cola") return undefined;
+        // Mientras esperaba el PDF, el contacto pudo quitarse o dejar de recibir por este canal (ADR-0028, parte 5).
+        if (!(await contactosDelCliente.sigueRecibiendo(tx, fila.contactoId, fila.canal, fila.destino))) {
+          await marcarFallido(tx, fila, "El contacto ya no recibe por este canal");
+          return undefined;
+        }
+        // Un intento anterior llegó al proveedor sin saberse el resultado. El correo repite con la misma
+        // llave y Resend lo descarta; WhatsApp no tiene llave: queda "Enviado" y sus eventos lo confirman.
+        if (fila.enviadoEn && fila.canal === "whatsapp") {
+          await marcarEnviado(tx, fila.id, null);
+          return undefined;
+        }
+        await tx.update(envios).set({ enviadoEn: new Date() }).where(eq(envios.id, fila.id));
+        return fila;
+      });
+      if (!fila) return;
+
+      let proveedorId: string | null;
       try {
-        const { id } = await salir(fila, await leerTodo(almacenamiento, pdfRuta));
-        await enOrganizacion(bd, organizacionId, (tx) =>
-          tx
-            .update(envios)
-            .set({ estado: "enviado", proveedorId: id, enviadoEn: new Date(), actualizadoEn: new Date() })
-            .where(and(eq(envios.id, envioId), eq(envios.estado, "en_cola"))),
-        );
+        // Leer el PDF no envía nada: un fallo aquí es seguro de reintentar.
+        const pdf = await leerTodo(almacenamiento, pdfRuta).catch((error: unknown) => {
+          throw new NoAceptado(`No se pudo leer el PDF: ${error instanceof Error ? error.message : String(error)}`);
+        });
+        ({ id: proveedorId } = await salir(fila, pdf));
       } catch (error) {
-        // Definitivo o sin más intentos: "No llegó" con su motivo. Si no, la cola lo reintenta.
-        if (!(error instanceof RechazoDefinitivo) && !ultimoIntento) throw error;
-        const motivo = error instanceof RechazoDefinitivo ? error.message : `No se pudo enviar después de varios intentos: ${error instanceof Error ? error.message : String(error)}`;
-        await enOrganizacion(bd, organizacionId, (tx) => marcarFallido(tx, fila, motivo));
+        const seguroNoSalio = error instanceof RechazoDefinitivo || error instanceof NoAceptado;
+        if (!seguroNoSalio && fila.canal === "whatsapp") proveedorId = null;
+        else {
+          // Seguro que no salió: el siguiente intento lo manda. Definitivo o sin más intentos: "No llegó".
+          await enOrganizacion(bd, organizacionId, async (tx) => {
+            if (error instanceof RechazoDefinitivo || ultimoIntento) {
+              const motivo = error instanceof RechazoDefinitivo ? error.message : `No se pudo enviar después de varios intentos: ${error instanceof Error ? error.message : String(error)}`;
+              await marcarFallido(tx, fila, motivo);
+            } else await tx.update(envios).set({ enviadoEn: null }).where(and(eq(envios.id, fila.id), eq(envios.estado, "en_cola")));
+          });
+          if (error instanceof RechazoDefinitivo || ultimoIntento) return;
+          throw error;
+        }
       }
+      // Fuera del try: si esto falla, el reintento no lo marca "No llegó" ni repite el WhatsApp.
+      await enOrganizacion(bd, organizacionId, (tx) => marcarEnviado(tx, fila.id, proveedorId));
     },
 
     registrarRutas(app) {

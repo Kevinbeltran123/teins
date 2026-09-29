@@ -17,7 +17,7 @@ export type Aviso =
   | { tipo: "comentario" | "levantamiento_revisado"; organizacionId: string; tecnicoId: string; levantamientoId: string; creadoEn: Date }
   | { tipo: "levantamiento_enviado"; organizacionId: string; levantamientoId: string; tecnico: string }
   /** A quien publicó o pidió el envío: una copia del informe no llegó al cliente (ADR-0028). */
-  | { tipo: "envio_fallido"; organizacionId: string; usuarioId: string; versionId: string };
+  | { tipo: "envio_fallido"; organizacionId: string; usuarioId: string; versionId: string; documento: "informe" | "cotizacion" };
 
 /** Lo que se ve en el aviso. Nunca lleva datos del cliente: se lee con el teléfono bloqueado (R5). */
 export interface Contenido {
@@ -52,7 +52,9 @@ export function contenidoDe(aviso: Aviso): Contenido {
     case "levantamiento_enviado":
       return { titulo: "Levantamiento nuevo", cuerpo: `${aviso.tecnico} envió un levantamiento.`, etiqueta: `levantamiento:${aviso.levantamientoId}` };
     case "envio_fallido":
-      return { titulo: "Un envío del informe no llegó", cuerpo: "Abra Informes para ver cuál y volver a enviarlo.", etiqueta: `envio:${aviso.versionId}` };
+      return aviso.documento === "cotizacion"
+        ? { titulo: "Un envío de la cotización no llegó", cuerpo: "Abra Cotizaciones para ver cuál y volver a enviarla.", etiqueta: `envio:${aviso.versionId}` }
+        : { titulo: "Un envío del informe no llegó", cuerpo: "Abra Informes para ver cuál y volver a enviarlo.", etiqueta: `envio:${aviso.versionId}` };
   }
 }
 

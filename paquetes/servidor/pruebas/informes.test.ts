@@ -94,6 +94,29 @@ describe("bandeja (iteración 14)", () => {
   });
 });
 
+describe("PDF que no se puede generar", () => {
+  it("un plano ilegible falla en el primer intento y sus envíos en cola quedan 'No llegó'", async () => {
+    const { oficina, visitaId, revisado, informeId } = await visitaConRevisado();
+    const { rows } = await s.propietario.pool.query("select cliente_id from visitas.visitas where id = $1", [visitaId]);
+    const contacto = await post(oficina.cookie, `/api/clientes/${rows[0].cliente_id}/contactos`, { nombre: "Ana Torres", cargo: "", correo: "ana@cliente.example", celular: null, recibeCorreo: true, recibeWhatsapp: false });
+    expect(contacto.statusCode, contacto.body).toBe(201);
+    const plano = await subir(oficina.cookie, Buffer.from(`%PDF-1.7 ${randomUUID()} sin estructura`), "application/pdf");
+    await s.procesarCola();
+    await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [{ huella: plano, nombre: "Plano dañado" }] });
+    const publicada = await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [contacto.json().contactos[0].id] });
+    expect(publicada.statusCode, publicada.body).toBe(201);
+
+    await hastaQueLosPdfEstenListos(informeId);
+    const { rows: versiones } = await s.propietario.pool.query(
+      "select v.pdf_estado, (select attempts from graphile_worker.jobs j where j.key = 'informes.generarPdf:' || v.id) as intentos from informes.versiones v where informe_id = $1",
+      [informeId],
+    );
+    expect(versiones[0]).toMatchObject({ pdf_estado: "fallido", intentos: null });
+    const detalle = (await get(oficina.cookie, `/api/informes/${informeId}`)).json();
+    expect(detalle.versiones[0].envios).toEqual([expect.objectContaining({ estado: "fallido", error: expect.stringContaining("PDF") })]);
+  }, 90_000);
+});
+
 describe("informe (corte 4)", () => {
   it("compone, publica y genera en segundo plano un PDF con los datos y el plano anexo, que no se vuelve a generar (QA-17)", async () => {
     const { oficina, visitaId, revisado, enviado, informeId } = await visitaConRevisado();

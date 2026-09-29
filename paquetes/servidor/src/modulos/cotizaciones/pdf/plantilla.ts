@@ -1,3 +1,4 @@
+import { TARIFA_IVA } from "@teins/dominio";
 import type { ContenidoCotizacion } from "../esquema";
 
 /**
@@ -33,12 +34,12 @@ export function plantillaCotizacion(c: ContenidoCotizacion, { fuente }: { fuente
   const totales = [
     ["Subtotal", t.subtotal],
     ...(c.impuestos.tipo === "iva"
-      ? [["IVA 19 %", t.iva]]
+      ? [[`IVA ${TARIFA_IVA} %`, t.iva]]
       : [
           [`Administración ${pct(c.impuestos.administracion)}`, t.aiu!.administracion],
           [`Imprevistos ${pct(c.impuestos.imprevistos)}`, t.aiu!.imprevistos],
           [`Utilidad ${pct(c.impuestos.utilidad)}`, t.aiu!.utilidad],
-          ["IVA 19 % sobre la utilidad", t.aiu!.ivaUtilidad],
+          [`IVA ${TARIFA_IVA} % sobre la utilidad`, t.aiu!.ivaUtilidad],
         ]),
   ] as [string, number][];
 

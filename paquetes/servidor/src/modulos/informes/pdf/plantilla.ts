@@ -55,8 +55,13 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
       const secciones = bloques(l.formato, l.repeticiones ?? {})
         .map(({ seccion: s, clave, titulo }) => {
           const datos = s.campos
-            // Una firma tomada va en su constancia; sin firmar (o "no se pudo obtener"), como cualquier dato.
-            .filter((campo) => campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "cantidades" && !(campo.tipo === "firma" && esFirma(l.respuestas[clave]?.[campo.clave])))
+            // Fotos, bocetos, cantidades y firmas tomadas van en su propio bloque; "no se pudo obtener"
+            // de cualquier tipo, y una firma sin tomar, van como cualquier dato, con su motivo.
+            .filter((campo) => {
+              const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
+              if (valor !== undefined && esNoObtenido(valor)) return true;
+              return campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "cantidades" && !(campo.tipo === "firma" && esFirma(valor));
+            })
             .map((campo) => {
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
               const vacio = valor === undefined || esNoObtenido(valor);

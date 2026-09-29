@@ -4,6 +4,12 @@ import type { Config } from "../../config";
 /** El proveedor no lo aceptará nunca (dirección inválida, plantilla inexistente): no se reintenta. */
 export class RechazoDefinitivo extends Error {}
 
+/**
+ * El proveedor respondió y no lo aceptó por ahora (429, 5xx, 409 de una llave en curso): seguro que no
+ * salió, así que se reintenta. Un error sin respuesta (red, tiempo agotado) no dice si salió.
+ */
+export class NoAceptado extends Error {}
+
 export interface CorreoSaliente {
   /** Id del envío: el proveedor descarta un segundo intento con la misma llave. */
   idempotencia: string;
@@ -29,7 +35,7 @@ export interface WhatsappSaliente {
   referencia: string;
 }
 
-/** Entrega el mensaje y devuelve su id en el proveedor. 429, 5xx o un error de red se lanzan como error común: se reintenta. */
+/** Entrega el mensaje y devuelve su id en el proveedor. 429, 5xx o 409 se lanzan como `NoAceptado`: se reintenta. */
 export type ProveedorDeCorreo = (correo: CorreoSaliente) => Promise<{ id: string }>;
 export type ProveedorDeWhatsapp = (mensaje: WhatsappSaliente) => Promise<{ id: string }>;
 
@@ -40,12 +46,15 @@ export interface Proveedores {
 
 const ESPERA_MAXIMA_MS = 60_000;
 
-/** 2xx devuelve el JSON; 429 y 5xx se reintentan; cualquier otro 4xx es definitivo, con el motivo del proveedor. */
+/**
+ * 2xx devuelve el JSON; 429, 5xx y 409 (Resend: otra solicitud con la misma llave sigue en curso) se
+ * reintentan; cualquier otro 4xx es definitivo, con el motivo del proveedor.
+ */
 async function leerRespuesta<T>(respuesta: Response, proveedor: string): Promise<T> {
   const cuerpo = (await respuesta.json().catch(() => ({}))) as Record<string, unknown>;
   if (respuesta.ok) return cuerpo as T;
   const detalle = motivoDe(cuerpo) ?? `respondió ${respuesta.status}`;
-  if (respuesta.status === 429 || respuesta.status >= 500) throw new Error(`${proveedor}: ${detalle}`);
+  if (respuesta.status === 429 || respuesta.status === 409 || respuesta.status >= 500) throw new NoAceptado(`${proveedor}: ${detalle}`);
   throw new RechazoDefinitivo(`${proveedor} lo rechazó: ${detalle}`);
 }
 
@@ -93,7 +102,10 @@ export function whatsappMeta({ token, numeroId, versionApi }: { token: string; n
     formulario.set("messaging_product", "whatsapp");
     formulario.set("type", "application/pdf");
     formulario.set("file", new Blob([new Uint8Array(m.documento.contenido)], { type: "application/pdf" }), m.documento.nombre);
-    const subida = await fetch(`${base}/media`, { method: "POST", headers: autorizacion, body: formulario, signal: AbortSignal.timeout(ESPERA_MAXIMA_MS) });
+    // Subir el medio no envía nada: si falla la red aquí, reintentar no duplica.
+    const subida = await fetch(`${base}/media`, { method: "POST", headers: autorizacion, body: formulario, signal: AbortSignal.timeout(ESPERA_MAXIMA_MS) }).catch((error: unknown) => {
+      throw new NoAceptado(`WhatsApp: ${error instanceof Error ? error.message : String(error)}`);
+    });
     const { id: medio } = await leerRespuesta<{ id: string }>(subida, "WhatsApp");
 
     const respuesta = await fetch(`${base}/messages`, {

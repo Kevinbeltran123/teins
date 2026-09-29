@@ -24,6 +24,8 @@ const correo: ProveedorDeCorreo = async (c) => {
 };
 const whatsapp: ProveedorDeWhatsapp = async (m) => {
   whatsapps.push(m);
+  // Meta lo aceptó pero la respuesta no llegó: no se sabe si salió.
+  if (m.para.endsWith("0199")) throw new Error("The operation was aborted due to timeout");
   return { id: `wamid.${randomUUID()}` };
 };
 
@@ -191,6 +193,45 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     const admin = await s.nuevoAdministrador(await organizacionDe(informeId));
     expect((await post(admin.cookie, `/api/informes/${informeId}/versiones/1/retirar`, { motivo: "Prueba" })).statusCode).toBe(200);
     expect((await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: jorge.id }] })).json()).toMatchObject({ codigo: "estado_invalido" });
+  }, 90_000);
+
+  it("si no se sabe si WhatsApp lo recibió, no lo manda otra vez", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, celular: "+573005550199", recibeCorreo: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [ana!.id] });
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    const [envio] = await enviosDe(oficina.cookie, informeId);
+    expect(whatsapps.filter((m) => m.referencia.endsWith(envio!.id))).toHaveLength(1);
+    expect(envio!.estado).toBe("enviado");
+  }, 90_000);
+
+  it("retirar la versión antes de que el PDF esté listo cancela sus envíos en cola", async () => {
+    const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, ANA);
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [ana!.id] })).statusCode).toBe(201);
+    const admin = await s.nuevoAdministrador(organizacionId);
+    expect((await post(admin.cookie, `/api/informes/${informeId}/versiones/1/retirar`, { motivo: "Tenía un error" })).statusCode).toBe(200);
+
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    const envios = await enviosDe(oficina.cookie, informeId);
+    expect(envios.map((e) => e.estado)).toEqual(["fallido", "fallido"]);
+    expect(envios[0]!.error).toContain("retiró");
+    expect(correos.some((c) => envios.some((e) => e.id === c.etiquetas["envio"]))).toBe(false);
+  }, 90_000);
+
+  it("un contacto quitado mientras su envío espera el PDF no lo recibe", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, ANA);
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [ana!.id] });
+    expect((await post(oficina.cookie, `/api/clientes/${clienteId}/contactos/${ana!.id}/quitar`)).statusCode).toBe(200);
+
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    const envios = await enviosDe(oficina.cookie, informeId);
+    expect(envios.map((e) => e.estado)).toEqual(["fallido", "fallido"]);
+    expect(whatsapps.some((m) => envios.some((e) => m.referencia.endsWith(e.id)))).toBe(false);
   }, 90_000);
 });
 

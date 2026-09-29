@@ -149,6 +149,12 @@ export const contactosDelCliente = {
     return destinatarios;
   },
 
+  /** Si el contacto sigue recibiendo por ese canal en ese destino: al salir, un envío en cola lo confirma. */
+  async sigueRecibiendo(tx: TxOrganizacion, contactoId: string, canal: "correo" | "whatsapp", destino: string): Promise<boolean> {
+    const [c] = await tx.select().from(contactos).where(and(eq(contactos.id, contactoId), vigente));
+    return !!c && canalesDe(c).includes(canal) && (canal === "correo" ? c.correo : c.celular) === destino;
+  },
+
   /** El correo rebotó: queda marcado mientras la dirección siga siendo la misma. */
   async marcarRebote(tx: TxOrganizacion, contactoId: string, correo: string, motivo: string): Promise<void> {
     await tx

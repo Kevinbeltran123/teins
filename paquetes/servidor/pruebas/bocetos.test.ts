@@ -144,5 +144,9 @@ describe("bocetos en el servidor (iteración 10)", () => {
     expect(html).toContain('<div class="hojas"><figure class="boceto"><svg id="p1"></svg><figcaption>Primer piso</figcaption></figure>');
     expect(html).toContain("<figcaption>Segundo &lt;piso&gt;</figcaption>");
     expect(plantillaInforme(contenido, { fuente: "", fotos: new Map() })).toContain("[BOCETO]");
+
+    // "No se pudo obtener" sale con su motivo, como en campo y oficina.
+    const sinBoceto = { ...contenido, levantamientos: [{ ...contenido.levantamientos[0]!, respuestas: { cuarto: { croquis: { noObtenido: true as const, motivo: "Sin acceso al cuarto" } } } }] };
+    expect(plantillaInforme(sinBoceto, { fuente: "", fotos: new Map() })).toContain("No se pudo obtener: Sin acceso al cuarto");
   });
 });

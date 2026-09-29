@@ -2,9 +2,9 @@ import type { Task, TaskList } from "graphile-worker";
 import { z } from "zod";
 import type { Archivos } from "./modulos/archivos";
 import type { Avisos } from "./modulos/avisos";
-import type { Cotizaciones } from "./modulos/cotizaciones";
+import type { GeneradorPdfCotizaciones } from "./modulos/cotizaciones";
 import type { Envios } from "./modulos/envios";
-import type { Informes } from "./modulos/informes";
+import type { GeneradorPdf } from "./modulos/informes";
 import type { NombreTrabajo, Trabajos } from "./plataforma/cola";
 
 /** Datos de cada trabajo validados al ejecutarse: la cola guarda JSON y un trabajo viejo puede tener otra forma. */
@@ -28,10 +28,10 @@ export function definirTareas({
   cotizaciones,
 }: {
   archivos: Archivos;
-  informes: Pick<Informes, "generarPdf">;
+  informes: GeneradorPdf;
   avisos: Pick<Avisos, "enviar">;
   envios: Pick<Envios, "enviar">;
-  cotizaciones: Pick<Cotizaciones, "generarPdf">;
+  cotizaciones: GeneradorPdfCotizaciones;
 }): TaskList {
   const manejadores: Manejadores = {
     "archivos.verificar": (datos) => archivos.verificar(datos),
