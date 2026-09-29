@@ -14,7 +14,7 @@ export interface DependenciasRevision {
   avisar: Avisar;
   catalogo: PuertoCatalogo;
   /** Para decir quién tiene la revisión cuando otra persona intenta tomarla. */
-  nombres: (organizacionId: string, ids: readonly string[]) => Promise<Map<string, string>>;
+  nombres: (organizacionId: string, ids: readonly string[], en?: TxOrganizacion) => Promise<Map<string, string>>;
   reloj?: () => Date;
 }
 
@@ -71,7 +71,7 @@ export function tomar(deps: DependenciasRevision, actor: Actor, id: string, vers
       // Tomar dos veces lo propio no es un error: responde el estado vigente.
       if (r.motivo === "ya_es_suya") return { estado: actual.estado, revisorId: actual.revisorId, version: actual.version };
       if (r.motivo === "tomado_por_otro") {
-        const nombre = (await deps.nombres(actor.organizacionId, [r.revisorId])).get(r.revisorId) ?? "[Usuario no disponible]";
+        const nombre = (await deps.nombres(actor.organizacionId, [r.revisorId], tx)).get(r.revisorId) ?? "[Usuario no disponible]";
         throw problema("tomado_por_otro", `${nombre} tiene la revisión de este levantamiento`, { revisor: { id: r.revisorId, nombre }, versionActual: actual.version });
       }
       throw problema("estado_invalido", "Este levantamiento ya no se puede tomar para revisar");

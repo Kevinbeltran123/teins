@@ -180,7 +180,7 @@ async function detalleDe(tx: TxOrganizacion, identidad: Pick<Identidad, "nombres
   const [cliente] = await clientesYSitios.conSitios(tx, [id]);
   if (!cliente) throw problema("no_encontrado", "El cliente no existe");
   const filas = await tx.select().from(contactos).where(and(eq(contactos.clienteId, id), vigente)).orderBy(asc(contactos.nombre));
-  const nombres = await identidad.nombres(organizacionId, [...new Set(filas.flatMap((f) => (f.whatsappAutorizadoPor ? [f.whatsappAutorizadoPor] : [])))]);
+  const nombres = await identidad.nombres(organizacionId, [...new Set(filas.flatMap((f) => (f.whatsappAutorizadoPor ? [f.whatsappAutorizadoPor] : [])))], tx);
   return {
     id: cliente.id,
     nombre: cliente.nombre,

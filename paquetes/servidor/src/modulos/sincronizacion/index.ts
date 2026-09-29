@@ -74,7 +74,7 @@ export async function armarBajada(tx: TxOrganizacion, deps: Omit<Dependencias, "
     // N-1 (ADR-0015): su contrato solo conoce "enviado" y no trae comentarios.
     for (const l of estados) cambios.push({ tipo: "levantamiento", id: l.id, estado: "enviado", recibidoEn: l.recibidoEn.toISOString() });
   } else {
-    const nombres = await deps.identidad.nombres(organizacionId, [...new Set(estados.flatMap((l) => l.comentarios.map((c) => c.autorId)))]);
+    const nombres = await deps.identidad.nombres(organizacionId, [...new Set(estados.flatMap((l) => l.comentarios.map((c) => c.autorId)))], tx);
     for (const l of estados) {
       cambios.push({
         tipo: "levantamiento",

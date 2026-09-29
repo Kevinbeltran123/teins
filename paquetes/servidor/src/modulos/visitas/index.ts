@@ -204,7 +204,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       async function programadas(organizacionId: string, filas: (typeof visitas.$inferSelect)[], tx: TxOrganizacion) {
         const sitios = await clientes.sitios(tx, filas.map((f) => f.sitioId));
         const avance = await conteos(tx, filas.map((f) => f.id));
-        const nombres = await identidad.nombres(organizacionId, [...new Set(filas.flatMap((f) => [...f.tecnicos, ...(f.canceladaPor ? [f.canceladaPor] : [])]))]);
+        const nombres = await identidad.nombres(organizacionId, [...new Set(filas.flatMap((f) => [...f.tecnicos, ...(f.canceladaPor ? [f.canceladaPor] : [])]))], tx);
         const persona = (id: string) => ({ id, nombre: nombres.get(id) ?? "[Usuario no disponible]" });
         return filas.flatMap((f) => {
           const sitio = sitios.get(f.sitioId);

@@ -23,7 +23,8 @@ export interface Conexion {
  * de base de datos corta mientras está inactiva no debe tumbar el proceso.
  */
 export function conectar(url: string, maximo: number, alFallar: (error: Error) => void = (e) => console.error("Error de conexión", e)): Conexion {
-  const pool = new pg.Pool({ connectionString: url, max: maximo, idleTimeoutMillis: 30_000 });
+  // Sin límite de espera, un pool agotado deja cada solicitud colgada; con él, falla y se ve en el registro.
+  const pool = new pg.Pool({ connectionString: url, max: maximo, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 10_000 });
   pool.on("error", alFallar);
   pool.on("connect", (cliente) => cliente.on("error", alFallar));
   return { bd: drizzle(pool), pool, cerrar: () => pool.end() };

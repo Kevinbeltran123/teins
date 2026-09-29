@@ -364,7 +364,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             const visita = (await visitas.resumenes(tx, [informe.visitaId])).get(informe.visitaId);
             if (!visita) throw problema("no_encontrado", "La visita del informe no existe");
             const incluidos = informe.levantamientos.map((lid) => lista.find((l) => l.id === lid)!);
-            const nombres = await identidad.nombres(actor.organizacionId, [...new Set([actor.usuarioId, ...incluidos.flatMap((l) => [l.tecnicoId, l.revisorId ?? ""])])]);
+            const nombres = await identidad.nombres(actor.organizacionId, [...new Set([actor.usuarioId, ...incluidos.flatMap((l) => [l.tecnicoId, l.revisorId ?? ""])])], tx);
             const [{ numero } = { numero: 0 }] = await tx
               .select({ numero: sql<number>`coalesce(max(${versionesPublicadas.numero}), 0)` })
               .from(versionesPublicadas)

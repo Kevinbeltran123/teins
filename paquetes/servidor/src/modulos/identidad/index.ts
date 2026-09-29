@@ -5,7 +5,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import type { Config } from "../../config";
 import { contieneTexto } from "../../plataforma/busqueda";
 import { ROLES, type Actor, type Rol } from "../../plataforma/actor";
-import { enOrganizacion, esViolacionUnica, type BaseDeDatos } from "../../plataforma/base-de-datos";
+import { enOrganizacion, esViolacionUnica, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion, registrarOperacionDeDispositivo, registrarRutaPublica } from "../../plataforma/rutas";
@@ -24,12 +24,18 @@ export interface NuevoUsuario {
   contrasena: string;
 }
 
+type Ejecutor = BaseDeDatos | TxOrganizacion;
+
 export interface Identidad {
   auth: Auth;
   resolverActor(solicitud: FastifyRequest): Promise<Actor | null>;
-  nombres(organizacionId: string, ids: readonly string[]): Promise<Map<string, string>>;
-  /** Personas cuyo nombre contiene el texto: para buscar por técnico (iteración 23). */
-  buscarPorNombre(organizacionId: string, texto: string): Promise<string[]>;
+  /**
+   * Nombres por id. Dentro de una transacción se pasa `en: tx`: pedir otra conexión del pool mientras se
+   * retiene una puede agotarlo y dejar todas las solicitudes esperando.
+   */
+  nombres(organizacionId: string, ids: readonly string[], en?: Ejecutor): Promise<Map<string, string>>;
+  /** Personas cuyo nombre contiene el texto: para buscar por técnico (iteración 23). Igual que `nombres` con `en`. */
+  buscarPorNombre(organizacionId: string, texto: string, en?: Ejecutor): Promise<string[]>;
   crearUsuario(datos: NuevoUsuario): Promise<{ id: string }>;
   /** Recuperación de acceso por el administrador (ADR-0009): cambia la contraseña y cierra todas sus sesiones. */
   restablecerContrasena(usuario: string, contrasena: string): Promise<void>;
@@ -234,17 +240,17 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
     resolverActor,
     permisoLocalHasta,
 
-    async nombres(organizacionId, ids) {
+    async nombres(organizacionId, ids, en = bd) {
       if (ids.length === 0) return new Map();
-      const filas = await bd
+      const filas = await en
         .select({ id: usuarios.id, nombre: usuarios.name })
         .from(usuarios)
         .where(and(eq(usuarios.organizacionId, organizacionId), inArray(usuarios.id, [...ids])));
       return new Map(filas.map((f) => [f.id, f.nombre]));
     },
 
-    async buscarPorNombre(organizacionId, texto) {
-      const filas = await bd
+    async buscarPorNombre(organizacionId, texto, en = bd) {
+      const filas = await en
         .select({ id: usuarios.id })
         .from(usuarios)
         .where(and(eq(usuarios.organizacionId, organizacionId), contieneTexto(usuarios.name, texto)));

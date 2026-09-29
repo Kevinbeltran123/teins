@@ -112,7 +112,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             // Búsqueda: formato aquí; cliente y sitio por la interfaz de visitas; técnico por la de identidad.
             const texto = consulta.buscar?.trim();
             const filtro = texto
-              ? or(contieneTexto(levantamientos.formato, texto), inArrayONada(levantamientos.visitaId, await visitas.coincidentes(tx, texto)), inArrayONada(levantamientos.tecnicoId, await identidad.buscarPorNombre(actor.organizacionId, texto)))
+              ? or(contieneTexto(levantamientos.formato, texto), inArrayONada(levantamientos.visitaId, await visitas.coincidentes(tx, texto)), inArrayONada(levantamientos.tecnicoId, await identidad.buscarPorNombre(actor.organizacionId, texto, tx)))
               : undefined;
             const pagina = await paginaPorEstado(tx, consulta.estado, consulta.cursor, consulta.limite, filtro);
             // Cliente y sitio de toda la página en una consulta, por la interfaz del módulo de visitas.

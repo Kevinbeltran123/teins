@@ -51,6 +51,14 @@ describe("clientes y sitios (iteración 7)", () => {
   });
 });
 
+describe("pool de conexiones", () => {
+  it("muchas consultas de visitas a la vez no agotan el pool: los nombres se leen en la misma transacción", async () => {
+    await programar(await clienteConSitio(), [org.tecnico.id], "2026-10-05");
+    const respuestas = await Promise.all(Array.from({ length: 12 }, () => pedir(org.oficina.cookie, "GET", "/api/visitas?vista=proximas&hoy=2026-10-01")));
+    expect(respuestas.map((r) => r.statusCode)).toEqual(Array(12).fill(200));
+  }, 30_000);
+});
+
 describe("visitas (iteración 7)", () => {
   it("programar llega al teléfono; reprogramar le cambia la fecha; cancelar la saca con su motivo", async () => {
     const cliente = await clienteConSitio();

@@ -157,7 +157,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
 
   async function versionConEnvios(tx: TxOrganizacion, organizacionId: string, v: FilaVersion) {
     const envios = await enviosDeVersiones(tx, [v.id]);
-    const nombres = await identidad.nombres(organizacionId, [v.publicadaPor]);
+    const nombres = await identidad.nombres(organizacionId, [v.publicadaPor], tx);
     return comoVersion(v, nombres, envios);
   }
 
