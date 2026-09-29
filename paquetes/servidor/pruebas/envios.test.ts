@@ -206,6 +206,29 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     expect(envio!.estado).toBe("enviado");
   }, 90_000);
 
+  it("enviar otra vez mientras el PDF queda listo no deja el envío en cola para siempre", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, recibeWhatsapp: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    // El trabajo del PDF está por confirmar "listo" justo cuando oficina pide enviar.
+    await s.propietario.pool.query("update informes.versiones set pdf_estado = 'generando' where informe_id = $1", [informeId]);
+    const cliente = await s.propietario.pool.connect();
+    try {
+      await cliente.query("begin");
+      await cliente.query("select id from informes.versiones where informe_id = $1 for update", [informeId]);
+      const envio = post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }] });
+      await new Promise((r) => setTimeout(r, 300));
+      await cliente.query("update informes.versiones set pdf_estado = 'listo' where informe_id = $1", [informeId]);
+      await cliente.query("commit");
+      expect((await envio).statusCode).toBe(200);
+    } finally {
+      cliente.release();
+    }
+    await s.procesarCola();
+    expect((await enviosDe(oficina.cookie, informeId)).map((e) => e.estado)).toEqual(["enviado"]);
+  }, 90_000);
+
   it("retirar la versión antes de que el PDF esté listo cancela sus envíos en cola", async () => {
     const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
     const [ana] = await crearContacto(oficina.cookie, clienteId, ANA);
