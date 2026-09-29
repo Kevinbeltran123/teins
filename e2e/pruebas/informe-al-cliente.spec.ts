@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { nuevaVisita, nuevoUsuario, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
@@ -116,6 +117,51 @@ test("oficina registra los contactos del cliente, publica con el PDF para ellos 
   await jorge.getByRole("button", { name: "Volver a enviar" }).click();
   await expect(jorge.getByText(salio)).toBeVisible({ timeout: 30_000 });
   await expect(envios.getByText("Un envío no llegó.")).toHaveCount(0);
+
+  await contexto.close();
+});
+
+test("si el PDF no se pudo generar, el envío no se ofrece otra vez: se publica una versión nueva", async ({ page, browser }) => {
+  const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
+  const revisora = nuevoUsuario("oficina", "oficina");
+  const cliente = nuevaVisita(tecnico);
+  await enviarDesdeCampo(page, tecnico, cliente);
+
+  const contexto = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });
+  const o = await contexto.newPage();
+  await o.goto(`${OFICINA}/`);
+  await iniciarSesion(o, revisora);
+  await o.getByRole("navigation", { name: "Secciones" }).getByRole("link", { name: "Clientes" }).click();
+  await o.getByRole("searchbox", { name: "Buscar cliente" }).fill(cliente);
+  await o.getByRole("row").filter({ hasText: cliente }).getByRole("link", { name: cliente }).click();
+  await expect(o.getByRole("heading", { name: cliente, level: 1 })).toBeVisible();
+  await nuevoContacto(o, { nombre: "Ana Torres", correo: "delivered@resend.dev" });
+
+  await o.getByRole("navigation", { name: "Secciones" }).getByRole("link", { name: "Levantamientos" }).click();
+  await (await filaDeLaBandeja(o, tecnico.nombre)).getByRole("link").click();
+  await o.getByRole("button", { name: "Tomar para revisar" }).click();
+  await o.getByRole("button", { name: "Marcar revisado" }).click();
+  await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
+  await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
+  await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
+  await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
+  // Empieza como un PDF, así que se verifica, pero no se puede anexar: el PDF del informe falla.
+  await o.locator("input[type=file]").setInputFiles({ name: "Plano dañado.pdf", mimeType: "application/pdf", buffer: Buffer.from(`%PDF-1.7 ${randomUUID()} sin estructura`) });
+  await expect(o.getByRole("textbox", { name: "Nombre del plano 1" })).toHaveValue("Plano dañado");
+  await o.getByRole("button", { name: "Guardar borrador" }).click();
+  await expect(o.getByText("Todo guardado")).toBeVisible();
+  await o.getByRole("button", { name: "Publicar versión 1" }).click();
+  await expect(async () => {
+    await o.getByRole("dialog").getByRole("button", { name: /^Publicar/ }).click();
+    await expect(o.getByText("Versión 1 vigente")).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
+
+  const envios = o.getByRole("region", { name: "Envíos de la versión 1" });
+  await expect(envios.getByText("No llegó", { exact: true })).toBeVisible({ timeout: 90_000 });
+  await expect(envios).toContainText("No se pudo generar el PDF");
+  await expect(envios.getByRole("button", { name: "Volver a enviar" })).toHaveCount(0);
+  await expect(envios.getByRole("button", { name: /^Enviar a/ })).toHaveCount(0);
+  await expect(envios.getByText("Revise el contacto")).toHaveCount(0);
 
   await contexto.close();
 });

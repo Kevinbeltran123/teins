@@ -138,6 +138,8 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, 
   const envios = ultimosIntentos(version.envios);
   const sinLlegar = envios.filter((e) => e.estado === "fallido");
   const esperando = envios.some((e) => e.estado === "en_cola");
+  // Sin PDF no hay qué enviar: la versión lo dice arriba y el servidor no lo acepta. Se publica una nueva.
+  const sePuedeEnviar = version.pdf !== "fallido";
 
   async function volverAEnviar(e: Envio) {
     setReenviando(e.id);
@@ -160,7 +162,7 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, 
           {version.pdf === "fallido" ? "No se generó el PDF: los envíos esperan. Avísele a soporte." : "Salen cuando el PDF esté listo."}
         </span>
       )}
-      {sinLlegar.length > 0 && (
+      {sinLlegar.length > 0 && sePuedeEnviar && (
         <Aviso tono="error">
           <span>
             <b>{sinLlegar.length === 1 ? "Un envío no llegó." : `${sinLlegar.length} envíos no llegaron.`}</b> Revise el contacto en{" "}
@@ -172,7 +174,7 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, 
         </Aviso>
       )}
       {envios.length === 0 ? (
-        <span className="meta">No se envió a nadie: solo está en el portal.</span>
+        sePuedeEnviar && <span className="meta">No se envió a nadie: solo está en el portal.</span>
       ) : (
         <ul className="envios-v" style={{ listStyle: "none", margin: "6px 0 0" }}>
           {envios.map((e) => {
@@ -187,9 +189,11 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, 
                 {e.estado === "fallido" ? (
                   <span className="det mal">
                     {e.error}
-                    <Boton tamano="pequeno" icono={RefreshCw} cargando={reenviando === e.id} onClick={() => void volverAEnviar(e)}>
-                      Volver a enviar
-                    </Boton>
+                    {sePuedeEnviar && (
+                      <Boton tamano="pequeno" icono={RefreshCw} cargando={reenviando === e.id} onClick={() => void volverAEnviar(e)}>
+                        Volver a enviar
+                      </Boton>
+                    )}
                   </span>
                 ) : e.enviadoEn ? (
                   <span className="det">
@@ -206,9 +210,11 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, 
       )}
       {error && <Aviso tono="error">{error}</Aviso>}
       <div className="fila-flex" style={{ gap: 4 }}>
-        <Boton variante="fantasma" tamano="pequeno" icono={Send} disabled={!contactos} onClick={() => setEligiendo(true)}>
-          {envios.length === 0 ? "Enviar a un contacto" : "Enviar a otro contacto"}
-        </Boton>
+        {sePuedeEnviar && (
+          <Boton variante="fantasma" tamano="pequeno" icono={Send} disabled={!contactos} onClick={() => setEligiendo(true)}>
+            {envios.length === 0 ? "Enviar a un contacto" : "Enviar a otro contacto"}
+          </Boton>
+        )}
         {acciones}
       </div>
       {eligiendo && contactos && <EnviarAContactos cliente={c} numero={version.numero} contactos={contactos} enviar={enviar} alCerrar={() => setEligiendo(false)} alEnviar={recargar} />}
