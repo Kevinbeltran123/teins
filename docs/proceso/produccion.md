@@ -128,6 +128,7 @@ Si algo falla, termina con error. Cada simulacro se anota en la tabla de abajo.
 | 2026-09-25 | Pruebas (Railway) | 0,0 h | 0 s | 75 íntegras (184 eslabones), 0 rotas | 23 referenciados, 0 faltantes | Correcto, contra la copia real en `teins-respaldos` |
 | 2026-09-25 | Local (Docker) | 0,0 h | 0 s | 435 íntegras, 0 rotas | 144 referenciados, 4 faltantes | Correcto: los 4 faltantes son las fotos que S3Mock perdió el 2026-09-24, antes de guardar en su volumen; tampoco están en el origen. El simulacro los detectó |
 | 2026-09-29 | Pruebas (Railway) | 0,0 h | 1 s | 177 íntegras (302 eslabones), 0 rotas | 27 referenciados, 0 faltantes | Correcto, primera copia cifrada (revisión 4d): la copia vieja pasó a `cifrado/` y en la raíz del destino no quedó nada en claro |
+| 2026-09-29 | Producción (Railway) | 0,1 h | 0 s | 2 íntegras (3 eslabones), 0 rotas | 0 referenciados, 0 faltantes | Correcto, primera copia cifrada de producción, después de actualizarla con las iteraciones 9 a 23 y la revisión de seguridad: los volcados en claro pasaron a `cifrado/` |
 
 ## Transferir a TEINS
 
