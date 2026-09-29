@@ -85,7 +85,15 @@ E2E_PORTAL_URL=https://portal-production-d5d9.up.railway.app \
 npx playwright test --project chromium
 ```
 
-El entorno conserva el límite de 5 inicios de sesión por minuto (QA-7): corra un navegador a la vez, con un minuto entre corridas.
+El entorno conserva el límite de 5 inicios de sesión por minuto y por IP (QA-7), y todas las pruebas salen de la misma IP. La suite completa, aun con un solo trabajador, pasa de 5 ingresos por minuto: las pruebas que chocan con el límite fallan con "Demasiados intentos" en la pantalla de ingreso, no por un error de la aplicación. Corra un archivo a la vez, con un minuto entre archivos:
+
+```sh
+cd e2e
+export E2E_CAMPO_URL=https://campo-production-2642.up.railway.app \
+  E2E_OFICINA_URL=https://oficina-production-d24f.up.railway.app \
+  E2E_PORTAL_URL=https://portal-production-d5d9.up.railway.app
+for f in pruebas/*.spec.ts; do npx playwright test "$f" --project chromium --workers=1; sleep 65; done
+```
 
 Si más adelante se conecta el repositorio de GitHub (`railway service source connect --repo Kevinbeltran123/teins --branch <rama> --service <servicio>`), cada subida a esa rama despliega sola.
 
