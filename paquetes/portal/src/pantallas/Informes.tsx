@@ -15,6 +15,8 @@ export function Informes({ cliente: nombre, aviso }: { cliente: string; aviso?: 
   const consultasCliente = useQueryClient();
   const [descargando, setDescargando] = useState<string | null>(null);
   const [errorDescarga, setErrorDescarga] = useState(false);
+  const [saliendo, setSaliendo] = useState(false);
+  const [errorSalir, setErrorSalir] = useState(false);
   // La sesión se cerró mientras la pantalla estaba abierta: se vuelve a pedir la clave, con el aviso.
   const volverAlIngreso = () => consultasCliente.invalidateQueries({ queryKey: consultas.sesion().queryKey });
   useEffect(() => {
@@ -37,9 +39,18 @@ export function Informes({ cliente: nombre, aviso }: { cliente: string; aviso?: 
   }
 
   async function salir() {
+    setSaliendo(true);
+    setErrorSalir(false);
+    try {
+      await cliente.llamar("salirDelPortal");
+    } catch {
+      // La cookie la cierra solo el servidor: sin su respuesta, la sesión sigue abierta en este equipo.
+      setErrorSalir(true);
+      setSaliendo(false);
+      return;
+    }
     // Salir es decisión de la persona: no se le avisa después que su sesión se cerró.
     olvidarSesion();
-    await cliente.llamar("salirDelPortal").catch(() => undefined);
     await consultasCliente.resetQueries();
   }
 
@@ -49,7 +60,7 @@ export function Informes({ cliente: nombre, aviso }: { cliente: string; aviso?: 
         <div className="mx-auto flex min-h-16 max-w-3xl items-center justify-between gap-4 px-4">
           <p className="text-cuerpo font-extrabold tracking-wide text-superficie">TEINS</p>
           {/* En un equipo compartido, salir evita que otra persona vea los informes. */}
-          <Boton variante="fantasma" tamano="pequeno" icono={LogOut} onClick={() => void salir()}>
+          <Boton variante="fantasma" tamano="pequeno" icono={LogOut} cargando={saliendo} onClick={() => void salir()}>
             Salir
           </Boton>
         </div>
@@ -58,6 +69,7 @@ export function Informes({ cliente: nombre, aviso }: { cliente: string; aviso?: 
       <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-8">
         <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Informes de {nombre}</h1>
         {aviso}
+        {errorSalir && <Aviso tono="error">No se pudo cerrar la sesión y sus informes siguen abiertos en este equipo. Revise la conexión e intente salir de nuevo.</Aviso>}
         {informes.isPending ? (
           <EsqueletoBloques etiqueta="Cargando sus informes" altos={["medio", "medio"]} />
         ) : informes.isError ? (
