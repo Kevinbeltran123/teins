@@ -17,10 +17,12 @@ import { accesosDeClientes, intentos, sesionesDelPortal } from "./esquema";
 const DURACION_SESION_S = 30 * 60;
 /**
  * Límite de intentos (QA-7): desde el quinto fallo con un identificador, o el vigésimo desde un mismo
- * origen, espera creciente (1, 2, 4… minutos, hasta una hora). Los fallos se olvidan tras una hora sin fallar.
+ * origen, espera creciente (1, 2, 4… minutos, hasta una hora). Los fallos se olvidan una hora después del
+ * último fallo o del fin de la espera, lo que ocurra más tarde: en la espera máxima, el conteo no vuelve a cero.
  */
 const UMBRAL = { acceso: 5, origen: 20 } as const;
 const ESPERA_MAXIMA_S = 60 * 60;
+const olvidado = sql`greatest(${intentos.ultimoFallo}, ${intentos.bloqueadoHasta}) < now() - interval '1 hour'`;
 
 export interface SesionDelPortal {
   tokenHuella: string;
@@ -54,20 +56,33 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
     });
   }
 
-  /** Suma un fallo a cada llave y bloquea las que pasaron su umbral. */
-  async function registrarFallo(llaves: { llave: string; umbral: number }[]) {
+  /**
+   * Cuenta el intento como fallo en cada llave antes de verificar la clave, y bloquea las que llegan a su
+   * umbral: así los intentos simultáneos no pasan todos la revisión del bloqueo. Con una llave ya bloqueada
+   * no cuenta nada y responde cuánto esperar. El ingreso correcto descuenta lo que contó aquí.
+   */
+  async function contarIntento(llaves: { llave: string; umbral: number }[]) {
+    // Los fallos olvidados se borran: cada identificador u origen probado dejaría su fila para siempre.
+    // Sin esperar filas bloqueadas por otro ingreso, para no trabarse con él.
+    await bdPortal.delete(intentos).where(inArray(intentos.llave, bdPortal.select({ llave: intentos.llave }).from(intentos).where(olvidado).for("update", { skipLocked: true })));
     await bdPortal.transaction(async (tx) => {
       for (const { llave, umbral } of llaves) {
-        const [{ fallos } = { fallos: 1 }] = await tx
+        const [contado] = await tx
           .insert(intentos)
           .values({ llave, fallos: 1, ultimoFallo: sql`now()` })
           .onConflictDoUpdate({
             target: intentos.llave,
-            set: { fallos: sql`case when ${intentos.ultimoFallo} < now() - interval '1 hour' then 1 else ${intentos.fallos} + 1 end`, ultimoFallo: sql`now()` },
+            set: { fallos: sql`case when ${olvidado} then 1 else ${intentos.fallos} + 1 end`, ultimoFallo: sql`now()` },
+            setWhere: sql`${intentos.bloqueadoHasta} is null or ${intentos.bloqueadoHasta} <= now()`,
           })
           .returning({ fallos: intentos.fallos });
-        if (fallos >= umbral) {
-          const espera = Math.min(ESPERA_MAXIMA_S, 60 * 2 ** (fallos - umbral));
+        if (!contado) {
+          const [bloqueo] = await tx.select({ hasta: intentos.bloqueadoHasta }).from(intentos).where(eq(intentos.llave, llave));
+          const hasta = bloqueo?.hasta?.getTime() ?? Date.now();
+          throw problema("demasiadas_solicitudes", "Demasiados intentos. Espere antes de volver a intentar.", { reintentarEnSegundos: Math.ceil((hasta - Date.now()) / 1000) });
+        }
+        if (contado.fallos >= umbral) {
+          const espera = Math.min(ESPERA_MAXIMA_S, 60 * 2 ** (contado.fallos - umbral));
           await tx.update(intentos).set({ bloqueadoHasta: sql`now() + make_interval(secs => ${espera})` }).where(eq(intentos.llave, llave));
         }
       }
@@ -86,22 +101,12 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
             { llave: `acceso:${cuerpo.identificador}`, umbral: UMBRAL.acceso },
             { llave: `origen:${portal.ip}`, umbral: UMBRAL.origen },
           ];
-          const bloqueos = await bdPortal
-            .select({ hasta: intentos.bloqueadoHasta })
-            .from(intentos)
-            .where(and(inArray(intentos.llave, llaves.map((l) => l.llave)), gt(intentos.bloqueadoHasta, sql`now()`)));
-          if (bloqueos.length > 0) {
-            const hasta = Math.max(...bloqueos.map((b) => b.hasta!.getTime()));
-            throw problema("demasiadas_solicitudes", "Demasiados intentos. Espere antes de volver a intentar.", { reintentarEnSegundos: Math.ceil((hasta - Date.now()) / 1000) });
-          }
+          await contarIntento(llaves);
 
           const [acceso] = await bdPortal.select().from(accesosDeClientes).where(eq(accesosDeClientes.identificador, cuerpo.identificador));
           // Con un identificador desconocido se verifica igual: la respuesta no revela si existe.
           const valida = await verificarClave(cuerpo.clave, acceso?.claveHash ?? HASH_DE_RELLENO);
-          if (!acceso || !valida) {
-            await registrarFallo(llaves);
-            throw noAutenticado();
-          }
+          if (!acceso || !valida) throw noAutenticado();
 
           const token = nuevoToken();
           await enOrganizacion(bdPortal, acceso.organizacionId, async (tx) => {
@@ -111,6 +116,11 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
             const [vigente] = await tx.select({ claveHash: accesosDeClientes.claveHash }).from(accesosDeClientes).where(eq(accesosDeClientes.id, acceso.id));
             if (vigente?.claveHash !== acceso.claveHash) throw noAutenticado();
             await tx.delete(intentos).where(eq(intentos.llave, llaves[0]!.llave));
+            // El ingreso correcto no es un fallo del origen: se descuenta lo que contó antes de verificar.
+            await tx
+              .update(intentos)
+              .set({ fallos: sql`${intentos.fallos} - 1`, bloqueadoHasta: sql`case when ${intentos.fallos} - 1 >= ${UMBRAL.origen} then ${intentos.bloqueadoHasta} end` })
+              .where(eq(intentos.llave, llaves[1]!.llave));
             await tx.insert(sesionesDelPortal).values({
               tokenHuella: huellaDeToken(token),
               accesoId: acceso.id,

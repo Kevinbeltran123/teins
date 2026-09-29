@@ -102,7 +102,7 @@ Símbolos (iteración 19, ADR-0027): módulo `simbolos` con su tabla por organiz
 
 Bocetos en el PDF (iteración 18, ADR-0026): cada hoja se convierte a SVG (`hojaASvg`); las verticales van de a dos por fila y una apaisada ocupa la fila, con su nombre si hay varias. El worker valida la versión 2 desde ya: el servidor se despliega antes que la app 9.
 
-PDF del informe: las URL firmadas de descarga llevan `Content-Disposition: attachment` con un nombre legible (`firmarDescarga(clave, { descargarComo })`, iteración 14), así que oficina y el portal lo descargan sin salir de la pantalla; fotos y bocetos siguen en línea. El worker usa Chromium. En la imagen es el de Alpine (`CHROMIUM_RUTA=/usr/bin/chromium`); en desarrollo, sin esa variable, el que instala Playwright (`pnpm --filter @teins/e2e exec playwright install chromium` si falta).
+PDF del informe: las URL firmadas de descarga llevan `Content-Disposition: attachment` con un nombre legible (`firmarDescarga(clave, { descargarComo })`, iteración 14), así que oficina y el portal lo descargan sin salir de la pantalla; fotos y bocetos siguen en línea. El worker usa Chromium: uno por proceso, compartido por los documentos en curso (cada uno en su propio contexto) y cerrado tras un minuto sin documentos. En la imagen es el de Alpine (`CHROMIUM_RUTA=/usr/bin/chromium`); en desarrollo, sin esa variable, el que instala Playwright (`pnpm --filter @teins/e2e exec playwright install chromium` si falta).
 
 Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/servidor generar-migracion --name <nombre>`. Los permisos de una tabla nueva van en una migración propia (`--custom`).
 

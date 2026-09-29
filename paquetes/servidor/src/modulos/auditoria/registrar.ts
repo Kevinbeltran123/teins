@@ -29,7 +29,6 @@ export type TipoEvento =
   | "segundo_factor_activado"
   | "llave_de_acceso_creada"
   | "llave_de_acceso_quitada"
-  | "segundo_factor_desactivado"
   | "borrado_local_confirmado"
   | "revision_tomada"
   | "revision_reasignada"

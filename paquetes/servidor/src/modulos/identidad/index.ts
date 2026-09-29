@@ -115,7 +115,7 @@ const comoAdministrado = (f: FilaAdministrada) => ({
 /** Interfaz pública del módulo de identidad (ADR-0009). */
 export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
   /** Evento de seguridad del usuario en la cadena de su organización (ADR-0008). */
-  async function eventoDeUsuario(usuarioId: string, tipoEvento: "segundo_factor_activado" | "segundo_factor_desactivado" | "llave_de_acceso_creada" | "llave_de_acceso_quitada") {
+  async function eventoDeUsuario(usuarioId: string, tipoEvento: "segundo_factor_activado" | "llave_de_acceso_creada" | "llave_de_acceso_quitada") {
     const [usuario] = await bd.select({ organizacionId: usuarios.organizacionId }).from(usuarios).where(eq(usuarios.id, usuarioId));
     if (!usuario) return;
     await enOrganizacion(bd, usuario.organizacionId, (tx) =>
@@ -150,12 +150,12 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         ]),
       );
     },
-    alCambiarSegundoFactor: async (usuarioId, activo) => {
+    alActivarSegundoFactor: async (usuarioId) => {
       // Al activarlo se cierran las sesiones abiertas solo con contraseña: el factor es del usuario, y sin esto
       // una de ellas administraría sin haber presentado nunca un código (ADR-0009). La que lo confirmó se rota
       // después de este gancho y sigue abierta.
-      if (activo) await bd.delete(sesiones).where(eq(sesiones.userId, usuarioId));
-      await eventoDeUsuario(usuarioId, activo ? "segundo_factor_activado" : "segundo_factor_desactivado");
+      await bd.delete(sesiones).where(eq(sesiones.userId, usuarioId));
+      await eventoDeUsuario(usuarioId, "segundo_factor_activado");
     },
     alCambiarLlaveDeAcceso: (usuarioId, cambio) => eventoDeUsuario(usuarioId, cambio === "creada" ? "llave_de_acceso_creada" : "llave_de_acceso_quitada"),
   };
@@ -385,9 +385,14 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
           // Solo lo que usan las aplicaciones: el resto de Better Auth (cambiar el propio nombre o usuario,
           // ingresar por correo, consultar usuarios) no pasa, porque no tiene auditoría ni límite propio.
           if (!RUTAS_DE_AUTENTICACION.has(url.pathname.slice("/api/auth".length))) throw problema("no_encontrado");
+          // La IP del cliente la resuelve Fastify (trustProxy, app.ts) y Better Auth la recibe sola: con la
+          // cabecera del proxy, que trae además un salto interno, no sabría cuál es y usaría un solo límite de
+          // intentos para todos.
+          const cabeceras = fromNodeHeaders(solicitud.headers);
+          cabeceras.set("x-forwarded-for", solicitud.ip);
           const peticion = new Request(url, {
             method: solicitud.method,
-            headers: fromNodeHeaders(solicitud.headers),
+            headers: cabeceras,
             ...(solicitud.body !== undefined && solicitud.method !== "GET" ? { body: JSON.stringify(solicitud.body) } : {}),
           });
           const resultado = await (porDominio.get(url.hostname) ?? auth).handler(peticion);
@@ -549,10 +554,13 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
           if (!fila.ordenDeBorradoEn || fila.borradoConfirmadoEn || !cuerpo.confirmados.includes(fila.usuarioId)) continue;
           fila.borradoConfirmadoEn = new Date();
           await enOrganizacion(bd, fila.organizacionId, async (tx) => {
-            await tx
+            // Un reintento simultáneo del teléfono también leyó la orden sin confirmar: solo uno la confirma y la registra.
+            const confirmado = await tx
               .update(dispositivos)
               .set({ borradoConfirmadoEn: fila.borradoConfirmadoEn })
-              .where(and(eq(dispositivos.id, cuerpo.id), eq(dispositivos.usuarioId, fila.usuarioId)));
+              .where(and(eq(dispositivos.id, cuerpo.id), eq(dispositivos.usuarioId, fila.usuarioId), isNull(dispositivos.borradoConfirmadoEn)))
+              .returning({ id: dispositivos.id });
+            if (confirmado.length === 0) return;
             await registrar(tx, [
               {
                 organizacionId: fila.organizacionId,

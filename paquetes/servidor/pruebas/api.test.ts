@@ -176,7 +176,24 @@ describe("rutas de autenticación", () => {
     expect((await pedir("/api/auth/is-username-available", { username: "otro" })).statusCode).toBe(404);
     expect((await app.inject({ method: "GET", url: "/api/sesion", headers: { cookie: oficina.cookie } })).json()).toMatchObject({ usuario: { nombre: "Oficina de prueba" } });
   });
+
+  it("el límite de inicios de sesión es por la IP que resuelve el servidor, no un solo límite para todos", async () => {
+    // Detrás del proxy de la plataforma llegan dos IP: la del cliente y la de un salto interno.
+    const intento = (ip: string) =>
+      conLimite.app.inject({
+        method: "POST",
+        url: "/api/auth/sign-in/username",
+        remoteAddress: ip,
+        headers: { origin: ORIGEN, "content-type": "application/json", "x-forwarded-for": `${ip}, 100.64.0.9` },
+        payload: { username: "nadie", password: "contrasena-equivocada" },
+      });
+    for (let i = 0; i < 3; i++) expect((await intento("10.20.0.1")).statusCode).toBe(401);
+    expect((await intento("10.20.0.1")).statusCode).toBe(429);
+    expect((await intento("10.20.0.2")).statusCode).toBe(401);
+  });
 });
+
+const conLimite = await servidorDePrueba({ config: { INICIOS_DE_SESION_POR_MINUTO: "3" } });
 
 describe("archivos (ADR-0007)", () => {
   it("autoriza, recibe, verifica y sirve una foto; la segunda autorización no vuelve a subirla", async () => {

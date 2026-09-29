@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { chromium } from "playwright-core";
+import { chromium, type Browser } from "playwright-core";
 import { PDFDocument } from "pdf-lib";
 
 /*
@@ -32,32 +32,75 @@ export class PlanoIlegible extends Error {
 }
 
 /**
+ * Un Chromium por proceso, que atiende todos los documentos en curso y se cierra tras un minuto sin
+ * ninguno: arrancarlo para cada PDF cuesta segundos y memoria, y tenerlo siempre abierto cuesta memoria
+ * todo el día. Cada documento usa su propio contexto, aislado de los demás.
+ */
+const INACTIVIDAD_MS = 60_000;
+let navegador: Promise<Browser> | undefined;
+let enCurso = 0;
+let cierre: NodeJS.Timeout | undefined;
+
+function abrirNavegador(chromiumRuta: string | undefined): Promise<Browser> {
+  if (navegador) return navegador;
+  // Si este Chromium se cae o no arranca, el siguiente documento abre otro. Solo se olvida si sigue siendo
+  // el vigente: el aviso de uno ya cerrado no debe soltar al que lo reemplazó.
+  const olvidar = () => void (navegador === lanzado && (navegador = undefined));
+  const lanzado: Promise<Browser> = chromium
+    .launch({
+      ...(chromiumRuta ? { executablePath: chromiumRuta } : {}),
+      // En el contenedor corre sin privilegios y sin el espacio de nombres que pide el sandbox de Chromium;
+      // lo que se renderiza es nuestra propia plantilla, sin JavaScript ni red.
+      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    })
+    .then(
+      (abierto) => abierto.on("disconnected", olvidar),
+      (error: unknown) => {
+        olvidar();
+        throw error;
+      },
+    );
+  return (navegador = lanzado);
+}
+
+/** Cierra el Chromium compartido, si hay uno: al apagar el worker y al terminar las pruebas. */
+export async function cerrarNavegador(): Promise<void> {
+  clearTimeout(cierre);
+  const abierto = navegador;
+  navegador = undefined;
+  await abierto?.then(
+    (b) => b.close(),
+    () => undefined,
+  );
+}
+
+/**
  * Imprime el documento con Chromium sin interfaz y anexa los planos con pdf-lib. La página no ejecuta
  * JavaScript ni sale a la red: todo lo que muestra viene incrustado en el HTML.
  */
 export async function imprimirPdf({ html, pie, planos, metadatos, chromiumRuta }: Impresion): Promise<Uint8Array> {
-  const navegador = await chromium.launch({
-    ...(chromiumRuta ? { executablePath: chromiumRuta } : {}),
-    // En el contenedor corre sin privilegios y sin el espacio de nombres que pide el sandbox de Chromium;
-    // lo que se renderiza es nuestra propia plantilla, sin JavaScript ni red.
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  });
+  clearTimeout(cierre);
+  enCurso++;
   let base: Uint8Array;
   try {
-    const contexto = await navegador.newContext({ javaScriptEnabled: false, offline: true });
-    const pagina = await contexto.newPage();
-    await pagina.route("**/*", (ruta) => ruta.abort());
-    await pagina.setContent(html, { waitUntil: "load" });
-    base = await pagina.pdf({
-      format: "Letter",
-      printBackground: true,
-      preferCSSPageSize: true,
-      displayHeaderFooter: true,
-      headerTemplate: "<span></span>",
-      footerTemplate: pie,
-    });
+    const contexto = await (await abrirNavegador(chromiumRuta)).newContext({ javaScriptEnabled: false, offline: true });
+    try {
+      const pagina = await contexto.newPage();
+      await pagina.route("**/*", (ruta) => ruta.abort());
+      await pagina.setContent(html, { waitUntil: "load" });
+      base = await pagina.pdf({
+        format: "Letter",
+        printBackground: true,
+        preferCSSPageSize: true,
+        displayHeaderFooter: true,
+        headerTemplate: "<span></span>",
+        footerTemplate: pie,
+      });
+    } finally {
+      await contexto.close();
+    }
   } finally {
-    await navegador.close();
+    if (--enCurso === 0) cierre = setTimeout(() => void cerrarNavegador(), INACTIVIDAD_MS).unref();
   }
 
   const documento = await PDFDocument.load(base);

@@ -57,6 +57,10 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
       disableRequestLogging: (solicitud) => solicitud.url === "/salud",
     }),
     bodyLimit: 2 * 1024 * 1024,
+    // La IP del cliente es la primera de X-Forwarded-For: el borde de Railway rehace esa cabecera (cliente y un
+    // salto interno) y descarta la que manda el cliente. Verificado el 2026-09-29 con
+    // `curl -H "X-Forwarded-For: 203.0.113.77" <portal>/api/portal/sesion`: el registro muestra la IP real.
+    // Si algún día muestra la enviada, los límites por origen (portal y Better Auth) quedarían burlables.
     trustProxy: config.NODE_ENV === "production",
   });
 

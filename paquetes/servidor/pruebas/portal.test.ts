@@ -136,6 +136,55 @@ describe("portal del cliente (ADR-0009, parte 4)", () => {
     expect((await ingresar("zzzzzzzzzzzzzzzzzzzz", "AAAA", "10.4.0.1")).json()).toMatchObject({ codigo: "no_autenticado", detail: "El identificador o la clave no son correctos" });
   });
 
+  it("intentos simultáneos no pasan del límite: cada uno cuenta antes de verificar la clave (QA-7)", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const g = await clienteConInforme(org, "Cliente G");
+    const { identificador } = await accesos.crear(org.organizacionId, g.clienteId, contexto);
+    const respuestas = await Promise.all(Array.from({ length: 30 }, (_, i) => ingresar(identificador, "AAAA-AAAA-AAAA", `10.8.0.${i + 1}`)));
+    const verificados = respuestas.filter((r) => r.statusCode === 401).length;
+    expect(verificados).toBe(5);
+    expect(respuestas.filter((r) => r.statusCode === 429)).toHaveLength(25);
+  });
+
+  it("un ingreso correcto no cuenta como fallo del origen", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const h = await clienteConInforme(org, "Cliente H");
+    const { identificador, clave } = await accesos.crear(org.organizacionId, h.clienteId, contexto);
+    const ip = "10.9.0.1";
+    for (let i = 0; i < 19; i++) expect((await ingresar("x".repeat(19) + "abcdefghjkmnpqrstuvw"[i], "AAAA", ip)).statusCode).toBe(401);
+    // El vigésimo intento es correcto: entra y el origen sigue con 19 fallos.
+    expect((await ingresar(identificador, clave, ip)).statusCode).toBe(200);
+    expect((await ingresar("y".repeat(20), "AAAA", ip)).statusCode).toBe(401);
+    expect((await ingresar("y".repeat(20), "AAAA", ip)).statusCode).toBe(429);
+  });
+
+  it("en la espera máxima, los fallos no se olvidan al terminar el bloqueo: se olvidan una hora después", async () => {
+    const identificador = "q".repeat(20);
+    // Doce fallos: el último bloqueó una hora, que terminó hace un segundo.
+    await s.propietario.pool.query(
+      "insert into portal.intentos (llave, fallos, ultimo_fallo, bloqueado_hasta) values ($1, 12, now() - interval '1 hour 1 second', now() - interval '1 second')",
+      [`acceso:${identificador}`],
+    );
+    expect((await ingresar(identificador, "AAAA", "10.10.0.1")).statusCode).toBe(401);
+    const bloqueado = await ingresar(identificador, "AAAA", "10.10.0.2");
+    expect(bloqueado.statusCode).toBe(429);
+    expect(bloqueado.json().reintentarEnSegundos).toBeGreaterThan(3500);
+  });
+
+  it("los intentos olvidados se borran: la tabla no crece sin límite", async () => {
+    const viejo = `origen:10.11.0.${randomUUID()}`;
+    const reciente = `origen:10.11.1.${randomUUID()}`;
+    await s.propietario.pool.query(
+      `insert into portal.intentos (llave, fallos, ultimo_fallo, bloqueado_hasta) values
+        ($1, 3, now() - interval '2 hours', null),
+        ($2, 3, now() - interval '2 hours', now() - interval '30 minutes')`,
+      [viejo, reciente],
+    );
+    await ingresar("w".repeat(20), "AAAA", "10.11.2.1");
+    const { rows } = await s.propietario.pool.query("select llave from portal.intentos where llave = any($1)", [[viejo, reciente]]);
+    expect(rows.map((r) => r.llave)).toEqual([reciente]);
+  });
+
   it("regenerar invalida el identificador anterior, la clave y las sesiones abiertas", async () => {
     const org = await s.nuevaOrganizacionConUsuarios();
     const d = await clienteConInforme(org, "Cliente D");

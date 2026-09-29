@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
+import { chromium } from "playwright-core";
+import { PDFDocument } from "pdf-lib";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { encolar } from "../src/plataforma/cola";
 import { archivos } from "../src/modulos/archivos/esquema";
 import { leerCadena, registrar, verificarCadena } from "../src/modulos/auditoria";
 import { leerCambios, registrarCambios } from "../src/modulos/cambios";
+import { contieneTexto } from "../src/plataforma/busqueda";
+import { cerrarNavegador, imprimirPdf } from "../src/plataforma/pdf";
 import { conexionesDePrueba, nuevaOrganizacion } from "./ayudas";
 
 const { app, propietario } = conexionesDePrueba();
@@ -191,5 +195,37 @@ describe("punto de control seguro (ADR-0005, patrón 3)", () => {
       }),
     ).rejects.toThrow("falla después de registrar");
     expect(await enOrganizacion(app.bd, org, (tx) => leerCambios(tx, "u", 0, 10))).toEqual([]);
+  });
+});
+
+describe("búsqueda sin mayúsculas ni tildes", () => {
+  it("encuentra mayúsculas con tilde aunque la base no sepa pasarlas a minúscula (locale C)", async () => {
+    const encuentra = async (valor: string, texto: string) => {
+      const { rows } = await propietario.bd.execute<{ si: boolean }>(sql`select ${contieneTexto(sql`${valor}::text collate "C"`, texto)} as si`);
+      return rows[0]!.si;
+    };
+    expect(await encuentra("NÚÑEZ ÁLVAREZ", "nunez")).toBe(true);
+    expect(await encuentra("NÚÑEZ ÁLVAREZ", "Álvarez")).toBe(true);
+    expect(await encuentra("Gómez", "gomez")).toBe(true);
+    expect(await encuentra("Gómez", "nunez")).toBe(false);
+  });
+});
+
+describe("impresión a PDF (ADR-0013)", () => {
+  it("los documentos seguidos o simultáneos comparten un Chromium; cerrado, el siguiente abre otro", async () => {
+    const lanzar = vi.spyOn(chromium, "launch");
+    const documento = (titulo: string) =>
+      imprimirPdf({ html: `<p>${titulo}</p>`, pie: "<span></span>", planos: [], metadatos: { titulo, autor: "Prueba", fecha: new Date("2026-09-29T00:00:00Z") } });
+    try {
+      await documento("uno");
+      await Promise.all([documento("dos"), documento("tres"), documento("cuatro")]);
+      expect(lanzar).toHaveBeenCalledTimes(1);
+      await cerrarNavegador();
+      expect((await PDFDocument.load(await documento("cinco"))).getTitle()).toBe("cinco");
+      expect(lanzar).toHaveBeenCalledTimes(2);
+    } finally {
+      lanzar.mockRestore();
+      await cerrarNavegador();
+    }
   });
 });

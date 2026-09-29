@@ -8,6 +8,7 @@ import { crearEnvios, proveedoresSegunConfig } from "./modulos/envios";
 import { crearGeneradorPdf } from "./modulos/informes";
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
+import { cerrarNavegador } from "./plataforma/pdf";
 import { definirTareas } from "./tareas";
 
 /**
@@ -53,7 +54,7 @@ async function apagar(senal: string) {
   cerrando = true;
   registro.info({ senal }, "Apagando: se terminan los trabajos en curso");
   await corredor.stop();
-  await Promise.all([negocio.cerrar(), cola.cerrar()]);
+  await Promise.all([negocio.cerrar(), cola.cerrar(), cerrarNavegador()]);
   process.exit(0);
 }
 process.on("SIGTERM", () => void apagar("SIGTERM"));

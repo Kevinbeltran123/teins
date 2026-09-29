@@ -252,4 +252,20 @@ describe("dispositivo y revocación (ADR-0009, ADR-0017, QA-5)", () => {
     );
     expect(rows.map((r) => r.tipo_evento)).toEqual(["usuario_desactivado", "borrado_local_confirmado"]);
   });
+
+  it("confirmar el borrado varias veces a la vez (reintentos del teléfono) lo registra una sola vez", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const dispositivo = { id: randomUUID(), secreto: secretoNuevo() };
+    await informar(tecnico.cookie, { ...dispositivo, salud });
+    const usuario = (await s.propietario.pool.query("select usuario from identidad.usuarios where id = $1", [tecnico.id])).rows[0].usuario;
+    await s.identidad.desactivarUsuario(usuario, contexto);
+
+    const respuestas = await Promise.all(Array.from({ length: 20 }, () => consultar({ ...dispositivo, confirmados: [tecnico.id] })));
+    for (const r of respuestas) expect(r.json()).toEqual({ borrar: [] });
+    const { rows } = await s.propietario.pool.query(
+      "select count(*)::int as n from auditoria.registros where organizacion_id = $1 and agregado_id = $2 and tipo_evento = 'borrado_local_confirmado'",
+      [organizacionId, tecnico.id],
+    );
+    expect(rows[0].n).toBe(1);
+  });
 });

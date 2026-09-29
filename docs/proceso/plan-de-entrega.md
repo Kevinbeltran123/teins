@@ -578,7 +578,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Retirar una versión** escribe solo tres columnas nuevas (`retirada_en`, `retirada_por`, `motivo_retiro`) con permiso de columna; la copia congelada sigue sin permiso de escritura (probado). La barrera del portal en la base exige además `retirada_en is null`, así que el cliente pasa a ver la versión anterior sin retirar, o nada. Retirar es definitivo: para volver a entregar se publica una versión nueva (regla 10). En oficina, "vigente" es la más reciente sin retirar.
 - **Accesos de clientes desde oficina** con el mismo código del comando (`crearAccesosDeClientes`) y la URL de `PORTAL_URL`; el QR lo dibuja oficina en el navegador (`qrcode`, cargado solo al necesitarlo) y se puede descargar como SVG.
 - **Panel de teléfonos:** alerta cuando el pendiente más antiguo lleva más de un día sin subir y cuando el almacenamiento no es persistente; se relee cada minuto.
-- **Auditoría:** `usuario_creado`, `contrasena_restablecida`, `usuario_desactivado`, `administrador_cambiado`, `segundo_factor_activado` y `segundo_factor_desactivado` en la cadena de cada usuario; `version_retirada` con su motivo en la del informe; accesos como en el corte 5.
+- **Auditoría:** `usuario_creado`, `contrasena_restablecida`, `usuario_desactivado`, `administrador_cambiado` y `segundo_factor_activado` en la cadena de cada usuario (el factor solo se quita al restablecer, y queda en `contrasena_restablecida`); `version_retirada` con su motivo en la del informe; accesos como en el corte 5.
 - **Oficina se prueba en escritorio:** en el viewport de celular el encabezado de oficina desborda (oficina se usa en monitor, `docs/diseno/pendientes.md`); las pruebas de oficina usan 1366 × 900.
 
 ---

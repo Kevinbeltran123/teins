@@ -16,7 +16,7 @@ export interface SesionCreada {
 
 export interface EventosDeAuth {
   alCrearSesion: (sesion: SesionCreada) => Promise<void>;
-  alCambiarSegundoFactor: (usuarioId: string, activo: boolean) => Promise<void>;
+  alActivarSegundoFactor: (usuarioId: string) => Promise<void>;
   alCambiarLlaveDeAcceso: (usuarioId: string, cambio: "creada" | "quitada") => Promise<void>;
 }
 
@@ -29,7 +29,7 @@ export interface EventosDeAuth {
  */
 const RUTAS_DE_INGRESO = new Set(["/sign-in/username", "/two-factor/verify-totp", "/two-factor/verify-backup-code", "/passkey/verify-authentication"]);
 
-export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCrearSesion, alCambiarSegundoFactor, alCambiarLlaveDeAcceso }: EventosDeAuth) {
+export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCrearSesion, alActivarSegundoFactor, alCambiarLlaveDeAcceso }: EventosDeAuth) {
   return betterAuth({
     appName: "TEINS",
     secret: config.AUTH_SECRETO,
@@ -74,7 +74,8 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
     advanced: {
       cookiePrefix: "teins",
       useSecureCookies: config.NODE_ENV === "production",
-      // Detrás del proxy de la plataforma, igual que trustProxy de Fastify.
+      // Detrás del proxy de la plataforma, igual que trustProxy de Fastify: la URL base sale de X-Forwarded-Host.
+      // La IP del cliente no: la pone el puente de rutas (index.ts) con la que resolvió Fastify.
       trustedProxyHeaders: config.NODE_ENV === "production",
       database: { generateId: () => randomUUID() },
     },
@@ -118,11 +119,12 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
         if (ctx.context.returned instanceof APIError) return;
         // Un ingreso es una sesión que nace de estas rutas. Con el segundo factor activo, la contraseña
         // crea una sesión provisional que el plugin borra después de este gancho (twoFactorRedirect); y
-        // verificar un código sin el desafío del ingreso (al activar el factor) solo rota la sesión.
+        // verificar un código con una sesión ya abierta (al activar el factor) solo la rota. El plugin
+        // decide entre ingreso y activación por esa sesión y la deja en ctx.context.session.
         const nueva = ctx.context.newSession;
         if (nueva && RUTAS_DE_INGRESO.has(ctx.path)) {
           const provisional = ctx.path === "/sign-in/username" && nueva.user.twoFactorEnabled === true;
-          const rotacion = ctx.path.startsWith("/two-factor/") && !(ctx.headers?.get("cookie") ?? "").includes(ctx.context.createAuthCookie("two_factor").name);
+          const rotacion = ctx.path.startsWith("/two-factor/") && ctx.context.session !== null;
           if (!provisional && !rotacion) await alCrearSesion(nueva.session);
         }
         if (ctx.path !== "/passkey/delete-passkey") return;
@@ -133,10 +135,11 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
     databaseHooks: {
       user: {
         update: {
-          // El segundo factor solo cambia al confirmarlo con un código o al desactivarlo: evento de seguridad (ADR-0008).
+          // El segundo factor se activa al confirmarlo con un código: evento de seguridad (ADR-0008). Solo se
+          // quita al restablecer el acceso, que tiene su propio registro.
           after: async (usuario, contexto) => {
-            if (contexto?.path === "/two-factor/verify-totp" || contexto?.path === "/two-factor/disable") {
-              await alCambiarSegundoFactor(usuario.id, (usuario as { twoFactorEnabled?: boolean }).twoFactorEnabled === true);
+            if (contexto?.path === "/two-factor/verify-totp" && (usuario as { twoFactorEnabled?: boolean }).twoFactorEnabled === true) {
+              await alActivarSegundoFactor(usuario.id);
             }
           },
         },

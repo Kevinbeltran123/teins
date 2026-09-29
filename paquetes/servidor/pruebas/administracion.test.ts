@@ -70,6 +70,23 @@ describe("segundo factor obligatorio para administrar (ADR-0009)", () => {
     expect(ingresos[0].n).toBe(3);
   });
 
+  it("activarlo con la sesión abierta no es un ingreso, aunque el navegador traiga una cookie que nombre la del desafío", async () => {
+    const usuario = `admin.${randomUUID().slice(0, 8)}`;
+    const contrasena = "contrasena-de-prueba";
+    await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre: "Otra administradora", rol: "oficina", contrasena });
+    await s.identidad.marcarAdministrador(usuario, true, { autorId: "administrador", correlacion: "prueba" });
+    const sesion = await iniciarSesion(app, usuario, contrasena);
+    const { totpURI } = (await autenticacion(app, "/two-factor/enable", { password: contrasena }, sesion)).json();
+    const confirmado = await autenticacion(app, "/two-factor/verify-totp", { code: codigoTotp(totpURI) }, `${sesion}; preferencias=teins.two_factor`);
+    expect(confirmado.statusCode, confirmado.body).toBe(200);
+
+    const { rows } = await s.propietario.pool.query(
+      "select count(*)::int as n from auditoria.registros r join identidad.usuarios u on u.id = r.autor_id where u.usuario = $1 and r.tipo_evento = 'inicio_de_sesion'",
+      [usuario],
+    );
+    expect(rows[0].n).toBe(1);
+  });
+
   it("sin la marca de administrador no se administra, y un técnico no puede activar el segundo factor", async () => {
     for (const cookie of [org.oficina.cookie, org.tecnico.cookie]) {
       const r = await pedir(cookie, "GET", "/api/administracion/usuarios");

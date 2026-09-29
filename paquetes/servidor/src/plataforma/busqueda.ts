@@ -10,9 +10,10 @@ export const normalizarBusqueda = (texto: string) =>
 
 /**
  * La columna contiene el texto, sin distinguir mayúsculas ni tildes (del lado de la base, con `translate`: no
- * hace falta la extensión unaccent). Los comodines del texto se escapan: se busca lo que la persona escribió.
+ * hace falta la extensión unaccent). Las mayúsculas con tilde van en la lista porque `lower` solo las cambia si
+ * el locale de la base lo sabe hacer. Los comodines del texto se escapan: se busca lo que la persona escribió.
  */
 export function contieneTexto(columna: AnyColumn | SQL, texto: string): SQL {
   const patron = `%${normalizarBusqueda(texto).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-  return sql`translate(lower(${columna}), 'áéíóúüñàèìòù', 'aeiouunaeiou') like ${patron}`;
+  return sql`translate(lower(${columna}), 'áéíóúüñàèìòùÁÉÍÓÚÜÑÀÈÌÒÙ', 'aeiouunaeiouaeiouunaeiou') like ${patron}`;
 }

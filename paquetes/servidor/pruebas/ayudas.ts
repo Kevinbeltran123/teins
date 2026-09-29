@@ -50,6 +50,7 @@ import { CABECERA_VERSION, VERSION_PROTOCOLO } from "@teins/protocolo";
 import { construirApp } from "../src/app";
 import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
+import { cerrarNavegador } from "../src/plataforma/pdf";
 import { crearArchivos } from "../src/modulos/archivos";
 import { crearAvisos, type EnviadorDeAvisos } from "../src/modulos/avisos";
 import { crearEnvios, type Proveedores } from "../src/modulos/envios";
@@ -104,6 +105,8 @@ export async function servidorDePrueba(opciones: { config?: Partial<Record<strin
   }
 
   const informes = crearGeneradorPdf({ bd: conexionApp.bd, almacenamiento, config });
+  // Los PDF comparten un Chromium por proceso: se cierra al terminar el archivo de pruebas.
+  afterAll(() => cerrarNavegador());
   const avisos = crearAvisos({ bd: conexionApp.bd, config, enviador: opciones.enviadorDeAvisos });
   // Envíos al cliente (ADR-0028): con los proveedores que traiga la prueba.
   const envios = crearEnvios({ bd: conexionApp.bd, almacenamiento, config, proveedores: opciones.proveedoresDeEnvio ?? {} });
