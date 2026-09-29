@@ -150,7 +150,13 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         ]),
       );
     },
-    alCambiarSegundoFactor: (usuarioId, activo) => eventoDeUsuario(usuarioId, activo ? "segundo_factor_activado" : "segundo_factor_desactivado"),
+    alCambiarSegundoFactor: async (usuarioId, activo) => {
+      // Al activarlo se cierran las sesiones abiertas solo con contraseña: el factor es del usuario, y sin esto
+      // una de ellas administraría sin haber presentado nunca un código (ADR-0009). La que lo confirmó se rota
+      // después de este gancho y sigue abierta.
+      if (activo) await bd.delete(sesiones).where(eq(sesiones.userId, usuarioId));
+      await eventoDeUsuario(usuarioId, activo ? "segundo_factor_activado" : "segundo_factor_desactivado");
+    },
     alCambiarLlaveDeAcceso: (usuarioId, cambio) => eventoDeUsuario(usuarioId, cambio === "creada" ? "llave_de_acceso_creada" : "llave_de_acceso_quitada"),
   };
 

@@ -62,13 +62,15 @@ export async function imprimirPdf({ html, pie, planos, metadatos, chromiumRuta }
 
   const documento = await PDFDocument.load(base);
   for (const [i, plano] of planos.entries()) {
-    let origen: PDFDocument;
+    // pdf-lib carga algunos PDF dañados sin quejarse y falla al copiar sus páginas: los dos pasos son del plano.
+    let paginas;
     try {
-      origen = await PDFDocument.load(plano);
+      const origen = await PDFDocument.load(plano);
+      paginas = await documento.copyPages(origen, origen.getPageIndices());
     } catch {
       throw new PlanoIlegible(i + 1);
     }
-    for (const pagina of await documento.copyPages(origen, origen.getPageIndices())) documento.addPage(pagina);
+    for (const pagina of paginas) documento.addPage(pagina);
   }
   documento.setTitle(metadatos.titulo);
   documento.setAuthor(metadatos.autor);

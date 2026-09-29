@@ -23,6 +23,7 @@ describe("segundo factor obligatorio para administrar (ADR-0009)", () => {
     await s.identidad.marcarAdministrador(usuario, true, { autorId: "administrador", correlacion: "prueba" });
 
     const sinFactor = await iniciarSesion(app, usuario, contrasena);
+    const otraSinFactor = await iniciarSesion(app, usuario, contrasena);
     const negado = await pedir(sinFactor, "GET", "/api/administracion/usuarios");
     expect(negado.statusCode).toBe(403);
     expect(negado.json().codigo).toBe("segundo_factor_requerido");
@@ -40,6 +41,8 @@ describe("segundo factor obligatorio para administrar (ADR-0009)", () => {
     const confirmado = await autenticacion(app, "/two-factor/verify-totp", { code: codigoTotp(totpURI) }, sinFactor);
     expect(confirmado.statusCode, confirmado.body).toBe(200);
     expect((await pedir(cookiesDe(confirmado), "GET", "/api/administracion/usuarios")).statusCode).toBe(200);
+    // Las sesiones abiertas solo con contraseña antes de activarlo se cierran: nunca administran sin código.
+    expect((await pedir(otraSinFactor, "GET", "/api/administracion/usuarios")).statusCode).toBe(401);
 
     // El siguiente ingreso no da sesión con la sola contraseña.
     const ingreso = await autenticacion(app, "/sign-in/username", { username: usuario, password: contrasena });
@@ -58,13 +61,13 @@ describe("segundo factor obligatorio para administrar (ADR-0009)", () => {
     );
     expect(rows.map((f) => f.tipo_evento)).toEqual(["administrador_cambiado", "segundo_factor_activado"]);
 
-    // Ingresos: el de solo contraseña (aún sin factor) y el que pasó el código. Ni el paso de la
+    // Ingresos: los dos de solo contraseña (aún sin factor) y el que pasó el código. Ni el paso de la
     // contraseña con el factor activo ni la rotación al activarlo cuentan como ingreso.
     const { rows: ingresos } = await s.propietario.pool.query(
       "select count(*)::int as n from auditoria.registros r join identidad.usuarios u on u.id = r.autor_id where u.usuario = $1 and r.tipo_evento = 'inicio_de_sesion'",
       [usuario],
     );
-    expect(ingresos[0].n).toBe(2);
+    expect(ingresos[0].n).toBe(3);
   });
 
   it("sin la marca de administrador no se administra, y un técnico no puede activar el segundo factor", async () => {
