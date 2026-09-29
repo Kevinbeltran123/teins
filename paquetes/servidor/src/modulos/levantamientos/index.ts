@@ -9,7 +9,7 @@ import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Archivos } from "../archivos";
 import type { Catalogo } from "../catalogo";
-import { leerCadena, registrar, verificarCadena } from "../auditoria";
+import { leerCadena, registrar } from "../auditoria";
 import { avisar } from "../avisos";
 import { registrarCambios } from "../cambios";
 import type { Formatos } from "../formatos";
@@ -301,10 +301,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
         manejar: async ({ parametros: { id }, actor }) => {
           const resultado = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
             if (!(await detalle(tx, id))) return null;
-            return {
-              eventos: await leerCadena(tx, actor.organizacionId, "levantamiento", id),
-              verificacion: await verificarCadena(tx, actor.organizacionId, "levantamiento", id),
-            };
+            return leerCadena(tx, actor.organizacionId, "levantamiento", id);
           });
           if (!resultado) throw problema("no_encontrado");
           const revisores = resultado.eventos.flatMap((e) => [e.valorAnterior, e.valorNuevo]).map((v) => (v as { revisor?: string } | null)?.revisor ?? null);

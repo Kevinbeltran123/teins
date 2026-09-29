@@ -675,7 +675,7 @@ export const operaciones = {
     cuerpo: AutorizarSubida,
     estadoExito: 200,
     respuesta: SubidaAutorizada,
-    errores: ["no_autenticado", "sin_permiso", "archivo_demasiado_grande", "tipo_de_archivo_no_permitido", "version_protocolo_no_soportada"],
+    errores: ["no_autenticado", "sin_permiso", "archivo_demasiado_grande", "tipo_de_archivo_no_permitido", "conflicto", "estado_invalido", "version_protocolo_no_soportada"],
   },
   confirmarSubida: {
     metodo: "POST",

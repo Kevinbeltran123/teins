@@ -30,13 +30,13 @@ interface Pedido {
   limite: number;
 }
 
+/** Primera versión de campo que entiende la revisión (estados y comentarios); a las anteriores se les manda "enviado". */
+export const APP_CON_REVISION = 3;
+
 /**
  * Bajada (ADR-0003): el registro dice qué cambió para el usuario; el contenido se lee al momento
  * del módulo dueño, así que varios cambios de la misma entidad bajan una sola vez con su estado actual.
  */
-/** Primera versión de campo que entiende la revisión (estados y comentarios); a las anteriores se les manda "enviado". */
-export const APP_CON_REVISION = 3;
-
 export async function armarBajada(tx: TxOrganizacion, deps: Omit<Dependencias, "bd">, { organizacionId, usuarioId, desde, app, limite }: Pedido) {
   const leidos = await leerCambios(tx, usuarioId, desde, limite + 1);
   const hayMas = leidos.length > limite;

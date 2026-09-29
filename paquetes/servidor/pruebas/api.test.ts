@@ -1,23 +1,24 @@
 import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
 import { llaveDeEnvio, operaciones, TIPO_PROBLEMA } from "@teins/protocolo";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
 import { crearArchivos } from "../src/modulos/archivos";
 import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
-import { cabecerasSync, jpegDePrueba, ORIGEN, servidorDePrueba } from "./ayudas";
+import { cabecerasSync, iniciarSesion, jpegDePrueba, ORIGEN, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
 const almacenamiento = almacenamientoS3(s.config);
 
-async function subir(cookie: string, foto = jpegDePrueba(), opciones: { contenido?: Buffer } = {}) {
+async function subir(cookie: string, foto = jpegDePrueba(), opciones: { contenido?: Buffer; tipo?: string } = {}) {
   const autorizacion = await app.inject({
     method: "POST",
     url: "/api/archivos/subidas",
     headers: { cookie, ...cabecerasSync },
-    payload: { huella: foto.huella, bytes: foto.datos.length, tipo: "image/jpeg" },
+    payload: { huella: foto.huella, bytes: foto.datos.length, tipo: opciones.tipo ?? "image/jpeg" },
   });
   expect(autorizacion.statusCode, autorizacion.body).toBe(200);
   const cuerpo = autorizacion.json();
@@ -265,6 +266,66 @@ describe("archivos (ADR-0007)", () => {
     expect((await subir(tecnico.cookie, foto)).statusCode).toBe(202);
   });
 
+  it("un archivo rechazado sin poder leerlo no se da por subido al confirmar: se pide subirlo de nuevo", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const foto = jpegDePrueba();
+    expect((await subir(tecnico.cookie, foto)).statusCode).toBe(202);
+    // El almacenamiento no responde en el último intento: queda rechazado y el objeto sigue guardado.
+    const sinLectura = crearArchivos({ bd: s.conexionApp.bd, almacenamiento: { ...almacenamiento, leer: () => Promise.reject(new Error("S3 no responde")) }, config: s.config });
+    await sinLectura.verificar({ organizacionId, huella: foto.huella }, { ultimoIntento: true });
+    expect(await almacenamiento.existe(`${organizacionId}/${foto.huella}`)).toBe(true);
+
+    const confirmacion = await app.inject({ method: "POST", url: `/api/archivos/${foto.huella}/subido`, headers: { cookie: tecnico.cookie, ...cabecerasSync, "content-type": "application/json" } });
+    expect(confirmacion.json()).toMatchObject({ codigo: "archivos_faltantes", faltantes: [foto.huella] });
+
+    // La nueva autorización empieza limpia, y el archivo se verifica otra vez.
+    const autorizacion = await app.inject({ method: "POST", url: "/api/archivos/subidas", headers: { cookie: tecnico.cookie, ...cabecerasSync }, payload: { huella: foto.huella, bytes: foto.datos.length, tipo: "image/jpeg" } });
+    expect(autorizacion.json()).toMatchObject({ estado: "autorizada" });
+    const fila = async () => (await s.propietario.pool.query("select estado, subido_en, motivo_rechazo from archivos.archivos where organizacion_id = $1 and huella = $2", [organizacionId, foto.huella])).rows[0];
+    expect(await fila()).toEqual({ estado: "pendiente", subido_en: null, motivo_rechazo: null });
+    expect((await subir(tecnico.cookie, foto)).statusCode).toBe(202);
+    await s.procesarCola();
+    expect(await fila()).toMatchObject({ estado: "verificado" });
+  });
+
+  it("si borrar un contenido rechazado falla, el reintento lo vuelve a verificar y lo borra", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const noEsJpeg = Buffer.from(`esto no es una imagen ${randomUUID()}`);
+    const huella = createHash("sha256").update(noEsJpeg).digest("hex");
+    expect((await subir(tecnico.cookie, { datos: noEsJpeg, huella })).statusCode).toBe(202);
+    const sinBorrar = crearArchivos({ bd: s.conexionApp.bd, almacenamiento: { ...almacenamiento, eliminar: () => Promise.reject(new Error("S3 no responde")) }, config: s.config });
+    await expect(sinBorrar.verificar({ organizacionId, huella }, { ultimoIntento: false })).rejects.toThrow("S3 no responde");
+
+    await s.procesarCola();
+    expect(await almacenamiento.existe(`${organizacionId}/${huella}`)).toBe(false);
+    const { rows } = await s.propietario.pool.query("select estado, motivo_rechazo from archivos.archivos where organizacion_id = $1 and huella = $2", [organizacionId, huella]);
+    expect(rows[0]).toEqual({ estado: "rechazado", motivo_rechazo: "el contenido no es image/jpeg" });
+  });
+
+  it("otra autorización del mismo contenido con otro tamaño o tipo no cambia la subida en curso", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const usuario = `tecnico.${randomUUID().slice(0, 8)}`;
+    await s.identidad.crearUsuario({ organizacionId, usuario, nombre: "Otro técnico de prueba", rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    const otro = await iniciarSesion(app, usuario, "contrasena-de-prueba");
+    const foto = jpegDePrueba();
+    const autorizar = (cookie: string, bytes: number, tipo = "image/jpeg") =>
+      app.inject({ method: "POST", url: "/api/archivos/subidas", headers: { cookie, ...cabecerasSync }, payload: { huella: foto.huella, bytes, tipo } });
+
+    const primera = (await autorizar(tecnico.cookie, foto.datos.length)).json();
+    expect(primera).toMatchObject({ estado: "autorizada" });
+    expect((await autorizar(otro, foto.datos.length - 1)).json()).toMatchObject({ codigo: "conflicto" });
+    expect((await autorizar(otro, foto.datos.length, TIPO_ARCHIVO_BOCETO)).json()).toMatchObject({ codigo: "conflicto" });
+    // Pedirla otra vez con lo mismo (la URL venció) sí se puede.
+    expect((await autorizar(otro, foto.datos.length)).json()).toMatchObject({ estado: "autorizada" });
+
+    expect((await fetch(primera.url, { method: "PUT", headers: primera.cabeceras, body: foto.datos })).status).toBe(200);
+    const confirmacion = await app.inject({ method: "POST", url: `/api/archivos/${foto.huella}/subido`, headers: { cookie: tecnico.cookie, ...cabecerasSync, "content-type": "application/json" } });
+    expect(confirmacion.statusCode).toBe(202);
+    await s.procesarCola();
+    const { rows } = await s.propietario.pool.query("select estado, creado_por from archivos.archivos where organizacion_id = $1 and huella = $2", [organizacionId, foto.huella]);
+    expect(rows[0]).toEqual({ estado: "verificado", creado_por: tecnico.id });
+  });
+
   it("no autoriza archivos que superan el límite", async () => {
     const { tecnico } = await s.nuevaOrganizacionConUsuarios();
     const r = await app.inject({
@@ -330,6 +391,20 @@ describe("envío de levantamientos (ADR-0003, ADR-0005)", () => {
     // El rechazo no consumió la llave: al terminar la verificación, el mismo comando pasa.
     await s.procesarCola();
     expect((await enviar(tecnico.cookie, comando(id, completo([sinVerificar.huella])))).statusCode).toBe(200);
+  });
+
+  it("cada archivo debe ser del tipo de su campo: un plano PDF de oficina no entra como foto", async () => {
+    const { tecnico, oficina, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const plano = Buffer.from(`%PDF-1.7\n% plano de prueba ${randomUUID()}\n%%EOF\n`);
+    const huella = createHash("sha256").update(plano).digest("hex");
+    expect((await subir(oficina.cookie, { datos: plano, huella }, { tipo: "application/pdf" })).statusCode).toBe(202);
+    await s.procesarCola();
+    const { rows } = await s.propietario.pool.query("select estado from archivos.archivos where organizacion_id = $1 and huella = $2", [organizacionId, huella]);
+    expect(rows[0].estado).toBe("verificado");
+
+    const r = await enviar(tecnico.cookie, comando(randomUUID(), completo([huella])));
+    expect(r.statusCode, r.body).toBe(422);
+    expect(r.json()).toMatchObject({ codigo: "respuestas_invalidas" });
   });
 
   it("rechaza respuestas que no cumplen el formato con el detalle por campo", async () => {

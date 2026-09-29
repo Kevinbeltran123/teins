@@ -5,7 +5,7 @@ import { bocetoNuevo, bocetoVacio, hojaNueva, serializarBoceto, TIPO_ARCHIVO_BOC
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { crearFormatos } from "../src/modulos/formatos";
 import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
-import { cabecerasSync, servidorDePrueba } from "./ayudas";
+import { cabecerasSync, jpegDePrueba, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
@@ -34,12 +34,12 @@ function archivoDe(contenido: string) {
   return { datos, huella: createHash("sha256").update(datos).digest("hex") };
 }
 
-async function subir(archivo: { datos: Buffer; huella: string }) {
+async function subir(archivo: { datos: Buffer; huella: string }, tipo = TIPO_ARCHIVO_BOCETO) {
   const autorizacion = await app.inject({
     method: "POST",
     url: "/api/archivos/subidas",
     headers: { cookie: org.tecnico.cookie, ...cabecerasSync },
-    payload: { huella: archivo.huella, bytes: archivo.datos.length, tipo: TIPO_ARCHIVO_BOCETO },
+    payload: { huella: archivo.huella, bytes: archivo.datos.length, tipo },
   });
   expect(autorizacion.statusCode, autorizacion.body).toBe(200);
   const cuerpo = autorizacion.json();
@@ -70,8 +70,12 @@ describe("bocetos en el servidor (iteración 10)", () => {
     await subir(archivo);
     await s.procesarCola();
     expect(await estado(archivo.huella)).toMatchObject({ estado: "verificado" });
-    const r = await enviar(archivo.huella);
+    const id = randomUUID();
+    const r = await enviar(archivo.huella, id);
     expect(r.statusCode, r.body).toBe(200);
+    // El envío cuenta sus fotos, no sus bocetos: lo mismo que muestra la bandeja.
+    const { rows } = await s.propietario.pool.query("select valor_nuevo from auditoria.registros where agregado_id = $1 and tipo_evento = 'levantamiento_enviado'", [id]);
+    expect(rows[0].valor_nuevo).toEqual({ fotos: 0 });
 
     // Oficina lo recibe ya verificado, para dibujarlo; un técnico no usa esta ruta.
     const documento = await app.inject({ method: "GET", url: `/api/archivos/${archivo.huella}/boceto`, headers: { cookie: org.oficina.cookie } });
@@ -103,6 +107,16 @@ describe("bocetos en el servidor (iteración 10)", () => {
     await s.procesarCola();
     expect(await estado(malo.huella)).toMatchObject({ estado: "rechazado", motivo_rechazo: "el contenido no es un boceto válido" });
     expect(await estado(noJson.huella)).toMatchObject({ estado: "rechazado" });
+  });
+
+  it("un JPEG verificado no entra en un campo de boceto", async () => {
+    const foto = jpegDePrueba();
+    await subir(foto, "image/jpeg");
+    await s.procesarCola();
+    expect(await estado(foto.huella)).toMatchObject({ estado: "verificado" });
+    const r = await enviar(foto.huella);
+    expect(r.statusCode, r.body).toBe(422);
+    expect(r.json()).toMatchObject({ codigo: "respuestas_invalidas" });
   });
 
   it("oficina no sube bocetos, y un formato con bocetos sin appMinima 5 no se publica", async () => {

@@ -124,24 +124,32 @@ export interface RegistroLeido {
   motivo: string | null;
 }
 
-/** La cadena de un agregado, en orden: el historial legible que ve oficina (ADR-0008). */
-export async function leerCadena(tx: TxOrganizacion, organizacionId: string, agregadoTipo: TipoAgregado, agregadoId: string): Promise<RegistroLeido[]> {
-  return tx
-    .select({
-      secuencia: registros.secuencia,
-      tipoEvento: registros.tipoEvento,
-      rutaCampo: registros.rutaCampo,
-      valorAnterior: registros.valorAnterior,
-      valorNuevo: registros.valorNuevo,
-      autorId: registros.autorId,
-      horaServidor: registros.horaServidor,
-      horaDispositivo: registros.horaDispositivo,
-      correlacion: registros.correlacion,
-      motivo: registros.motivo,
-    })
-    .from(registros)
-    .where(and(eq(registros.organizacionId, organizacionId), eq(registros.agregadoTipo, agregadoTipo), eq(registros.agregadoId, agregadoId)))
-    .orderBy(asc(registros.secuencia));
+/**
+ * La cadena de un agregado, en orden, y si está íntegra: el historial legible que ve oficina (ADR-0008).
+ * Se lee una sola vez para mostrarla y verificarla.
+ */
+export async function leerCadena(
+  tx: TxOrganizacion,
+  organizacionId: string,
+  agregadoTipo: TipoAgregado,
+  agregadoId: string,
+): Promise<{ eventos: RegistroLeido[]; verificacion: ResultadoVerificacion }> {
+  const filas = await filasDeCadena(tx, organizacionId, agregadoTipo, agregadoId);
+  return {
+    eventos: filas.map((f) => ({
+      secuencia: f.secuencia,
+      tipoEvento: f.tipoEvento,
+      rutaCampo: f.rutaCampo,
+      valorAnterior: f.valorAnterior,
+      valorNuevo: f.valorNuevo,
+      autorId: f.autorId,
+      horaServidor: f.horaServidor,
+      horaDispositivo: f.horaDispositivo,
+      correlacion: f.correlacion,
+      motivo: f.motivo,
+    })),
+    verificacion: verificar(filas),
+  };
 }
 
 /** Recalcula la cadena de un agregado y reporta el primer eslabón roto (ADR-0008). */
@@ -151,12 +159,17 @@ export async function verificarCadena(
   agregadoTipo: TipoAgregado,
   agregadoId: string,
 ): Promise<ResultadoVerificacion> {
-  const filas = await tx
+  return verificar(await filasDeCadena(tx, organizacionId, agregadoTipo, agregadoId));
+}
+
+const filasDeCadena = (tx: TxOrganizacion, organizacionId: string, agregadoTipo: TipoAgregado, agregadoId: string) =>
+  tx
     .select()
     .from(registros)
     .where(and(eq(registros.organizacionId, organizacionId), eq(registros.agregadoTipo, agregadoTipo), eq(registros.agregadoId, agregadoId)))
     .orderBy(asc(registros.secuencia));
 
+function verificar(filas: (typeof registros.$inferSelect)[]): ResultadoVerificacion {
   let hashAnterior: Buffer | null = null;
   for (const [i, f] of filas.entries()) {
     // Solo el contenido firmado: nunca id, hash ni versión, que no forman parte de la serialización.

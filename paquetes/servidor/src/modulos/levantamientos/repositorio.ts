@@ -8,7 +8,7 @@ import { comandosProcesados, comentarios, levantamientos, lineasCantidad } from 
  * La tabla de líneas sigue al documento (ADR-0006, parte 2): inserta las nuevas, actualiza las que
  * cambian (conservando su vínculo al catálogo) y marca como quitadas las que ya no están (regla 14).
  */
-async function proyectarCantidades(tx: TxOrganizacion, { organizacionId, levantamientoId, formato, respuestas, repeticiones, elegidosEnCampo }: DatosDeProyeccion) {
+async function proyectarCantidades(tx: TxOrganizacion, { organizacionId, levantamientoId, formato, respuestas, repeticiones, en, elegidosEnCampo }: DatosDeProyeccion) {
   const actuales: (typeof lineasCantidad.$inferInsert)[] = [];
   for (const bloque of bloques(formato, repeticiones)) {
     for (const campo of bloque.seccion.campos) {
@@ -16,7 +16,7 @@ async function proyectarCantidades(tx: TxOrganizacion, { organizacionId, levanta
       const valor = respuestas[bloque.clave]?.[campo.clave];
       if (!esCantidades(valor)) continue;
       valor.forEach((l, orden) => {
-        const elegido = elegidosEnCampo && l.item && elegidosEnCampo.items.has(l.item) ? { itemCatalogoId: l.item, vinculadaPor: elegidosEnCampo.tecnicoId, vinculadaEn: elegidosEnCampo.en } : {};
+        const elegido = elegidosEnCampo && l.item && elegidosEnCampo.items.has(l.item) ? { itemCatalogoId: l.item, vinculadaPor: elegidosEnCampo.tecnicoId, vinculadaEn: en } : {};
         actuales.push({
           organizacionId,
           levantamientoId,
@@ -34,7 +34,6 @@ async function proyectarCantidades(tx: TxOrganizacion, { organizacionId, levanta
       });
     }
   }
-  const llave = (l: { seccion: string; campo: string; linea: string }) => `${l.seccion}\u0000${l.campo}\u0000${l.linea}`;
   if (actuales.length > 0) {
     await tx
       .insert(lineasCantidad)
@@ -51,17 +50,18 @@ async function proyectarCantidades(tx: TxOrganizacion, { organizacionId, levanta
         },
       });
   }
-  const vigentes = new Set(actuales.map(llave));
-  const guardadas = await tx
-    .select({ seccion: lineasCantidad.seccion, campo: lineasCantidad.campo, linea: lineasCantidad.linea })
-    .from(lineasCantidad)
-    .where(and(eq(lineasCantidad.levantamientoId, levantamientoId), isNull(lineasCantidad.quitadaEn)));
-  for (const g of guardadas.filter((g) => !vigentes.has(llave(g)))) {
-    await tx
-      .update(lineasCantidad)
-      .set({ quitadaEn: new Date() })
-      .where(and(eq(lineasCantidad.levantamientoId, levantamientoId), eq(lineasCantidad.seccion, g.seccion), eq(lineasCantidad.campo, g.campo), eq(lineasCantidad.linea, g.linea)));
-  }
+  // Las vigentes que ya no están en el documento, en una sola sentencia.
+  const vigentes = sql.join(actuales.map((l) => sql`(${l.seccion}, ${l.campo}, ${l.linea})`), sql`, `);
+  await tx
+    .update(lineasCantidad)
+    .set({ quitadaEn: en })
+    .where(
+      and(
+        eq(lineasCantidad.levantamientoId, levantamientoId),
+        isNull(lineasCantidad.quitadaEn),
+        actuales.length > 0 ? sql`(${lineasCantidad.seccion}, ${lineasCantidad.campo}, ${lineasCantidad.linea}) not in (${vigentes})` : undefined,
+      ),
+    );
 }
 
 /** Adaptador de Drizzle para el puerto del núcleo. */
@@ -116,7 +116,7 @@ export const repositorioRevision: RepositorioRevision = {
     await tx.insert(comentarios).values(comentario);
   },
   proyectarCantidades,
-  async vincularLinea(tx, { levantamientoId, seccion, campo, linea, itemId, autorId }) {
+  async vincularLinea(tx, { levantamientoId, seccion, campo, linea, itemId, autorId, en }) {
     const donde = and(
       eq(lineasCantidad.levantamientoId, levantamientoId),
       eq(lineasCantidad.seccion, seccion),
@@ -127,7 +127,7 @@ export const repositorioRevision: RepositorioRevision = {
     const [antes] = await tx.select({ itemCatalogoId: lineasCantidad.itemCatalogoId }).from(lineasCantidad).where(donde).for("update");
     if (!antes) return undefined;
     if (antes.itemCatalogoId !== itemId) {
-      await tx.update(lineasCantidad).set({ itemCatalogoId: itemId, vinculadaPor: itemId ? autorId : null, vinculadaEn: itemId ? new Date() : null }).where(donde);
+      await tx.update(lineasCantidad).set({ itemCatalogoId: itemId, vinculadaPor: itemId ? autorId : null, vinculadaEn: itemId ? en : null }).where(donde);
     }
     return antes.itemCatalogoId;
   },

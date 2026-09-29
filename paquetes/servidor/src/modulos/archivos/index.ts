@@ -15,8 +15,8 @@ import { archivos, type EstadoArchivo } from "./esquema";
 export type { EstadoArchivo } from "./esquema";
 
 export interface Archivos {
-  /** Estado de cada huella en la organización de la transacción; las desconocidas no aparecen. */
-  estados(tx: TxOrganizacion, huellas: readonly string[]): Promise<Map<string, EstadoArchivo>>;
+  /** Estado y tipo declarado de cada huella en la organización de la transacción; las desconocidas no aparecen. */
+  estados(tx: TxOrganizacion, huellas: readonly string[]): Promise<Map<string, { estado: EstadoArchivo; tipo: string }>>;
   /**
    * Trabajo del worker: verifica firma interna, tamaño y huella (ADR-0007, paso 6). Idempotente. Si en
    * el último intento no se puede leer, queda rechazado: quien lo usa lo vuelve a subir.
@@ -85,17 +85,19 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
       await marcar(organizacionId, huella, "subido", { estado: "verificado", verificadoEn: new Date() });
       return;
     }
-    // Un contenido que no pasa la verificación nunca fue aceptado por ningún envío: se elimina.
+    // Un contenido que no pasa la verificación nunca fue aceptado por ningún envío: se elimina. Primero el
+    // objeto: si falla, la fila sigue subida y el reintento vuelve a verificar; y mientras está subida nadie
+    // puede autorizar una subida nueva que este borrado se llevaría.
     registro?.warn({ huella, motivo }, "Archivo rechazado");
-    await marcar(organizacionId, huella, "subido", { estado: "rechazado", motivoRechazo: motivo });
     await almacenamiento.eliminar(claveDeObjeto(organizacionId, huella));
+    await marcar(organizacionId, huella, "subido", { estado: "rechazado", motivoRechazo: motivo });
   }
 
   return {
     async estados(tx, huellas) {
       if (huellas.length === 0) return new Map();
-      const filas = await tx.select({ huella: archivos.huella, estado: archivos.estado }).from(archivos).where(inArray(archivos.huella, [...huellas]));
-      return new Map(filas.map((f) => [f.huella, f.estado]));
+      const filas = await tx.select({ huella: archivos.huella, estado: archivos.estado, tipo: archivos.tipo }).from(archivos).where(inArray(archivos.huella, [...huellas]));
+      return new Map(filas.map((f) => [f.huella, { estado: f.estado, tipo: f.tipo }]));
     },
 
     async verificar({ organizacionId, huella }, { ultimoIntento, registro }) {
@@ -128,10 +130,16 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
           const existente = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const [fila] = await tx.select().from(archivos).where(eq(archivos.huella, cuerpo.huella));
             if (fila && (fila.estado === "subido" || fila.estado === "verificado")) return fila.estado;
-            if (fila) {
+            if (fila?.estado === "pendiente") {
+              // Una subida en curso se verifica contra lo que declaró quien la pidió primero: otra autorización
+              // solo vuelve a firmarla (la URL venció) si declara lo mismo.
+              if (fila.tipo !== cuerpo.tipo || fila.bytes !== cuerpo.bytes) {
+                throw problema("conflicto", "Ese contenido ya se está subiendo con otro tamaño o tipo");
+              }
+            } else if (fila) {
               await tx
                 .update(archivos)
-                .set({ estado: "pendiente", tipo: cuerpo.tipo, bytes: cuerpo.bytes, creadoPor: actor.usuarioId, motivoRechazo: null })
+                .set({ estado: "pendiente", tipo: cuerpo.tipo, bytes: cuerpo.bytes, creadoPor: actor.usuarioId, motivoRechazo: null, subidoEn: null, verificadoEn: null })
                 .where(eq(archivos.huella, cuerpo.huella));
             } else {
               await tx.insert(archivos).values({
@@ -163,6 +171,10 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
           const fila = await leerFila(actor.organizacionId, huella);
           if (!fila) throw problema("no_encontrado", "Pida autorización antes de subir el archivo");
           if (fila.estado === "subido" || fila.estado === "verificado") return { archivo: fila.estado };
+          // Aunque el objeto siga guardado, un rechazado se vuelve a autorizar y a subir para verificarlo de nuevo.
+          if (fila.estado === "rechazado") {
+            throw problema("archivos_faltantes", "El archivo fue rechazado: pida autorización y súbalo de nuevo", { faltantes: [huella] });
+          }
           // La consulta al almacenamiento va fuera de la transacción: no se retiene una conexión esperando la red.
           if (!(await almacenamiento.existe(claveDeObjeto(actor.organizacionId, huella)))) {
             throw problema("archivos_faltantes", "El archivo no llegó al almacenamiento", { faltantes: [huella] });

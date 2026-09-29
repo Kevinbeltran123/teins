@@ -56,6 +56,8 @@ async function guardar(deps: DependenciasRevision, tx: TxOrganizacion, actual: L
 const avisarAlTecnico = (deps: DependenciasRevision, tx: TxOrganizacion, actor: Actor, actual: LevantamientoEnRevision) =>
   deps.registrarCambios(tx, [{ organizacionId: actor.organizacionId, usuarioId: actual.tecnicoId, entidad: "levantamiento", entidadId: actual.id, operacion: "cambio" }]);
 
+const ahora = (deps: DependenciasRevision) => deps.reloj?.() ?? new Date();
+
 const comun = (actor: Actor, id: string, correlacion: string) => ({
   organizacionId: actor.organizacionId,
   agregadoTipo: "levantamiento" as const,
@@ -76,7 +78,7 @@ export function tomar(deps: DependenciasRevision, actor: Actor, id: string, vers
       }
       throw problema("estado_invalido", "Este levantamiento ya no se puede tomar para revisar");
     }
-    const version = await guardar(deps, tx, actual, { estado: r.revision.estado, revisorId: actor.usuarioId, tomadoEn: (deps.reloj ?? (() => new Date()))() });
+    const version = await guardar(deps, tx, actual, { estado: r.revision.estado, revisorId: actor.usuarioId, tomadoEn: ahora(deps) });
     await deps.registrarAuditoria(tx, [
       r.anterior
         ? { ...comun(actor, id, correlacion), tipoEvento: "revision_reasignada", valorAnterior: { revisor: r.anterior }, valorNuevo: { revisor: actor.usuarioId } }
@@ -120,6 +122,7 @@ export function corregirCampos(
       formato,
       respuestas: r.respuestas,
       repeticiones: actual.repeticiones,
+      en: ahora(deps),
     });
     // Un registro por campo, todos con la misma correlación: "estos cambios fueron un solo guardado" (ADR-0008).
     await deps.registrarAuditoria(
@@ -147,7 +150,7 @@ export function marcar(deps: DependenciasRevision, actor: Actor, id: string, ver
       if (r.motivo === "no_tomado") throw problema("no_tomado", "Solo quien tomó la revisión la marca como revisada");
       throw problema("estado_invalido", "Solo se marca revisado un levantamiento en revisión");
     }
-    const version = await guardar(deps, tx, actual, { estado: "revisado", revisadoEn: (deps.reloj ?? (() => new Date()))() });
+    const version = await guardar(deps, tx, actual, { estado: "revisado", revisadoEn: ahora(deps) });
     await deps.registrarAuditoria(tx, [{ ...comun(actor, id, correlacion), tipoEvento: "levantamiento_revisado" }]);
     await deps.avisar(tx, { tipo: "levantamiento_revisado", organizacionId: actor.organizacionId, tecnicoId: actual.tecnicoId, levantamientoId: id, creadoEn: actual.creadoEnDispositivo });
     await avisarAlTecnico(deps, tx, actor, actual);
@@ -191,7 +194,7 @@ export function comentar(
       texto: datos.texto,
       seccion: datos.seccion ?? null,
       campo: datos.campo ?? null,
-      creadoEn: (deps.reloj ?? (() => new Date()))(),
+      creadoEn: ahora(deps),
     };
     await deps.repositorio.agregarComentario(tx, comentario);
     await deps.registrarAuditoria(tx, [
@@ -227,7 +230,7 @@ export function vincular(
       const item = (await deps.catalogo.items(tx, [datos.itemId])).get(datos.itemId);
       if (!item?.activo) throw problema("entrada_invalida", "El ítem no existe en el catálogo o está desactivado");
     }
-    const anterior = await deps.repositorio.vincularLinea(tx, { levantamientoId: id, ...datos, autorId: actor.usuarioId });
+    const anterior = await deps.repositorio.vincularLinea(tx, { levantamientoId: id, ...datos, autorId: actor.usuarioId, en: ahora(deps) });
     if (anterior === undefined) throw problema("no_encontrado", "La línea no existe en este levantamiento");
     if (anterior === datos.itemId) return { version: actual.version };
     const version = await guardar(deps, tx, actual, {});

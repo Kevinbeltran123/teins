@@ -348,9 +348,9 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
 
             // Los planos deben estar verificados (ADR-0007): un PDF a medio subir nunca entra en una versión.
             const estados = await archivos.estados(tx, informe.planos.map((p) => p.huella));
-            const faltantes = informe.planos.map((p) => p.huella).filter((h) => !["subido", "verificado"].includes(estados.get(h) ?? ""));
+            const faltantes = informe.planos.map((p) => p.huella).filter((h) => !["subido", "verificado"].includes(estados.get(h)?.estado ?? ""));
             if (faltantes.length > 0) throw problema("archivos_faltantes", "Hay planos que no terminaron de subir", { faltantes });
-            const pendientes = informe.planos.map((p) => p.huella).filter((h) => estados.get(h) === "subido");
+            const pendientes = informe.planos.map((p) => p.huella).filter((h) => estados.get(h)?.estado === "subido");
             if (pendientes.length > 0) throw problema("archivos_en_verificacion", "El servidor está verificando los planos", { pendientes, reintentarEnSegundos: 5 });
 
             // Nadie publica dos veces desde la misma versión del borrador.

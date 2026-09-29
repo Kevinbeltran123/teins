@@ -29,11 +29,13 @@ export interface DatosDeProyeccion {
   formato: VersionFormato;
   respuestas: Respuestas;
   repeticiones: Repeticiones;
+  /** Hora del guardado: marca las líneas quitadas y las que entran vinculadas. */
+  en: Date;
   /**
    * Solo al recibir (ADR-0025): los ítems que eligió el técnico y existen en la organización. Esas líneas
    * entran vinculadas, a nombre del técnico; las demás, sin vínculo.
    */
-  elegidosEnCampo?: { tecnicoId: string; en: Date; items: ReadonlySet<string> };
+  elegidosEnCampo?: { tecnicoId: string; items: ReadonlySet<string> };
 }
 
 /** Proyección de las cantidades: al recibir y al corregir, en la misma transacción. */
@@ -100,7 +102,7 @@ export interface RepositorioRevision extends ProyeccionDeCantidades {
    * Vincula (o desvincula, con `null`) una línea vigente al catálogo. Devuelve el ítem que tenía antes,
    * o `undefined` si la línea no existe.
    */
-  vincularLinea(tx: TxOrganizacion, datos: { levantamientoId: string; seccion: string; campo: string; linea: string; itemId: string | null; autorId: string }): Promise<string | null | undefined>;
+  vincularLinea(tx: TxOrganizacion, datos: { levantamientoId: string; seccion: string; campo: string; linea: string; itemId: string | null; autorId: string; en: Date }): Promise<string | null | undefined>;
 }
 
 export interface PuertoCatalogo {
@@ -112,7 +114,7 @@ export interface PuertoFormatos {
 }
 
 export interface PuertoArchivos {
-  estados(tx: TxOrganizacion, huellas: readonly string[]): Promise<Map<string, EstadoArchivo>>;
+  estados(tx: TxOrganizacion, huellas: readonly string[]): Promise<Map<string, { estado: EstadoArchivo; tipo: string }>>;
 }
 
 export interface PuertoVisitas {

@@ -109,7 +109,8 @@ describe("auditoría con cadena de hashes (ADR-0008)", () => {
     );
     expect(await enOrganizacion(app.bd, org, (tx) => verificarCadena(tx, org, "levantamiento", id))).toEqual({ integra: true, eslabones: 4 });
     const leidos = await enOrganizacion(app.bd, org, (tx) => leerCadena(tx, org, "levantamiento", id));
-    expect(leidos.map((r) => r.valorNuevo)).toEqual(textos);
+    expect(leidos.eventos.map((r) => r.valorNuevo)).toEqual(textos);
+    expect(leidos.verificacion).toEqual({ integra: true, eslabones: 4 });
   });
 
   it("la aplicación no puede actualizar ni borrar registros", async () => {
