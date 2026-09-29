@@ -1,3 +1,4 @@
+import { escapar } from "../../plataforma/html";
 import type { MensajeDeEnvio } from "./esquema";
 
 const fechaCorta = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -8,8 +9,6 @@ const diaLargo = (aaaaMmDd: string) => fechaLarga.format(new Date(`${aaaaMmDd}T0
 
 /** El saludo va con el primer nombre, como lo diría alguien de oficina. */
 export const primerNombre = (nombre: string) => nombre.trim().split(/\s+/)[0] ?? nombre;
-
-const escapar = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const version = (m: MensajeDeEnvio) => (m.numero > 1 ? ` (versión ${m.numero})` : "");
 

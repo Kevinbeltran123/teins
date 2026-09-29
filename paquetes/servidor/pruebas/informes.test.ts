@@ -5,7 +5,8 @@ import { llaveDeEnvio } from "@teins/protocolo";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { clientesYSitios } from "../src/modulos/clientes";
 import { crearVisitas } from "../src/modulos/visitas";
-import { escapar, plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
+import { escapar } from "../src/plataforma/html";
+import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
 import { cabecerasSync, jpegDePrueba, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();

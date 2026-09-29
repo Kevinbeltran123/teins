@@ -7,6 +7,11 @@
 import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 
 const e = process.env;
+// La misma guarda que sembrar: en producción solo corre si el entorno se declara de pruebas.
+if (e.NODE_ENV === "production" && e.ENTORNO_DE_PRUEBAS !== "true") {
+  console.error("vaciar-almacenamiento no corre en producción (en el entorno de pruebas, ENTORNO_DE_PRUEBAS=true).");
+  process.exit(1);
+}
 const s3 = new S3Client({
   region: e.S3_REGION,
   ...(e.S3_ENDPOINT ? { endpoint: e.S3_ENDPOINT } : {}),

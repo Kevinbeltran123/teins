@@ -60,6 +60,18 @@ describe("catálogo en el teléfono (iteración 17, ADR-0025)", () => {
     expect(itemsDe(ajena)).toEqual([]);
   });
 
+  it("reimportar no reactiva un ítem desactivado ni vuelve a bajar lo que no cambió", async () => {
+    const items = [{ codigo: "REI-1", descripcion: "Regleta", unidad: "und" }, { codigo: "REI-2", descripcion: "Bornera", unidad: "und" }];
+    expect((await oficina("POST", "/api/catalogo/importar", { items })).statusCode).toBe(200);
+    const regleta = (await oficina("GET", "/api/catalogo")).json().items.find((i: { codigo: string }) => i.codigo === "REI-1");
+    expect((await oficina("POST", `/api/catalogo/${regleta.id}`, { descripcion: "Regleta", unidad: "und", activo: false })).statusCode).toBe(200);
+    const antes = (await bajar(8)).json().puntoDeControl;
+
+    expect((await oficina("POST", "/api/catalogo/importar", { items: [...items, { codigo: "REI-3", descripcion: "Canaleta", unidad: "m" }] })).statusCode).toBe(200);
+    expect((await oficina("GET", "/api/catalogo")).json().items.find((i: { codigo: string }) => i.codigo === "REI-1").activo).toBe(false);
+    expect(itemsDe((await bajar(8, antes)).json()).map((i) => (i as { codigo: string }).codigo)).toEqual(["REI-3"]);
+  });
+
   it("la línea que eligió el técnico llega vinculada a su nombre; un ítem desconocido no rechaza el envío; oficina lo cambia", async () => {
     const soporte = await nuevoItem("SOP-L", "und");
     const id = randomUUID();

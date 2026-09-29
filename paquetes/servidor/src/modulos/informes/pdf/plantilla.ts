@@ -1,4 +1,5 @@
 import { aDecimalColombiano, bloques, describirValor, esBoceto, esCantidades, esFirma, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
+import { escapar } from "../../../plataforma/html";
 
 /**
  * Plantilla del informe (ADR-0013): HTML y CSS con la dirección de DESIGN.md. Se arma solo desde la
@@ -16,10 +17,6 @@ const fecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: ZO
 const fechaHora = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeStyle: "short", timeZone: ZONA });
 const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
 
-/** Todo texto que viene de personas se escapa. */
-export function escapar(texto: string): string {
-  return texto.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
 
 const parrafos = (texto: string) =>
   texto

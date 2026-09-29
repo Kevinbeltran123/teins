@@ -164,15 +164,19 @@ export function crearCatalogo(bd: BaseDeDatos, identidad: Pick<Identidad, "nombr
             );
             const tocados: string[] = [];
             for (const lote of dividir([...porCodigo.values()], 500)) {
-              const filas = await tx
+              // Solo cambia (y baja a los teléfonos) lo nuevo o lo distinto. Un ítem desactivado sigue así:
+              // reactivarlo es una decisión de oficina, no un efecto de importar la lista.
+              const cambiados = await tx
                 .insert(itemsCatalogo)
                 .values(lote.map(({ precio: _precio, ...i }) => ({ id: randomUUID(), organizacionId: actor.organizacionId, ...i })))
                 .onConflictDoUpdate({
                   target: [itemsCatalogo.organizacionId, itemsCatalogo.codigo],
-                  set: { descripcion: sql`excluded.descripcion`, unidad: sql`excluded.unidad`, activo: true, actualizadoEn: new Date() },
+                  set: { descripcion: sql`excluded.descripcion`, unidad: sql`excluded.unidad`, actualizadoEn: new Date() },
+                  setWhere: sql`${itemsCatalogo.descripcion} is distinct from excluded.descripcion or ${itemsCatalogo.unidad} is distinct from excluded.unidad`,
                 })
-                .returning({ id: itemsCatalogo.id, codigo: itemsCatalogo.codigo });
-              tocados.push(...filas.map((f) => f.id));
+                .returning({ id: itemsCatalogo.id });
+              tocados.push(...cambiados.map((f) => f.id));
+              const filas = await tx.select({ id: itemsCatalogo.id, codigo: itemsCatalogo.codigo }).from(itemsCatalogo).where(inArray(itemsCatalogo.codigo, lote.map((i) => i.codigo)));
               // Solo se agrega a la historia un precio que cambia: reimportar la misma lista no la ensucia.
               const conPrecio = filas.flatMap((f) => {
                 const precio = porCodigo.get(f.codigo)?.precio;

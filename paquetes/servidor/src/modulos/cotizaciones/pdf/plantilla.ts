@@ -1,4 +1,5 @@
 import { TARIFA_IVA } from "@teins/dominio";
+import { escapar } from "../../../plataforma/html";
 import type { ContenidoCotizacion } from "../esquema";
 
 /**
@@ -14,9 +15,6 @@ const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { day: "numer
 const pesos = (n: number) => `$ ${n.toLocaleString("es-CO")}`;
 const cantidad = (decimal: string) => decimal.replace(".", ",");
 
-export function escapar(texto: string): string {
-  return texto.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
 
 /** "10" → "10 %"; "2.5" → "2,5 %". */
 const pct = (p: string) => `${p.replace(".", ",")} %`;
