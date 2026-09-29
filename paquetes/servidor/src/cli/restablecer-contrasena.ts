@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import { leerConfig } from "../config";
 import { conectar } from "../plataforma/base-de-datos";
@@ -20,7 +20,7 @@ const contrasena = process.env.TEINS_CONTRASENA ?? randomBytes(12).toString("bas
 const config = leerConfig();
 const conexion = conectar(config.DATABASE_URL, 2);
 try {
-  await crearIdentidad(conexion.bd, config).restablecerContrasena(values.usuario, contrasena);
+  await crearIdentidad(conexion.bd, config).restablecerContrasena(values.usuario, contrasena, { autorId: "administrador", correlacion: `consola:${randomUUID()}` });
   console.log(`Contraseña restablecida para ${values.usuario}; sus sesiones se cerraron.${generada ? ` Nueva contraseña: ${contrasena}` : ""}`);
 } finally {
   await conexion.cerrar();

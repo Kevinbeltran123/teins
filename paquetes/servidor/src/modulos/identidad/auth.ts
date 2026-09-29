@@ -27,6 +27,8 @@ export interface EventosDeAuth {
  * Una instancia por superficie: una llave de acceso queda ligada al dominio donde se creó (`rpID`), y
  * cada superficie tiene el suyo (ADR-0016). Todas comparten la base y el secreto: la sesión es la misma.
  */
+const RUTAS_DE_INGRESO = new Set(["/sign-in/username", "/two-factor/verify-totp", "/two-factor/verify-backup-code", "/passkey/verify-authentication"]);
+
 export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCrearSesion, alCambiarSegundoFactor, alCambiarLlaveDeAcceso }: EventosDeAuth) {
   return betterAuth({
     appName: "TEINS",
@@ -80,7 +82,7 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
       // Mismos caracteres que acepta crearUsuario (con guion): el validador por defecto rechaza el guion al ingresar.
       username({ minUsernameLength: 3, maxUsernameLength: 30, usernameValidator: (u) => /^[a-zA-Z0-9._-]+$/.test(u) }),
       // Segundo factor TOTP (ADR-0009), obligatorio para administrar. El inicio de sesión de quien lo tiene
-      // activo no crea sesión: responde twoFactorRedirect y la sesión nace al verificar el código.
+      // activo responde twoFactorRedirect: su sesión provisional se borra y la de verdad nace al verificar el código.
       twoFactor({ issuer: "TEINS", twoFactorTable: "twoFactor" }),
       // Llaves de acceso (iteración 13): Face ID, huella o el PIN del dispositivo. Detectables (sin escribir
       // el usuario) y siempre con verificación de la persona: así valen también como segundo factor.
@@ -113,7 +115,17 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
         }
       }),
       after: createAuthMiddleware(async (ctx) => {
-        if (ctx.path !== "/passkey/delete-passkey" || ctx.context.returned instanceof APIError) return;
+        if (ctx.context.returned instanceof APIError) return;
+        // Un ingreso es una sesión que nace de estas rutas. Con el segundo factor activo, la contraseña
+        // crea una sesión provisional que el plugin borra después de este gancho (twoFactorRedirect); y
+        // verificar un código sin el desafío del ingreso (al activar el factor) solo rota la sesión.
+        const nueva = ctx.context.newSession;
+        if (nueva && RUTAS_DE_INGRESO.has(ctx.path)) {
+          const provisional = ctx.path === "/sign-in/username" && nueva.user.twoFactorEnabled === true;
+          const rotacion = ctx.path.startsWith("/two-factor/") && !(ctx.headers?.get("cookie") ?? "").includes(ctx.context.createAuthCookie("two_factor").name);
+          if (!provisional && !rotacion) await alCrearSesion(nueva.session);
+        }
+        if (ctx.path !== "/passkey/delete-passkey") return;
         const sesion = ctx.context.session ?? (await getSessionFromCtx(ctx));
         if (sesion) await alCambiarLlaveDeAcceso(sesion.user.id, "quitada");
       }),
@@ -136,7 +148,6 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
             const [usuario] = await bd.select({ desactivadoEn: usuarios.desactivadoEn }).from(usuarios).where(eq(usuarios.id, sesion.userId));
             if (!usuario || usuario.desactivadoEn) throw new APIError("UNAUTHORIZED", { message: "Invalid username or password" });
           },
-          after: (sesion) => alCrearSesion(sesion),
         },
       },
     },

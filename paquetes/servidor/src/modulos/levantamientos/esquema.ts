@@ -38,6 +38,7 @@ export const levantamientos = esquemaLevantamientos.table(
   (t) => [
     check("levantamientos_estado_valido", sql`${t.estado} in ('enviado', 'en_revision', 'revisado')`),
     index("levantamientos_bandeja_idx").on(t.organizacionId, t.estado, t.recibidoEn, t.id),
+    index("levantamientos_visita_idx").on(t.organizacionId, t.visitaId),
     aislamientoPorOrganizacion("levantamientos"),
   ],
 ).enableRLS();

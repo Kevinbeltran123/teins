@@ -108,6 +108,9 @@ describe("portal del cliente (ADR-0009, parte 4)", () => {
     expect(visibles.rows.map((f) => f.informe_id)).toEqual([b.informeId]);
     const sinCliente = await enOrganizacion(s.conexionPortal.bd, orgA.organizacionId, (tx) => tx.execute(sql`select informe_id from informes.versiones`));
     expect(sinCliente.rows).toEqual([]);
+    // De la auditoría, solo las cadenas de los accesos: ni correcciones ni contactos de la organización.
+    const auditoria = await enOrganizacion(s.conexionPortal.bd, orgA.organizacionId, (tx) => tx.execute(sql`select distinct agregado_tipo from auditoria.registros`));
+    expect(auditoria.rows.map((f) => f.agregado_tipo)).toEqual(["acceso_cliente"]);
     for (const tabla of ["levantamientos.levantamientos", "identidad.usuarios", "clientes.clientes", "informes.informes", "visitas.visitas"]) {
       const error = await s.conexionPortal.pool.query(`select 1 from ${tabla} limit 1`).then(
         () => null,

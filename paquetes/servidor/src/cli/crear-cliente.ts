@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import { leerConfig } from "../config";
 import { conectar, enOrganizacion } from "../plataforma/base-de-datos";
+import { registrar } from "../modulos/auditoria";
 import { clientesYSitios } from "../modulos/clientes";
 
 /**
@@ -19,9 +21,13 @@ if (!organizacion || !nombre || !sitio || !direccion) {
 const config = leerConfig();
 const conexion = conectar(config.DATABASE_URL, 2);
 try {
-  const { clienteId, sitioId } = await enOrganizacion(conexion.bd, organizacion, (tx) =>
-    clientesYSitios.crear(tx, { organizacionId: organizacion, nombre, sitio: { nombre: sitio, direccion } }),
-  );
+  const { clienteId, sitioId } = await enOrganizacion(conexion.bd, organizacion, async (tx) => {
+    const creado = await clientesYSitios.crear(tx, { organizacionId: organizacion, nombre, sitio: { nombre: sitio, direccion } });
+    await registrar(tx, [
+      { organizacionId: organizacion, agregadoTipo: "cliente", agregadoId: creado.clienteId, tipoEvento: "cliente_creado", autorId: "administrador", correlacion: `consola:${randomUUID()}`, valorNuevo: { nombre, sitio: { id: creado.sitioId, nombre: sitio, direccion } } },
+    ]);
+    return creado;
+  });
   console.log(`Cliente creado: ${clienteId}\nSitio creado: ${sitioId}`);
 } finally {
   await conexion.cerrar();

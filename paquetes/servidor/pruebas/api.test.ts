@@ -149,6 +149,17 @@ describe("sesión del personal", () => {
   });
 });
 
+describe("rutas de autenticación", () => {
+  it("solo pasan las que usan las aplicaciones: nadie cambia su propio nombre ni ingresa por correo", async () => {
+    const { oficina } = await s.nuevaOrganizacionConUsuarios();
+    const pedir = (url: string, payload: object) => app.inject({ method: "POST", url, headers: { cookie: oficina.cookie, origin: ORIGEN }, payload });
+    expect((await pedir("/api/auth/update-user", { name: "Ing. Supervisor TEINS" })).statusCode).toBe(404);
+    expect((await pedir("/api/auth/sign-in/email", { email: "x@y.co", password: "contrasena-de-prueba" })).statusCode).toBe(404);
+    expect((await pedir("/api/auth/is-username-available", { username: "otro" })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: "/api/sesion", headers: { cookie: oficina.cookie } })).json()).toMatchObject({ usuario: { nombre: "Oficina de prueba" } });
+  });
+});
+
 describe("archivos (ADR-0007)", () => {
   it("autoriza, recibe, verifica y sirve una foto; la segunda autorización no vuelve a subirla", async () => {
     const { tecnico, oficina } = await s.nuevaOrganizacionConUsuarios();
@@ -379,7 +390,7 @@ describe("recuperación de acceso (ADR-0009)", () => {
     const [{ username }] = (await s.propietario.pool.query("select usuario as username from identidad.usuarios where id = $1", [tecnico.id])).rows;
     expect((await app.inject({ method: "GET", url: "/api/sesion", headers: { cookie: tecnico.cookie } })).statusCode).toBe(200);
 
-    await crearIdentidad(s.conexionApp.bd, s.config).restablecerContrasena(username, "otra-contrasena-segura");
+    await crearIdentidad(s.conexionApp.bd, s.config).restablecerContrasena(username, "otra-contrasena-segura", { autorId: "administrador", correlacion: "prueba" });
     expect((await app.inject({ method: "GET", url: "/api/sesion", headers: { cookie: tecnico.cookie } })).statusCode).toBe(401);
   });
 });

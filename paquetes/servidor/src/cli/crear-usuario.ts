@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
 import { leerConfig } from "../config";
 import { ROLES, type Rol } from "../plataforma/actor";
@@ -31,7 +32,7 @@ try {
     nombre: values.nombre,
     rol: values.rol as Rol,
     contrasena,
-  });
+  }, { autorId: "administrador", correlacion: `consola:${randomUUID()}` });
   console.log(`Usuario creado: ${values.usuario} (${id})`);
 } finally {
   await conexion.cerrar();

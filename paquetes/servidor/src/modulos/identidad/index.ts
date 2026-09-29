@@ -12,7 +12,7 @@ import { registrarOperacion, registrarOperacionDeDispositivo, registrarRutaPubli
 import { registrar } from "../auditoria";
 import { olvidarSuscripciones } from "../avisos";
 import { crearAuth, type Auth, type EventosDeAuth } from "./auth";
-import { dispositivos, llavesDeAcceso, organizaciones, sesiones, usuarios } from "./esquema";
+import { cuentas, dispositivos, llavesDeAcceso, organizaciones, segundosFactores, sesiones, usuarios } from "./esquema";
 
 const USUARIO_VALIDO = /^[a-z0-9._-]{3,30}$/;
 
@@ -26,6 +26,20 @@ export interface NuevoUsuario {
 
 type Ejecutor = BaseDeDatos | TxOrganizacion;
 
+const RUTAS_DE_AUTENTICACION = new Set([
+  "/sign-in/username",
+  "/sign-out",
+  "/two-factor/enable",
+  "/two-factor/verify-totp",
+  "/two-factor/verify-backup-code",
+  "/passkey/generate-register-options",
+  "/passkey/verify-registration",
+  "/passkey/generate-authenticate-options",
+  "/passkey/verify-authentication",
+  "/passkey/list-user-passkeys",
+  "/passkey/delete-passkey",
+]);
+
 export interface Identidad {
   auth: Auth;
   /** Con `respuesta`, la cookie renovada de una sesión que se desliza vuelve al navegador. */
@@ -37,9 +51,10 @@ export interface Identidad {
   nombres(organizacionId: string, ids: readonly string[], en?: Ejecutor): Promise<Map<string, string>>;
   /** Personas cuyo nombre contiene el texto: para buscar por técnico (iteración 23). Igual que `nombres` con `en`. */
   buscarPorNombre(organizacionId: string, texto: string, en?: Ejecutor): Promise<string[]>;
-  crearUsuario(datos: NuevoUsuario): Promise<{ id: string }>;
+  /** Con `contexto`, queda el evento `usuario_creado` (desde oficina o por comando). */
+  crearUsuario(datos: NuevoUsuario, contexto?: { autorId: string; correlacion: string }): Promise<{ id: string }>;
   /** Recuperación de acceso por el administrador (ADR-0009): cambia la contraseña y cierra todas sus sesiones. */
-  restablecerContrasena(usuario: string, contrasena: string): Promise<void>;
+  restablecerContrasena(usuario: string, contrasena: string, contexto: { autorId: string; correlacion: string }): Promise<void>;
   /** Marca o desmarca a una persona de oficina como administradora (primer administrador: por comando). */
   marcarAdministrador(usuario: string, administrador: boolean, contexto: { autorId: string; correlacion: string }): Promise<void>;
   /**
@@ -177,17 +192,28 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
   }
 
   /**
-   * Restablecer el acceso cambia la contraseña, cierra todas las sesiones y quita las llaves de acceso:
-   * si se restablece porque se perdió el teléfono, la llave de ese teléfono deja de servir.
+   * Restablecer el acceso cambia la contraseña, cierra todas las sesiones y quita las llaves de acceso y el
+   * segundo factor: si se restablece porque se perdió el teléfono, nada de ese teléfono sigue sirviendo, y
+   * quien administra vuelve a activar su factor al entrar. Todo en una transacción, con su registro (ADR-0008).
    */
-  async function restablecer({ id, organizacionId }: { id: string; organizacionId: string }, contrasena: string): Promise<{ llavesQuitadas: number }> {
-    const contexto = await auth.$context;
-    await contexto.internalAdapter.updatePassword(id, await contexto.password.hash(contrasena));
-    await contexto.internalAdapter.deleteUserSessions(id);
-    const quitadas = await bd.delete(llavesDeAcceso).where(eq(llavesDeAcceso.userId, id)).returning({ id: llavesDeAcceso.id });
-    // El teléfono perdido tampoco sigue recibiendo sus avisos (ADR-0023).
-    await enOrganizacion(bd, organizacionId, (tx) => olvidarSuscripciones(tx, id));
-    return { llavesQuitadas: quitadas.length };
+  async function restablecer(
+    { id, organizacionId }: { id: string; organizacionId: string },
+    contrasena: string,
+    { autorId, correlacion }: { autorId: string; correlacion: string },
+  ): Promise<void> {
+    const hash = await (await auth.$context).password.hash(contrasena);
+    await enOrganizacion(bd, organizacionId, async (tx) => {
+      await tx.update(cuentas).set({ password: hash, updatedAt: new Date() }).where(and(eq(cuentas.userId, id), eq(cuentas.providerId, "credential")));
+      await tx.delete(sesiones).where(eq(sesiones.userId, id));
+      const quitadas = await tx.delete(llavesDeAcceso).where(eq(llavesDeAcceso.userId, id)).returning({ id: llavesDeAcceso.id });
+      const factor = await tx.delete(segundosFactores).where(eq(segundosFactores.userId, id)).returning({ id: segundosFactores.id });
+      await tx.update(usuarios).set({ twoFactorEnabled: false }).where(eq(usuarios.id, id));
+      // El teléfono perdido tampoco sigue recibiendo sus avisos (ADR-0023).
+      await olvidarSuscripciones(tx, id);
+      await registrar(tx, [
+        { organizacionId, agregadoTipo: "usuario", agregadoId: id, tipoEvento: "contrasena_restablecida", autorId, correlacion, valorNuevo: { llavesQuitadas: quitadas.length, segundoFactorQuitado: factor.length > 0 } },
+      ]);
+    });
   }
 
   async function desactivar(fila: FilaAdministrada, { autorId, correlacion }: { autorId: string; correlacion: string }) {
@@ -261,12 +287,12 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
       return filas.map((f) => f.id);
     },
 
-    async crearUsuario({ organizacionId, usuario, nombre, rol, contrasena }) {
+    async crearUsuario({ organizacionId, usuario, nombre, rol, contrasena }, contexto) {
       const nombreDeUsuario = usuario.trim().toLowerCase();
       if (!USUARIO_VALIDO.test(nombreDeUsuario)) throw new Error("Usuario: 3 a 30 caracteres entre a-z, 0-9, punto, guion y guion bajo");
       if (contrasena.length < 10) throw new Error("La contraseña debe tener al menos 10 caracteres");
-      const contexto = await auth.$context;
-      const creado = await contexto.internalAdapter.createUser({
+      const contextoAuth = await auth.$context;
+      const creado = await contextoAuth.internalAdapter.createUser({
         name: nombre.trim(),
         // Correo interno no entregable (RFC 2606): Better Auth lo exige y los técnicos no tienen (P35).
         email: `${nombreDeUsuario}@${organizacionId}.invalid`,
@@ -277,22 +303,30 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         rol,
       }, { method: "admin" });
       try {
-        await contexto.internalAdapter.linkAccount({
+        await contextoAuth.internalAdapter.linkAccount({
           providerId: "credential",
           accountId: creado.id,
           userId: creado.id,
-          password: await contexto.password.hash(contrasena),
+          password: await contextoAuth.password.hash(contrasena),
         });
       } catch (error) {
-        await contexto.internalAdapter.deleteUser(creado.id);
+        await contextoAuth.internalAdapter.deleteUser(creado.id);
         throw error;
+      }
+      // Better Auth crea el usuario con su propia conexión: el registro va después, en su transacción.
+      if (contexto) {
+        await enOrganizacion(bd, organizacionId, (tx) =>
+          registrar(tx, [
+            { organizacionId, agregadoTipo: "usuario", agregadoId: creado.id, tipoEvento: "usuario_creado", autorId: contexto.autorId, correlacion: contexto.correlacion, valorNuevo: { usuario: nombreDeUsuario, rol } },
+          ]),
+        );
       }
       return { id: creado.id };
     },
 
-    async restablecerContrasena(usuario, contrasena) {
+    async restablecerContrasena(usuario, contrasena, contexto) {
       if (contrasena.length < 10) throw new Error("La contraseña debe tener al menos 10 caracteres");
-      await restablecer(await porNombreDeUsuario(usuario), contrasena);
+      await restablecer(await porNombreDeUsuario(usuario), contrasena, contexto);
     },
 
     async desactivarUsuario(usuario, contexto) {
@@ -342,6 +376,9 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         motivo: "Autenticación: Better Auth aplica sus propias reglas, orígenes confiables y límite de intentos",
         handler: async (solicitud, respuesta) => {
           const url = new URL(solicitud.url, `http://${solicitud.headers.host ?? "localhost"}`);
+          // Solo lo que usan las aplicaciones: el resto de Better Auth (cambiar el propio nombre o usuario,
+          // ingresar por correo, consultar usuarios) no pasa, porque no tiene auditoría ni límite propio.
+          if (!RUTAS_DE_AUTENTICACION.has(url.pathname.slice("/api/auth".length))) throw problema("no_encontrado");
           const peticion = new Request(url, {
             method: solicitud.method,
             headers: fromNodeHeaders(solicitud.headers),
@@ -397,17 +434,12 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
           const contrasena = contrasenaTemporal();
           let id: string;
           try {
-            ({ id } = await this.crearUsuario({ organizacionId: actor.organizacionId, usuario: cuerpo.usuario, nombre: cuerpo.nombre, rol: cuerpo.rol, contrasena }));
+            ({ id } = await this.crearUsuario({ organizacionId: actor.organizacionId, usuario: cuerpo.usuario, nombre: cuerpo.nombre, rol: cuerpo.rol, contrasena }, { autorId: actor.usuarioId, correlacion }));
           } catch (error) {
             // El nombre de usuario es único en todo el sistema: es con lo que se inicia sesión.
             if (esViolacionUnica(error)) throw problema("conflicto", "Ese nombre de usuario ya existe");
             throw error;
           }
-          await enOrganizacion(bd, actor.organizacionId, (tx) =>
-            registrar(tx, [
-              { organizacionId: actor.organizacionId, agregadoTipo: "usuario", agregadoId: id, tipoEvento: "usuario_creado", autorId: actor.usuarioId, correlacion, valorNuevo: { usuario: cuerpo.usuario, rol: cuerpo.rol } },
-            ]),
-          );
           return { usuario: comoAdministrado(await administrado(actor.organizacionId, id)), contrasena };
         },
       });
@@ -418,12 +450,7 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
           const fila = await administrado(actor.organizacionId, id);
           if (fila.desactivadoEn) throw problema("estado_invalido", "El usuario está desactivado");
           const contrasena = contrasenaTemporal();
-          const { llavesQuitadas } = await restablecer(fila, contrasena);
-          await enOrganizacion(bd, actor.organizacionId, (tx) =>
-            registrar(tx, [
-              { organizacionId: actor.organizacionId, agregadoTipo: "usuario", agregadoId: fila.id, tipoEvento: "contrasena_restablecida", autorId: actor.usuarioId, correlacion, valorNuevo: { llavesQuitadas } },
-            ]),
-          );
+          await restablecer(fila, contrasena, { autorId: actor.usuarioId, correlacion });
           return { contrasena };
         },
       });

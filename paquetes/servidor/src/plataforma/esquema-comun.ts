@@ -26,12 +26,3 @@ export const aislamientoPorOrganizacion = (tabla: string) =>
 
 export const marcaDeTiempo = (nombre: string) => timestamp(nombre, conZona);
 
-/** La misma barrera por organización para el rol del portal (auditoría de ingresos y descargas). */
-export const aislamientoDelPortal = (tabla: string) =>
-  pgPolicy(`${tabla}_portal_organizacion`, {
-    as: "permissive",
-    to: rolPortal,
-    for: "all",
-    using: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid`,
-    withCheck: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid`,
-  });

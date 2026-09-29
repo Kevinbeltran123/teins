@@ -1,5 +1,6 @@
-import { customType, index, integer, pgSchema, smallint, text, unique, uuid } from "drizzle-orm/pg-core";
-import { aislamientoDelPortal, aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
+import { sql } from "drizzle-orm";
+import { customType, index, integer, pgPolicy, pgSchema, smallint, text, unique, uuid } from "drizzle-orm/pg-core";
+import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId, rolPortal } from "../../plataforma/esquema-comun";
 
 const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
 
@@ -44,6 +45,14 @@ export const registros = auditoria.table(
     unique("registros_cadena_unica").on(t.organizacionId, t.agregadoTipo, t.agregadoId, t.secuencia),
     index("registros_correlacion_idx").on(t.correlacion),
     aislamientoPorOrganizacion("registros"),
-    aislamientoDelPortal("registros"),
+    // El portal solo lee y escribe las cadenas de los accesos de clientes (ingresos y descargas): nunca
+    // correcciones, contactos ni el resto de la auditoría de la organización (ADR-0009, parte 3; QA-4).
+    pgPolicy("registros_portal_organizacion", {
+      as: "permissive",
+      to: rolPortal,
+      for: "all",
+      using: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid and agregado_tipo = 'acceso_cliente'`,
+      withCheck: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid and agregado_tipo = 'acceso_cliente'`,
+    }),
   ],
 ).enableRLS();

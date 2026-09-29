@@ -84,7 +84,7 @@ describe("llaves de acceso (iteración 13, ADR-0009)", () => {
     const restablecido = await nuevoTecnico();
     const perdida = nuevoAutenticador();
     await registrar(restablecido.cookie, perdida);
-    await identidad.restablecerContrasena(restablecido.usuario, "otra-contrasena-de-prueba");
+    await identidad.restablecerContrasena(restablecido.usuario, "otra-contrasena-de-prueba", { autorId: "administrador", correlacion: "prueba" });
     expect((await entrar(perdida)).statusCode).not.toBe(200);
   });
 });

@@ -212,7 +212,7 @@ export function crearAvisos({ bd, config, enviador }: { bd: BaseDeDatos; config:
               .insert(suscripciones)
               .values({ id: randomUUID(), organizacionId: actor.organizacionId, endpoint: cuerpo.endpoint, ...datos })
               // Teléfono compartido: el navegador pasa a quien inició sesión.
-              .onConflictDoUpdate({ target: suscripciones.endpoint, set: { ...datos, creadaEn: new Date() } }),
+              .onConflictDoUpdate({ target: [suscripciones.organizacionId, suscripciones.endpoint], set: { ...datos, creadaEn: new Date() } }),
           );
           return {};
         },

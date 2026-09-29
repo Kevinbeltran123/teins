@@ -1,4 +1,4 @@
-import { index, pgSchema, text, uuid } from "drizzle-orm/pg-core";
+import { index, pgSchema, text, unique, uuid } from "drizzle-orm/pg-core";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 export const esquemaAvisos = pgSchema("avisos");
@@ -18,7 +18,8 @@ export const suscripciones = esquemaAvisos.table(
     superficie: text("superficie", { enum: ["campo", "oficina"] }).notNull(),
     /** Origen de la superficie: el aviso abre su inicio. */
     origen: text("origen").notNull(),
-    endpoint: text("endpoint").notNull().unique(),
+    /** Uno por organización: un navegador compartido entre organizaciones no choca con la fila que no ve. */
+    endpoint: text("endpoint").notNull(),
     p256dh: text("p256dh").notNull(),
     auth: text("auth").notNull(),
     creadaEn: marcaDeTiempo("creada_en").notNull().defaultNow(),
@@ -26,7 +27,7 @@ export const suscripciones = esquemaAvisos.table(
     /** Último rechazo que no se reintenta (un 4xx distinto de 404 y 410), para soporte. */
     ultimoError: text("ultimo_error"),
   },
-  (t) => [index("suscripciones_usuario_idx").on(t.organizacionId, t.usuarioId), index("suscripciones_superficie_idx").on(t.organizacionId, t.superficie), aislamientoPorOrganizacion("suscripciones")],
+  (t) => [unique("suscripciones_endpoint_unico").on(t.organizacionId, t.endpoint), index("suscripciones_usuario_idx").on(t.organizacionId, t.usuarioId), index("suscripciones_superficie_idx").on(t.organizacionId, t.superficie), aislamientoPorOrganizacion("suscripciones")],
 ).enableRLS();
 
 export type FilaSuscripcion = typeof suscripciones.$inferSelect;

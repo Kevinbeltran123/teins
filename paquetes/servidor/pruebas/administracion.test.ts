@@ -57,6 +57,14 @@ describe("segundo factor obligatorio para administrar (ADR-0009)", () => {
       [usuario],
     );
     expect(rows.map((f) => f.tipo_evento)).toEqual(["administrador_cambiado", "segundo_factor_activado"]);
+
+    // Ingresos: el de solo contraseña (aún sin factor) y el que pasó el código. Ni el paso de la
+    // contraseña con el factor activo ni la rotación al activarlo cuentan como ingreso.
+    const { rows: ingresos } = await s.propietario.pool.query(
+      "select count(*)::int as n from auditoria.registros r join identidad.usuarios u on u.id = r.autor_id where u.usuario = $1 and r.tipo_evento = 'inicio_de_sesion'",
+      [usuario],
+    );
+    expect(ingresos[0].n).toBe(2);
   });
 
   it("sin la marca de administrador no se administra, y un técnico no puede activar el segundo factor", async () => {
@@ -99,6 +107,17 @@ describe("usuarios (iteración 6)", () => {
     const r = await pedir(admin.cookie, "POST", "/api/administracion/usuarios", { usuario, nombre: "Ana Guion", rol: "tecnico" });
     expect(r.statusCode, r.body).toBe(201);
     await iniciarSesion(app, usuario, r.json().contrasena);
+  });
+
+  it("restablecer también quita el segundo factor: quien perdió su autenticador vuelve a entrar y lo activa de nuevo", async () => {
+    const otro = await s.nuevoAdministrador(org.organizacionId);
+    const r = await pedir(admin.cookie, "POST", `/api/administracion/usuarios/${otro.id}/restablecer-contrasena`);
+    expect(r.statusCode, r.body).toBe(200);
+    const ingreso = await autenticacion(app, "/sign-in/username", { username: otro.usuario, password: r.json().contrasena });
+    expect(ingreso.json()).not.toHaveProperty("twoFactorRedirect");
+    expect((await pedir(cookiesDe(ingreso), "GET", "/api/sesion")).json().usuario).toMatchObject({ segundoFactor: false });
+    const { rows } = await s.propietario.pool.query("select valor_nuevo from auditoria.registros where agregado_id = $1 and tipo_evento = 'contrasena_restablecida'", [otro.id]);
+    expect(rows).toEqual([{ valor_nuevo: { llavesQuitadas: 0, segundoFactorQuitado: true } }]);
   });
 
   it("restablecer da una contraseña nueva y cierra las sesiones; desactivar revoca y no se aplica a sí mismo", async () => {

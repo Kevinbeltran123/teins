@@ -94,6 +94,16 @@ describe("suscripciones (ADR-0023)", () => {
     expect(guardadas.find((f) => f.endpoint === deOficina.endpoint)).toMatchObject({ usuarioId: org.oficina.id, superficie: "oficina", origen: "http://localhost:5174" });
   });
 
+  it("el mismo navegador se suscribe en dos organizaciones sin chocar", async () => {
+    const una = await s.nuevaOrganizacionConUsuarios();
+    const otra = await s.nuevaOrganizacionConUsuarios();
+    const datos = suscripcion();
+    expect((await pedir(una.tecnico.cookie, "POST", "/api/avisos/suscripciones", datos)).statusCode).toBe(200);
+    const r = await pedir(otra.tecnico.cookie, "POST", "/api/avisos/suscripciones", datos);
+    expect(r.statusCode, r.body).toBe(200);
+    expect((await filas(otra.organizacionId)).find((f) => f.endpoint === datos.endpoint)).toMatchObject({ usuarioId: otra.tecnico.id });
+  });
+
   it("solo acepta servicios de avisos conocidos, por https y con el origen de la superficie", async () => {
     const org = await s.nuevaOrganizacionConUsuarios();
     for (const servicio of ["https://169.254.169.254/latest", "https://ejemplo.invalid/push", "http://fcm.googleapis.com/fcm/send"]) {

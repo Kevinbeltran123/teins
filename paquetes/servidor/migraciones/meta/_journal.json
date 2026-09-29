@@ -197,6 +197,13 @@
       "when": 1790523030416,
       "tag": "0027_permisos_cotizaciones",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790655876813,
+      "tag": "0028_correcciones_revision",
+      "breakpoints": true
     }
   ]
 }
