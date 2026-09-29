@@ -10,7 +10,7 @@ import { escapar } from "../../../plataforma/html";
  * un capítulo por levantamiento, conclusiones, firma y planos anexos. Lo que falta va como marcador.
  * La marca por organización (ADR-0020) llega con la administración: hoy, los valores de TEINS.
  */
-const MARCA = { superficie: "#002B81", acento: "#FFC21A", texto: "#15171A", secundario: "#525152", division: "#DEDBD3", fondo: "#F3F1EC" };
+const MARCA = { superficie: "#002B81", acento: "#FFC21A", texto: "#15171A", secundario: "#525152", division: "#E1E4EA", fondo: "#F5F6F8" };
 
 const ZONA = "America/Bogota";
 const fecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: ZONA });

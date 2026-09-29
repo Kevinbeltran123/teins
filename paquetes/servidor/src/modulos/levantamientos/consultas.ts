@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, lt, or, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, type SQL } from "drizzle-orm";
 import type { EstadoRevision } from "@teins/dominio";
 import { Uuid } from "@teins/protocolo";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
@@ -182,8 +182,11 @@ export interface LineaRevisadaDeVisita {
   itemId: string | null;
 }
 
-/** Líneas vigentes de los levantamientos revisados; sin `visitaIds`, de todas las visitas de la organización. */
-export async function cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readonly string[]): Promise<LineaRevisadaDeVisita[]> {
+/**
+ * Líneas vigentes de los levantamientos revisados; sin `visitaIds`, de todas las visitas de la organización.
+ * Con `recibidosDesde`, solo de levantamientos recibidos desde esa fecha.
+ */
+export async function cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readonly string[], recibidosDesde?: Date): Promise<LineaRevisadaDeVisita[]> {
   if (visitaIds && visitaIds.length === 0) return [];
   const filas = await tx
     .select({
@@ -196,7 +199,7 @@ export async function cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readon
     })
     .from(lineasCantidad)
     .innerJoin(levantamientos, eq(levantamientos.id, lineasCantidad.levantamientoId))
-    .where(and(eq(levantamientos.estado, "revisado"), isNull(lineasCantidad.quitadaEn), isNotNull(levantamientos.visitaId), visitaIds ? inArray(levantamientos.visitaId, [...visitaIds]) : undefined))
+    .where(and(eq(levantamientos.estado, "revisado"), isNull(lineasCantidad.quitadaEn), isNotNull(levantamientos.visitaId), visitaIds ? inArray(levantamientos.visitaId, [...visitaIds]) : undefined, recibidosDesde ? gte(levantamientos.recibidoEn, recibidosDesde) : undefined))
     .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id), asc(lineasCantidad.seccion), asc(lineasCantidad.campo), asc(lineasCantidad.orden));
   return filas.map((f) => ({ ...f, visitaId: f.visitaId! }));
 }

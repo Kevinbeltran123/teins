@@ -188,6 +188,14 @@ describe("cotización desde las cantidades revisadas (ADR-0029, parte 2)", () =>
     expect(listado.find((c: { id: string }) => c.id === id)).toMatchObject({ vigente: 1, total: 1213766, envioSinEntregar: false });
   }, 120_000);
 
+  it("la lista para cotizar solo trae levantamientos recibidos en los últimos 90 días", async () => {
+    const e = await escenario();
+    const id = await e.revisado([linea("a0000001", "Canaleta", "4")]);
+    expect((await e.oficina("GET", "/api/cotizaciones/visitas")).json().visitas).toEqual([expect.objectContaining({ visitaId: e.visitaId })]);
+    await s.propietario.pool.query("update levantamientos.levantamientos set recibido_en = now() - interval '100 days' where id = $1", [id]);
+    expect((await e.oficina("GET", "/api/cotizaciones/visitas")).json().visitas).toEqual([]);
+  });
+
   it("una visita sin levantamientos revisados no se cotiza, y el técnico no ve cotizaciones", async () => {
     const e = await escenario();
     expect((await e.oficina("POST", "/api/cotizaciones", { visitaId: e.visitaId })).json().codigo).toBe("estado_invalido");

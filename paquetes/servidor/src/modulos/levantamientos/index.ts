@@ -60,7 +60,7 @@ export interface Levantamientos {
   /** Levantamientos por estado de cada visita: su avance (modelo de dominio, sección 5). */
   conteosPorVisita(tx: TxOrganizacion, visitaIds: readonly string[]): Promise<Map<string, ConteoDeVisita>>;
   /** Cantidades de los levantamientos revisados, para cotizar (ADR-0029). */
-  cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readonly string[]): Promise<LineaRevisadaDeVisita[]>;
+  cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readonly string[], recibidosDesde?: Date): Promise<LineaRevisadaDeVisita[]>;
   registrarRutas(app: FastifyInstance): void;
 }
 

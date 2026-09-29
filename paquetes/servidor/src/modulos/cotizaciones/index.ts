@@ -49,6 +49,8 @@ const idDeLinea = () => BigInt(`0x${randomBytes(8).toString("hex")}`).toString(3
 const CONDICIONES_INICIALES = { validezDias: 30, formaPago: "", notas: "" };
 
 /** Año en Colombia: una cotización creada el 31 de diciembre a las 8 p. m. es de ese año. */
+/** Ventana de la lista "Visitas para cotizar". */
+const DIAS_PARA_COTIZAR = 90;
 const anioEnColombia = (ahora = new Date()) => Number(ahora.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }).slice(0, 4));
 
 /** Lo único que necesita el worker: el PDF de una versión desde su copia congelada. */
@@ -105,9 +107,12 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
     return fila;
   }
 
-  /** Las líneas de cada visita, desde sus cantidades revisadas y con los precios vigentes; sin `visitaIds`, de todas. */
-  async function lineasPorVisita(tx: TxOrganizacion, visitaIds?: readonly string[]): Promise<Map<string, { lineas: LineaDeCotizacion[]; levantamientos: number }>> {
-    const revisadas = await levantamientos.cantidadesRevisadas(tx, visitaIds);
+  /**
+   * Las líneas de cada visita, desde sus cantidades revisadas y con los precios vigentes; sin `visitaIds`, de
+   * todas, con `recibidosDesde` para no cargar la historia completa.
+   */
+  async function lineasPorVisita(tx: TxOrganizacion, visitaIds?: readonly string[], recibidosDesde?: Date): Promise<Map<string, { lineas: LineaDeCotizacion[]; levantamientos: number }>> {
+    const revisadas = await levantamientos.cantidadesRevisadas(tx, visitaIds, recibidosDesde);
     const itemIds = [...new Set(revisadas.flatMap((l) => (l.itemId ? [l.itemId] : [])))];
     const [items, precios] = await Promise.all([catalogo.items(tx, itemIds), catalogo.preciosVigentes(tx, itemIds)]);
     const valores = new Map([...precios].map(([id, p]) => [id, p.valor]));
@@ -198,7 +203,8 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
         politica: politicas.oficina,
         manejar: async ({ actor }) =>
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
-            const porVisita = await lineasPorVisita(tx);
+            // Lo que se cotiza es trabajo reciente: levantamientos recibidos en los últimos 90 días.
+            const porVisita = await lineasPorVisita(tx, undefined, new Date(Date.now() - DIAS_PARA_COTIZAR * 24 * 60 * 60 * 1000));
             if (porVisita.size === 0) return { visitas: [] };
             const resumenes = await visitas.resumenes(tx, [...porVisita.keys()]);
             const existentes = await tx.select({ visitaId: cotizaciones.visitaId, numero: cotizaciones.numero }).from(cotizaciones).where(inArray(cotizaciones.visitaId, [...porVisita.keys()]));
