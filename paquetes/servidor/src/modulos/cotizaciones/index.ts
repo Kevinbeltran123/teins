@@ -7,7 +7,7 @@ import { claveDeObjeto, type Almacenamiento } from "../../plataforma/almacenamie
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
-import { fuenteIncrustada, imprimirPdf, PlanoIlegible } from "../../plataforma/pdf";
+import { fuenteIncrustada, imprimirPdf } from "../../plataforma/pdf";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
@@ -81,17 +81,18 @@ export function crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }: 
         });
       } catch (error) {
         const mensaje = (error instanceof Error ? error.message : String(error)).slice(0, 500);
-        // Un plano ilegible no se arregla reintentando. Con reintentos pendientes sigue "generando";
-        // al agotarlos, queda "fallido" y los envíos en cola se dan por no llegados, con aviso.
-        const definitivo = ultimoIntento || error instanceof PlanoIlegible;
+        // Con reintentos pendientes sigue "generando"; al agotarlos, queda "fallido" y los envíos en cola
+        // se dan por no llegados, con aviso.
         await enOrganizacion(bd, organizacionId, async (tx) => {
-          await tx
+          // Otra pasada, o esta misma sin saberlo, pudo dejarlo listo: un PDF listo no cambia.
+          const fallada = await tx
             .update(versionesCotizacion)
-            .set({ pdfError: mensaje, ...(definitivo ? { pdfEstado: "fallido" as EstadoPdfCotizacion } : {}) })
-            .where(eq(versionesCotizacion.id, versionId));
-          if (definitivo) await fallarEnviosDeVersion(tx, versionId);
+            .set({ pdfError: mensaje, ...(ultimoIntento ? { pdfEstado: "fallido" as EstadoPdfCotizacion } : {}) })
+            .where(and(eq(versionesCotizacion.id, versionId), sql`${versionesCotizacion.pdfEstado} <> 'listo'`))
+            .returning({ id: versionesCotizacion.id });
+          if (ultimoIntento && fallada.length > 0) await fallarEnviosDeVersion(tx, versionId);
         });
-        if (!definitivo) throw error;
+        if (!ultimoIntento) throw error;
       }
     },
   };
@@ -150,9 +151,10 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
     envios: envios.get(v.id) ?? [],
   });
 
-  const mensajeDe = (c: ContenidoCotizacion, organizacion: string): MensajeDeCotizacion => ({
+  /** Lo que dice el correo o el WhatsApp, de la copia congelada: el mismo nombre que el PDF adjunto. */
+  const mensajeDe = (c: ContenidoCotizacion): MensajeDeCotizacion => ({
     documento: "cotizacion",
-    organizacion,
+    organizacion: c.organizacion.nombre,
     cliente: c.visita.cliente,
     sitio: c.visita.sitio,
     cotizacion: c.numero,
@@ -359,7 +361,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               organizacionId: actor.organizacionId,
               versionId,
               clienteId: c.clienteId,
-              mensaje: mensajeDe(contenido, organizacion),
+              mensaje: mensajeDe(contenido),
               destinos: cuerpo.destinatarios.map((contactoId) => ({ contactoId })),
               por: actor.usuarioId,
             });
@@ -386,9 +388,8 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
 
       registrarOperacion(app, "enviarCotizacion", {
         politica: politicas.oficina,
-        manejar: async ({ parametros: { id, numero }, cuerpo, actor, correlacion }) => {
-          const organizacion = await identidad.nombreDeOrganizacion(actor.organizacionId);
-          return enOrganizacion(bd, actor.organizacionId, async (tx) => {
+        manejar: async ({ parametros: { id, numero }, cuerpo, actor, correlacion }) =>
+          enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const c = await leer(tx, id);
             const [version] = await tx
               .select()
@@ -397,11 +398,13 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               // Bloquea la fila: si el PDF queda listo al mismo tiempo, uno espera al otro y ningún envío queda en cola sin salir.
               .for("update");
             if (!version) throw problema("no_encontrado", "La versión no existe");
+            // Sin PDF no hay qué adjuntar, y nada lo vuelve a generar: el envío quedaría en cola para siempre.
+            if (version.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
             await programarEnvios(tx, {
               organizacionId: actor.organizacionId,
               versionId: version.id,
               clienteId: c.clienteId,
-              mensaje: mensajeDe(version.contenido, organizacion),
+              mensaje: mensajeDe(version.contenido),
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
               pdfRuta: version.pdfEstado === "listo" && version.pdfHuella ? claveDeObjeto(actor.organizacionId, version.pdfHuella) : undefined,
@@ -410,8 +413,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               { organizacionId: actor.organizacionId, agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: "cotizacion_enviada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, destinos: cuerpo.destinos } },
             ]);
             return versionConEnvios(tx, actor.organizacionId, version);
-          });
-        },
+          }),
       });
     },
   };

@@ -12,8 +12,14 @@ export const primerNombre = (nombre: string) => nombre.trim().split(/\s+/)[0] ??
 
 const version = (m: MensajeDeEnvio) => (m.numero > 1 ? ` (versión ${m.numero})` : "");
 
+/**
+ * El asunto es una cabecera del correo y Meta rechaza una variable con saltos de línea, tabulaciones o
+ * espacios seguidos: un nombre copiado con ellos va en una sola línea.
+ */
+const unaLinea = (texto: string) => texto.replace(/\s+/g, " ").trim();
+
 export function asunto(m: MensajeDeEnvio): string {
-  return m.documento === "cotizacion" ? `Cotización ${m.cotizacion} · ${m.sitio}${version(m)}` : `Informe de la visita del ${diaCorto(m.programadaPara)} · ${m.sitio}${version(m)}`;
+  return unaLinea(m.documento === "cotizacion" ? `Cotización ${m.cotizacion} · ${m.sitio}${version(m)}` : `Informe de la visita del ${diaCorto(m.programadaPara)} · ${m.sitio}${version(m)}`);
 }
 
 /** Qué se envía, en texto y en HTML (ADR-0028; la cotización, ADR-0029). */
@@ -77,4 +83,4 @@ ${
  * `cotizacion_publicada`, nombre, número de la cotización, sitio y versión (ADR-0029).
  */
 export const variablesDeWhatsapp = (m: MensajeDeEnvio, nombre: string) =>
-  m.documento === "cotizacion" ? [primerNombre(nombre), m.cotizacion, m.sitio, String(m.numero)] : [primerNombre(nombre), diaCorto(m.programadaPara), m.sitio, String(m.numero)];
+  (m.documento === "cotizacion" ? [primerNombre(nombre), m.cotizacion, m.sitio, String(m.numero)] : [primerNombre(nombre), diaCorto(m.programadaPara), m.sitio, String(m.numero)]).map(unaLinea);

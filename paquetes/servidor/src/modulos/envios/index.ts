@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Respuesta } from "@teins/protocolo";
 import type { Config } from "../../config";
 import { leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
@@ -57,16 +57,22 @@ export async function enviarAlQuedarListo(tx: TxOrganizacion, { organizacionId, 
   for (const { id } of pendientes) await encolarEnvio(tx, { organizacionId, envioId: id, pdfRuta });
 }
 
+const RETIRADA_ANTES_DE_SALIR = "La versión se retiró antes de enviarla";
+
 /**
  * La versión se retiró: sus envíos en cola no salen. Quedan "No llegó" con el motivo y sin aviso,
- * porque lo decidió oficina (regla 10).
+ * porque lo decidió oficina (regla 10). Uno que ya estaba saliendo no se detiene: si el proveedor lo
+ * acepta, pasa a "Enviado" (`marcarEnviado`); si no, su reintento ya no lo manda.
  */
 export async function cancelarEnviosDeVersion(tx: TxOrganizacion, versionId: string): Promise<void> {
   await tx
     .update(envios)
-    .set({ estado: "fallido", error: "La versión se retiró antes de enviarla", actualizadoEn: new Date() })
+    .set({ estado: "fallido", error: RETIRADA_ANTES_DE_SALIR, actualizadoEn: new Date() })
     .where(and(eq(envios.versionId, versionId), eq(envios.estado, "en_cola")));
 }
+
+/** El proveedor lo aceptó o lo entregó: vale para uno en cola y para uno que el retiro alcanzó cuando ya salía. */
+const puedeSalir = or(eq(envios.estado, "en_cola"), and(eq(envios.estado, "fallido"), eq(envios.error, RETIRADA_ANTES_DE_SALIR)));
 
 /** El PDF de la versión no se pudo generar: sus envíos en cola no van a salir, y se avisa a quien los pidió (ADR-0012). */
 export async function fallarEnviosDeVersion(tx: TxOrganizacion, versionId: string): Promise<void> {
@@ -115,8 +121,8 @@ export async function versionesConEnvioSinEntregar(tx: TxOrganizacion, versionId
 async function marcarEnviado(tx: TxOrganizacion, envioId: string, proveedorId: string | null): Promise<void> {
   await tx
     .update(envios)
-    .set({ estado: "enviado", proveedorId, actualizadoEn: new Date() })
-    .where(and(eq(envios.id, envioId), eq(envios.estado, "en_cola")));
+    .set({ estado: "enviado", proveedorId, error: null, actualizadoEn: new Date() })
+    .where(and(eq(envios.id, envioId), puedeSalir));
 }
 
 /** "No llegó": queda el motivo y se avisa a quien lo pidió. Un rebote de correo marca al contacto. */
@@ -129,6 +135,19 @@ async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string
   if (!cambiado) return;
   if (rebote && fila.canal === "correo") await contactosDelCliente.marcarRebote(tx, fila.contactoId, fila.destino, motivo);
   await avisar(tx, { tipo: "envio_fallido", organizacionId: fila.organizacionId, usuarioId: fila.creadoPor, versionId: fila.versionId, documento: fila.mensaje.documento ?? "informe" });
+}
+
+/**
+ * Un evento firmado que no se entiende no mejora reintentándolo: queda en el registro y se acusa recibo,
+ * para que el proveedor no lo repita sin fin.
+ */
+function leerEvento<T>(solicitud: FastifyRequest, cuerpo: Buffer, leer: (carga: unknown) => T): T | undefined {
+  try {
+    return leer(JSON.parse(cuerpo.toString("utf8")));
+  } catch (error) {
+    solicitud.log.warn({ err: error }, "Evento de un proveedor de envíos que no se entiende");
+    return undefined;
+  }
 }
 
 export interface Envios {
@@ -180,8 +199,8 @@ export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { 
       if (evento.estado === "fallido") return marcarFallido(tx, fila, evento.motivo ?? "El proveedor no lo entregó", evento.rebote);
       await tx
         .update(envios)
-        .set({ estado: "entregado", proveedorId: evento.proveedorId, actualizadoEn: new Date() })
-        .where(and(eq(envios.id, fila.id), inArray(envios.estado, ["en_cola", "enviado"])));
+        .set({ estado: "entregado", proveedorId: evento.proveedorId, error: null, actualizadoEn: new Date() })
+        .where(and(eq(envios.id, fila.id), or(eq(envios.estado, "enviado"), puedeSalir)));
     });
   }
 
@@ -201,32 +220,43 @@ export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { 
           await marcarEnviado(tx, fila.id, null);
           return undefined;
         }
-        await tx.update(envios).set({ enviadoEn: new Date() }).where(eq(envios.id, fila.id));
         return fila;
       });
       if (!fila) return;
 
+      /** Seguro que no salió: el siguiente intento lo manda. Definitivo o sin más intentos: "No llegó". */
+      const noSalio = async (error: unknown): Promise<void> => {
+        const definitivo = error instanceof RechazoDefinitivo || ultimoIntento;
+        await enOrganizacion(bd, organizacionId, async (tx) => {
+          if (definitivo) {
+            const motivo = error instanceof RechazoDefinitivo ? error.message : `No se pudo enviar después de varios intentos: ${error instanceof Error ? error.message : String(error)}`;
+            await marcarFallido(tx, fila, motivo);
+          } else await tx.update(envios).set({ enviadoEn: null }).where(and(eq(envios.id, fila.id), eq(envios.estado, "en_cola")));
+        });
+        if (!definitivo) throw error;
+      };
+
+      // Leer el PDF no envía nada. Va antes de marcar la salida: si el proceso muere leyéndolo, el
+      // reintento no da por enviado un WhatsApp que nunca salió.
+      let pdf: Buffer;
+      try {
+        pdf = await leerTodo(almacenamiento, pdfRuta);
+      } catch (error) {
+        return noSalio(new NoAceptado(`No se pudo leer el PDF: ${error instanceof Error ? error.message : String(error)}`));
+      }
+      // Desde aquí puede salir. Si la versión se retiró mientras se leía el PDF, ya no sale.
+      const [saliendo] = await enOrganizacion(bd, organizacionId, (tx) =>
+        tx.update(envios).set({ enviadoEn: new Date() }).where(and(eq(envios.id, fila.id), eq(envios.estado, "en_cola"))).returning({ id: envios.id }),
+      );
+      if (!saliendo) return;
+
       let proveedorId: string | null;
       try {
-        // Leer el PDF no envía nada: un fallo aquí es seguro de reintentar.
-        const pdf = await leerTodo(almacenamiento, pdfRuta).catch((error: unknown) => {
-          throw new NoAceptado(`No se pudo leer el PDF: ${error instanceof Error ? error.message : String(error)}`);
-        });
         ({ id: proveedorId } = await salir(fila, pdf));
       } catch (error) {
         const seguroNoSalio = error instanceof RechazoDefinitivo || error instanceof NoAceptado;
-        if (!seguroNoSalio && fila.canal === "whatsapp") proveedorId = null;
-        else {
-          // Seguro que no salió: el siguiente intento lo manda. Definitivo o sin más intentos: "No llegó".
-          await enOrganizacion(bd, organizacionId, async (tx) => {
-            if (error instanceof RechazoDefinitivo || ultimoIntento) {
-              const motivo = error instanceof RechazoDefinitivo ? error.message : `No se pudo enviar después de varios intentos: ${error instanceof Error ? error.message : String(error)}`;
-              await marcarFallido(tx, fila, motivo);
-            } else await tx.update(envios).set({ enviadoEn: null }).where(and(eq(envios.id, fila.id), eq(envios.estado, "en_cola")));
-          });
-          if (error instanceof RechazoDefinitivo || ultimoIntento) return;
-          throw error;
-        }
+        if (seguroNoSalio || fila.canal === "correo") return noSalio(error);
+        proveedorId = null;
       }
       // Fuera del try: si esto falla, el reintento no lo marca "No llegó" ni repite el WhatsApp.
       await enOrganizacion(bd, organizacionId, (tx) => marcarEnviado(tx, fila.id, proveedorId));
@@ -248,7 +278,7 @@ export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { 
             const cabecera = (nombre: string) => [solicitud.headers[nombre]].flat()[0];
             if (!secreto || !Buffer.isBuffer(cuerpo)) throw problema("no_encontrado", "Los eventos de correo están apagados en este entorno");
             if (!firmaSvixValida(secreto, { id: cabecera("svix-id"), hora: cabecera("svix-timestamp"), firma: cabecera("svix-signature") }, cuerpo)) throw problema("no_autenticado", "Firma inválida");
-            const evento = eventoDeResend(JSON.parse(cuerpo.toString("utf8")));
+            const evento = leerEvento(solicitud, cuerpo, eventoDeResend);
             if (evento) await aplicar(evento);
             return respuesta.status(204).send();
           },
@@ -275,7 +305,7 @@ export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { 
             const cuerpo = solicitud.body as Buffer | undefined;
             if (!secreto || !Buffer.isBuffer(cuerpo)) throw problema("no_encontrado", "Los eventos de WhatsApp están apagados en este entorno");
             if (!firmaMetaValida(secreto, [solicitud.headers["x-hub-signature-256"]].flat()[0], cuerpo)) throw problema("no_autenticado", "Firma inválida");
-            for (const evento of eventosDeWhatsapp(JSON.parse(cuerpo.toString("utf8")))) await aplicar(evento);
+            for (const evento of leerEvento(solicitud, cuerpo, eventosDeWhatsapp) ?? []) await aplicar(evento);
             return respuesta.status(200).send();
           },
         });

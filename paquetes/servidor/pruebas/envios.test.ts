@@ -1,10 +1,11 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { llaveDeEnvio } from "@teins/protocolo";
+import { almacenamientoS3, claveDeObjeto, type Almacenamiento } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { clientesYSitios } from "../src/modulos/clientes";
 import { crearVisitas } from "../src/modulos/visitas";
-import { proveedoresSegunConfig, RechazoDefinitivo, type ProveedorDeCorreo, type ProveedorDeWhatsapp } from "../src/modulos/envios";
+import { crearEnvios, proveedoresSegunConfig, RechazoDefinitivo, type ProveedorDeCorreo, type ProveedorDeWhatsapp } from "../src/modulos/envios";
 import { firmaMetaValida, firmaSvixValida } from "../src/modulos/envios/eventos";
 import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "../src/modulos/envios/mensajes";
 import type { CorreoSaliente, WhatsappSaliente } from "../src/modulos/envios/proveedores";
@@ -17,8 +18,11 @@ const TOKEN_VERIFICACION = randomBytes(16).toString("hex");
 /** Proveedores falsos que guardan lo que saldría; una dirección con "rebota" se rechaza como lo haría el real. */
 const correos: CorreoSaliente[] = [];
 const whatsapps: WhatsappSaliente[] = [];
+/** Lo que pasa mientras Resend recibe un correo: para probar lo que ocurre justo cuando sale. */
+let alSalir: (() => Promise<void>) | undefined;
 const correo: ProveedorDeCorreo = async (c) => {
   if (c.para.includes("rebota")) throw new RechazoDefinitivo("Resend lo rechazó: dirección inválida");
+  await alSalir?.();
   correos.push(c);
   return { id: `correo-${randomUUID()}` };
 };
@@ -256,6 +260,61 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     expect(envios.map((e) => e.estado)).toEqual(["fallido", "fallido"]);
     expect(whatsapps.some((m) => envios.some((e) => m.referencia.endsWith(e.id)))).toBe(false);
   }, 90_000);
+
+  it("una versión cuyo PDF no se pudo generar no se envía: su envío quedaría en cola para siempre", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, ANA);
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    await s.propietario.pool.query("update informes.versiones set pdf_estado = 'fallido' where informe_id = $1", [informeId]);
+
+    const envio = await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }] });
+    expect(envio.json()).toMatchObject({ codigo: "estado_invalido" });
+    expect(await enviosDe(oficina.cookie, informeId)).toEqual([]);
+  }, 90_000);
+
+  it("retirar la versión mientras una copia sale no la da por no enviada: salió", async () => {
+    const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, recibeWhatsapp: false });
+    const admin = await s.nuevoAdministrador(organizacionId);
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }] });
+
+    let retiro: number | undefined;
+    alSalir = async () => {
+      alSalir = undefined;
+      retiro = (await post(admin.cookie, `/api/informes/${informeId}/versiones/1/retirar`, { motivo: "Tenía un error" })).statusCode;
+    };
+    await s.procesarCola();
+    expect(retiro).toBe(200);
+    expect(await enviosDe(oficina.cookie, informeId)).toEqual([expect.objectContaining({ estado: "enviado", error: null })]);
+  }, 90_000);
+
+  it("el PDF se lee antes de marcar la salida: si el proceso muere leyéndolo, el WhatsApp no queda por enviado", async () => {
+    const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, recibeCorreo: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }] });
+    const envioId = (await enviosDe(oficina.cookie, informeId))[0]!.id;
+    const { rows } = await s.propietario.pool.query("select pdf_huella from informes.versiones where informe_id = $1", [informeId]);
+
+    // Al leer el PDF, lo que dice la base de la salida del envío.
+    const salidaAlLeer: unknown[] = [];
+    const almacenamiento = almacenamientoS3(s.config);
+    const espia: Almacenamiento = {
+      ...almacenamiento,
+      async leer(clave) {
+        salidaAlLeer.push((await s.propietario.pool.query("select enviado_en from envios.envios where id = $1", [envioId])).rows[0].enviado_en);
+        return almacenamiento.leer(clave);
+      },
+    };
+    const envios = crearEnvios({ bd: s.conexionApp.bd, almacenamiento: espia, config: s.config, proveedores: { correo, whatsapp } });
+    await envios.enviar({ organizacionId, envioId, pdfRuta: claveDeObjeto(organizacionId, rows[0].pdf_huella) }, { ultimoIntento: false });
+    expect(salidaAlLeer).toEqual([null]);
+    expect((await enviosDe(oficina.cookie, informeId))[0]).toMatchObject({ estado: "enviado" });
+  }, 90_000);
 });
 
 async function organizacionDe(informeId: string): Promise<string> {
@@ -319,6 +378,17 @@ describe("eventos de los proveedores (ADR-0028, parte 4)", () => {
     await app.inject({ method: "POST", url, headers: firmado(fallo), payload: fallo });
     expect((await enviosDe(oficina.cookie, informeId)).find((e) => e.id === envio.id)).toMatchObject({ estado: "fallido", error: "WhatsApp no lo entregó: Message undeliverable" });
   }, 90_000);
+
+  it("un evento firmado que no se entiende se acusa: reintentarlo no lo arregla", async () => {
+    for (const cuerpo of ["no es JSON", "null"]) {
+      expect((await app.inject({ method: "POST", url: "/api/envios/eventos/correo", headers: firmarResend(cuerpo), payload: cuerpo })).statusCode).toBe(204);
+    }
+    for (const cuerpo of ["no es JSON", "null", '{"entry":5}']) {
+      const firma = `sha256=${createHmac("sha256", SECRETO_META).update(cuerpo).digest("hex")}`;
+      const r = await app.inject({ method: "POST", url: "/api/envios/eventos/whatsapp", headers: { "x-hub-signature-256": firma, "content-type": "application/json" }, payload: cuerpo });
+      expect(r.statusCode).toBe(200);
+    }
+  });
 });
 
 describe("mensajes y firmas", () => {
@@ -337,6 +407,14 @@ describe("mensajes y firmas", () => {
   it("el asunto lleva la versión desde la 2 y el texto dice cuándo el PDF no va adjunto", () => {
     expect(asunto(mensaje)).toBe("Informe de la visita del 3 oct 2026 · Sede Norte (versión 2)");
     expect(textoDeCorreo(mensaje, { nombre: "Ana Torres", portal: undefined, sinAdjunto: true })).toContain("El PDF pesa demasiado para el correo");
+  });
+
+  it("un salto de línea en un nombre no llega al asunto ni a las variables de WhatsApp", () => {
+    const conSaltos = { ...mensaje, sitio: "Sede\r\nBcc: otro@example.com" };
+    expect(asunto(conSaltos)).toBe("Informe de la visita del 3 oct 2026 · Sede Bcc: otro@example.com (versión 2)");
+    // Meta rechaza una variable con saltos de línea, tabulaciones o más de cuatro espacios seguidos.
+    expect(variablesDeWhatsapp(conSaltos, "Ana\tTorres")).toEqual(["Ana", "3 oct 2026", "Sede Bcc: otro@example.com", "2"]);
+    expect(variablesDeWhatsapp({ ...mensaje, sitio: "Sede      Norte" }, "Ana")[2]).toBe("Sede Norte");
   });
 
   it("las firmas solo valen con el secreto y el cuerpo exactos", () => {

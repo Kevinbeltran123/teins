@@ -2,8 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { llaveDeEnvio } from "@teins/protocolo";
+import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { clientesYSitios } from "../src/modulos/clientes";
+import { crearGeneradorPdf } from "../src/modulos/informes";
 import { crearVisitas } from "../src/modulos/visitas";
 import { escapar } from "../src/plataforma/html";
 import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
@@ -69,7 +71,7 @@ async function visitaConRevisado() {
   expect((await post(org.oficina.cookie, `/api/levantamientos/${revisado}/tomar`, { version: 1 })).statusCode).toBe(200);
   expect((await post(org.oficina.cookie, `/api/levantamientos/${revisado}/marcar-revisado`, { version: 2 })).statusCode).toBe(200);
   const { id: informeId } = (await post(org.oficina.cookie, "/api/informes", { visitaId })).json();
-  return { ...org, visitaId, revisado, enviado, informeId };
+  return { ...org, visitaId, revisado, enviado, informeId, foto };
 }
 
 /** La cola `pdf` procesa de a uno y otro archivo de pruebas puede estar usándola: se insiste hasta que termine. */
@@ -115,6 +117,37 @@ describe("PDF que no se puede generar", () => {
     expect(versiones[0]).toMatchObject({ pdf_estado: "fallido", intentos: null });
     const detalle = (await get(oficina.cookie, `/api/informes/${informeId}`)).json();
     expect(detalle.versiones[0].envios).toEqual([expect.objectContaining({ estado: "fallido", error: expect.stringContaining("PDF") })]);
+  }, 90_000);
+
+  it("un fallo tardío no pisa un PDF que ya quedó listo ni da por no llegados sus envíos", async () => {
+    const { oficina, organizacionId, visitaId, revisado, informeId } = await visitaConRevisado();
+    const { rows } = await s.propietario.pool.query("select cliente_id from visitas.visitas where id = $1", [visitaId]);
+    const contacto = await post(oficina.cookie, `/api/clientes/${rows[0].cliente_id}/contactos`, { nombre: "Ana Torres", cargo: "", correo: "ana@cliente.example", celular: null, recibeCorreo: true, recibeWhatsapp: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [] });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2 });
+    await hastaQueLosPdfEstenListos(informeId);
+    // Como justo después de publicar: el PDF se está generando y un envío lo espera.
+    const { rows: versiones } = await s.propietario.pool.query("update informes.versiones set pdf_estado = 'generando' where informe_id = $1 returning id", [informeId]);
+    const versionId: string = versiones[0].id;
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: contacto.json().contactos[0].id }] })).statusCode).toBe(200);
+
+    // Otra pasada del trabajo lo deja listo; a esta se le pierde la conexión en su último intento.
+    const almacenamiento = almacenamientoS3(s.config);
+    const generador = crearGeneradorPdf({
+      bd: s.conexionApp.bd,
+      config: s.config,
+      almacenamiento: {
+        ...almacenamiento,
+        async guardar() {
+          await s.propietario.pool.query("update informes.versiones set pdf_estado = 'listo' where id = $1", [versionId]);
+          throw new Error("Se perdió la conexión");
+        },
+      },
+    });
+    await generador.generarPdf({ organizacionId, versionId }, { ultimoIntento: true });
+    const { rows: despues } = await s.propietario.pool.query("select pdf_estado from informes.versiones where id = $1", [versionId]);
+    expect(despues[0].pdf_estado).toBe("listo");
+    expect((await get(oficina.cookie, `/api/informes/${informeId}`)).json().versiones[0].envios).toEqual([expect.objectContaining({ estado: "en_cola" })]);
   }, 90_000);
 });
 
@@ -208,6 +241,15 @@ describe("informe (corte 4)", () => {
     // Guardar con una versión vieja se rechaza.
     expect((await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "x", conclusiones: "", levantamientos: [], planos: [] })).json()).toMatchObject({
       codigo: "conflicto_de_version",
+    });
+  });
+
+  it("un plano es un PDF: una foto verificada con su huella no se anexa", async () => {
+    const { oficina, revisado, informeId, foto } = await visitaConRevisado();
+    await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [{ huella: foto, nombre: "Planta" }] });
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2 })).json()).toMatchObject({
+      codigo: "informe_invalido",
+      erroresInforme: [{ codigo: "plano_invalido", huella: foto }],
     });
   });
 

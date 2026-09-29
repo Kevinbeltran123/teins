@@ -132,10 +132,12 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
       if (!version || version.pdfEstado === "listo") return;
       const c = version.contenido;
       try {
-        // Fotos incrustadas: el documento no depende de URL que vencen.
+        // Fotos incrustadas: el documento no depende de URL que vencen. Se descargan a la vez; el cliente
+        // de S3 limita cuántas conexiones abre.
         const huellas = [...new Set(c.levantamientos.flatMap((l) => fotosReferenciadas(l.respuestas)))];
-        const fotos = new Map<string, string>();
-        for (const h of huellas) fotos.set(h, `data:image/jpeg;base64,${(await leerTodo(almacenamiento, claveDeObjeto(organizacionId, h))).toString("base64")}`);
+        const fotos = new Map(
+          await Promise.all(huellas.map(async (h) => [h, `data:image/jpeg;base64,${(await leerTodo(almacenamiento, claveDeObjeto(organizacionId, h))).toString("base64")}`] as const)),
+        );
         // Bocetos (ADR-0019): cada hoja del documento vectorial se convierte a SVG (ADR-0026).
         // Las firmas usan el mismo documento, sin cuadrícula y recortadas a sus trazos (ADR-0024).
         const valores = c.levantamientos.flatMap((l) => Object.values(l.respuestas).flatMap((seccion) => Object.values(seccion)));
@@ -174,11 +176,13 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         // al agotarlos, queda "fallido" y los envíos en cola se dan por no llegados, con aviso.
         const definitivo = ultimoIntento || error instanceof PlanoIlegible;
         await enOrganizacion(bd, organizacionId, async (tx) => {
-          await tx
+          // Otra pasada, o esta misma sin saberlo, pudo dejarlo listo: un PDF listo no cambia (QA-17).
+          const fallada = await tx
             .update(versionesPublicadas)
             .set({ pdfError: mensaje, ...(definitivo ? { pdfEstado: "fallido" as EstadoPdf } : {}) })
-            .where(eq(versionesPublicadas.id, versionId));
-          if (definitivo) await fallarEnviosDeVersion(tx, versionId);
+            .where(and(eq(versionesPublicadas.id, versionId), sql`${versionesPublicadas.pdfEstado} <> 'listo'`))
+            .returning({ id: versionesPublicadas.id });
+          if (definitivo && fallada.length > 0) await fallarEnviosDeVersion(tx, versionId);
         });
         if (!definitivo) throw error;
       }
@@ -227,7 +231,9 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
         manejar: async ({ actor }) =>
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const filas = await tx.select({ id: informes.id, visitaId: informes.visitaId }).from(informes);
-            // La versión vigente es la de mayor número sin retirar (regla 10): la que ve el cliente.
+            // La versión vigente es la de mayor número sin retirar (regla 10), como en el detalle del informe.
+            // El portal muestra la de mayor número con el PDF listo: mientras el de la vigente se genera, o si
+            // falló, el cliente sigue viendo la anterior.
             const publicadas = await tx
               .select({ id: versionesPublicadas.id, informeId: versionesPublicadas.informeId, numero: versionesPublicadas.numero, pdf: versionesPublicadas.pdfEstado })
               .from(versionesPublicadas)
@@ -350,6 +356,9 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             const estados = await archivos.estados(tx, informe.planos.map((p) => p.huella));
             const faltantes = informe.planos.map((p) => p.huella).filter((h) => !["subido", "verificado"].includes(estados.get(h)?.estado ?? ""));
             if (faltantes.length > 0) throw problema("archivos_faltantes", "Hay planos que no terminaron de subir", { faltantes });
+            // Un plano es un PDF: una foto o un boceto con su huella no se puede anexar (ADR-0013).
+            const deOtroTipo = informe.planos.filter((p) => estados.get(p.huella)?.tipo !== "application/pdf");
+            if (deOtroTipo.length > 0) throw invalido(deOtroTipo.map((p) => ({ codigo: "plano_invalido", huella: p.huella })));
             const pendientes = informe.planos.map((p) => p.huella).filter((h) => estados.get(h)?.estado === "subido");
             if (pendientes.length > 0) throw problema("archivos_en_verificacion", "El servidor está verificando los planos", { pendientes, reintentarEnSegundos: 5 });
 
@@ -478,6 +487,8 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             if (!fila) throw problema("no_encontrado", "La versión no existe");
             // Lo retirado no se vuelve a entregar (regla 10): para eso se publica una versión nueva.
             if (fila.retiradaEn) throw problema("estado_invalido", "La versión está retirada del portal: publique una nueva para enviarla");
+            // Sin PDF no hay qué adjuntar, y nada lo vuelve a generar: el envío quedaría en cola para siempre.
+            if (fila.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
             await programarEnvios(tx, {
               organizacionId: actor.organizacionId,
               versionId: fila.id,

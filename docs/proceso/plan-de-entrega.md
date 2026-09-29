@@ -1094,7 +1094,7 @@ Oficina y portal siguen con Consola: el mismo método empieza por cotizaciones.
 - **Publicar con destinatarios:** el diálogo de publicar marca por omisión a todos los que reciben el informe; se puede desmarcar. Sin contactos, avisa que el informe solo quedará en el portal y lleva a agregarlos.
 - **Envíos (módulo `envios`, ADR-0028):** una fila por contacto y canal, "En cola" al publicar; salen cuando el PDF queda listo, en la misma transacción que lo marca. Correo por Resend (HTTPS, idempotente, con el PDF adjunto y el enlace al portal); WhatsApp por la Cloud API de Meta con la plantilla `informe_publicado` y el PDF en el encabezado.
 - **Estado de cada envío:** En cola, Enviado, Entregado y No llegó, con el motivo. Los eventos firmados de Resend (Svix) y de Meta (`X-Hub-Signature-256`) llegan a `/api/envios/eventos/correo` y `/api/envios/eventos/whatsapp`. Un rebote marca el correo del contacto. Lo que no llega avisa por push a quien lo pidió y se marca en la bandeja de Informes ("Envío sin entregar").
-- **Volver a enviar y enviar a otro contacto** desde el panel "Envíos de la versión N"; el intento anterior se conserva.
+- **Volver a enviar y enviar a otro contacto** desde el panel "Envíos de la versión N"; el intento anterior se conserva. Una versión cuyo PDF no se pudo generar no se envía: se publica una nueva (revisión de seguridad 4c).
 - **Retirar del portal** dice a quién ya le llegó una copia, porque no se recupera.
 - **Proveedores simulados** (`ENVIOS_SIMULADOS=true`) en desarrollo, en el extremo a extremo y en el entorno de pruebas: aceptan todo menos las direcciones con "rebota" (y los celulares que terminan en 000). El servidor no arranca con simulados en producción.
 

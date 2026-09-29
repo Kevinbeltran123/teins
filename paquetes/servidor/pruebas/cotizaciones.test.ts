@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { llaveDeEnvio } from "@teins/protocolo";
 import type { LineaCantidad, VersionFormato } from "@teins/dominio";
+import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { clientesYSitios } from "../src/modulos/clientes";
+import { crearGeneradorPdfDeCotizaciones } from "../src/modulos/cotizaciones";
 import { crearFormatos } from "../src/modulos/formatos";
 import { crearVisitas } from "../src/modulos/visitas";
 import { cabecerasSync, ORIGEN, servidorDePrueba } from "./ayudas";
@@ -201,4 +203,63 @@ describe("cotización desde las cantidades revisadas (ADR-0029, parte 2)", () =>
     expect((await e.oficina("POST", "/api/cotizaciones", { visitaId: e.visitaId })).json().codigo).toBe("estado_invalido");
     expect((await app.inject({ method: "GET", url: "/api/cotizaciones", headers: { cookie: e.tecnico.cookie } })).statusCode).toBe(403);
   });
+});
+
+describe("envío de una cotización publicada (ADR-0029)", () => {
+  /** Una cotización con precio, publicada sin destinatarios y con su PDF listo, y un contacto de compras. */
+  async function publicada() {
+    const e = await escenario();
+    await e.revisado([linea("a0000001", "Canaleta", "4")]);
+    const { id } = (await e.oficina("POST", "/api/cotizaciones", { visitaId: e.visitaId })).json();
+    const detalle = (await e.oficina("GET", `/api/cotizaciones/${id}`)).json();
+    const lineas = detalle.lineas.map((l: object) => ({ ...l, precio: 1000 }));
+    expect((await e.oficina("POST", `/api/cotizaciones/${id}/borrador`, { version: 1, lineas, impuestos: { tipo: "iva" }, condiciones: detalle.condiciones })).statusCode).toBe(200);
+    const contactos = (
+      await e.oficina("POST", `/api/clientes/${e.clienteId}/contactos`, { nombre: "Marta Gil", correo: "compras@cliente.example", recibeCorreo: true, recibeWhatsapp: false, recibeInformes: false, recibeCotizaciones: true })
+    ).json().contactos;
+    expect((await e.oficina("POST", `/api/cotizaciones/${id}/publicar`, { version: 2, destinatarios: [] })).statusCode).toBe(201);
+    await esperarPdfDeCotizaciones(id);
+    const { rows } = await s.propietario.pool.query("select id from cotizaciones.versiones where cotizacion_id = $1", [id]);
+    const enviar = () => e.oficina("POST", `/api/cotizaciones/${id}/versiones/1/enviar`, { destinos: [{ contactoId: contactos[0].id }] });
+    return { ...e, id, versionId: rows[0].id as string, marta: contactos[0] as { id: string }, enviar };
+  }
+
+  it("el mensaje lleva el nombre de la organización que quedó en el PDF, aunque cambie después", async () => {
+    const { organizacionId, marta, enviar } = await publicada();
+    await s.propietario.pool.query("update identidad.organizaciones set nombre = 'Nombre nuevo' where id = $1", [organizacionId]);
+    expect((await enviar()).statusCode).toBe(200);
+    const { rows } = await s.propietario.pool.query("select mensaje from envios.envios where contacto_id = $1", [marta.id]);
+    expect(rows[0].mensaje.organizacion).toBe("Organización de prueba");
+  }, 120_000);
+
+  it("una versión cuyo PDF no se pudo generar no se envía: su envío quedaría en cola para siempre", async () => {
+    const { id, marta, enviar } = await publicada();
+    await s.propietario.pool.query("update cotizaciones.versiones set pdf_estado = 'fallido' where cotizacion_id = $1", [id]);
+    expect((await enviar()).json().codigo).toBe("estado_invalido");
+    expect((await s.propietario.pool.query("select 1 from envios.envios where contacto_id = $1", [marta.id])).rows).toEqual([]);
+  }, 120_000);
+
+  it("un fallo tardío no pisa un PDF que ya quedó listo ni da por no llegados sus envíos", async () => {
+    const { organizacionId, versionId, marta, enviar } = await publicada();
+    // Como justo después de publicar: el PDF se está generando y un envío lo espera.
+    await s.propietario.pool.query("update cotizaciones.versiones set pdf_estado = 'generando' where id = $1", [versionId]);
+    expect((await enviar()).statusCode).toBe(200);
+
+    // Otra pasada del trabajo lo deja listo; a esta se le pierde la conexión en su último intento.
+    const almacenamiento = almacenamientoS3(s.config);
+    const generador = crearGeneradorPdfDeCotizaciones({
+      bd: s.conexionApp.bd,
+      config: s.config,
+      almacenamiento: {
+        ...almacenamiento,
+        async guardar() {
+          await s.propietario.pool.query("update cotizaciones.versiones set pdf_estado = 'listo' where id = $1", [versionId]);
+          throw new Error("Se perdió la conexión");
+        },
+      },
+    });
+    await generador.generarPdf({ organizacionId, versionId }, { ultimoIntento: true });
+    expect((await s.propietario.pool.query("select pdf_estado from cotizaciones.versiones where id = $1", [versionId])).rows[0].pdf_estado).toBe("listo");
+    expect((await s.propietario.pool.query("select estado from envios.envios where contacto_id = $1", [marta.id])).rows).toEqual([{ estado: "en_cola" }]);
+  }, 120_000);
 });
