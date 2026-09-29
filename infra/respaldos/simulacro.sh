@@ -11,6 +11,8 @@ set -euo pipefail
 
 RAIZ=$(cd "$(dirname "$0")/../.." && pwd)
 : "${DESTINO_BUCKET:?Falta DESTINO_BUCKET: ejecútelo con railway run --service respaldos}"
+# Si se perdió el proyecto, la clave está en privado/<proyecto>-respaldos.txt: RESPALDOS_CLAVE=... antes del comando.
+: "${RESPALDOS_CLAVE:?Falta RESPALDOS_CLAVE: sin ella los respaldos no se pueden leer}"
 # Bajo el directorio personal: Docker Desktop y Colima lo comparten con los contenedores; /tmp no siempre.
 mkdir -p "$HOME/.cache"
 TRABAJO=$(mktemp -d "$HOME/.cache/teins-simulacro.XXXXXX")
@@ -24,17 +26,26 @@ limpiar() {
 trap limpiar EXIT
 
 docker build -q -t "$IMAGEN" "$RAIZ/infra/respaldos" > /dev/null
-destino() {
+# La copia está cifrada (respaldar.sh): se lee por el mismo destino cifrado. La clave llega a rclone por su entrada.
+export RCLONE_CONFIG_CIFRADO_TYPE=crypt
+export RCLONE_CONFIG_CIFRADO_REMOTE="destino:${DESTINO_BUCKET}/cifrado"
+export RCLONE_CONFIG_CIFRADO_FILENAME_ENCRYPTION=off
+export RCLONE_CONFIG_CIFRADO_DIRECTORY_NAME_ENCRYPTION=false
+RCLONE_CONFIG_CIFRADO_PASSWORD=$(printf '%s' "$RESPALDOS_CLAVE" | docker run --rm -i --entrypoint rclone "$IMAGEN" obscure -)
+export RCLONE_CONFIG_CIFRADO_PASSWORD
+cifrado() {
   docker run --rm --user 0 -v "$TRABAJO:/trabajo" --entrypoint rclone --add-host=host.docker.internal:host-gateway \
     -e RCLONE_CONFIG_DESTINO_TYPE -e RCLONE_CONFIG_DESTINO_PROVIDER -e RCLONE_CONFIG_DESTINO_ENDPOINT \
     -e RCLONE_CONFIG_DESTINO_ACCESS_KEY_ID -e RCLONE_CONFIG_DESTINO_SECRET_ACCESS_KEY -e RCLONE_CONFIG_DESTINO_REGION \
-    -e RCLONE_CONFIG_DESTINO_FORCE_PATH_STYLE "$IMAGEN" "$@"
+    -e RCLONE_CONFIG_DESTINO_FORCE_PATH_STYLE -e RCLONE_CONFIG_CIFRADO_TYPE -e RCLONE_CONFIG_CIFRADO_REMOTE \
+    -e RCLONE_CONFIG_CIFRADO_FILENAME_ENCRYPTION -e RCLONE_CONFIG_CIFRADO_DIRECTORY_NAME_ENCRYPTION \
+    -e RCLONE_CONFIG_CIFRADO_PASSWORD "$IMAGEN" "$@"
 }
 
 # 1. El volcado más reciente, con su huella.
-ULTIMO=$(destino lsf "destino:${DESTINO_BUCKET}/base" --include '*.dump' | sort | tail -1)
-[ -n "$ULTIMO" ] || { echo "No hay volcados en ${DESTINO_BUCKET}/base"; exit 1; }
-destino copy "destino:${DESTINO_BUCKET}/base" /trabajo --include "${ULTIMO}*" > /dev/null
+ULTIMO=$(cifrado lsf "cifrado:base" --include '*.dump' | sort | tail -1)
+[ -n "$ULTIMO" ] || { echo "No hay volcados en ${DESTINO_BUCKET}/cifrado/base"; exit 1; }
+cifrado copy "cifrado:base" /trabajo --include "${ULTIMO}*" > /dev/null
 (cd "$TRABAJO" && shasum -a 256 -c "${ULTIMO}.sha256" > /dev/null) || { echo "La huella del volcado no coincide"; exit 1; }
 MARCA=${ULTIMO#teins-}
 MARCA=${MARCA%.dump}
@@ -66,7 +77,7 @@ DATABASE_URL="postgresql://postgres:simulacro@127.0.0.1:${PUERTO}/restaurada" pn
 # 6. Cada archivo que la base referencia está en la copia (fotos y planos verificados, PDF generados).
 consulta "select organizacion_id || '/' || huella from archivos.archivos where estado = 'verificado'
           union select organizacion_id || '/' || pdf_huella from informes.versiones where pdf_huella is not null" | sort -u > "$TRABAJO/esperados"
-destino lsf -R --files-only "destino:${DESTINO_BUCKET}/archivos" | sort -u > "$TRABAJO/copiados"
+cifrado lsf -R --files-only "cifrado:archivos" | sort -u > "$TRABAJO/copiados"
 FALTANTES=$(comm -23 "$TRABAJO/esperados" "$TRABAJO/copiados" | wc -l | tr -d ' ')
 echo "Archivos: $(wc -l < "$TRABAJO/esperados" | tr -d ' ') referenciados, ${FALTANTES} faltantes en la copia."
 if [ "$FALTANTES" != "0" ]; then

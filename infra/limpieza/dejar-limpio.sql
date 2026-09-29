@@ -9,6 +9,15 @@
 
 begin;
 
+-- Solo en el entorno de pruebas: sus dos usuarios de prueba los crea `sembrar`, que se niega a correr en
+-- producción. Si falta alguno (la CLI quedó enlazada a otro proyecto), no se borra nada.
+do $$
+begin
+  if (select count(*) from identidad.usuarios where usuario in ('oficina.prueba', 'tecnico.prueba')) <> 2 then
+    raise exception 'Esta base no es la del entorno de pruebas: no tiene oficina.prueba y tecnico.prueba. No se borró nada.';
+  end if;
+end $$;
+
 -- Lo capturado, revisado, publicado y enviado.
 truncate levantamientos.lineas_cantidad, levantamientos.comentarios, levantamientos.comandos_procesados, levantamientos.levantamientos;
 truncate informes.versiones, informes.informes;

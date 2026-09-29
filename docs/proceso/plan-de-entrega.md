@@ -35,6 +35,8 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 ## Próximo paso
 
+**Revisión de seguridad por áreas (2026-09-29).** Las correcciones de 4a a 4d están hechas y sin desplegar; se despliegan juntas después de 4e (campo y portal). En cada entorno, en este orden: `railway config apply` (confirma los dos cambios destructivos: quitar `DATABASE_URL_PROPIETARIO` de `oficina` y `portal`, y fija `PROXIES_DE_CONFIANZA=2`; el redespliegue de la imagen anterior en esos dos servicios falla sin la variable y Railway deja la versión que corre); `infra/respaldos/clave.sh <proyecto>` (genera `RESPALDOS_CLAVE` con su copia en `privado/`; no se corre `montar.sh` entero, porque su paso 8 crearía otra persona administradora en pruebas); el despliegue de `campo`, `oficina`, `portal`, `worker` y `respaldos` (`railway up infra/respaldos --path-as-root --service respaldos`); `infra/railway/verificar-exposicion.sh`, `infra/respaldos/ahora.sh` y el simulacro. En el registro de una solicitud real, la IP debe ser la del computador que pide, también con `curl -H "X-Forwarded-For: 203.0.113.77"`. Después, el extremo a extremo contra el entorno con `--workers=1`.
+
 **Oficina con la identidad Recorrido (iteración 23, 2026-09-27).** Kevin pidió llevar a oficina la identidad de campo. Se hizo el prototipo (`prototipos/oficina/prototipo.html`); Kevin rechazó la primera versión por agobiante (todo en recuadros) y se rehízo ordenando primero la información de cada pantalla. Aprobado el prototipo, la app quedó igual a él, pantalla por pantalla, sin tocar funciones: solo se agregó al servidor la búsqueda opcional de la bandeja y el nombre del formato en la lista. Siguiente: desplegarla en el entorno de pruebas y que Kevin la revise.
 
 **Rediseño de campo (iteración 22, 2026-09-27).** Kevin dijo que todo funciona pero que la app es "demasiado fea". Se hizo una línea base con 21 problemas, una crítica con impeccable, referencias de Mobbin y un prototipo navegable (`prototipos/campo/prototipo.html`). Kevin aprobó la dirección Recorrido y quedó construida en campo y desplegada en el entorno de pruebas. Kevin la probó en el iPhone y aprobó el resultado. La identidad visual quedó anotada en `DESIGN.md` ("Identidad visual Recorrido") para llevarla a oficina más adelante; oficina no se toca hasta que Kevin lo pida. Siguiente: oficina con el mismo método, empezando por cotizaciones, cuando Kevin lo decida.
@@ -650,7 +652,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 | Qué | Dónde se resuelve |
 |---|---|
-| Destino de los respaldos en otro proveedor (nivel 2 completo) | Cuando Kevin o TEINS abran una cuenta compatible con S3; solo cambian variables |
+| Destino de los respaldos en otro proveedor (nivel 2 completo), con una llave sin permiso de borrar y retención obligatoria del bucket | Cuando Kevin o TEINS abran una cuenta compatible con S3; cambian variables y la retención pasa a ser regla del bucket (`produccion.md`, "Pendiente para cumplir del todo el nivel 2") |
 | Dominio propio | Cuando TEINS lo tenga; se agrega junto al de Railway |
 | Datos reales | Después de transferir a TEINS o con su autorización escrita (ADR-0021) |
 | Despliegue automático desde GitHub | Al fusionar a `master` (ADR-0016: pruebas automático, producción con aprobación) |
@@ -681,6 +683,16 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Correr un respaldo ya:** `infra/respaldos/ahora.sh` (la API de Railway ejecuta el servicio programado sin esperar a su hora).
 - **Pruebas del PDF bajo carga:** esperar los PDF por tiempo (hasta 90 s, procesando la cola) y no por 20 vueltas: un PDF que falla una vez bajo carga vuelve a la cola segundos después (`esperarPdf` en las pruebas del servidor).
 - **Integración continua:** el trabajo del servidor instala el Chromium de `playwright-core` (sin él no se generaban los PDF), y gitleaks recibió permiso para leer el pull request.
+
+**Revisión de seguridad 4d (2026-09-29): configuración, Railway e `infra`.**
+
+- **El rol dueño solo donde se usa:** `DATABASE_URL_PROPIETARIO` es opcional en la configuración y la exigen el worker, `migrar`, `sembrar` y `crear-organizacion` (`urlDelPropietario`). En Railway la tienen `campo` (migra y corre los comandos) y `worker`; `oficina` y `portal`, no. Un fallo en el portal ya no entrega una conexión que se salta la seguridad por fila y puede reescribir la auditoría. Que el servicio del portal atienda solo el portal, sin `teins_app` ni `AUTH_SECRETO`, sería un tercer rol de arranque: cambia ADR-0001 y queda para un ADR si se quiere.
+- **Proxies contados, no "confiar en todo":** `PROXIES_DE_CONFIANZA` (en Railway, 2) reemplaza `trustProxy: true`. La IP del cliente es la que está justo antes de los proxies en `X-Forwarded-For`; lo que el cliente escriba antes se ignora aunque el borde deje de descartarlo. Fastify 5.12 no acepta el número (lo trata como "no confiar", porque no puede validar quién conecta), así que va como función; en Railway solo se llega al servicio por el borde o por la red privada. En producción la configuración exige el dato: sin él, todas las solicitudes compartirían un límite de intentos.
+- **Sin `NODE_ENV`, no arranca un despliegue:** con orígenes `https` y modo de desarrollo, la configuración falla (saldrían cookies sin `Secure`, sin HSTS y con `sembrar` permitido). Se eligió esa regla y no hacer obligatorio `NODE_ENV`, que obligaba a tocar los `.env` de todos; la imagen ya fija `NODE_ENV=production`.
+- **La correlación la genera el servidor:** la cabecera `x-correlacion` que manda quien pide ya no llega a la auditoría encadenada.
+- **Respaldos cifrados** con `rclone crypt` y `RESPALDOS_CLAVE` en `cifrado/` del destino, con copia de la clave en `privado/<proyecto>-respaldos.txt` (sin ella no se restaura nada si se pierde el proyecto). Sin clave, el respaldo no corre. La primera corrida mueve la copia vieja sin cifrar a la cifrada. Se verificó en local de punta a punta: cero apariciones del contenido en claro en el destino, simulacro correcto con la clave y fallido con otra. Los almacenamientos de Railway no ofrecen versiones, bloqueo ni credenciales limitadas: que quien tome producción no pueda borrar las copias queda para el destino en otro proveedor.
+- **`montar.sh`:** si la CLI falla al leer un secreto, se detiene (antes lo tomaba por inexistente y lo reemplazaba: habría cerrado todas las sesiones y dejado ilegibles los segundos factores); la contraseña de la primera persona administradora y las de los roles viajan por la entrada estándar, y las de los roles no quedan en el registro de PostgreSQL (verificado con `log_statement = 'all'`). Al final corre `verificar-exposicion.sh`: la base, el worker y los respaldos no se alcanzan desde internet (verificado en pruebas).
+- **`dejar-limpio.sql` no borra nada fuera del entorno de pruebas:** exige `oficina.prueba` y `tecnico.prueba`, que solo crea `sembrar`. Verificado en una base desechable con forma de producción (no borra) y con la de pruebas (limpia).
 
 ---
 
@@ -1127,6 +1139,7 @@ Oficina y portal siguen con Consola: el mismo método empieza por cotizaciones.
 ### Decisiones tomadas al construirlo
 
 - **Quitar un contacto no borra la fila:** la aplicación no borra en ninguna tabla de negocio (ADR-0009, prueba de plataforma). Se borran su correo, su celular y su autorización, y queda el nombre.
+- **La auditoría de contactos enmascara el correo y el celular** (`a•••@cliente.example`, `•••0117`; revisión de seguridad 4d): la auditoría no se borra, así que con los datos completos quitar el contacto no los borraba de verdad (regla 18). El registro sigue mostrando cuál cambió. Los envíos anteriores sí conservan su destino completo, como constancia de a dónde salió cada copia (ADR-0028).
 - **Los eventos se aceptan solo con el id del mensaje que dio el proveedor** (o antes de guardarlo): un evento firmado de otro mensaje no cambia un envío.
 - **El panel muestra el último intento por contacto y canal:** uno que no llegó y se volvió a enviar ya no pide nada; el historial completo queda en la base.
 - **Publicar confirma con el botón de peligro**, como dice `DESIGN.md` para lo que no se deshace (antes usaba el principal).

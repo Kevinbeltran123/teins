@@ -28,8 +28,9 @@ Variables, iguales en los tres servicios (las credenciales son referencias, nunc
 | Variable | Valor |
 |---|---|
 | `NODE_ENV` · `ENTORNO_DE_PRUEBAS` · `NIVEL_REGISTRO` | `production` · `true` · `info` |
+| `PROXIES_DE_CONFIANZA` | `2`: la conexión llega de un proxy interno y `X-Forwarded-For` trae el cliente y un salto interno |
 | `DATABASE_URL` | `postgresql://teins_app:${{Postgres.TEINS_APP_CONTRASENA}}@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}` |
-| `DATABASE_URL_PROPIETARIO` | `${{Postgres.DATABASE_URL}}` |
+| `DATABASE_URL_PROPIETARIO` (solo `campo` y `worker`) | `${{Postgres.DATABASE_URL}}` |
 | `S3_ENDPOINT` · `S3_BUCKET` · `S3_ACCESS_KEY_ID` · `S3_SECRET_ACCESS_KEY` | `${{teins-pruebas.ENDPOINT}}` y sus pares |
 | `S3_REGION` · `S3_FORZAR_RUTA` · `S3_CONFIGURAR_CORS` · `S3_EXIGIR_HUELLA` | `auto` · `false` · `true` · `true` |
 | `ORIGENES_CONFIABLES` · `SUPERFICIE_CAMPO_HOST` · `SUPERFICIE_OFICINA_HOST` | Los dos dominios |

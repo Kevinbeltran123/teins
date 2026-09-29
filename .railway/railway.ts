@@ -18,6 +18,8 @@ export default defineRailway((ctx) => {
   const nombreDelAlmacen = produccion ? "teins-produccion" : "teins-pruebas";
 
   const Postgres = postgres("Postgres", { region: REGION });
+  // Solo red privada: sin proxy TCP ni dominio, la base no se alcanza desde internet. Este archivo no puede
+  // exigir que no exista un proxy creado a mano; montar.sh lo verifica en su último paso.
   Postgres.networking = { privateNetworkEndpoint: "postgres" };
   // El volumen de Postgres es de la base: no se declara (declararlo en un proyecto nuevo crearía otro).
   const almacen = bucket(nombreDelAlmacen, { region: "iad" });
@@ -36,9 +38,10 @@ export default defineRailway((ctx) => {
   const comun = {
     NODE_ENV: "production",
     NIVEL_REGISTRO: "info",
+    // La conexión llega de un proxy interno y X-Forwarded-For trae el cliente y un salto interno (app.ts).
+    PROXIES_DE_CONFIANZA: "2",
     AUTH_SECRETO: preserve(),
     DATABASE_URL: conexion("teins_app", "TEINS_APP_CONTRASENA"),
-    DATABASE_URL_PROPIETARIO: ref("Postgres", "DATABASE_URL"),
     S3_ENDPOINT: ref(nombreDelAlmacen, "ENDPOINT"),
     S3_BUCKET: ref(nombreDelAlmacen, "BUCKET"),
     S3_ACCESS_KEY_ID: ref(nombreDelAlmacen, "ACCESS_KEY_ID"),
@@ -52,6 +55,9 @@ export default defineRailway((ctx) => {
     // Producción nunca corre en modo de pruebas: `sembrar` se niega (ADR-0021).
     ...(produccion ? {} : { ENTORNO_DE_PRUEBAS: "true" }),
   };
+  // El rol dueño (migraciones y cola) solo en campo, que migra y corre los comandos, y en el worker: oficina y
+  // portal atienden solicitudes y no la reciben.
+  const propietario = { DATABASE_URL_PROPIETARIO: ref("Postgres", "DATABASE_URL") };
   // Railway prueba la salud en PORT.
   const web = { healthcheck: "/salud", healthcheckTimeout: 120, replicas: { [REGION]: 1 }, deploy: { restartPolicyMaxRetries: 5 } };
 
@@ -62,7 +68,7 @@ export default defineRailway((ctx) => {
     // El SDK aplica este campo (railway config pull lo genera) pero todavía no lo tipa.
     // @ts-expect-error preDeployTimeoutSeconds falta en DeployConfig
     deploy: { preDeployTimeoutSeconds: 300, restartPolicyMaxRetries: 5 },
-    env: { ...comun, PORT: "3000", SUPERFICIE_CAMPO_HOST: ref("campo", "RAILWAY_PUBLIC_DOMAIN"), AVISOS_VAPID_PUBLICA: ref("worker", "AVISOS_VAPID_PUBLICA") },
+    env: { ...comun, ...propietario, PORT: "3000", SUPERFICIE_CAMPO_HOST: ref("campo", "RAILWAY_PUBLIC_DOMAIN"), AVISOS_VAPID_PUBLICA: ref("worker", "AVISOS_VAPID_PUBLICA") },
   });
   const oficina = service("oficina", {
     ...web,
@@ -88,6 +94,7 @@ export default defineRailway((ctx) => {
     deploy: { restartPolicyMaxRetries: 5 },
     env: {
       ...comun,
+      ...propietario,
       AVISOS_VAPID_PUBLICA: preserve(),
       AVISOS_VAPID_PRIVADA: preserve(),
       AVISOS_CONTACTO: https("oficina"),
@@ -122,6 +129,8 @@ export default defineRailway((ctx) => {
       ...s3("ORIGEN", { endpoint: ref(nombreDelAlmacen, "ENDPOINT"), llave: ref(nombreDelAlmacen, "ACCESS_KEY_ID"), secreto: ref(nombreDelAlmacen, "SECRET_ACCESS_KEY") }),
       DESTINO_BUCKET: preserve(),
       ...s3("DESTINO", { endpoint: preserve(), llave: preserve(), secreto: preserve() }),
+      // Cifra todo lo que sale al destino (respaldar.sh); la genera infra/respaldos/clave.sh.
+      RESPALDOS_CLAVE: preserve(),
     },
   });
 

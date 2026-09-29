@@ -18,7 +18,13 @@ RAIZ=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$RAIZ"
 
 paso() { printf '\n== %s\n' "$1"; }
-existe() { railway variable list --service "$1" --json 2> /dev/null | python3 -c "import json,sys; sys.exit(0 if '$2' in json.load(sys.stdin) else 1)"; }
+# Si la CLI falla (red, sesión), el script se detiene: tomar el fallo por "no existe" cambiaría un secreto en uso.
+existe() {
+  local respuesta
+  respuesta=$(railway variable list --service "$1" --json | python3 -c "import json,sys; print('si' if sys.argv[1] in json.load(sys.stdin) else 'no')" "$2" 2> /dev/null) \
+    || { echo "  No se pudieron leer las variables de $1: se detiene sin cambiar nada" >&2; exit 1; }
+  [ "$respuesta" = si ]
+}
 # Fija un secreto solo si no existe; el valor llega por la entrada estándar, nunca como argumento.
 secreto() {
   local servicio=$1 variable=$2 valor=$3
@@ -62,6 +68,8 @@ secreto respaldos DESTINO_BUCKET "$(campo_de bucketName)"
 secreto respaldos RCLONE_CONFIG_DESTINO_ENDPOINT "$(campo_de endpoint)"
 secreto respaldos RCLONE_CONFIG_DESTINO_ACCESS_KEY_ID "$(campo_de accessKeyId)"
 secreto respaldos RCLONE_CONFIG_DESTINO_SECRET_ACCESS_KEY "$(campo_de secretAccessKey)"
+# Los respaldos salen cifrados; la clave tiene una copia en privado/, la única si se pierde el proyecto.
+infra/respaldos/clave.sh "$PROYECTO"
 
 paso "4. Roles de la aplicación en la base (infra/roles.sql), con las contraseñas que ya viven en Postgres"
 # Se ejecuta dentro del contenedor de Postgres: las contraseñas se expanden allí, no en esta máquina.
@@ -77,10 +85,11 @@ if [ "$(ve_las_contrasenas)" != "si" ]; then
   until [ "$(railway deployment list --service Postgres --json | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['status'])")" = "SUCCESS" ]; do sleep 5; done
   until [ "$(ve_las_contrasenas)" = "si" ]; do sleep 5; done
 fi
-# El SQL viaja en base64 para que ningún shell toque sus `$$`.
+# El SQL viaja en base64 para que ningún shell toque sus `$$`. Las contraseñas le llegan a psql por su entrada
+# (printf es del shell: no aparecen en la lista de procesos) y sin quedar en el registro de sentencias.
 SQL=$(base64 < paquetes/servidor/infra/roles.sql | tr -d '\n')
 PSQL='psql -v ON_ERROR_STOP=1 -q -U "$PGUSER" -d "$PGDATABASE"'
-railway ssh -s Postgres -- sh -c "[ -n \"\$TEINS_APP_CONTRASENA\" ] && [ -n \"\$TEINS_PORTAL_CONTRASENA\" ] && echo $SQL | base64 -d | $PSQL && $PSQL -c \"ALTER ROLE teins_app PASSWORD '\$TEINS_APP_CONTRASENA'\" -c \"ALTER ROLE teins_portal PASSWORD '\$TEINS_PORTAL_CONTRASENA'\" && echo roles-listos" | grep -q roles-listos \
+railway ssh -s Postgres -- sh -c "[ -n \"\$TEINS_APP_CONTRASENA\" ] && [ -n \"\$TEINS_PORTAL_CONTRASENA\" ] && { echo $SQL | base64 -d; printf \"set log_statement = 'none';\\nalter role teins_app password '%s';\\nalter role teins_portal password '%s';\\n\" \"\$TEINS_APP_CONTRASENA\" \"\$TEINS_PORTAL_CONTRASENA\"; } | $PSQL && echo roles-listos" | grep -q roles-listos \
   || { echo "  No se pudieron preparar los roles"; exit 1; }
 echo "  Roles teins_app y teins_portal listos"
 
@@ -108,7 +117,8 @@ if [ ! -f "privado/${PROYECTO}.txt" ]; then
   CONTRASENA=$(aleatorio 18)
   # Producción nunca se siembra: la organización se crea aquí (en pruebas ya existe y no se toca).
   railway ssh -s campo -- node dist/cli/crear-organizacion.js --id "$ORGANIZACION" --nombre "TEINS" > /dev/null
-  railway ssh -s campo -- env TEINS_CONTRASENA="$CONTRASENA" node dist/cli/crear-usuario.js --organizacion "$ORGANIZACION" --usuario administracion --nombre "Administración TEINS" --rol oficina > /dev/null
+  # La contraseña va por la entrada estándar: como argumento se vería en la lista de procesos de las dos máquinas.
+  printf '%s\n' "$CONTRASENA" | railway ssh -s campo -- sh -c "read -r TEINS_CONTRASENA && export TEINS_CONTRASENA && exec node dist/cli/crear-usuario.js --organizacion $ORGANIZACION --usuario administracion --nombre 'Administración TEINS' --rol oficina" > /dev/null
   railway ssh -s campo -- node dist/cli/marcar-administrador.js --usuario administracion > /dev/null
   printf 'Proyecto %s\nUsuario: administracion\nContraseña: %s\n' "$PROYECTO" "$CONTRASENA" > "privado/${PROYECTO}.txt"
   chmod 600 "privado/${PROYECTO}.txt"
@@ -117,5 +127,8 @@ if [ ! -f "privado/${PROYECTO}.txt" ]; then
 else
   echo "  privado/${PROYECTO}.txt ya existe: la primera persona administradora ya se creó"
 fi
+
+paso "9. Exposición a internet"
+infra/railway/verificar-exposicion.sh
 
 paso "Listo. Siguiente: el primer respaldo y el simulacro (docs/proceso/produccion.md)"
