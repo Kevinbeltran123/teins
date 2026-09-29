@@ -28,7 +28,9 @@ rm -f "$ARCHIVO"
 echo "respaldo ${MARCA}: volcado subido (${BYTES} bytes, sha256 ${HUELLA})"
 
 echo "respaldo ${MARCA}: archivos"
-rclone copy "origen:${ORIGEN_BUCKET}" "destino:${DESTINO_BUCKET}/archivos" --immutable --s3-no-check-bucket --stats-one-line --stats 0
+# Se compara tamaño y huella, no la fecha: un archivo que se vuelve a subir con el mismo contenido tiene otra
+# fecha y con --immutable eso era un error. Otro contenido bajo la misma llave sigue siendo un error.
+rclone copy "origen:${ORIGEN_BUCKET}" "destino:${DESTINO_BUCKET}/archivos" --immutable --checksum --s3-no-check-bucket --stats-one-line --stats 0
 
 rclone delete "destino:${DESTINO_BUCKET}/base" --min-age "${RETENCION_DIAS}d"
 echo "respaldo ${MARCA}: listo"
