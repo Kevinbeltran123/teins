@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export interface Notificacion {
   /** Qué pasó, en participio: "Cliente creado", "Foto eliminada". Nunca un error: esos quedan donde ocurrieron. */
@@ -53,36 +54,53 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
     return () => pendientes.forEach(clearTimeout);
   }, []);
 
+  // Con un diálogo modal abierto (el visor de fotos), todo lo de fuera queda inerte y debajo, también un popover:
+  // las notificaciones van dentro del diálogo de encima, para que "Deshacer" se vea y se pueda tocar.
+  const [capa, setCapa] = useState<HTMLDialogElement | null>(null);
+  const hayVisibles = visibles.length > 0;
+  useEffect(() => {
+    if (!hayVisibles) return;
+    const revisar = () => setCapa([...document.querySelectorAll("dialog")].filter((d) => d.matches(":modal")).at(-1) ?? null);
+    revisar();
+    const observador = new MutationObserver(revisar);
+    observador.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open"] });
+    return () => observador.disconnect();
+  }, [hayVisibles]);
+
   const posicion =
     lugar === "abajo-derecha"
       ? "right-6 bottom-6 w-[min(400px,calc(100vw-48px))]"
       : "right-3 bottom-4 left-3 mx-auto max-w-xl [html:has([data-barra-inferior])_&]:bottom-[104px]";
 
+  const region = (
+    <div role="status" aria-live="polite" className={`pointer-events-none fixed z-40 flex flex-col gap-2 ${posicion}`}>
+      {visibles.map((n) => (
+        <div
+          key={n.id}
+          className="pointer-events-auto flex min-h-12 animate-aparecer items-center justify-between gap-3 rounded-control bg-notificacion py-1 pr-1 pl-4 text-cuerpo text-sobre-superficie shadow-menu"
+        >
+          <span className="py-2">{n.texto}</span>
+          {n.accion && (
+            <button
+              type="button"
+              onClick={() => {
+                n.accion!.alHacer();
+                quitar(n.id);
+              }}
+              className="min-h-control-sm shrink-0 rounded-control px-3 font-extrabold text-acento hover:bg-sobre-superficie/10 focus-visible:outline-3 focus-visible:outline-acento"
+            >
+              {n.accion.texto}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <Contexto.Provider value={notificar}>
       {children}
-      <div role="status" aria-live="polite" className={`pointer-events-none fixed z-40 flex flex-col gap-2 ${posicion}`}>
-        {visibles.map((n) => (
-          <div
-            key={n.id}
-            className="pointer-events-auto flex min-h-12 animate-aparecer items-center justify-between gap-3 rounded-control bg-notificacion py-1 pr-1 pl-4 text-cuerpo text-sobre-superficie shadow-menu"
-          >
-            <span className="py-2">{n.texto}</span>
-            {n.accion && (
-              <button
-                type="button"
-                onClick={() => {
-                  n.accion!.alHacer();
-                  quitar(n.id);
-                }}
-                className="min-h-control-sm shrink-0 rounded-control px-3 font-extrabold text-acento hover:bg-sobre-superficie/10 focus-visible:outline-3 focus-visible:outline-acento"
-              >
-                {n.accion.texto}
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
+      {capa && hayVisibles ? createPortal(region, capa) : region}
     </Contexto.Provider>
   );
 }

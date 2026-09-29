@@ -45,3 +45,4 @@ export type { FotoVisible } from "./VisorFotos";
 export { PanelDeMarca } from "./PanelDeMarca";
 export { BarraLista, Buscador, coincide, EsqueletoLista, Marcado, normalizarTexto, PieLista, SinResultados } from "./Lista";
 export { TramaDePuntos } from "./TramaDePuntos";
+export { useSinRepetir } from "./useSinRepetir";

@@ -1,4 +1,4 @@
-import { createContext, lazy, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { pasosDe, type Paso } from "../recorrido";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -76,6 +76,7 @@ import {
   TablaCantidades,
   Trash,
   useNotificar,
+  useSinRepetir,
   ValorLeido,
   type LineaEditable,
 } from "@teins/ui";
@@ -91,7 +92,7 @@ import type { ArchivoNuevo } from "../datos/repositorio";
 import { procesarFoto } from "../fotos/procesar";
 import { fechaHora, horaExacta } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos } from "../formatos";
-import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion } from "../mensajes";
+import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion, porQueNoEntro, QUE_HACER_CON_EL_RECHAZO } from "../mensajes";
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 
@@ -102,6 +103,12 @@ const HojaDeFirma = lazy(() => import("./HojaDeFirma"));
 const claveDeError = (seccion: string, campo: string) => `${seccion}.${campo}`;
 /** El campo ocupa su propio paso del recorrido: la firma pone ahí su acción (prototipo aprobado). */
 const PasoPropio = createContext(false);
+
+/**
+ * Cada escritura en el teléfono pasa por aquí: si una falla (almacenamiento lleno, por ejemplo), la captura lo dice
+ * hasta que la siguiente funcione. Sin esto, el técnico seguiría escribiendo en algo que no se guarda.
+ */
+const VigilarGuardado = createContext<(escritura: Promise<unknown>) => void>(() => undefined);
 /** Ancla de un dato en la pantalla: el resumen de errores lleva hasta él. */
 const anclaDeDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`;
 const anclaDeSeccion = (seccion: string) => `seccion-${seccion}`;
@@ -319,6 +326,16 @@ function Borrador({
       : { tipo: "recorrido" },
   );
   const resumen = useRef<HTMLDivElement>(null);
+  const [noGuardo, setNoGuardo] = useState(false);
+  const vigilar = (escritura: Promise<unknown>) =>
+    void escritura.then(
+      () => setNoGuardo(false),
+      (error: unknown) => {
+        // El técnico ve qué hacer; soporte necesita la causa (ADR-0017).
+        console.error("No se pudo guardar en el teléfono", error);
+        setNoGuardo(true);
+      },
+    );
   const porClave: ReadonlyMap<string, CodigoErrorValidacion> = new Map((errores ?? []).map((e) => [claveDeError(e.seccion, e.campo ?? ""), e.codigo]));
   const { errores: pendientes, obligatorios, completos } = progreso(formato, actual);
   const avance = obligatorios > 0 ? completos / obligatorios : pendientes.length === 0 ? 1 : 0;
@@ -576,8 +593,16 @@ function Borrador({
 
   const pasoConFaltantes = faltantesDelPaso ? pasos.find((p) => p.id === faltantesDelPaso.pasoId) : undefined;
   return (
-    <>
+    <VigilarGuardado.Provider value={vigilar}>
       {pantalla}
+      {/* Fijo arriba: el técnico puede estar lejos del principio de la página cuando falla. */}
+      {noGuardo && (
+        <div className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 mx-auto max-w-xl shadow-menu">
+          <Aviso tono="error">
+            <b>No se pudo guardar en este teléfono.</b> Lo último que escribiste puede no estar guardado. Revisa que el teléfono tenga espacio libre y vuelve a escribirlo.
+          </Aviso>
+        </div>
+      )}
       {faltantesDelPaso && pasoConFaltantes && (
         <Dialogo
           forma="inferior"
@@ -634,7 +659,7 @@ function Borrador({
           <p>Después de enviar ya no podrás editar este levantamiento. Oficina lo revisará.</p>
         </Confirmacion>
       )}
-    </>
+    </VigilarGuardado.Provider>
   );
 }
 
@@ -665,12 +690,20 @@ function Repeticiones({
   const etiqueta = seccion.repetible!.etiqueta;
   const maximo = seccion.repetible!.max ?? LIMITES.repeticiones;
 
-  async function agregar() {
-    await repositorio.agregarRepeticion(id, formato, seccion.clave, new Date());
+  const vigilar = useContext(VigilarGuardado);
+  // Un doble toque agrega una sola.
+  const [agregar] = useSinRepetir(async () => {
+    const escritura = repositorio.agregarRepeticion(id, formato, seccion.clave, new Date());
+    vigilar(escritura);
+    try {
+      await escritura;
+    } catch {
+      return;
+    }
     alGuardar(seccion.clave, "");
     const nueva = (await repositorio.obtener(id))?.repeticiones?.[seccion.clave]?.at(-1);
     if (nueva) abrir(nueva.id);
-  }
+  });
 
   return (
     <section aria-label={seccion.titulo} className="flex flex-col gap-3">
@@ -708,6 +741,7 @@ function Repeticion({
   children: ReactNode;
 }) {
   const [quitando, setQuitando] = useState(false);
+  const vigilar = useContext(VigilarGuardado);
   const etiqueta = seccion.repetible!.etiqueta;
   return (
     <>
@@ -722,7 +756,7 @@ function Repeticion({
             error={error === "nombre_de_repeticion_invalido" ? mensajeDeValidacion.nombre_de_repeticion_invalido : undefined}
             onCambio={(texto) => {
               // Un nombre vacío no se guarda: se conserva el anterior.
-              if (texto.trim()) void repositorio.renombrarRepeticion(id, seccion.clave, repeticion.id, texto.trim(), new Date());
+              if (texto.trim()) vigilar(repositorio.renombrarRepeticion(id, seccion.clave, repeticion.id, texto.trim(), new Date()));
             }}
           />
           <div>
@@ -772,10 +806,20 @@ function Campo(props: PropsCampo) {
   );
 }
 
-function ContenidoDeCampo({ id, seccion, campo, inicial, actual, error, alGuardar }: PropsCampo) {
+function ContenidoDeCampo({ id, seccion, campo, inicial: alAbrir, actual, error, alGuardar }: PropsCampo) {
+  const notificar = useNotificar();
+  const vigilar = useContext(VigilarGuardado);
   const guardar = (valor: Valor | undefined) => {
     alGuardar();
-    return repositorio.guardarRespuesta(id, seccion, campo.clave, valor, new Date());
+    vigilar(repositorio.guardarRespuesta(id, seccion, campo.clave, valor, new Date()));
+  };
+  // Los controles escriben sobre lo que muestran; cuando la marca (o su "Deshacer") reemplaza el dato, se vuelven
+  // a montar con lo guardado, para que nunca muestren un valor que ya no está.
+  const [desde, setDesde] = useState({ vez: 0, valor: alAbrir });
+  const inicial = desde.valor;
+  const reemplazar = (valor: Valor | undefined) => {
+    guardar(valor);
+    setDesde((d) => ({ vez: d.vez + 1, valor }));
   };
   const noObtenido = esNoObtenido(actual);
   const mensaje = error ? mensajeDeValidacion[error] : undefined;
@@ -794,7 +838,7 @@ function ContenidoDeCampo({ id, seccion, campo, inicial, actual, error, alGuarda
             valorInicial={typeof inicial === "string" ? inicial : ""}
             largo={campo.largo}
             valoresComunes={campo.valoresComunes}
-            onCambio={(texto) => void guardar(texto === "" ? undefined : texto)}
+            onCambio={(texto) => guardar(texto === "" ? undefined : texto)}
           />
         );
       case "medida": {
@@ -811,11 +855,11 @@ function ContenidoDeCampo({ id, seccion, campo, inicial, actual, error, alGuarda
             unidadInicial={medida?.unidad}
             onCambio={(texto, unidad) => {
               if (texto.trim() === "") {
-                void guardar(undefined);
+                guardar(undefined);
                 return true;
               }
               const valor = crearMedida(texto, unidad, campo.unidades);
-              if (valor) void guardar(valor);
+              if (valor) guardar(valor);
               return valor !== null;
             }}
           />
@@ -830,7 +874,7 @@ function ContenidoDeCampo({ id, seccion, campo, inicial, actual, error, alGuarda
             unidades={campo.unidades}
             inicial={noObtenido ? undefined : inicial}
             error={noObtenido ? undefined : errorDelCampo}
-            guardar={(valor) => void guardar(valor)}
+            guardar={(valor) => guardar(valor)}
           />
         );
       case "boceto":
@@ -843,14 +887,20 @@ function ContenidoDeCampo({ id, seccion, campo, inicial, actual, error, alGuarda
   if (!campo.obligatorio) return control;
   return (
     <div className="flex flex-col gap-2">
-      {control}
+      <Fragment key={desde.vez}>{control}</Fragment>
       <MarcaNoObtenido
         dato={campo.etiqueta}
         marcado={noObtenido}
-        motivoInicial={esNoObtenido(inicial) ? inicial.motivo : ""}
+        motivoInicial={esNoObtenido(alAbrir) ? alAbrir.motivo : ""}
         error={errorDeMotivo}
-        // Marcar reemplaza el dato; desmarcar lo deja vacío para capturarlo (regla 3).
-        onCambio={(marcado, motivo) => void guardar(marcado ? { noObtenido: true, motivo } : undefined)}
+        // Marcar reemplaza el dato, y lo capturado vuelve con "Deshacer"; desmarcar lo deja vacío para capturarlo (regla 3).
+        onMarcar={(marcado, motivo) => {
+          if (!marcado) return reemplazar(undefined);
+          const anterior = noObtenido || (Array.isArray(actual) && actual.length === 0) ? undefined : actual;
+          reemplazar({ noObtenido: true, motivo });
+          if (anterior !== undefined) notificar({ texto: `Marcado como no obtenido: ${campo.etiqueta}`, accion: { texto: "Deshacer", alHacer: () => reemplazar(anterior) } });
+        }}
+        onMotivo={(motivo) => guardar({ noObtenido: true, motivo })}
       />
     </div>
   );
@@ -1244,6 +1294,10 @@ function Enviado({
   volver: () => void;
 }) {
   const enLinea = useServidorAlcanzable();
+  const [reintentar, reintentando] = useSinRepetir(async () => {
+    await repositorio.reintentarEnvio(levantamiento.id);
+    sincronizarEnSegundoPlano();
+  });
   // El avance real: cuántos de sus archivos (fotos, bocetos, firma) ya subieron, y si oficina lo recibió.
   const huellas = archivosReferenciados(levantamiento.respuestas);
   const totalArchivos = huellas.length;
@@ -1277,7 +1331,7 @@ function Enviado({
                 : proceso === "esperando"
                   ? "Se envía solo cuando vuelva la señal. Puedes seguir con otra visita."
                   : proceso === "error"
-                    ? (estado?.texto ?? "Intenta de nuevo.")
+                    ? porQueNoEntro(envio?.ultimoError?.codigo)
                     : "Puedes salir de esta pantalla: el envío sigue solo."
             }
             etapas={[
@@ -1289,16 +1343,15 @@ function Enviado({
               { texto: recibido ? "Recibido en oficina" : "Llega a oficina", estado: recibido ? "hecho" : proceso === "enviando" && (totalArchivos === 0 || subidos === totalArchivos) ? "en_curso" : "espera" },
             ]}
           />
-          {!recibido && estado && <p className="-mt-2 text-center text-ayuda text-texto-secundario">{estado.texto}</p>}
-          {envio?.estado === "error" && (
-            <Boton
-              onClick={async () => {
-                await repositorio.reintentarEnvio(levantamiento.id);
-                sincronizarEnSegundoPlano();
-              }}
-            >
-              Reintentar envío
-            </Boton>
+          {envio?.estado === "error" ? (
+            <>
+              <p className="-mt-2 text-center text-ayuda text-texto-secundario">{QUE_HACER_CON_EL_RECHAZO}</p>
+              <Boton cargando={reintentando} onClick={() => void reintentar()}>
+                Reintentar envío
+              </Boton>
+            </>
+          ) : (
+            !recibido && estado && <p className="-mt-2 text-center text-ayuda text-texto-secundario">{estado.texto}</p>
           )}
           <BotonSiguiente onClick={volver}>
             {siguienteVisita ? (

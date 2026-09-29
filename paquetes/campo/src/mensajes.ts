@@ -37,13 +37,37 @@ export function estadoDeEnvio(envio: EstadoDeEnvio, enLinea: boolean): { texto: 
     case "requiere_actualizar":
       return { texto: "Actualiza la app para enviar", tono: "pendiente" };
     case "error":
-      return { texto: `No se pudo enviar: ${envio.ultimoError?.mensaje ?? "error desconocido"}`, tono: "error" };
+      return { texto: `No se pudo enviar: ${porQueNoEntro(envio.ultimoError?.codigo).toLowerCase()} Avísale a oficina.`, tono: "error" };
     case "pendiente":
       if (!enLinea || envio.ultimoError?.codigo === "sin_conexion") return { texto: "Sin conexión: se enviará al recuperar señal", tono: "pendiente" };
       if (envio.ultimoError?.codigo === "archivos_en_verificacion") return { texto: "El servidor está verificando las fotos", tono: "pendiente" };
       return { texto: "Pendiente de enviar", tono: "pendiente" };
   }
 }
+
+/**
+ * Un rechazo que reintentar solo no arregla (ADR-0003), sin la jerga del servidor. El técnico no lo puede
+ * resolver: oficina lo ve en "Teléfonos de campo" (ADR-0017) y, cuando lo resuelve, el técnico reintenta.
+ */
+export function porQueNoEntro(codigo: string | undefined): string {
+  switch (codigo) {
+    case "formato_desconocido":
+      return "Oficina retiró o cambió el formato de este levantamiento.";
+    case "conflicto":
+      return "Este levantamiento ya lo envió otra persona.";
+    case "sin_permiso":
+      return "Tu usuario ya no puede enviar este levantamiento.";
+    case "respuestas_invalidas":
+    case "entrada_invalida":
+      return "Oficina no pudo aceptar algunos datos.";
+    default:
+      return "Oficina no pudo recibirlo.";
+  }
+}
+
+/** Qué hacer con un rechazo: nada se perdió, oficina ya lo ve y se reintenta cuando lo resuelva. */
+export const QUE_HACER_CON_EL_RECHAZO =
+  "Lo capturado sigue guardado en este teléfono. Avísale a oficina: ya ven el error en «Teléfonos de campo». Cuando te digan que está resuelto, toca «Reintentar envío».";
 
 /** Estado de negocio según el servidor (bajada). */
 export function estadoSegunServidor(estado: EstadoServidor): { texto: string; tono: Tono } {

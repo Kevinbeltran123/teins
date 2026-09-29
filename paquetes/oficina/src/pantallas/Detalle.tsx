@@ -570,7 +570,8 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
           marcado={marcado}
           motivoInicial={noObtenidoAntes ? valor.motivo : ""}
           error={marcado ? mensajeCampo : undefined}
-          onCambio={(m, motivoNoObtenido) => setNuevo(m ? { noObtenido: true, motivo: motivoNoObtenido } : undefined)}
+          onMarcar={(m, motivoNoObtenido) => setNuevo(m ? { noObtenido: true, motivo: motivoNoObtenido } : undefined)}
+          onMotivo={(motivoNoObtenido) => setNuevo({ noObtenido: true, motivo: motivoNoObtenido })}
         />
       )}
       <div className="campo">

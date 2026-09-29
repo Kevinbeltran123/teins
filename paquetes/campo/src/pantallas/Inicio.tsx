@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, Insignia, LogOut, MapPin, Smartphone } from "@teins/ui";
+import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, Insignia, LogOut, MapPin, Smartphone, useSinRepetir } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
@@ -73,11 +73,12 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   const permisoVencido = bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
   const sinConexion = !enLinea || (!alcanzable && porEnviar > 0);
 
-  async function iniciar(visitaId: string, formato: VersionFormato) {
+  // Un doble toque crea uno solo.
+  const [iniciar] = useSinRepetir(async (visitaId: string, formato: VersionFormato) => {
     const levantamiento = crearLevantamiento(formato, uuidv7(), new Date(), visitaId, nuevoIdDeRepeticion);
     await repositorio.crear(levantamiento, usuario.id);
     abrir(levantamiento.id);
-  }
+  });
 
   const cargando = lista === undefined || envios === undefined || servidor === undefined || visitas === undefined || bajada === undefined || formatos === undefined;
   const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar };

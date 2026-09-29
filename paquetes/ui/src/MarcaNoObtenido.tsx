@@ -7,12 +7,15 @@ interface Props {
   dato: string;
   marcado: boolean;
   motivoInicial: string;
-  onCambio: (marcado: boolean, motivo: string) => void;
+  /** Tocar la casilla: marca o desmarca. */
+  onMarcar: (marcado: boolean, motivo: string) => void;
+  /** Escribir el motivo, con la casilla ya marcada. */
+  onMotivo: (motivo: string) => void;
   error?: string | undefined;
 }
 
 /** Regla 3: un dato obligatorio que no se pudo obtener se marca, con su motivo escrito. */
-export function MarcaNoObtenido({ dato, marcado: guardado, motivoInicial, onCambio, error }: Props) {
+export function MarcaNoObtenido({ dato, marcado: guardado, motivoInicial, onMarcar, onMotivo, error }: Props) {
   const id = useId();
   const [motivo, setMotivo] = useState(motivoInicial);
   // Responde al toque de inmediato; el valor guardado llega un instante después y manda.
@@ -27,7 +30,7 @@ export function MarcaNoObtenido({ dato, marcado: guardado, motivoInicial, onCamb
           checked={marcado}
           onChange={(e) => {
             setMarcado(e.target.checked);
-            onCambio(e.target.checked, motivo);
+            onMarcar(e.target.checked, motivo);
           }}
           aria-label={`${dato}: no se pudo obtener`}
           className="peer sr-only"
@@ -49,7 +52,7 @@ export function MarcaNoObtenido({ dato, marcado: guardado, motivoInicial, onCamb
             aria-describedby={error ? `${id}-error` : undefined}
             onChange={(e) => {
               setMotivo(e.target.value);
-              onCambio(true, e.target.value);
+              onMotivo(e.target.value);
             }}
           />
           {error && <MensajeError id={`${id}-error`}>{error}</MensajeError>}
