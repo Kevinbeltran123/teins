@@ -12,6 +12,7 @@ Cómo se monta, se respalda y se recupera un entorno de TEINS en Railway (ADR-00
 | `infra/railway/montar.sh` | Repositorio | Lo que el archivo no declara: secretos (generados, nunca mostrados), roles de la base, dominios, despliegue, copias y la primera persona administradora |
 | `infra/railway/verificar-exposicion.sh` | Repositorio | Comprueba que solo `campo`, `oficina` y `portal` se alcanzan desde internet (sin proxy TCP en la base ni dominio en el worker o los respaldos). Lo corre `montar.sh`; se corre solo después de tocar la red en el panel |
 | `infra/respaldos/` | Servicio `respaldos` de cada entorno | Una vez al día (07:00 UTC, 02:00 en Colombia): volcado de la base y copia de los archivos al proyecto `teins-respaldos`, cifrados con `RESPALDOS_CLAVE` |
+| `infra/railway/claves-avisos.sh` | Repositorio | Genera el par VAPID de los avisos push (ADR-0023) en el `worker` si no lo tiene, sin mostrarlo, y nunca reemplaza uno que existe: las suscripciones quedan atadas a la clave pública. Lo corre `montar.sh`; en un entorno montado antes de los avisos (producción, 2026-09-25) se corre solo, antes de `railway config apply` |
 | `infra/respaldos/clave.sh` | Repositorio | Genera `RESPALDOS_CLAVE` si el entorno no la tiene, con su copia en `privado/<proyecto>-respaldos.txt`; si esa copia ya existe (proyecto montado de nuevo), pone la misma clave y nunca la sobrescribe. Lo corre `montar.sh`; en un entorno que ya existe se corre solo y después se despliega `respaldos` |
 | `infra/respaldos/simulacro.sh` | Computador de quien lo corre | Restaura el último volcado en un PostgreSQL desechable y verifica cadenas y archivos |
 | `pnpm --filter @teins/servidor verificar-integridad` | Servidor | Verifica todas las cadenas de la auditoría de una base |
@@ -48,7 +49,7 @@ Hace, en orden y sin repetir lo que ya existe:
 
 1. Crea el proyecto `teins-respaldos` y su almacenamiento para este entorno, en otra región.
 2. Crea el proyecto y aplica `.railway/railway.ts`: Postgres, almacenamiento, `campo`, `oficina`, `portal`, `worker` y `respaldos`.
-3. Genera los secretos: `AUTH_SECRETO` (el mismo en los cuatro servicios), las contraseñas de `teins_app` y `teins_portal` (en el servicio Postgres), las credenciales del destino de los respaldos y la clave que los cifra, `RESPALDOS_CLAVE`, con una copia en `privado/<proyecto>-respaldos.txt`. Si la CLI de Railway falla al leer un secreto, el script se detiene: nunca reemplaza uno que ya está en uso.
+3. Genera los secretos: `AUTH_SECRETO` (el mismo en los cuatro servicios), el par VAPID de los avisos (`claves-avisos.sh`), las contraseñas de `teins_app` y `teins_portal` (en el servicio Postgres), las credenciales del destino de los respaldos y la clave que los cifra, `RESPALDOS_CLAVE`, con una copia en `privado/<proyecto>-respaldos.txt`. Si la CLI de Railway falla al leer un secreto, el script se detiene: nunca reemplaza uno que ya está en uso.
 4. Crea los roles de la base con `infra/roles.sql` y les pone sus contraseñas, dentro del contenedor de Postgres. Las contraseñas le llegan a `psql` por su entrada y no quedan en su registro.
 5. Genera un dominio gratuito de Railway por superficie (`*.up.railway.app`).
 6. Despliega: `campo` primero (migra la base antes de arrancar), después `oficina`, `portal`, `worker` y `respaldos`.
