@@ -21,7 +21,8 @@ import {
   Trash,
   useNotificar,
 } from "@teins/ui";
-import { cliente, consultas } from "../api";
+import { cliente, consultas, esSesionVencida } from "../api";
+import { useBorrador } from "../borrador";
 import { aFechaCorta } from "../formato";
 import { mensajeDeAdministracion } from "../administracion";
 import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
@@ -79,7 +80,8 @@ export function InformeDeVisita({ id }: { id: string }) {
       </>
     );
   }
-  if (consulta.isError) {
+  // Solo si nunca cargó: un error al releer (sin red, sesión vencida) deja el borrador donde está.
+  if (consulta.data === undefined) {
     const noExiste = consulta.error instanceof ErrorApi && consulta.error.codigo === "no_encontrado";
     return (
       <>
@@ -97,17 +99,16 @@ export function InformeDeVisita({ id }: { id: string }) {
       </>
     );
   }
-  // Se reinicia con cada versión guardada del servidor (key = versión).
-  return <Composicion key={consulta.data.version} informe={consulta.data} recargar={() => void consulta.refetch()} />;
+  return <Composicion informe={consulta.data} recargar={() => void consulta.refetch()} />;
 }
 
 function Composicion({ informe, recargar }: { informe: Informe; recargar: () => void }) {
   const notificar = useNotificar();
-  const [borrador, setBorrador] = useState<Borrador>(() => ({
+  const { borrador, setBorrador, cambiado, version, guardado, descartar } = useBorrador<Borrador>(informe.version, () => ({
     introduccion: informe.introduccion,
     conclusiones: informe.conclusiones,
     levantamientos: [...informe.levantamientos],
-    planos: informe.planos.map((p) => ({ ...p })),
+    planos: informe.planos.map((p) => ({ huella: p.huella, nombre: p.nombre })),
   }));
   const [subiendo, setSubiendo] = useState(false);
   const [errorPlano, setErrorPlano] = useState<unknown>(null);
@@ -117,13 +118,13 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "informes") : []);
   const guardar = useGuardarInforme(informe.id);
   const publicar = usePublicarInforme(informe.id);
-  const cambiado = JSON.stringify(borrador) !== JSON.stringify({ introduccion: informe.introduccion, conclusiones: informe.conclusiones, levantamientos: informe.levantamientos, planos: informe.planos });
   const siguiente = (informe.versiones[0]?.numero ?? 0) + 1;
   const nombreDe = (lid: string) => {
     const c = informe.candidatos.find((x) => x.id === lid);
     return c ? `${c.formato} de ${c.tecnico}` : "Un levantamiento";
   };
-  const error = errorPlano ?? guardar.error;
+  // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
+  const error = errorPlano ?? (esSesionVencida(guardar.error) ? null : guardar.error);
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
   // Salir con cambios sin guardar pregunta antes, también al cerrar la pestaña (DESIGN.md).
   const salida = useBlocker({ shouldBlockFn: () => cambiado, enableBeforeUnload: () => cambiado, withResolver: true });
@@ -145,10 +146,23 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
     }
   }
 
+  async function guardarBorrador() {
+    const enviado = borrador;
+    const r = await guardar.mutateAsync({ version, ...enviado });
+    guardado(r.version, enviado);
+    return r.version;
+  }
+
   async function guardarYPublicar() {
     // Lo que se publica es lo guardado: si hay cambios, primero se guardan.
-    const { version } = cambiado ? await guardar.mutateAsync({ version: informe.version, ...borrador }) : { version: informe.version };
-    await publicar.mutateAsync({ version, destinatarios: elegidos });
+    const guardada = cambiado ? await guardarBorrador() : version;
+    await publicar.mutateAsync({ version: guardada, destinatarios: elegidos });
+  }
+
+  function recargarDescartando() {
+    guardar.reset();
+    descartar();
+    recargar();
   }
 
   const incluidos = borrador.levantamientos.map((lid) => informe.candidatos.find((c) => c.id === lid)).filter((c): c is Informe["candidatos"][number] => Boolean(c));
@@ -211,7 +225,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
               {cambiado ? "Cambios sin guardar" : "Todo guardado"}
             </span>
             {cambiado && (
-              <Boton cargando={guardar.isPending} disabled={subiendo} onClick={() => guardar.mutate({ version: informe.version, ...borrador })}>
+              <Boton cargando={guardar.isPending} disabled={subiendo} onClick={() => void guardarBorrador().catch(() => undefined)}>
                 Guardar borrador
               </Boton>
             )}
@@ -239,7 +253,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           </ul>
           {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
             <div>
-              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargar}>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargarDescartando}>
                 Recargar
               </Boton>
             </div>

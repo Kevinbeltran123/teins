@@ -63,6 +63,9 @@ export function Administracion({ sesion }: { sesion: Sesion }) {
   const [seccion, setSeccion] = useState<Seccion>("usuarios");
   const [creando, setCreando] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  // Al verificar, el segundo factor ya queda activo y la sesión releída lo dice: la activación sigue a la vista
+  // hasta que la persona diga que guardó los códigos de respaldo, que no se vuelven a mostrar.
+  const [activando, setActivando] = useState(!sesion.usuario.segundoFactor);
   if (!sesion.usuario.administrador) {
     return (
       <>
@@ -71,7 +74,7 @@ export function Administracion({ sesion }: { sesion: Sesion }) {
       </>
     );
   }
-  if (!sesion.usuario.segundoFactor) return <ActivarSegundoFactor />;
+  if (!sesion.usuario.segundoFactor || activando) return <ActivarSegundoFactor alTerminar={() => setActivando(false)} />;
   return (
     <>
       <EncabezadoPagina
@@ -134,7 +137,7 @@ function Paso({ numero, titulo, estado, children }: { numero: number; titulo: st
 /** La clave de la app en bloques de cuatro, para escribirla a mano sin perderse. */
 const enBloques = (texto: string) => texto.match(/.{1,4}/g)?.join(" ") ?? texto;
 
-function ActivarSegundoFactor() {
+function ActivarSegundoFactor({ alTerminar }: { alTerminar: () => void }) {
   const consultasCliente = useQueryClient();
   const [etapa, setEtapa] = useState<Etapa>("contrasena");
   const [contrasena, setContrasena] = useState("");
@@ -258,7 +261,13 @@ function ActivarSegundoFactor() {
               <BotonCopiar texto={codigos.join("\n")} etiqueta="Copiar los códigos de respaldo" />
             </div>
             <div>
-              <Boton variante="principal" onClick={() => void consultasCliente.invalidateQueries({ queryKey: consultas.sesion().queryKey })}>
+              <Boton
+                variante="principal"
+                onClick={() => {
+                  alTerminar();
+                  void consultasCliente.invalidateQueries({ queryKey: consultas.sesion().queryKey });
+                }}
+              >
                 Ya los guardé
               </Boton>
             </div>

@@ -396,6 +396,9 @@ select.control { appearance: none; background-image: linear-gradient(45deg, tran
 .app[data-tema="claro"] .notif svg { color: #3DD68C; }
 .notif button { border: 0; background: color-mix(in srgb, var(--fondo) 14%, transparent); color: inherit; font-weight: 800; border-radius: 10px; padding: 6px 12px; }
 
+/* Sesión vencida: el mismo inicio de sesión, encima de la pantalla abierta (que sigue montada detrás) */
+dialog.sesion-vencida { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: var(--fondo); }
+
 /* Inicio de sesión (Shopify: marca centrada, tarjeta) */
 .entrada { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; padding: 28px 36px; background: var(--fondo); }
 .entrada > .logo { text-align: left; font-size: 20px; }

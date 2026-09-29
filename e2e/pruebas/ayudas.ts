@@ -47,6 +47,17 @@ export async function iniciarSesion(page: Page, u: { usuario: string; contrasena
   await page.getByRole("button", { name: /^(Iniciar sesión|Ingresar)$/ }).click();
 }
 
+/** La pestaña se oculta y vuelve a la vista: así relee sus datos la app (refetchOnWindowFocus). */
+export async function volverALaPestana(page: Page) {
+  await page.evaluate(() => {
+    for (const estado of ["hidden", "visible"]) {
+      Object.defineProperty(document, "visibilityState", { value: estado, configurable: true });
+      // Sube hasta window, donde escucha TanStack Query, como el evento real.
+      document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
+    }
+  });
+}
+
 /**
  * La fila del técnico en la pestaña abierta de la bandeja. La bandeja va del más antiguo al más reciente,
  * 50 por página: en un entorno con levantamientos de corridas anteriores, el recién enviado puede estar

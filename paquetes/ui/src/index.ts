@@ -16,7 +16,7 @@ export { CampoSeleccion } from "./CampoSeleccion";
 export { CampoTexto } from "./CampoTexto";
 export { CampoTextoLargo } from "./CampoTextoLargo";
 export { Confirmacion } from "./Confirmacion";
-export { Dialogo } from "./Dialogo";
+export { Dialogo, useModal } from "./Dialogo";
 export { EncabezadoPagina } from "./EncabezadoPagina";
 export { EsqueletoBloques, EsqueletoTabla } from "./Esqueleto";
 export { EstadoVacio } from "./EstadoVacio";

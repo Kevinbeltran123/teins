@@ -52,13 +52,13 @@ export function nuevaVisita(tecnico: Usuario): string {
   return nuevaVisitaConCliente(tecnico).cliente;
 }
 
-export function nuevaVisitaConCliente(tecnico: Usuario): { cliente: string; clienteId: string } {
+export function nuevaVisitaConCliente(tecnico: Usuario): { cliente: string; clienteId: string; visitaId: string } {
   const cliente = `Cliente E2E ${randomBytes(3).toString("hex")}`;
   const salida = comando("crear-cliente", ["--organizacion", ORGANIZACION, "--nombre", cliente, "--sitio", "Sede E2E", "--direccion", "Calle [N] # [N]-[N]"]);
   const [clienteId, sitioId] = [...salida.matchAll(/creado: ([0-9a-f-]{36})/g)].map((m) => m[1]!);
   const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
-  comando("crear-visita", ["--organizacion", ORGANIZACION, "--cliente", clienteId!, "--sitio", sitioId!, "--motivo", "Mantenimiento", "--fecha", hoy, "--tecnicos", tecnico.usuario]);
-  return { cliente, clienteId: clienteId! };
+  const visita = comando("crear-visita", ["--organizacion", ORGANIZACION, "--cliente", clienteId!, "--sitio", sitioId!, "--motivo", "Mantenimiento", "--fecha", hoy, "--tecnicos", tecnico.usuario]);
+  return { cliente, clienteId: clienteId!, visitaId: /Visita creada: ([0-9a-f-]{36})/.exec(visita)![1]! };
 }
 
 /** Acceso de cliente al portal: identificador, clave y la URL que lleva el QR. */

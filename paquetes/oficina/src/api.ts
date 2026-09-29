@@ -1,9 +1,21 @@
-import { QueryClient, queryOptions } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, queryOptions } from "@tanstack/react-query";
 import { crearClienteApi, ErrorApi } from "@teins/protocolo";
 
 export const cliente = crearClienteApi();
 
-export const clienteDeConsultas = new QueryClient({
+export const esSesionVencida = (error: unknown) => error instanceof ErrorApi && error.codigo === "no_autenticado";
+
+/**
+ * Un 401 en cualquier consulta o acción vuelve a leer la sesión: si venció, la raíz pide ingresar de nuevo encima
+ * de la pantalla, sin desmontarla, y lo que la persona escribía sigue ahí.
+ */
+const siVencio = (error: unknown, clave?: readonly unknown[]) => {
+  if (esSesionVencida(error) && clave?.[0] !== "sesion") void clienteDeConsultas.invalidateQueries({ queryKey: ["sesion"] });
+};
+
+export const clienteDeConsultas: QueryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: (error, consulta) => siVencio(error, consulta.queryKey) }),
+  mutationCache: new MutationCache({ onError: (error) => siVencio(error) }),
   defaultOptions: {
     queries: {
       // Un error del contrato (401, 403, 404) no se arregla reintentando; un fallo de red sí.

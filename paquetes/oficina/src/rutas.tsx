@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router";
-import { ErrorApi } from "@teins/protocolo";
-import { Aviso, Boton, RefreshCw } from "@teins/ui";
-import { consultas } from "./api";
+import { Aviso, Boton, RefreshCw, useModal } from "@teins/ui";
+import { consultas, esSesionVencida } from "./api";
 import { Administracion } from "./pantallas/Administracion";
 import { Bandeja } from "./pantallas/Bandeja";
 import { Catalogo } from "./pantallas/Catalogo";
@@ -18,6 +17,19 @@ import { Marco } from "./pantallas/Marco";
 import { MiCuenta } from "./pantallas/MiCuenta";
 import { Visitas } from "./pantallas/Visitas";
 
+/**
+ * La sesión venció con una pantalla abierta: se ingresa de nuevo encima de ella, sin desmontarla, y lo que la
+ * persona escribía sigue ahí. No se puede cerrar: detrás, sin sesión, nada funciona.
+ */
+function SesionVencida() {
+  const modal = useModal(false, () => undefined);
+  return (
+    <dialog {...modal} className="sesion-vencida" aria-label="Su sesión venció">
+      <IniciarSesion aviso="Su sesión venció. Ingrese de nuevo: lo que estaba haciendo sigue aquí." />
+    </dialog>
+  );
+}
+
 /** Toda pantalla de oficina exige una sesión de oficina; la autorización real la aplica el servidor. */
 function Raiz() {
   const sesion = useQuery(consultas.sesion());
@@ -28,8 +40,10 @@ function Raiz() {
       </div>
     );
   }
-  if (sesion.isError) {
-    if (sesion.error instanceof ErrorApi && sesion.error.codigo === "no_autenticado") return <IniciarSesion />;
+  // Con una sesión ya leída, un error al releerla no desmonta la pantalla (se perdería lo escrito): sin
+  // conexión, el marco lo avisa; con la sesión vencida, se ingresa de nuevo encima.
+  if (sesion.data === undefined) {
+    if (esSesionVencida(sesion.error)) return <IniciarSesion />;
     return (
       <main className="mx-auto max-w-md px-4 py-16">
         <Aviso tono="error">
@@ -45,9 +59,13 @@ function Raiz() {
     return <IniciarSesion aviso="Este usuario es de técnico: la bandeja es solo para oficina. Inicie sesión con un usuario de oficina." />;
   }
   return (
-    <Marco nombre={sesion.data.usuario.nombre} administrador={sesion.data.usuario.administrador}>
-      <Outlet />
-    </Marco>
+    <>
+      {/* Si ingresa otra persona, todo empieza de nuevo: lo escrito por la anterior no queda a la vista. */}
+      <Marco key={sesion.data.usuario.id} nombre={sesion.data.usuario.nombre} administrador={sesion.data.usuario.administrador}>
+        <Outlet />
+      </Marco>
+      {esSesionVencida(sesion.error) && <SesionVencida />}
+    </>
   );
 }
 

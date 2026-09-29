@@ -22,7 +22,8 @@ import {
   Trash,
   useNotificar,
 } from "@teins/ui";
-import { cliente } from "../api";
+import { cliente, esSesionVencida } from "../api";
+import { useBorrador } from "../borrador";
 import { consultasDeCotizaciones, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
 import { aFechaCorta, leerPesos, pesos } from "../formato";
 import { consultasDeProgramacion } from "../programacion";
@@ -108,7 +109,8 @@ export function DetalleCotizacion({ id }: { id: string }) {
       </>
     );
   }
-  if (consulta.isError) {
+  // Solo si nunca cargó: un error al releer (sin red, sesión vencida) deja el borrador donde está.
+  if (consulta.data === undefined) {
     const noExiste = consulta.error instanceof ErrorApi && consulta.error.codigo === "no_encontrado";
     return (
       <>
@@ -126,17 +128,15 @@ export function DetalleCotizacion({ id }: { id: string }) {
       </>
     );
   }
-  // Se reinicia con cada versión guardada del servidor (key = versión).
-  return <Composicion key={consulta.data.version} c={consulta.data} recargar={() => void consulta.refetch()} />;
+  return <Composicion c={consulta.data} recargar={() => void consulta.refetch()} />;
 }
 
 function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const notificar = useNotificar();
-  const [borrador, setBorrador] = useState<Borrador>(() => inicial(c));
+  const { borrador, setBorrador, cambiado, version, guardado, descartar } = useBorrador(c.version, () => inicial(c));
   const [confirmando, setConfirmando] = useState(false);
   const [destinatarios, setDestinatarios] = useState<string[] | null>(null);
   const contactos = useQuery(consultasDeProgramacion.cliente(c.clienteId));
-  const cambiado = JSON.stringify(borrador) !== JSON.stringify(inicial(c));
   const salida = useBlocker({ shouldBlockFn: () => cambiado, enableBeforeUnload: () => cambiado, withResolver: true });
 
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
@@ -166,14 +166,29 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
     cliente.llamar("publicarCotizacion", { parametros: { id: c.id }, cuerpo: { version, destinatarios } }),
   );
   const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "cotizaciones") : []);
-  const error = guardar.error ?? publicar.error;
+  // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
+  const error = [guardar.error, publicar.error].find((e) => e && !esSesionVencida(e)) ?? null;
   const siguiente = (c.versiones[0]?.numero ?? 0) + 1;
   const vigente = c.versiones[0];
 
+  async function guardarBorrador() {
+    const enviado = borrador;
+    const r = await guardar.mutateAsync(version);
+    guardado(r.version, enviado);
+    return r.version;
+  }
+
   async function guardarYPublicar() {
     // Lo que se publica es lo guardado: si hay cambios, primero se guardan.
-    const { version } = cambiado ? await guardar.mutateAsync(c.version) : { version: c.version };
-    await publicar.mutateAsync({ version, destinatarios: elegidos });
+    const guardada = cambiado ? await guardarBorrador() : version;
+    await publicar.mutateAsync({ version: guardada, destinatarios: elegidos });
+  }
+
+  function recargarDescartando() {
+    guardar.reset();
+    publicar.reset();
+    descartar();
+    recargar();
   }
 
   function quitar(linea: LineaEditable) {
@@ -241,7 +256,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           <>
             {estado}
             {cambiado && (
-              <Boton disabled={!guardable} cargando={guardar.isPending} onClick={() => guardar.mutate(c.version)}>
+              <Boton disabled={!guardable} cargando={guardar.isPending} onClick={() => void guardarBorrador().catch(() => undefined)}>
                 Guardar borrador
               </Boton>
             )}
@@ -264,7 +279,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           <b>{mensajeDeCotizacion(error)}</b>
           {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
             <div>
-              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargar}>
+              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargarDescartando}>
                 Recargar
               </Boton>
             </div>

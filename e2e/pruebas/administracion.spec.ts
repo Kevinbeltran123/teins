@@ -3,7 +3,38 @@ import { expect, test } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoAdministrador } from "../consola";
 import { CAMPO, OFICINA, PORTAL } from "../destino";
 import { codigoTotp } from "../totp";
-import { iniciarSesion } from "./ayudas";
+import { iniciarSesion, volverALaPestana } from "./ayudas";
+
+test("los códigos de respaldo siguen a la vista hasta decir que se guardaron, aunque la sesión se relea (iteración 24)", async ({ browser }) => {
+  const admin = nuevoAdministrador();
+  const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });
+  const page = await escritorio.newPage();
+  // El reloj del navegador se adelanta para que la sesión quede vieja (se relee pasado un minuto).
+  await page.clock.install();
+  await page.goto(`${OFICINA}/`);
+  await iniciarSesion(page, admin);
+  await page.getByRole("link", { name: "Administración" }).click();
+  await page.getByLabel("Su contraseña").fill(admin.contrasena);
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByText("¿No puede escanearlo?").click();
+  const clave = (await page.locator("details code").textContent())!.replace(/\s/g, "");
+  await page.getByLabel("Código de 6 dígitos que muestra la app").fill(codigoTotp(clave));
+  await page.getByRole("button", { name: "Verificar y activar" }).click();
+  const codigos = page.getByRole("list", { name: "Códigos de respaldo" }).getByRole("listitem");
+  await expect(codigos).not.toHaveCount(0);
+
+  // Ya activo en el servidor: la sesión releída lo dice, pero los códigos no se vuelven a mostrar nunca.
+  await page.clock.fastForward("01:01");
+  const releida = page.waitForResponse((r) => r.url().endsWith("/api/sesion"));
+  await volverALaPestana(page);
+  await releida;
+  await page.waitForTimeout(500);
+  await expect(codigos).not.toHaveCount(0);
+
+  await page.getByRole("button", { name: "Ya los guardé" }).click();
+  await expect(page.getByRole("tab", { name: "Usuarios" })).toBeVisible();
+  await escritorio.close();
+});
 
 test("administrar exige segundo factor; con él se crea un técnico y el acceso de un cliente, y se ve su teléfono (iteración 6)", async ({ browser }) => {
   const admin = nuevoAdministrador();
