@@ -138,6 +138,17 @@ describe("contrato y políticas (ADR-0009, ADR-0014)", () => {
   });
 });
 
+describe("sesión del personal", () => {
+  it("cuando Better Auth renueva la sesión, la cookie nueva llega al navegador", async () => {
+    const { oficina } = await s.nuevaOrganizacionConUsuarios();
+    // Una sesión con más de un día de uso: la siguiente solicitud la renueva (updateAge).
+    await s.propietario.pool.query("update identidad.sesiones set expira_en = now() + make_interval(days => $2) where usuario_id = $1", [oficina.id, s.config.DURACION_SESION_DIAS - 2]);
+    const r = await app.inject({ method: "GET", url: "/api/sesion", headers: { cookie: oficina.cookie } });
+    expect(r.statusCode).toBe(200);
+    expect(String(r.headers["set-cookie"])).toMatch(/teins\.session_token=.*Max-Age=\d+/);
+  });
+});
+
 describe("archivos (ADR-0007)", () => {
   it("autoriza, recibe, verifica y sirve una foto; la segunda autorización no vuelve a subirla", async () => {
     const { tecnico, oficina } = await s.nuevaOrganizacionConUsuarios();

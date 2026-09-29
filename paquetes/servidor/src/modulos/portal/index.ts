@@ -3,7 +3,7 @@ import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Config } from "../../config";
 import { claveDeObjeto, type Almacenamiento } from "../../plataforma/almacenamiento";
-import { enClienteDelPortal, enOrganizacion, type BaseDeDatos } from "../../plataforma/base-de-datos";
+import { enClienteDelPortal, enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion, registrarOperacionDelPortal } from "../../plataforma/rutas";
@@ -29,6 +29,9 @@ export interface SesionDelPortal {
   clienteId: string;
   cliente: string;
 }
+
+/** Serializa ingresar y regenerar sobre el mismo acceso: el rol del portal no puede bloquear la fila. */
+const bloquearAcceso = (tx: TxOrganizacion, accesoId: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`acceso:${accesoId}`}, 0))`);
 
 const noAutenticado = () => problema("no_autenticado", "El identificador o la clave no son correctos");
 
@@ -71,7 +74,7 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
     });
   }
 
-  const comun = { nombreCookie, seguro, resolverSesion };
+  const comun = { nombreCookie, seguro, resolverSesion, duracionSesionS: DURACION_SESION_S };
 
   return {
     registrarRutas(app: FastifyInstance) {
@@ -102,6 +105,11 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
 
           const token = nuevoToken();
           await enOrganizacion(bdPortal, acceso.organizacionId, async (tx) => {
+            // La clave pudo regenerarse mientras se verificaba: con el bloqueo del acceso se confirma, y una
+            // regeneración que llegue después espera a que esta sesión exista para cerrarla.
+            await bloquearAcceso(tx, acceso.id);
+            const [vigente] = await tx.select({ claveHash: accesosDeClientes.claveHash }).from(accesosDeClientes).where(eq(accesosDeClientes.id, acceso.id));
+            if (vigente?.claveHash !== acceso.claveHash) throw noAutenticado();
             await tx.delete(intentos).where(eq(intentos.llave, llaves[0]!.llave));
             await tx.insert(sesionesDelPortal).values({
               tokenHuella: huellaDeToken(token),
@@ -249,6 +257,8 @@ export function crearAccesosDeClientes(bd: BaseDeDatos) {
       const credenciales = { identificador: nuevoIdentificador(), clave: nuevaClave() };
       const claveHash = await hashDeClave(credenciales.clave);
       await enOrganizacion(bd, organizacionId, async (tx) => {
+        const [actual] = await tx.select({ id: accesosDeClientes.id }).from(accesosDeClientes).where(eq(accesosDeClientes.clienteId, clienteId));
+        if (actual) await bloquearAcceso(tx, actual.id);
         const [acceso] = await tx
           .update(accesosDeClientes)
           .set({ identificador: credenciales.identificador, claveHash, regeneradoEn: new Date() })

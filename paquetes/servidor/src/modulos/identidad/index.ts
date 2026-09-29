@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Config } from "../../config";
 import { contieneTexto } from "../../plataforma/busqueda";
@@ -28,7 +28,8 @@ type Ejecutor = BaseDeDatos | TxOrganizacion;
 
 export interface Identidad {
   auth: Auth;
-  resolverActor(solicitud: FastifyRequest): Promise<Actor | null>;
+  /** Con `respuesta`, la cookie renovada de una sesión que se desliza vuelve al navegador. */
+  resolverActor(solicitud: FastifyRequest, respuesta?: FastifyReply): Promise<Actor | null>;
   /**
    * Nombres por id. Dentro de una transacción se pasa `en: tx`: pedir otra conexión del pool mientras se
    * retiene una puede agotarlo y dejar todas las solicitudes esperando.
@@ -143,8 +144,11 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
   const porDominio = new Map(dominios.map((d) => [d, crearAuth(bd, config, d, eventos)]));
   const auth = porDominio.get(dominios[0]!)!;
 
-  async function resolverActor(solicitud: FastifyRequest): Promise<Actor | null> {
-    const sesion = await auth.api.getSession({ headers: fromNodeHeaders(solicitud.headers) });
+  async function resolverActor(solicitud: FastifyRequest, respuesta?: FastifyReply): Promise<Actor | null> {
+    const { headers, response: sesion } = await auth.api.getSession({ headers: fromNodeHeaders(solicitud.headers), returnHeaders: true });
+    // Better Auth renueva la sesión una vez al día de uso: sin su cookie nueva, el navegador la pierde a los días de ingresar.
+    const cookies = headers.getSetCookie();
+    if (respuesta && cookies.length > 0) respuesta.header("set-cookie", cookies);
     if (!sesion) return null;
     const { id, organizacionId, rol, desactivadoEn, administrador, twoFactorEnabled } = sesion.user as typeof sesion.user & {
       organizacionId: string;

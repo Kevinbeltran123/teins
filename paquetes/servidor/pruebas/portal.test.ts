@@ -146,6 +146,27 @@ describe("portal del cliente (ADR-0009, parte 4)", () => {
     expect((await ingresar(nuevas.identificador, nuevas.clave, "10.5.0.3")).statusCode).toBe(200);
   });
 
+  it("un ingreso con la clave anterior que termina después de regenerar no deja una sesión viva", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const e = await clienteConInforme(org, "Cliente E");
+    const anteriores = await accesos.crear(org.organizacionId, e.clienteId, contexto);
+    // El ingreso ya leyó el acceso y está verificando la clave cuando llega la regeneración.
+    const enCurso = ingresar(anteriores.identificador, anteriores.clave, "10.6.0.1");
+    await new Promise((r) => setTimeout(r, 0));
+    await accesos.regenerar(org.organizacionId, e.clienteId, contexto);
+    const ingreso = await enCurso;
+    if (ingreso.statusCode === 200) expect((await portal(cookieDe(ingreso), "/api/portal/sesion")).statusCode).toBe(401);
+  });
+
+  it("cada uso renueva la cookie: la sesión vence 30 minutos después del último uso, no del ingreso", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const f = await clienteConInforme(org, "Cliente F");
+    const { identificador, clave } = await accesos.crear(org.organizacionId, f.clienteId, contexto);
+    const cookie = cookieDe(await ingresar(identificador, clave, "10.7.0.1"));
+    const r = await portal(cookie, "/api/portal/sesion");
+    expect(String(r.headers["set-cookie"])).toMatch(/Max-Age=1800; Path=\/; HttpOnly/);
+  });
+
   it("muestra la versión vigente con PDF listo; salir cierra la sesión; la cookie de oficina no sirve aquí", async () => {
     const org = await s.nuevaOrganizacionConUsuarios();
     const e = await clienteConInforme(org, "Cliente E");

@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest, RouteOptions } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from "fastify";
 import type { z } from "zod";
 import {
   CABECERA_VERSION,
@@ -22,7 +22,7 @@ declare module "fastify" {
     operacion?: NombreOperacion;
   }
   interface FastifyInstance {
-    resolverActor(solicitud: FastifyRequest): Promise<Actor | null>;
+    resolverActor(solicitud: FastifyRequest, respuesta?: FastifyReply): Promise<Actor | null>;
   }
 }
 
@@ -73,8 +73,8 @@ export function registrarOperacion<N extends NombreOperacion>(
     app,
     nombre,
     opciones.politica,
-    async (solicitud) => {
-      const actor = await app.resolverActor(solicitud);
+    async (solicitud, respuesta) => {
+      const actor = await app.resolverActor(solicitud, respuesta);
       const decision = evaluar(opciones.politica, actor);
       if (decision !== "permitido") throw problema(decision);
       return actor!;
@@ -109,6 +109,8 @@ export interface OpcionesPortal<N extends NombreOperacion, S> {
   nombreCookie: string;
   seguro: boolean;
   resolverSesion: (token: string) => Promise<S | null>;
+  /** La sesión se desliza con cada uso: la cookie se renueva con esta duración. */
+  duracionSesionS: number;
   manejar: (entrada: Omit<Entrada<N>, "actor"> & { sesion: S; portal: ContextoPortal }) => Promise<RespuestaServidor<N>>;
 }
 
@@ -142,6 +144,7 @@ export function registrarOperacionDelPortal<N extends NombreOperacion, S>(app: F
         ponerSesion: (valor, segundos) => void respuesta.header("set-cookie", `${opciones.nombreCookie}=${valor}; Max-Age=${segundos}; ${atributos}`),
         quitarSesion: () => void respuesta.header("set-cookie", `${opciones.nombreCookie}=; Max-Age=0; ${atributos}`),
       };
+      if (sesion && token) portal.ponerSesion(token, opciones.duracionSesionS);
       const resultado = await opciones.manejar({
         cuerpo: validar(op.cuerpo, solicitud.body, "cuerpo") as Cuerpo<N>,
         parametros: validar(op.parametros, solicitud.params, "parametros") as Parametros<N>,
@@ -162,7 +165,7 @@ function registrar<N extends NombreOperacion, A>(
   app: FastifyInstance,
   nombre: N,
   politica: Politica,
-  autorizar: (solicitud: FastifyRequest) => Promise<A>,
+  autorizar: (solicitud: FastifyRequest, respuesta: FastifyReply) => Promise<A>,
   manejar: (entrada: Omit<Entrada<N>, "actor"> & { actor: A }) => Promise<RespuestaServidor<N>>,
 ): void {
   const op: Operacion = operaciones[nombre];
@@ -172,7 +175,7 @@ function registrar<N extends NombreOperacion, A>(
     config: { politica, operacion: nombre },
     handler: async (solicitud, respuesta) => {
       if (op.sincronizacion) verificarVersion(solicitud);
-      const actor = await autorizar(solicitud);
+      const actor = await autorizar(solicitud, respuesta);
       const resultado = await manejar({
         cuerpo: validar(op.cuerpo, solicitud.body, "cuerpo") as Cuerpo<N>,
         parametros: validar(op.parametros, solicitud.params, "parametros") as Parametros<N>,
