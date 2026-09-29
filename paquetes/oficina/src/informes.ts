@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, type CuerpoEntrada } from "@teins/protocolo";
 import { cliente } from "./api";
+import { textoDelServidor } from "./mensajes";
 
 function useRefrescar() {
   const consultas = useQueryClient();
@@ -88,6 +89,6 @@ export function mensajeDeInforme(error: unknown, nombreDe: (id: string) => strin
     case "conflicto_de_version":
       return ["Otra persona guardó o publicó este informe mientras usted lo tenía abierto. Lo suyo no se guardó: recargue para ver la versión actual."];
     default:
-      return [error.message || "No se pudo completar la acción."];
+      return [textoDelServidor(error, "No se pudo completar la acción.")];
   }
 }

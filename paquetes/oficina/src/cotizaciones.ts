@@ -1,6 +1,7 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
 import { cliente } from "./api";
+import { textoDelServidor } from "./mensajes";
 
 export const consultasDeCotizaciones = {
   lista: () => queryOptions({ queryKey: ["cotizaciones"], queryFn: () => cliente.llamar("listarCotizaciones") }),
@@ -30,10 +31,10 @@ export function mensajeDeCotizacion(error: unknown): string {
     case "cotizacion_invalida":
       return (error.problema.erroresCotizacion ?? []).map((e) => EXPLICACION[e.codigo]?.(e) ?? e.codigo).join(" ") || "A la cotización le falta algo para publicarse.";
     case "estado_invalido":
-      return error.message || "La cotización no se puede cambiar así.";
+      return textoDelServidor(error, "La cotización no se puede cambiar así.");
     case "no_autenticado":
       return "Su sesión venció. Inicie sesión de nuevo.";
     default:
-      return error.message || "No se pudo completar la acción. Intente de nuevo.";
+      return textoDelServidor(error, "No se pudo completar la acción. Intente de nuevo.");
   }
 }

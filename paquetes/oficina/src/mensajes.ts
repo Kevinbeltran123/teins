@@ -23,6 +23,53 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   firma_invalida: "La firma no tiene sus trazos, el nombre de quien firmó, la fecha o la constancia",
 };
 
+/** Los datos que envían las pantallas de oficina, como se nombran en ellas (las claves de los esquemas de protocolo). */
+const NOMBRE_DEL_DATO: Record<string, string> = {
+  nombre: "el nombre",
+  correo: "el correo",
+  telefono: "el teléfono",
+  cargo: "el cargo",
+  usuario: "el usuario",
+  contrasena: "la contraseña",
+  rol: "el rol",
+  direccion: "la dirección",
+  sitio: "el sitio",
+  sitioId: "el sitio",
+  clienteId: "el cliente",
+  programadaPara: "la fecha",
+  tecnicos: "los técnicos",
+  motivo: "el motivo",
+  texto: "el comentario",
+  descripcion: "la descripción",
+  codigo: "el código",
+  unidad: "la unidad",
+  precio: "el precio",
+  cantidad: "la cantidad",
+  lineas: "las líneas",
+  impuestos: "los impuestos",
+  validezDias: "la validez",
+  formaPago: "la forma de pago",
+  notas: "las notas",
+  introduccion: "la introducción",
+  conclusiones: "las conclusiones",
+  planos: "los planos",
+  destinos: "los destinatarios",
+  destinatarios: "los destinatarios",
+};
+
+/**
+ * El texto de un error del servidor para la persona. Si el esquema rechazó la entrada, el servidor dice "Revise
+ * cuerpo" y lista las rutas en `campos`: se nombran los datos como en la pantalla. Si no, su texto ya está escrito
+ * para la persona.
+ */
+export function textoDelServidor(error: ErrorApi, respaldo: string): string {
+  const campos = error.problema.campos;
+  if (!campos?.length) return error.message || respaldo;
+  const nombres = [...new Set(campos.map((c) => NOMBRE_DEL_DATO[c.ruta.split(".").filter((s) => !/^\d+$/.test(s)).at(-1) ?? ""]))];
+  if (nombres.includes(undefined) || nombres.length === 0) return "Revise los datos: alguno no tiene la forma esperada.";
+  return `Revise ${new Intl.ListFormat("es", { type: "conjunction" }).format(nombres as string[])}: ${nombres.length === 1 ? "no tiene" : "no tienen"} la forma esperada.`;
+}
+
 /** Lo que una persona de oficina necesita saber de un error al guardar. */
 export function mensajeDeError(error: unknown): string {
   if (error instanceof ErrorDeRed) return "Sin conexión con el servidor. No se guardó nada; intente de nuevo al recuperar la conexión.";
@@ -41,7 +88,7 @@ export function mensajeDeError(error: unknown): string {
     case "no_autenticado":
       return "Su sesión venció. Inicie sesión de nuevo.";
     default:
-      return error.message || "No se pudo guardar. Intente de nuevo.";
+      return textoDelServidor(error, "No se pudo guardar. Intente de nuevo.");
   }
 }
 

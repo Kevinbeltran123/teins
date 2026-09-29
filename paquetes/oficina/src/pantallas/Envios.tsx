@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import { Aviso, Boton, Confirmacion, Insignia, Mail, MessageCircle, RefreshCw, Send, useNotificar } from "@teins/ui";
 import { aFechaCorta } from "../formato";
+import { textoDelServidor } from "../mensajes";
 
 type Contacto = Respuesta<"obtenerCliente">["contactos"][number];
 type Envio = Respuesta<"obtenerInforme">["versiones"][number]["envios"][number];
@@ -149,7 +150,7 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, 
       recargar();
       notificar({ texto: `Envío a ${e.contacto.nombre} en cola` });
     } catch (causa) {
-      setError(causa instanceof ErrorApi && causa.codigo === "entrada_invalida" ? `${causa.message}. Revise el contacto en Clientes.` : "No se pudo volver a enviar. Intente de nuevo.");
+      setError(causa instanceof ErrorApi && causa.codigo === "entrada_invalida" ? `${textoDelServidor(causa, "Un dato no sirve")}. Revise el contacto en Clientes.` : "No se pudo volver a enviar. Intente de nuevo.");
     } finally {
       setReenviando(null);
     }
@@ -245,7 +246,7 @@ function EnviarAContactos({
       titulo={`Enviar la versión ${numero} a otro contacto`}
       confirmar={nombres.length === 1 ? `Enviar a ${nombres[0]}` : nombres.length > 1 ? `Enviar a ${nombres.length}` : "Enviar"}
       validar={() => (elegidos.length === 0 ? "Marque a quién enviarla." : null)}
-      mensajeDeError={(e) => (e instanceof ErrorApi && e.codigo === "estado_invalido" ? e.message : e instanceof ErrorApi && e.codigo === "entrada_invalida" ? e.message : "No se pudo enviar. Intente de nuevo.")}
+      mensajeDeError={(e) => (e instanceof ErrorApi && e.codigo === "estado_invalido" ? e.message : e instanceof ErrorApi && e.codigo === "entrada_invalida" ? textoDelServidor(e, "Revise los datos.") : "No se pudo enviar. Intente de nuevo.")}
       alCerrar={alCerrar}
       alTerminar={() => notificar({ texto: nombres.length === 1 ? `Envío a ${nombres[0]} en cola` : `${nombres.length} envíos en cola` })}
       accion={async () => {

@@ -1,6 +1,7 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
 import { cliente } from "./api";
+import { textoDelServidor } from "./mensajes";
 
 export type Vista = "proximas" | "anteriores" | "canceladas";
 
@@ -32,8 +33,8 @@ export function mensajeDeProgramacion(error: unknown): string {
     case "no_autenticado":
       return "Su sesión venció. Inicie sesión de nuevo.";
     case "entrada_invalida":
-      return error.message || "Revise los datos.";
+      return textoDelServidor(error, "Revise los datos.");
     default:
-      return error.message || "No se pudo guardar. Intente de nuevo.";
+      return textoDelServidor(error, "No se pudo guardar. Intente de nuevo.");
   }
 }

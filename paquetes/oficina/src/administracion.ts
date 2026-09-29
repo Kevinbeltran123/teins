@@ -1,6 +1,7 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
 import { cliente } from "./api";
+import { textoDelServidor } from "./mensajes";
 
 export const consultasDeAdministracion = {
   usuarios: () => queryOptions({ queryKey: ["administracion", "usuarios"], queryFn: () => cliente.llamar("listarUsuarios") }),
@@ -32,8 +33,11 @@ export function mensajeDeAdministracion(error: unknown): string {
     case "no_autenticado":
       return "Su sesión venció. Inicie sesión de nuevo.";
     case "entrada_invalida":
-      return "Revise los datos: el usuario lleva de 3 a 30 letras minúsculas, números, punto o guion, sin espacios.";
+      // Lo que más se rechaza es el usuario: se dice cómo se escribe. Otro dato se nombra como en la pantalla.
+      return error.problema.campos?.every((c) => !c.ruta.endsWith(".usuario"))
+        ? textoDelServidor(error, "Revise los datos.")
+        : "Revise los datos: el usuario lleva de 3 a 30 letras minúsculas, números, punto o guion, sin espacios.";
     default:
-      return error.message || "No se pudo completar la acción. Intente de nuevo.";
+      return textoDelServidor(error, "No se pudo completar la acción. Intente de nuevo.");
   }
 }
