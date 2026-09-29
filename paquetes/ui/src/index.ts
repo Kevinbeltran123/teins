@@ -5,6 +5,7 @@ export type { ElementoDibujable, HojaDibujable } from "./Boceto";
 export { Boton, BotonIcono, claseBoton } from "./Boton";
 export type { TamanoBoton, VarianteBoton } from "./Boton";
 export { BotonCopiar } from "./BotonCopiar";
+export { CapturaDeErrores, FallaAlDibujar } from "./CapturaDeErrores";
 export { CampoBusqueda } from "./CampoBusqueda";
 export { CampoEnTabla } from "./CampoEnTabla";
 export { CampoFotos } from "./CampoFotos";

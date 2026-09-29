@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { CapturaDeErrores, FallaAlDibujar } from "@teins/ui";
 import { clienteDeConsultas } from "./api";
 import { App } from "./App";
 import "./estilos.css";
@@ -8,7 +9,15 @@ import "./estilos.css";
 createRoot(document.getElementById("app")!).render(
   <StrictMode>
     <QueryClientProvider client={clienteDeConsultas}>
-      <App />
+      <CapturaDeErrores
+        respaldo={
+          <main className="mx-auto flex max-w-md flex-col gap-4 px-4 py-10">
+            <FallaAlDibujar texto="Algo falló al mostrar el portal." />
+          </main>
+        }
+      >
+        <App />
+      </CapturaDeErrores>
     </QueryClientProvider>
   </StrictMode>,
 );

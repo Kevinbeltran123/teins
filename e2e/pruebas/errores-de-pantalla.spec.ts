@@ -1,0 +1,55 @@
+import { expect, test, type Page } from "@playwright/test";
+import { nuevaVisitaConCliente, nuevoAcceso, nuevoUsuario } from "../consola";
+import { OFICINA } from "../destino";
+import { iniciarSesion } from "./ayudas";
+
+/**
+ * Iteración 24 (fallo 12 del grupo A): una ruta que no existe o una pantalla que falla al dibujarse lo dicen en
+ * español y dejan una salida, en vez de la pantalla en blanco o el texto en inglés del enrutador.
+ */
+
+/** Desde aquí, dibujar un icono (SVG) falla: así se provoca un error al dibujar la pantalla siguiente. */
+const romperLosIconos = (p: Page) =>
+  p.evaluate(() => {
+    Document.prototype.createElementNS = () => {
+      throw new Error("Falla de prueba al dibujar");
+    };
+  });
+
+async function oficina(page: Page) {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto(`${OFICINA}/`);
+  await iniciarSesion(page, nuevoUsuario("oficina", "oficina"));
+  await expect(page.getByRole("tab", { name: /Esperando revisión/ })).toBeVisible();
+}
+
+test("oficina: una ruta que no existe lo dice y lleva a Levantamientos", async ({ page }) => {
+  await oficina(page);
+  await page.goto(`${OFICINA}/no-existe`);
+  await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
+  await page.getByRole("link", { name: "Ir a Levantamientos" }).click();
+  await expect(page.getByRole("tab", { name: /Esperando revisión/ })).toBeVisible();
+});
+
+test("oficina: si una pantalla falla al dibujarse, lo dice en español y ofrece volver a cargar", async ({ page }) => {
+  await oficina(page);
+  await romperLosIconos(page);
+  await page.getByRole("navigation", { name: "Secciones" }).getByRole("link", { name: "Visitas" }).click();
+  await expect(page.getByText("Algo falló al mostrar esta pantalla.")).toBeVisible();
+  await page.getByRole("button", { name: "Volver a cargar" }).click();
+  await expect(page.getByRole("heading", { name: "Visitas" })).toBeVisible();
+});
+
+test("portal: si la pantalla falla al dibujarse, lo dice y ofrece volver a cargar", async ({ page }) => {
+  const { clienteId } = nuevaVisitaConCliente(nuevoUsuario("tecnico", "tecnico.e2e"));
+  const acceso = nuevoAcceso(clienteId);
+  await page.goto(acceso.url);
+  await page.getByLabel("Clave").fill(acceso.clave);
+  await romperLosIconos(page);
+  await page.getByRole("button", { name: "Ver mis informes" }).click();
+  await expect(page.getByText("Algo falló al mostrar el portal.")).toBeVisible();
+  // Volver a cargar deja el portal funcionando: con la sesión, sus informes; si el fallo llegó antes de abrirla, el ingreso.
+  await page.getByRole("button", { name: "Volver a cargar" }).click();
+  await expect(page.getByRole("heading", { name: /^Informes de / }).or(page.getByRole("heading", { name: "Sus informes técnicos" }))).toBeVisible();
+  await expect(page.getByText("Algo falló al mostrar el portal.")).toHaveCount(0);
+});

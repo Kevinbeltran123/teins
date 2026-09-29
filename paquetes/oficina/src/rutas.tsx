@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router";
-import { Aviso, Boton, RefreshCw, useModal } from "@teins/ui";
+import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
+import { Aviso, Boton, claseBoton, EncabezadoPagina, FallaAlDibujar, RefreshCw, useModal } from "@teins/ui";
 import { consultas, esSesionVencida } from "./api";
 import { Administracion } from "./pantallas/Administracion";
 import { Bandeja } from "./pantallas/Bandeja";
@@ -129,7 +129,28 @@ const administracion = createRoute({
   },
 });
 
-export const router = createRouter({ routeTree: raiz.addChildren([bandeja, detalle, visitas, clientes, detalleDeCliente, catalogo, listaDeInformes, informe, cotizaciones, cotizacion, cuenta, administracion]) });
+/** Una ruta que no existe (un enlace viejo o mal copiado), dentro del marco: el menú sigue ahí. */
+function NoExiste() {
+  return (
+    <>
+      <EncabezadoPagina titulo="Esta página no existe" />
+      <p className="sec">El enlace está mal escrito o la página ya no existe.</p>
+      <div>
+        <Link to="/" className={claseBoton("secundaria")}>
+          Ir a Levantamientos
+        </Link>
+      </div>
+    </>
+  );
+}
+
+export const router = createRouter({
+  routeTree: raiz.addChildren([bandeja, detalle, visitas, clientes, detalleDeCliente, catalogo, listaDeInformes, informe, cotizaciones, cotizacion, cuenta, administracion]),
+  // Una pantalla que falla al dibujarse lo dice en español, dentro del marco (sin esto, el enrutador lo dice en inglés).
+  defaultErrorComponent: () => <FallaAlDibujar texto="Algo falló al mostrar esta pantalla." />,
+  defaultOnCatch: (error) => console.error("Falla al dibujar la pantalla", error),
+  defaultNotFoundComponent: NoExiste,
+});
 
 declare module "@tanstack/react-router" {
   interface Register {
