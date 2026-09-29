@@ -22,15 +22,26 @@ export class DatoIlegible extends Error {
 
 const esperar = <T>(promesa: Promise<T>): Promise<T> => Promise.resolve(promesa);
 
-/** La clave del técnico; se crea la primera vez que hace falta. Nunca sale del navegador. */
-export async function claveDe(db: BaseCampo, tecnicoId: string): Promise<CryptoKey> {
+/** Técnicos con un borrado sin terminar o sin confirmar: lo suyo espera a borrarse, no se sella. */
+export async function enBorrado(db: BaseCampo): Promise<Set<string>> {
+  const ajuste = await db.ajustes.get("borrados_por_confirmar");
+  return new Set(ajuste?.clave === "borrados_por_confirmar" ? ajuste.valor : []);
+}
+
+/**
+ * La clave del técnico; se crea la primera vez que hace falta. Nunca sale del navegador. A un técnico con
+ * un borrado pendiente no se le crea otra: volvería legible lo que el borrado acaba de cerrar.
+ */
+export async function claveDe(db: BaseCampo, tecnicoId: string, contexto: string): Promise<CryptoKey> {
   const actual = await db.claves.get(tecnicoId);
   if (actual) return actual.clave;
   const nueva = await esperar(crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]));
-  // Si otra pestaña la creó mientras tanto, gana la primera: nunca hay dos claves para un técnico.
-  return db.transaction("rw", db.claves, async () => {
+  // Si otra pestaña la creó mientras tanto, gana la primera: nunca hay dos claves para un técnico. Con
+  // `ajustes` en la transacción, el borrado (que destruye la clave y se marca junto) no se cuela en medio.
+  return db.transaction("rw", [db.claves, db.ajustes], async () => {
     const otra = await db.claves.get(tecnicoId);
     if (otra) return otra.clave;
+    if ((await enBorrado(db)).has(tecnicoId)) throw new DatoIlegible(contexto);
     await db.claves.add({ tecnicoId, clave: nueva, creadaEn: new Date().toISOString() });
     return nueva;
   });
@@ -41,7 +52,7 @@ export async function claveDe(db: BaseCampo, tecnicoId: string): Promise<CryptoK
  * `contexto` es, por ejemplo, "levantamiento:<id>".
  */
 export async function sellarBytes(db: BaseCampo, tecnicoId: string, contexto: string, datos: BufferSource): Promise<Sellado> {
-  const clave = await claveDe(db, tecnicoId);
+  const clave = await claveDe(db, tecnicoId, contexto);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cifrado = await esperar(crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode(contexto) }, clave, datos));
   return { iv, datos: cifrado };

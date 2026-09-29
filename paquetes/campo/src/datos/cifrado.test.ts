@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { createHash } from "node:crypto";
 import Dexie from "dexie";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
 import { almacenDexie } from "../sincronizacion/almacen";
 import type { BaseCampo } from "./base";
@@ -26,6 +26,7 @@ function foto(texto: string) {
 
 const bases: Dexie[] = [];
 afterEach(async () => {
+  vi.unstubAllGlobals();
   for (const db of bases.splice(0)) await db.delete();
 });
 function nuevaBase(nombre = `cifrado-${Math.random()}`) {
@@ -199,5 +200,66 @@ describe("cifrado local (iteración 12, ADR-0022)", () => {
     const [deT2] = await repo.obtenerArchivos([compartida.id]);
     expect(new TextDecoder().decode(deT2!.datos)).toBe("la misma foto");
     expect((await db.archivos.get(compartida.id))?.tecnicoId).toBe("t2");
+  });
+
+  it("con un borrado a medias no nace otra clave para el revocado, y lo de los demás se cifra igual", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    // A la vista, de antes del cifrado: uno del revocado y uno de otro técnico.
+    await db.levantamientos.bulkAdd([
+      { ...crearLevantamiento(formato, id(1), ahora), tecnicoId: "t1", respuestas: { s: { t: "de t1 SECRETO" } } },
+      { ...crearLevantamiento(formato, id(2), ahora), tecnicoId: "t2", respuestas: { s: { t: "de t2 SECRETO" } } },
+    ]);
+    // Como si la app se cerrara justo después del primer paso del borrado de t1.
+    await db.ajustes.put({ clave: "borrados_por_confirmar", valor: ["t1"] });
+
+    await sellarPendientes(db);
+    expect(await db.claves.get("t1")).toBeUndefined();
+    expect((await db.levantamientos.get(id(2)))?.sellado).toBeDefined();
+    expect(await contarPorSellar(db)).toBe(0);
+    await expect(repo.crear(crearLevantamiento(formato, id(3), ahora), "t1")).rejects.toBeInstanceOf(DatoIlegible);
+    expect(await db.claves.get("t1")).toBeUndefined();
+
+    await almacenDexie(db).completarBorrados();
+    expect(await db.levantamientos.toCollection().primaryKeys()).toEqual([id(2)]);
+  });
+
+  it("borrar a un técnico no le quita a un borrador sin responsable una foto que ambos usan (regla 5)", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const compartida = foto("la misma foto");
+    await repo.crear(crearLevantamiento(formato, id(1), ahora), "t1");
+    await repo.agregarFoto(id(1), "s", "fotos", compartida, ahora);
+    await db.levantamientos.add({ ...crearLevantamiento(formato, id(2), ahora), respuestas: { s: { fotos: [compartida.id] } } });
+    expect((await db.archivos.get(compartida.id))?.tecnicoId).toBe("t1");
+
+    await almacenDexie(db).borrarDatosDe("t1", ahora.toISOString());
+    const [delBorrador] = await repo.obtenerArchivos([compartida.id]);
+    expect(new TextDecoder().decode(delBorrador!.datos)).toBe("la misma foto");
+
+    // Cuando alguien recibe el borrador, la foto se cifra con su clave.
+    await repo.asignarSinResponsable("t2");
+    await sellarPendientes(db);
+    expect((await db.archivos.get(compartida.id))?.tecnicoId).toBe("t2");
+  });
+
+  it("el borrado olvida lo que el revocado descartó en el teléfono, no lo de los demás", async () => {
+    const guardado = new Map([
+      ["teins-avisos-descartados:t1", "2026-09-25"],
+      ["teins-llave-descartada:t1", "2026-09-25"],
+      ["teins-llave-descartada:t2", "2026-09-25"],
+    ]);
+    vi.stubGlobal("localStorage", {
+      get length() {
+        return guardado.size;
+      },
+      key: (i: number) => [...guardado.keys()][i] ?? null,
+      removeItem: (llave: string) => void guardado.delete(llave),
+    });
+    const db = nuevaBase();
+    await repositorioDexie(db).crear(crearLevantamiento(formato, id(1), ahora), "t1");
+
+    await almacenDexie(db).borrarDatosDe("t1", ahora.toISOString());
+    expect([...guardado.keys()]).toEqual(["teins-llave-descartada:t2"]);
   });
 });

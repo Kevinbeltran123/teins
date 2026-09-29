@@ -4,7 +4,7 @@ import { admiteLlaves, ErrorApi, ErrorDeRed, esLlaveCancelada } from "@teins/pro
 import { Aviso, Boton, Eye, EyeOff, KeyRound, LoaderCircle, TramaDePuntos } from "@teins/ui";
 import { db } from "../datos/instancia";
 import { useConexionDelNavegador } from "../dispositivo/useConexion";
-import { iniciarSesion, iniciarSesionConLlave, RolNoPermitido } from "../sesion/sesion";
+import { completarCierrePendiente, iniciarSesion, iniciarSesionConLlave, RolNoPermitido } from "../sesion/sesion";
 
 function mensajeDeError(error: unknown, conLlave = false): string {
   if (error instanceof ErrorDeRed) return "Necesitas conexión para iniciar sesión.";
@@ -29,6 +29,10 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
   const [estado, setEstado] = useState<{ tipo: "listo" } | { tipo: "enviando" } | { tipo: "error"; mensaje: string }>({ tipo: "listo" });
   const [conLlave, setConLlave] = useState(false);
   useEffect(() => void admiteLlaves().then(setConLlave), []);
+  // Una sesión cerrada sin señal se cierra también en el servidor en cuanto vuelve.
+  useEffect(() => {
+    if (enLinea) void completarCierrePendiente();
+  }, [enLinea]);
 
   async function entrarConLlave() {
     setEstado({ tipo: "enviando" });

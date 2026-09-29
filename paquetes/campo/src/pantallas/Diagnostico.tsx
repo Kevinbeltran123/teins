@@ -6,29 +6,8 @@ import { contarPorSellar } from "../datos/registros";
 import { estadoAlmacenamiento, estaInstalada, type EstadoAlmacenamiento } from "../dispositivo/almacenamiento";
 import { estadoAvisos, type EstadoAvisos } from "../dispositivo/estadoAvisos";
 import { plataforma } from "../dispositivo/instalacion";
-import { huella } from "../fotos/procesar";
+import { verificarFotos, type Verificacion } from "../fotos/verificar";
 import { megabytes } from "../formato";
-
-interface Verificacion {
-  guardadas: number;
-  integras: number;
-  /** Fotos que un levantamiento menciona pero que no están en la base: pérdida real. */
-  faltantes: number;
-}
-
-async function verificarFotos(): Promise<Verificacion> {
-  const referenciadas = new Set(
-    (await repositorio.todos()).flatMap((l) =>
-      Object.values(l.respuestas).flatMap((s) => Object.values(s).flatMap((v) => (Array.isArray(v) ? v : []))),
-    ),
-  );
-  const archivos = await repositorio.todosLosArchivos();
-  let integras = 0;
-  for (const a of archivos) if ((await huella(a.datos)) === a.id) integras++;
-  const guardados = new Set(archivos.map((a) => a.id));
-  const faltantes = [...referenciadas].filter((id) => !guardados.has(id)).length;
-  return { guardadas: archivos.length, integras, faltantes };
-}
 
 /** Evidencia para la prueba de durabilidad del corte 0 (docs/proceso/plan-de-entrega.md). */
 const ESTADO_AVISOS: Record<EstadoAvisos, string> = {
@@ -39,7 +18,7 @@ const ESTADO_AVISOS: Record<EstadoAvisos, string> = {
   requiere_instalar: "Solo con la app instalada",
 };
 
-export function Diagnostico() {
+export function Diagnostico({ tecnicoId }: { tecnicoId: string }) {
   const [estado, setEstado] = useState<EstadoAlmacenamiento>();
   // Se relee al abrir el panel: los avisos pueden haberse activado desde el inicio después de dibujarlo.
   const [avisos, setAvisos] = useState(estadoAvisos);
@@ -53,7 +32,7 @@ export function Diagnostico() {
   async function verificar() {
     setVerificacion("verificando");
     try {
-      setVerificacion(await verificarFotos());
+      setVerificacion(await verificarFotos(repositorio, tecnicoId));
     } catch {
       setVerificacion("error");
     }

@@ -1,7 +1,7 @@
 import { archivosReferenciados, fotosReferenciadas, type Repeticiones, type Respuestas } from "@teins/dominio";
 import type { EnviarLevantamiento } from "@teins/protocolo";
 import type { BaseCampo } from "./base";
-import { abrirBytes, abrirJson, contexto, sellarBytes, sellarJson } from "./cofre";
+import { abrirBytes, abrirJson, contexto, enBorrado, sellarBytes, sellarJson } from "./cofre";
 import type {
   ArchivoGuardado,
   ArchivoLocal,
@@ -102,28 +102,35 @@ export async function sellarEstado(db: BaseCampo, e: EstadoServidor): Promise<Es
   return { ...resto, sellado: await sellarJson(db, e.tecnicoId, contexto.estado(e.id), comentarios ?? []) };
 }
 
-/** Un archivo es de quien tiene el levantamiento que lo usa; sin responsable conocido, no tiene dueño. */
-async function duenosDeArchivos(db: BaseCampo): Promise<Map<string, string>> {
+/**
+ * Un archivo es de quien tiene el levantamiento que lo usa; sin responsable conocido, o si el responsable
+ * tiene un borrado pendiente, no tiene dueño.
+ */
+async function duenosDeArchivos(db: BaseCampo, borrando: Set<string>): Promise<Map<string, string>> {
   const duenos = new Map<string, string>();
   for (const l of await db.levantamientos.toArray()) {
-    if (l.tecnicoId) for (const huella of referencias(l).archivos) if (!duenos.has(huella)) duenos.set(huella, l.tecnicoId);
+    if (l.tecnicoId && !borrando.has(l.tecnicoId)) for (const huella of referencias(l).archivos) if (!duenos.has(huella)) duenos.set(huella, l.tecnicoId);
   }
   return duenos;
 }
 
+/** Levantamientos a la vista que ya se pueden sellar: tienen responsable y no están por borrarse. */
+const levantamientosPorSellar = (db: BaseCampo, borrando: Set<string>) => db.levantamientos.filter((l) => !l.sellado && l.tecnicoId !== undefined && !borrando.has(l.tecnicoId));
+
 /** Registros a la vista que ya se pueden sellar (tienen responsable). Para el diagnóstico. */
 export async function contarPorSellar(db: BaseCampo): Promise<number> {
-  const duenos = await duenosDeArchivos(db);
+  const borrando = await enBorrado(db);
+  const duenos = await duenosDeArchivos(db, borrando);
   const sellados = new Set(await db.archivos.where("cifrado").equals(1).primaryKeys());
   const [levantamientos, archivos, envios, visitas, estados] = await Promise.all([
-    db.levantamientos.filter((l) => !l.sellado && l.tecnicoId !== undefined).count(),
+    levantamientosPorSellar(db, borrando).count(),
     db.archivos
       .toCollection()
       .primaryKeys()
       .then((huellas) => huellas.filter((h) => duenos.has(h) && !sellados.has(h)).length),
-    db.envios.filter((e) => !e.sellado).count(),
-    db.visitas.filter((v) => !v.sellado).count(),
-    db.estadosServidor.filter((e) => !e.sellado).count(),
+    db.envios.filter((e) => !e.sellado && !borrando.has(e.tecnicoId)).count(),
+    db.visitas.filter((v) => !v.sellado && !borrando.has(v.tecnicoId)).count(),
+    db.estadosServidor.filter((e) => !e.sellado && !borrando.has(e.tecnicoId)).count(),
   ]);
   return levantamientos + archivos + envios + visitas + estados;
 }
@@ -134,7 +141,9 @@ export async function contarPorSellar(db: BaseCampo): Promise<number> {
  * si cambió, lo sella quien lo cambió o la próxima pasada. Se puede interrumpir y repetir.
  */
 export async function sellarPendientes(db: BaseCampo): Promise<void> {
-  for (const g of await db.levantamientos.filter((l) => !l.sellado && l.tecnicoId !== undefined).toArray()) {
+  // Lo de un técnico con un borrado pendiente no se sella: `completarBorrados` lo borra.
+  const borrando = await enBorrado(db);
+  for (const g of await levantamientosPorSellar(db, borrando).toArray()) {
     const nuevo = await sellarLevantamiento(db, await abrirLevantamiento(db, g), (g.rev ?? 0) + 1);
     await db.transaction("rw", db.levantamientos, async () => {
       const actual = await db.levantamientos.get(g.id);
@@ -143,7 +152,7 @@ export async function sellarPendientes(db: BaseCampo): Promise<void> {
   }
 
   // Sin responsable conocido, el archivo espera.
-  const duenos = await duenosDeArchivos(db);
+  const duenos = await duenosDeArchivos(db, borrando);
   // De a uno: las fotos pesan, y en un teléfono no caben todas en memoria a la vez.
   const sellados = new Set(await db.archivos.where("cifrado").equals(1).primaryKeys());
   for (const huella of await db.archivos.toCollection().primaryKeys()) {
@@ -159,7 +168,7 @@ export async function sellarPendientes(db: BaseCampo): Promise<void> {
     });
   }
 
-  for (const e of await db.envios.filter((e) => !e.sellado).toArray()) {
+  for (const e of await db.envios.filter((e) => !e.sellado && !borrando.has(e.tecnicoId)).toArray()) {
     if (!e.comando) continue;
     const sellado = await sellarEnvio(db, await abrirEnvio(db, e));
     await db.transaction("rw", db.envios, async () => {
@@ -172,7 +181,7 @@ export async function sellarPendientes(db: BaseCampo): Promise<void> {
     });
   }
 
-  for (const v of await db.visitas.filter((v) => !v.sellado).toArray()) {
+  for (const v of await db.visitas.filter((v) => !v.sellado && !borrando.has(v.tecnicoId)).toArray()) {
     const sellada = await sellarVisita(db, await abrirVisita(db, v));
     await db.transaction("rw", db.visitas, async () => {
       const actual = await db.visitas.get([v.tecnicoId, v.id]);
@@ -180,7 +189,7 @@ export async function sellarPendientes(db: BaseCampo): Promise<void> {
     });
   }
 
-  for (const e of await db.estadosServidor.filter((e) => !e.sellado).toArray()) {
+  for (const e of await db.estadosServidor.filter((e) => !e.sellado && !borrando.has(e.tecnicoId)).toArray()) {
     const sellado = await sellarEstado(db, await abrirEstado(db, e));
     await db.transaction("rw", db.estadosServidor, async () => {
       const actual = await db.estadosServidor.get(e.id);

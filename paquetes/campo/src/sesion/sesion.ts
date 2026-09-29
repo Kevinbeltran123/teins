@@ -1,3 +1,4 @@
+import { ErrorDeRed } from "@teins/protocolo";
 import { db, repositorio, sellarEnSegundoPlano } from "../datos/instancia";
 import { quitarSuscripcion } from "../dispositivo/avisos";
 import { almacen, cliente, sincronizarEnSegundoPlano } from "../sincronizacion/instancia";
@@ -16,12 +17,14 @@ export class RolNoPermitido extends Error {
  * para trabajar sin conexión y reanuda lo que esperaba por una sesión.
  */
 export async function iniciarSesion(usuario: string, contrasena: string): Promise<void> {
+  await completarCierrePendiente();
   await cliente.iniciarSesion(usuario, contrasena);
   await prepararSesion();
 }
 
 /** Con la llave de acceso del teléfono (Face ID, huella o PIN; iteración 13): sin escribir nada. */
 export async function iniciarSesionConLlave(): Promise<void> {
+  await completarCierrePendiente();
   await cliente.iniciarSesionConLlave();
   await prepararSesion();
 }
@@ -43,10 +46,41 @@ async function prepararSesion(): Promise<void> {
   sincronizarEnSegundoPlano({ bajar: true });
 }
 
-/** Cierra la sesión. Nunca borra datos del teléfono: lo pendiente espera a que su responsable vuelva. */
+/**
+ * Cierra la sesión. Nunca borra datos del teléfono: lo pendiente espera a que su responsable vuelva. Sin
+ * señal, la sesión sigue abierta en el servidor hasta que `completarCierrePendiente` la cierra.
+ */
 export async function cerrarSesion(): Promise<void> {
   // Con la sesión todavía abierta: el servidor solo deja quitar la suscripción propia (ADR-0023).
   await quitarSuscripcion().catch(() => undefined);
-  await cliente.cerrarSesion().catch(() => undefined);
-  await db.ajustes.delete("usuario");
+  const sinSenal = await cliente.cerrarSesion().then(
+    () => false,
+    (error: unknown) => error instanceof ErrorDeRed,
+  );
+  await db.transaction("rw", db.ajustes, async () => {
+    await db.ajustes.delete("usuario");
+    if (sinSenal) await db.ajustes.put({ clave: "cierre_pendiente", valor: new Date().toISOString() });
+  });
+}
+
+let cierreEnCurso: Promise<void> | null = null;
+
+/**
+ * Cierra en el servidor la sesión que se cerró sin señal: al volver la señal y antes de iniciar otra. Se
+ * espera antes de iniciar sesión: si la respuesta del cierre llegara después, borraría la cookie nueva.
+ */
+export function completarCierrePendiente(): Promise<void> {
+  cierreEnCurso ??= (async () => {
+    if (!(await db.ajustes.get("cierre_pendiente"))) return;
+    try {
+      await cliente.cerrarSesion();
+    } catch (error) {
+      // Sin señal todavía: se intenta de nuevo al volver. Otra respuesta del servidor es que ya no hay sesión.
+      if (error instanceof ErrorDeRed) return;
+    }
+    await db.ajustes.delete("cierre_pendiente");
+  })().finally(() => {
+    cierreEnCurso = null;
+  });
+  return cierreEnCurso;
 }

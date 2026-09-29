@@ -1,6 +1,7 @@
 import type { Bajada, SaludDispositivo } from "@teins/protocolo";
 import type { BaseCampo } from "../datos/base";
 import type { ArchivoLocal, BajadaLocal, DispositivoLocal, EnvioLocal, EstadoServidorGuardado, VisitaGuardada } from "../datos/modelo";
+import { enBorrado } from "../datos/cofre";
 import { abrirArchivo, abrirEnvio, referencias, sellarArchivo, sellarEstado, sellarVisita } from "../datos/registros";
 import { estadoAlmacenamiento } from "../dispositivo/almacenamiento";
 
@@ -50,8 +51,19 @@ function secretoAleatorio(): string {
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
+/** Lo que el técnico descartó en este teléfono (`teins-…:<id>`: sugerencias de llave y de avisos). */
+function olvidarDescartesDe(tecnicoId: string) {
+  try {
+    const llaves = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i));
+    for (const llave of llaves) if (llave?.startsWith("teins-") && llave.endsWith(`:${tecnicoId}`)) localStorage.removeItem(llave);
+  } catch {
+    // Sin almacenamiento del navegador no hay nada que olvidar.
+  }
+}
+
 export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
   function borrarRegistrosDe(tecnicoId: string) {
+    olvidarDescartesDe(tecnicoId);
     const tablas = [db.levantamientos, db.archivos, db.envios, db.visitas, db.estadosServidor, db.bajadas];
     return db.transaction("rw", tablas, async () => {
       const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
@@ -192,10 +204,16 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
 
     async borrarDatosDe(tecnicoId, ahora) {
       // Un archivo con la clave del revocado que también usa otra persona pasa a la clave de esa persona
-      // antes de destruir la suya: el borrado de uno nunca le quita una foto al otro.
-      const deOtros = await db.levantamientos.filter((l) => l.tecnicoId !== undefined && l.tecnicoId !== tecnicoId).toArray();
-      const usadosPorOtros = new Map<string, string>();
-      for (const l of deOtros) for (const h of referencias(l).archivos) if (!usadosPorOtros.has(h)) usadosPorOtros.set(h, l.tecnicoId!);
+      // antes de destruir la suya: el borrado de uno nunca le quita una foto al otro. Si solo lo usa un
+      // borrador sin responsable, vuelve a quedar a la vista, como el borrador (ADR-0022, parte 5). Quien
+      // también tiene un borrado pendiente no cuenta: lo suyo se va a borrar y su clave ya no está.
+      const borrando = await enBorrado(db);
+      const deOtros = await db.levantamientos.filter((l) => l.tecnicoId !== tecnicoId && !(l.tecnicoId && borrando.has(l.tecnicoId))).toArray();
+      const usadosPorOtros = new Map<string, string | undefined>();
+      // Primero los que tienen responsable: cifrada con la clave de alguien es mejor que a la vista.
+      for (const l of deOtros.sort((a, b) => Number(a.tecnicoId === undefined) - Number(b.tecnicoId === undefined))) {
+        for (const h of referencias(l).archivos) if (!usadosPorOtros.has(h)) usadosPorOtros.set(h, l.tecnicoId);
+      }
       for (const [huella, otro] of usadosPorOtros) {
         const archivo = await db.archivos.get(huella);
         if (archivo?.tecnicoId !== tecnicoId) continue;

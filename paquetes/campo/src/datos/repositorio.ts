@@ -44,8 +44,6 @@ export interface RepositorioLevantamientos {
   quitarFoto(id: string, seccion: string, campo: string, huella: string, ahora: Date): Promise<void>;
   obtenerArchivos(ids: readonly string[]): Promise<ArchivoLocal[]>;
   todosLosArchivos(): Promise<ArchivoLocal[]>;
-  /** Todos los levantamientos del teléfono, de cualquier responsable: solo para el diagnóstico. */
-  todos(): Promise<LevantamientoLocal[]>;
   /**
    * Borrador → Enviado y comando al outbox, en una transacción: si la app se cierra en medio,
    * o queda todo o no queda nada (ADR-0018, nivel 3: cierre entre guardar y encolar).

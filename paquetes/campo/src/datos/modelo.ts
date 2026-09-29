@@ -193,4 +193,6 @@ export type Ajuste =
   /** Se borraron los datos de un usuario revocado: la pantalla de inicio de sesión lo explica. */
   | { clave: "acceso_cerrado"; valor: { nombre: string; en: string } }
   /** Usuarios cuyos datos ya se borraron y falta avisarle al servidor. */
-  | { clave: "borrados_por_confirmar"; valor: string[] };
+  | { clave: "borrados_por_confirmar"; valor: string[] }
+  /** Se cerró la sesión sin señal: falta cerrarla en el servidor (desde cuándo). */
+  | { clave: "cierre_pendiente"; valor: string };

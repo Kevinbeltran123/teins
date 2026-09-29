@@ -224,7 +224,6 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
       return Promise.all(archivos.map((a) => abrirArchivo(db, a)));
     },
     todosLosArchivos: async () => Promise.all((await db.archivos.toArray()).map((a) => abrirArchivo(db, a))),
-    todos: async () => Promise.all((await db.levantamientos.toArray()).map((g) => abrirLevantamiento(db, g))),
 
     enviar(id, formato, ahora) {
       return escribir<ResultadoEnvio>(id, async (levantamiento) => {

@@ -233,7 +233,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
                 <span className="text-ayuda text-texto-secundario">{sinConexion ? "Sin señal · lo capturado queda aquí" : "Conectado · todo al día"}</span>
               </span>
             </div>
-            <Diagnostico />
+            <Diagnostico tecnicoId={usuario.id} />
             <button
               type="button"
               onClick={() => {

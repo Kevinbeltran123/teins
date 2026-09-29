@@ -24,10 +24,18 @@ self.addEventListener("push", (evento) => {
   );
 });
 
-// Tocar el aviso abre la app (o la trae al frente si ya estaba abierta); al abrir, sincroniza sola.
+// Tocar el aviso abre la app (o la trae al frente si ya estaba abierta, sin recargarla ni cambiarle la
+// pantalla); al abrir, sincroniza sola. Solo abre direcciones de la propia app: un aviso con otra abriría
+// otro sitio con la marca de TEINS.
 self.addEventListener("notificationclick", (evento) => {
   evento.notification.close();
-  const destino = (evento.notification.data && evento.notification.data.navigate) || "/";
+  let destino = "/";
+  try {
+    const pedido = new URL((evento.notification.data && evento.notification.data.navigate) || "/", self.location.origin);
+    if (pedido.origin === self.location.origin) destino = pedido.href;
+  } catch {
+    // Una dirección que no se entiende abre el inicio.
+  }
   evento.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((ventanas) => {
       const abierta = ventanas.find((v) => new URL(v.url).origin === self.location.origin);
