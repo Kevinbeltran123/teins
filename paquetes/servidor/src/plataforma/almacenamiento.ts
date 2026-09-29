@@ -9,6 +9,16 @@ export interface SubidaFirmada {
   expiraEn: Date;
 }
 
+/** Objetos por contenido (ADR-0007): viven en `organizacion/huella`, nunca se sobrescriben ni se comparten entre organizaciones. */
+export const claveDeObjeto = (organizacionId: string, huella: string) => `${organizacionId}/${huella}`;
+
+/** Lee un objeto completo en memoria: solo para los que ya se sabe que son pequeños o se van a adjuntar. */
+export async function leerTodo(almacenamiento: Almacenamiento, clave: string): Promise<Buffer> {
+  const partes: Buffer[] = [];
+  for await (const trozo of await almacenamiento.leer(clave)) partes.push(trozo as Buffer);
+  return Buffer.concat(partes);
+}
+
 /** Puerto del almacenamiento de objetos (ADR-0007): cualquier proveedor compatible con S3. */
 export interface Almacenamiento {
   firmarSubida(clave: string, datos: { bytes: number; tipo: string; sha256Hex: string }): Promise<SubidaFirmada>;

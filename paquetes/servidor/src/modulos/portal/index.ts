@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Config } from "../../config";
-import type { Almacenamiento } from "../../plataforma/almacenamiento";
+import { claveDeObjeto, type Almacenamiento } from "../../plataforma/almacenamiento";
 import { enClienteDelPortal, enOrganizacion, type BaseDeDatos } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
@@ -174,7 +174,7 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
           // Otro cliente o un informe sin publicar dan lo mismo: no existe (QA-4).
           if (!pdf) throw problema("no_encontrado");
           // Se descarga, no se abre: el portal no pierde la pantalla.
-          const firma = await almacenamiento.firmarDescarga(`${sesion.organizacionId}/${pdf.huella}`, { descargarComo: pdf.nombre });
+          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(sesion.organizacionId, pdf.huella), { descargarComo: pdf.nombre });
           return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
         },
       });

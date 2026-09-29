@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { calcularTotales, lineasDesdeCantidades, numeroDeCotizacion, validarCotizacion, type BorradorCotizacion, type LineaDeCotizacion } from "@teins/dominio";
 import type { Config } from "../../config";
-import type { Almacenamiento } from "../../plataforma/almacenamiento";
+import { claveDeObjeto, type Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
@@ -39,8 +39,6 @@ export interface Cotizaciones {
 }
 
 const SIN_NOMBRE = "[Usuario no disponible]";
-/** Objetos por contenido, como los PDF del informe (ADR-0007). */
-const clave = (organizacionId: string, huella: string) => `${organizacionId}/${huella}`;
 /** Con qué nombre se descarga: se encuentra después por el número y el cliente. */
 const nombreDelPdf = (c: Pick<ContenidoCotizacion, "numero" | "version" | "visita">) =>
   `Cotización ${c.numero} - ${c.visita.cliente} - versión ${c.version}.pdf`.replace(/[/\\:*?"<>|]/g, "-");
@@ -69,7 +67,7 @@ export function crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }: 
           chromiumRuta: config.CHROMIUM_RUTA,
         });
         const huella = createHash("sha256").update(pdf).digest("hex");
-        await almacenamiento.guardar(clave(organizacionId, huella), pdf, "application/pdf");
+        await almacenamiento.guardar(claveDeObjeto(organizacionId, huella), pdf, "application/pdf");
         await enOrganizacion(bd, organizacionId, async (tx) => {
           const listo = await tx
             .update(versionesCotizacion)
@@ -77,7 +75,7 @@ export function crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }: 
             .where(and(eq(versionesCotizacion.id, versionId), sql`${versionesCotizacion.pdfEstado} <> 'listo'`))
             .returning({ id: versionesCotizacion.id });
           // Los envíos al cliente salen ahora, con el PDF adjunto (ADR-0028, ADR-0029).
-          if (listo.length > 0) await enviarAlQuedarListo(tx, { organizacionId, versionId, pdfRuta: clave(organizacionId, huella) });
+          if (listo.length > 0) await enviarAlQuedarListo(tx, { organizacionId, versionId, pdfRuta: claveDeObjeto(organizacionId, huella) });
         });
       } catch (error) {
         const mensaje = (error instanceof Error ? error.message : String(error)).slice(0, 500);
@@ -375,7 +373,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
           );
           if (!version) throw problema("no_encontrado");
           if (version.pdfEstado !== "listo" || !version.pdfHuella) throw problema("estado_invalido", "El PDF de esta versión todavía no está listo");
-          const firma = await almacenamiento.firmarDescarga(clave(actor.organizacionId, version.pdfHuella), { descargarComo: nombreDelPdf(version.contenido) });
+          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(actor.organizacionId, version.pdfHuella), { descargarComo: nombreDelPdf(version.contenido) });
           return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
         },
       });
@@ -400,7 +398,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               mensaje: mensajeDe(version.contenido, organizacion),
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
-              pdfRuta: version.pdfEstado === "listo" && version.pdfHuella ? clave(actor.organizacionId, version.pdfHuella) : undefined,
+              pdfRuta: version.pdfEstado === "listo" && version.pdfHuella ? claveDeObjeto(actor.organizacionId, version.pdfHuella) : undefined,
             });
             await registrar(tx, [
               { organizacionId: actor.organizacionId, agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: "cotizacion_enviada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, destinos: cuerpo.destinos } },

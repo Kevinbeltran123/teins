@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Respuesta } from "@teins/protocolo";
 import type { Config } from "../../config";
-import type { Almacenamiento } from "../../plataforma/almacenamiento";
+import { leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { encolar, type Trabajos } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
@@ -110,12 +110,6 @@ export async function versionesConEnvioSinEntregar(tx: TxOrganizacion, versionId
     .as("ultimos");
   const filas = await tx.select({ versionId: ultimos.versionId }).from(ultimos).where(eq(ultimos.estado, "fallido"));
   return new Set(filas.map((f) => f.versionId));
-}
-
-async function leerTodo(almacenamiento: Almacenamiento, ruta: string): Promise<Buffer> {
-  const partes: Buffer[] = [];
-  for await (const trozo of await almacenamiento.leer(ruta)) partes.push(trozo as Buffer);
-  return Buffer.concat(partes);
 }
 
 async function marcarEnviado(tx: TxOrganizacion, envioId: string, proveedorId: string | null): Promise<void> {

@@ -1,13 +1,16 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { llaveDeEnvio, operaciones, TIPO_PROBLEMA } from "@teins/protocolo";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
+import { crearArchivos } from "../src/modulos/archivos";
+import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { cabecerasSync, jpegDePrueba, ORIGEN, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
+const almacenamiento = almacenamientoS3(s.config);
 
 async function subir(cookie: string, foto = jpegDePrueba(), opciones: { contenido?: Buffer } = {}) {
   const autorizacion = await app.inject({
@@ -180,6 +183,29 @@ describe("archivos (ADR-0007)", () => {
     ]);
     expect(rows[0]).toEqual({ estado: "rechazado", motivo_rechazo: "el contenido no es image/jpeg" });
     expect((await app.inject({ method: "GET", url: `/api/archivos/${huella}/url`, headers: { cookie: oficina.cookie } })).statusCode).toBe(404);
+  });
+
+  it("una clave ocupada sin fila de archivo (un PDF generado) no se puede autorizar ni, por tanto, borrar", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const generado = Buffer.from(`%PDF-1.7 generado ${randomUUID()}`);
+    const huella = createHash("sha256").update(generado).digest("hex");
+    await almacenamiento.guardar(`${organizacionId}/${huella}`, generado, "application/pdf");
+    const r = await app.inject({ method: "POST", url: "/api/archivos/subidas", headers: { cookie: tecnico.cookie, ...cabecerasSync }, payload: { huella, bytes: 1, tipo: "image/jpeg" } });
+    expect(r.json()).toMatchObject({ codigo: "estado_invalido" });
+    expect(await almacenamiento.existe(`${organizacionId}/${huella}`)).toBe(true);
+  });
+
+  it("si la verificación agota sus intentos, el archivo queda rechazado y se puede volver a subir", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const foto = jpegDePrueba();
+    expect((await subir(tecnico.cookie, foto)).statusCode).toBe(202);
+    await almacenamiento.eliminar(`${organizacionId}/${foto.huella}`);
+    const archivos = crearArchivos({ bd: s.conexionApp.bd, almacenamiento, config: s.config });
+    await expect(archivos.verificar({ organizacionId, huella: foto.huella }, { ultimoIntento: true })).resolves.toBeUndefined();
+
+    const { rows } = await s.propietario.pool.query("select estado from archivos.archivos where organizacion_id = $1 and huella = $2", [organizacionId, foto.huella]);
+    expect(rows[0].estado).toBe("rechazado");
+    expect((await subir(tecnico.cookie, foto)).statusCode).toBe(202);
   });
 
   it("no autoriza archivos que superan el límite", async () => {

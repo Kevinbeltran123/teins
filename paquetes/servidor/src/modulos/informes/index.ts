@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type { Respuesta } from "@teins/protocolo";
 import { bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
-import type { Almacenamiento } from "../../plataforma/almacenamiento";
+import { claveDeObjeto, leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } from "../../plataforma/base-de-datos";
 import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
@@ -88,16 +88,7 @@ export interface Informes {
   registrarRutas(app: FastifyInstance): void;
 }
 
-/** Objetos por contenido, como las fotos (ADR-0007). */
-const clave = (organizacionId: string, huella: string) => `${organizacionId}/${huella}`;
 const SIN_NOMBRE = "[Usuario no disponible]";
-
-
-async function leerTodo(almacenamiento: Almacenamiento, ruta: string): Promise<Buffer> {
-  const partes: Buffer[] = [];
-  for await (const trozo of await almacenamiento.leer(ruta)) partes.push(trozo as Buffer);
-  return Buffer.concat(partes);
-}
 
 interface FilaVersion {
   numero: number;
@@ -144,7 +135,7 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         // Fotos incrustadas: el documento no depende de URL que vencen.
         const huellas = [...new Set(c.levantamientos.flatMap((l) => fotosReferenciadas(l.respuestas)))];
         const fotos = new Map<string, string>();
-        for (const h of huellas) fotos.set(h, `data:image/jpeg;base64,${(await leerTodo(almacenamiento, clave(organizacionId, h))).toString("base64")}`);
+        for (const h of huellas) fotos.set(h, `data:image/jpeg;base64,${(await leerTodo(almacenamiento, claveDeObjeto(organizacionId, h))).toString("base64")}`);
         // Bocetos (ADR-0019): cada hoja del documento vectorial se convierte a SVG (ADR-0026).
         // Las firmas usan el mismo documento, sin cuadrícula y recortadas a sus trazos (ADR-0024).
         const valores = c.levantamientos.flatMap((l) => Object.values(l.respuestas).flatMap((seccion) => Object.values(seccion)));
@@ -152,12 +143,12 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         const bocetos = new Map<string, HojaDelInforme[]>();
         const firmas = new Map<string, string>();
         for (const h of [...new Set(c.levantamientos.flatMap((l) => bocetosReferenciados(l.respuestas)))]) {
-          const documento = leerBoceto((await leerTodo(almacenamiento, clave(organizacionId, h))).toString("utf8"));
+          const documento = leerBoceto((await leerTodo(almacenamiento, claveDeObjeto(organizacionId, h))).toString("utf8"));
           if (documento && deFirmas.has(h)) firmas.set(h, firmaASvg(documento));
           else if (documento) bocetos.set(h, hojasDe(documento).map((hoja) => ({ nombre: hoja.nombre, vertical: hoja.alto > hoja.ancho, svg: hojaASvg(hoja) })));
         }
         const planos = [];
-        for (const p of c.planos) planos.push(await leerTodo(almacenamiento, clave(organizacionId, p.huella)));
+        for (const p of c.planos) planos.push(await leerTodo(almacenamiento, claveDeObjeto(organizacionId, p.huella)));
 
         const pdf = await imprimirPdf({
           html: plantillaInforme(c, { fuente: fuenteIncrustada(), fotos, bocetos, firmas }),
@@ -167,7 +158,7 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
           chromiumRuta: config.CHROMIUM_RUTA,
         });
         const huella = createHash("sha256").update(pdf).digest("hex");
-        await almacenamiento.guardar(clave(organizacionId, huella), pdf, "application/pdf");
+        await almacenamiento.guardar(claveDeObjeto(organizacionId, huella), pdf, "application/pdf");
         await enOrganizacion(bd, organizacionId, async (tx) => {
           const listo = await tx
             .update(versionesPublicadas)
@@ -175,7 +166,7 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
             .where(and(eq(versionesPublicadas.id, versionId), sql`${versionesPublicadas.pdfEstado} <> 'listo'`))
             .returning({ id: versionesPublicadas.id });
           // Los envíos al cliente salen ahora, no al publicar: antes no hay PDF que adjuntar (ADR-0028, parte 3).
-          if (listo.length > 0) await enviarAlQuedarListo(tx, { organizacionId, versionId, pdfRuta: clave(organizacionId, huella) });
+          if (listo.length > 0) await enviarAlQuedarListo(tx, { organizacionId, versionId, pdfRuta: claveDeObjeto(organizacionId, huella) });
         });
       } catch (error) {
         const mensaje = (error instanceof Error ? error.message : String(error)).slice(0, 500);
@@ -494,7 +485,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               mensaje: mensajeDe(fila.contenido),
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
-              pdfRuta: fila.pdfEstado === "listo" && fila.pdfHuella ? clave(actor.organizacionId, fila.pdfHuella) : undefined,
+              pdfRuta: fila.pdfEstado === "listo" && fila.pdfHuella ? claveDeObjeto(actor.organizacionId, fila.pdfHuella) : undefined,
             });
             await registrar(tx, [
               { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "informe_enviado", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, destinos: cuerpo.destinos } },
@@ -519,7 +510,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
           if (!version) throw problema("no_encontrado");
           if (version.estado !== "listo" || !version.huella) throw problema("estado_invalido", "El PDF de esta versión todavía no está listo");
           // Se descarga, no se abre: la aplicación de oficina no pierde la pantalla.
-          const firma = await almacenamiento.firmarDescarga(clave(actor.organizacionId, version.huella), { descargarComo: nombreDelPdf(version.visita, numero) });
+          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(actor.organizacionId, version.huella), { descargarComo: nombreDelPdf(version.visita, numero) });
           return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
         },
       });
