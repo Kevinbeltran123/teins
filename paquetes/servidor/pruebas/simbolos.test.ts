@@ -54,6 +54,8 @@ describe("símbolos de los bocetos (iteración 19, ADR-0027)", () => {
     const org = await s.nuevaOrganizacionConUsuarios();
     await expect(publicar(org.organizacionId, [tablero, { ...ups, trazado: 'M0 0"/><script>' }])).rejects.toMatchObject({ codigo: "entrada_invalida" });
     await expect(publicar(org.organizacionId, [tablero, { ...ups, nombre: "tablero" }])).rejects.toMatchObject({ codigo: "entrada_invalida" });
+    // Un id que no es UUID según el protocolo rompería la bajada de todos los teléfonos.
+    await expect(publicar(org.organizacionId, [tablero, { ...ups, id: "12345678-1234-1234-1234-123456789012" }])).rejects.toMatchObject({ codigo: "entrada_invalida" });
     expect(simbolosDe((await bajar(org.tecnico.cookie, 10)).json())).toEqual([]);
   });
 });
