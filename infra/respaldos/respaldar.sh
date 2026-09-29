@@ -28,6 +28,14 @@ export RCLONE_CONFIG_CIFRADO_DIRECTORY_NAME_ENCRYPTION=false
 RCLONE_CONFIG_CIFRADO_PASSWORD=$(printf '%s' "$RESPALDOS_CLAVE" | rclone obscure -)
 export RCLONE_CONFIG_CIFRADO_PASSWORD
 
+# Con otra clave, lo nuevo quedaría ilegible junto a lo viejo sin que nada falle hasta el simulacro: antes de
+# escribir, la clave tiene que abrir la huella del último volcado que ya está en el destino.
+ULTIMA=$(rclone lsf "cifrado:base" --include '*.sha256' --s3-no-check-bucket 2> /dev/null | sort | tail -1)
+if [ -n "$ULTIMA" ] && ! rclone cat "cifrado:base/${ULTIMA}" --s3-no-check-bucket > /dev/null 2>&1; then
+  echo "respaldo ${MARCA}: RESPALDOS_CLAVE no abre los respaldos que ya hay en el destino; no se escribe nada" >&2
+  exit 1
+fi
+
 # Una sola vez: lo que se copió antes sin cifrar (base/ y archivos/ en la raíz del destino) pasa a la copia
 # cifrada y sale de la raíz. Desde entonces no hay nada que mover.
 for anterior in base archivos; do

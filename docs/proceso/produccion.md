@@ -12,7 +12,7 @@ Cómo se monta, se respalda y se recupera un entorno de TEINS en Railway (ADR-00
 | `infra/railway/montar.sh` | Repositorio | Lo que el archivo no declara: secretos (generados, nunca mostrados), roles de la base, dominios, despliegue, copias y la primera persona administradora |
 | `infra/railway/verificar-exposicion.sh` | Repositorio | Comprueba que solo `campo`, `oficina` y `portal` se alcanzan desde internet (sin proxy TCP en la base ni dominio en el worker o los respaldos). Lo corre `montar.sh`; se corre solo después de tocar la red en el panel |
 | `infra/respaldos/` | Servicio `respaldos` de cada entorno | Una vez al día (07:00 UTC, 02:00 en Colombia): volcado de la base y copia de los archivos al proyecto `teins-respaldos`, cifrados con `RESPALDOS_CLAVE` |
-| `infra/respaldos/clave.sh` | Repositorio | Genera `RESPALDOS_CLAVE` si el entorno no la tiene, con su copia en `privado/<proyecto>-respaldos.txt`. Lo corre `montar.sh`; en un entorno que ya existe se corre solo y después se despliega `respaldos` |
+| `infra/respaldos/clave.sh` | Repositorio | Genera `RESPALDOS_CLAVE` si el entorno no la tiene, con su copia en `privado/<proyecto>-respaldos.txt`; si esa copia ya existe (proyecto montado de nuevo), pone la misma clave y nunca la sobrescribe. Lo corre `montar.sh`; en un entorno que ya existe se corre solo y después se despliega `respaldos` |
 | `infra/respaldos/simulacro.sh` | Computador de quien lo corre | Restaura el último volcado en un PostgreSQL desechable y verifica cadenas y archivos |
 | `pnpm --filter @teins/servidor verificar-integridad` | Servidor | Verifica todas las cadenas de la auditoría de una base |
 
@@ -82,7 +82,7 @@ Con el plan Hobby de Kevin, Railway rechaza programar las copias del volumen ("Y
 
 El archivo de la recuperación a un punto en el tiempo es un almacenamiento, `Postgres-PITR`, que crea Railway al activarla. Está declarado en `.railway/railway.ts` para que ningún `apply` lo borre; solo el primer `apply` de un proyecto nuevo lo omite (`TEINS_SIN_PITR=1`), porque todavía no existe.
 
-**Cifrado del nivel 2.** Todo lo que sale a `teins-respaldos` va cifrado con `rclone crypt` en `cifrado/` (volcados y archivos; los nombres quedan legibles, son fechas y huellas). Quien lea ese almacenamiento sin `RESPALDOS_CLAVE` no ve datos de nadie. La clave vive en el servicio `respaldos` y en `privado/<proyecto>-respaldos.txt`; si se pierde el proyecto, esa copia es la única que abre los respaldos, así que se guarda también fuera del computador (un gestor de contraseñas). Sin la clave, el respaldo no corre: nunca sale nada sin cifrar. La clave no se cambia: los archivos copiados quedaron cifrados con ella.
+**Cifrado del nivel 2.** Todo lo que sale a `teins-respaldos` va cifrado con `rclone crypt` en `cifrado/` (volcados y archivos; los nombres quedan legibles, son fechas y huellas). Quien lea ese almacenamiento sin `RESPALDOS_CLAVE` no ve datos de nadie. La clave vive en el servicio `respaldos` y en `privado/<proyecto>-respaldos.txt`; si se pierde el proyecto, esa copia es la única que abre los respaldos, así que se guarda también fuera del computador (un gestor de contraseñas). Sin la clave, el respaldo no corre: nunca sale nada sin cifrar. Con otra clave tampoco: antes de escribir, comprueba que abre la huella del último volcado del destino, así nunca quedan respaldos mezclados que solo el simulacro descubriría. La clave no se cambia: los archivos copiados quedaron cifrados con ella.
 
 Pendiente para cumplir del todo el nivel 2:
 
@@ -102,7 +102,7 @@ railway logs --service respaldos   # "respaldo …: listo" al terminar
 
 - **Una migración o un error borró datos hace poco:** en el servicio Postgres, pestaña Backups, "Restore to this moment" (o `railway postgres pitr restore --service Postgres --at <fecha ISO>`). Crea un Postgres nuevo al lado; se verifica con `verificar-integridad` y se cambian las conexiones.
 - **Se necesita el estado de ayer entero:** copia del volumen, desde la misma pestaña.
-- **Se perdió el proyecto:** se monta uno nuevo con `montar.sh`, se restaura el último volcado de `teins-respaldos` con `pg_restore` y se copian los archivos de vuelta (`rclone copy` desde el destino cifrado), con el mismo procedimiento que el simulacro. La clave sale de `privado/<proyecto>-respaldos.txt`.
+- **Se perdió el proyecto:** se monta uno nuevo con `montar.sh`, se restaura el último volcado de `teins-respaldos` con `pg_restore` y se copian los archivos de vuelta (`rclone copy` desde el destino cifrado), con el mismo procedimiento que el simulacro. Antes de `montar.sh`, `privado/<proyecto>-respaldos.txt` tiene que estar en su lugar (si hace falta, desde la copia fuera del computador): `montar.sh` pone esa misma clave en el proyecto nuevo, así los respaldos viejos y los nuevos se leen con ella.
 
 ## Simulacro
 
@@ -126,6 +126,7 @@ Si algo falla, termina con error. Cada simulacro se anota en la tabla de abajo.
 | 2026-09-25 | Producción (Railway) | 0,0 h | 1 s | 2 íntegras, 0 rotas | 0 referenciados, 0 faltantes | Correcto; base recién montada (organización y primera persona administradora) |
 | 2026-09-25 | Pruebas (Railway) | 0,0 h | 0 s | 75 íntegras (184 eslabones), 0 rotas | 23 referenciados, 0 faltantes | Correcto, contra la copia real en `teins-respaldos` |
 | 2026-09-25 | Local (Docker) | 0,0 h | 0 s | 435 íntegras, 0 rotas | 144 referenciados, 4 faltantes | Correcto: los 4 faltantes son las fotos que S3Mock perdió el 2026-09-24, antes de guardar en su volumen; tampoco están en el origen. El simulacro los detectó |
+| 2026-09-29 | Pruebas (Railway) | 0,0 h | 1 s | 177 íntegras (302 eslabones), 0 rotas | 27 referenciados, 0 faltantes | Correcto, primera copia cifrada (revisión 4d): la copia vieja pasó a `cifrado/` y en la raíz del destino no quedó nada en claro |
 
 ## Transferir a TEINS
 

@@ -2,7 +2,8 @@
 # Genera la clave que cifra los respaldos (RESPALDOS_CLAVE, infra/respaldos/respaldar.sh) del proyecto enlazado,
 # si todavía no tiene. La guarda primero en privado/<proyecto>-respaldos.txt (git lo ignora) y después en el
 # servicio `respaldos`, sin mostrarla. Si se pierde el proyecto, esa copia es la única que abre los respaldos:
-# guárdela también fuera de este computador. La corre montar.sh; en un entorno que ya existe, se corre sola:
+# guárdela también fuera de este computador. Si el archivo ya existe (proyecto montado de nuevo), pone esa misma
+# clave en vez de generar otra. La corre montar.sh; en un entorno que ya existe, se corre sola:
 #
 #   infra/respaldos/clave.sh teins-produccion
 set -euo pipefail
@@ -19,10 +20,23 @@ if [ "$TIENE" = si ]; then
   exit 0
 fi
 
+ARCHIVO="privado/${PROYECTO}-respaldos.txt"
+if [ -f "$ARCHIVO" ]; then
+  # Proyecto montado de nuevo sobre respaldos que ya existen, o variable borrada: vuelve la misma clave. Una nueva
+  # dejaría ilegible todo lo que ya está en el destino.
+  CLAVE=$(sed -n 's/^Clave de cifrado de los respaldos (RESPALDOS_CLAVE): //p' "$ARCHIVO")
+  [ -n "$CLAVE" ] || { echo "  $ARCHIVO no tiene la clave: revíselo antes de seguir" >&2; exit 1; }
+  printf '%s' "$CLAVE" | railway variable set RESPALDOS_CLAVE --stdin --service respaldos --skip-deploys > /dev/null
+  unset CLAVE
+  echo "  respaldos.RESPALDOS_CLAVE restaurada desde $ARCHIVO"
+  exit 0
+fi
+
 mkdir -p privado
 CLAVE=$(openssl rand -base64 32 | tr -d '\n')
-( umask 077; printf 'Proyecto %s\nClave de cifrado de los respaldos (RESPALDOS_CLAVE): %s\nSin ella no se puede leer ningún respaldo de teins-respaldos. Guarde una copia fuera de este computador.\n' \
-  "$PROYECTO" "$CLAVE" > "privado/${PROYECTO}-respaldos.txt" )
+# noclobber: una copia de la clave nunca se sobrescribe.
+( umask 077; set -o noclobber; printf 'Proyecto %s\nClave de cifrado de los respaldos (RESPALDOS_CLAVE): %s\nSin ella no se puede leer ningún respaldo de teins-respaldos. Guarde una copia fuera de este computador.\n' \
+  "$PROYECTO" "$CLAVE" > "$ARCHIVO" )
 printf '%s' "$CLAVE" | railway variable set RESPALDOS_CLAVE --stdin --service respaldos --skip-deploys > /dev/null
 unset CLAVE
-echo "  respaldos.RESPALDOS_CLAVE fijada; copia en privado/${PROYECTO}-respaldos.txt"
+echo "  respaldos.RESPALDOS_CLAVE fijada; copia en $ARCHIVO"
