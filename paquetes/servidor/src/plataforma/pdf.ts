@@ -12,7 +12,7 @@ const requerir = createRequire(import.meta.url);
 let fuente: string | undefined;
 /** La misma familia de la interfaz, incrustada: el PDF no depende de las fuentes del servidor (ADR-0013). */
 export const fuenteIncrustada = () =>
-  (fuente ??= readFileSync(requerir.resolve("@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2")).toString("base64"));
+  (fuente ??= readFileSync(requerir.resolve("@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")).toString("base64"));
 
 export interface Impresion {
   html: string;

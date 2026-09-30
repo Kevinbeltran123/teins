@@ -8,6 +8,7 @@ import { clientesYSitios } from "../src/modulos/clientes";
 import { crearGeneradorPdf } from "../src/modulos/informes";
 import { crearVisitas } from "../src/modulos/visitas";
 import { escapar } from "../src/plataforma/html";
+import { LOGO_TEINS } from "../src/plataforma/logo";
 import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
 import { cabecerasSync, jpegDePrueba, servidorDePrueba } from "./ayudas";
 
@@ -292,7 +293,8 @@ describe("plantilla del informe", () => {
     );
     expect(html).toContain("Cliente &lt;b&gt;");
     expect(html).toContain("<p>Segundo &lt;párrafo&gt;.</p>");
-    expect(html).toContain("[LOGO]");
+    // El logo oficial ya existe (DESIGN.md): va incrustado, no como marcador.
+    expect(html).toContain(`<img class="logo" src="${LOGO_TEINS}"`);
     expect(html).toContain("[FOTO]");
     expect(html).toContain("Sin dato");
     expect(html).toContain("Versión 3");

@@ -1,5 +1,6 @@
 import { aDecimalColombiano, bloques, describirValor, esBoceto, esCantidades, esFirma, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
 import { escapar } from "../../../plataforma/html";
+import { LOGO_TEINS } from "../../../plataforma/logo";
 
 /**
  * Plantilla del informe (ADR-0013): HTML y CSS con la dirección de DESIGN.md. Se arma solo desde la
@@ -35,7 +36,7 @@ export interface HojaDelInforme {
 }
 
 export interface RecursosPlantilla {
-  /** Fuente Atkinson Hyperlegible Next en woff2, en base64. */
+  /** Fuente Geist en woff2, en base64. */
   fuente: string;
   /** Foto por huella, como data URI. Una que falte se muestra como marcador, nunca se inventa. */
   fotos: ReadonlyMap<string, string>;
@@ -138,32 +139,32 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
 <meta charset="utf-8">
 <title>Informe técnico · ${escapar(c.visita.cliente)} · versión ${c.numero}</title>
 <style>
-@font-face { font-family: "Atkinson"; src: url(data:font/woff2;base64,${fuente}) format("woff2"); font-weight: 200 800; }
+@font-face { font-family: "Geist"; src: url(data:font/woff2;base64,${fuente}) format("woff2"); font-weight: 100 900; }
 @page { size: Letter; margin: 22mm 18mm 20mm; }
 * { box-sizing: border-box; }
-body { margin: 0; font-family: "Atkinson", sans-serif; font-size: 10.5pt; line-height: 1.45; color: ${MARCA.texto}; }
+body { margin: 0; font-family: "Geist", sans-serif; font-size: 10.5pt; line-height: 1.45; color: ${MARCA.texto}; }
 h1, h2, h3, h4 { margin: 0; line-height: 1.2; }
-h2 { font-size: 17pt; font-weight: 800; color: ${MARCA.superficie}; margin-bottom: 6pt; }
-h3 { font-size: 12.5pt; font-weight: 800; margin: 14pt 0 6pt; }
-h4 { font-size: 10.5pt; font-weight: 700; margin: 10pt 0 6pt; }
+h2 { font-size: 17pt; font-weight: 600; color: ${MARCA.superficie}; margin-bottom: 6pt; }
+h3 { font-size: 12.5pt; font-weight: 600; margin: 14pt 0 6pt; }
+h4 { font-size: 10.5pt; font-weight: 600; margin: 10pt 0 6pt; }
 p { margin: 0 0 8pt; }
 .portada { background: ${MARCA.superficie}; color: #FFFFFF; border-radius: 8px; padding: 26pt; min-height: 200mm; display: flex; flex-direction: column; gap: 14pt; break-after: page; }
-.portada .logo { border: 1.5px dashed rgba(255,255,255,.6); border-radius: 6px; width: 120pt; padding: 14pt; text-align: center; font-weight: 700; }
-.portada h1 { font-size: 30pt; font-weight: 800; letter-spacing: -0.5pt; margin-top: auto; }
-.portada .cliente { font-size: 18pt; font-weight: 700; }
+.portada .logo { display: block; height: 40pt; width: auto; align-self: flex-start; filter: brightness(0) invert(1); }
+.portada h1 { font-size: 30pt; font-weight: 600; letter-spacing: -0.5pt; margin-top: auto; }
+.portada .cliente { font-size: 18pt; font-weight: 600; }
 .portada dl { display: grid; grid-template-columns: auto 1fr; gap: 4pt 16pt; margin: 0; }
 .portada dt { opacity: .8; }
-.portada dd { margin: 0; font-weight: 700; }
-.marquilla { display: inline-block; background: ${MARCA.acento}; color: ${MARCA.texto}; font-weight: 800; padding: 4pt 16pt 4pt 10pt; clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%); align-self: flex-start; }
+.portada dd { margin: 0; font-weight: 600; }
+.marquilla { display: inline-block; background: ${MARCA.acento}; color: ${MARCA.texto}; font-weight: 600; padding: 4pt 16pt 4pt 10pt; clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%); align-self: flex-start; }
 .bloque { margin-bottom: 18pt; }
 .capitulo { break-before: page; }
-.numero { color: ${MARCA.secundario}; font-weight: 700; margin-bottom: 2pt; }
+.numero { color: ${MARCA.secundario}; font-weight: 600; margin-bottom: 2pt; }
 .meta { color: ${MARCA.secundario}; }
 .seccion { break-inside: auto; }
 table.datos { width: 100%; border-collapse: collapse; }
 table.datos th, table.datos td { text-align: left; vertical-align: top; padding: 5pt 6pt; border-bottom: 1px solid ${MARCA.division}; }
 table.datos th { width: 38%; font-weight: 400; color: ${MARCA.secundario}; }
-table.datos td { font-weight: 700; }
+table.datos td { font-weight: 600; }
 table.datos tr { break-inside: avoid; }
 table.cantidades { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
 table.cantidades th { text-align: left; font-weight: 400; color: ${MARCA.secundario}; border-bottom: 1px solid ${MARCA.division}; padding: 4pt 6pt 4pt 0; }
@@ -192,7 +193,7 @@ figcaption { font-size: 9pt; color: ${MARCA.secundario}; margin-top: 3pt; }
 </head>
 <body>
 <section class="portada">
-  <div class="logo">[LOGO]</div>
+  <img class="logo" src="${LOGO_TEINS}" alt="TEINS">
   <h1>Informe técnico</h1>
   <p class="cliente">${escapar(c.visita.cliente)}</p>
   <dl>

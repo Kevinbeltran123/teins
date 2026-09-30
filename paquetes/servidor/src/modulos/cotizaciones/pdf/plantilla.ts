@@ -1,5 +1,6 @@
 import { TARIFA_IVA } from "@teins/dominio";
 import { escapar } from "../../../plataforma/html";
+import { LOGO_TEINS } from "../../../plataforma/logo";
 import type { ContenidoCotizacion } from "../esquema";
 
 /**
@@ -47,34 +48,34 @@ export function plantillaCotizacion(c: ContenidoCotizacion, { fuente }: { fuente
 <meta charset="utf-8">
 <title>Cotización ${escapar(c.numero)} · versión ${c.version}</title>
 <style>
-@font-face { font-family: "Atkinson"; src: url(data:font/woff2;base64,${fuente}) format("woff2"); font-weight: 200 800; }
+@font-face { font-family: "Geist"; src: url(data:font/woff2;base64,${fuente}) format("woff2"); font-weight: 100 900; }
 @page { size: Letter; margin: 20mm 18mm 20mm; }
 * { box-sizing: border-box; }
-body { margin: 0; font-family: "Atkinson", sans-serif; font-size: 9.5pt; line-height: 1.45; color: ${MARCA.texto}; font-variant-numeric: tabular-nums; }
+body { margin: 0; font-family: "Geist", sans-serif; font-size: 9.5pt; line-height: 1.45; color: ${MARCA.texto}; font-variant-numeric: tabular-nums; }
 .encabezado { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5pt solid ${MARCA.superficie}; padding-bottom: 10pt; }
-.marca { font-size: 20pt; font-weight: 800; color: ${MARCA.superficie}; letter-spacing: 0.5pt; }
+.logo { display: block; height: 26pt; width: auto; margin-bottom: 4pt; }
 .secundario { color: ${MARCA.secundario}; }
 .documento { text-align: right; }
-.documento h1 { margin: 0; font-size: 14pt; font-weight: 800; }
+.documento h1 { margin: 0; font-size: 14pt; font-weight: 600; }
 .partes { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; margin: 14pt 0; }
 .partes strong { font-size: 11pt; }
 table { width: 100%; border-collapse: collapse; }
-table.lineas th { background: ${MARCA.suave}; text-align: left; padding: 5pt 6pt; font-weight: 700; }
+table.lineas th { background: ${MARCA.suave}; text-align: left; padding: 5pt 6pt; font-weight: 600; }
 table.lineas td { padding: 5pt 6pt; border-bottom: 0.75pt solid ${MARCA.division}; vertical-align: top; }
 table.lineas tr { break-inside: avoid; }
 .numero { text-align: right; white-space: nowrap; }
-.fuerte { font-weight: 700; }
+.fuerte { font-weight: 600; }
 .totales { display: flex; justify-content: flex-end; margin-top: 10pt; break-inside: avoid; }
 .totales table { width: 250pt; }
 .totales td { padding: 3pt 6pt; }
-.totales tr.total td { font-size: 11pt; font-weight: 800; border-top: 1.5pt solid ${MARCA.superficie}; padding-top: 5pt; }
+.totales tr.total td { font-size: 11pt; font-weight: 600; border-top: 1.5pt solid ${MARCA.superficie}; padding-top: 5pt; }
 .condiciones { margin-top: 16pt; break-inside: avoid; }
 .condiciones p { margin: 0 0 3pt; }
 </style>
 </head>
 <body>
 <header class="encabezado">
-  <div><div class="marca">${escapar(c.organizacion.nombre)}</div><div class="secundario">[LOGO] · NIT [N] · [Dirección] · [Teléfono]</div></div>
+  <div><img class="logo" src="${LOGO_TEINS}" alt="${escapar(c.organizacion.nombre)}"><div class="secundario">NIT [N] · [Dirección] · [Teléfono]</div></div>
   <div class="documento"><h1>Cotización ${escapar(c.numero)}</h1><div>Versión ${c.version} · ${fecha.format(publicada)}</div><div>Válida hasta el ${fecha.format(validaHasta)}</div></div>
 </header>
 <section class="partes">
