@@ -61,7 +61,9 @@ El paso 2, en este orden y comparando cada pantalla con el prototipo en capturas
 - Campo: tarjeta de la siguiente visita y lista de visitas como el prototipo; en claro, las tarjetas llevan borde de 1 px (blanco sobre casi blanco no se veía). Barra de paso de 3 px, botón de abajo de 50 px, "Agregar" punteado fino.
 - Arreglado de paso: la notificación en oscuro ponía texto blanco sobre fondo casi blanco.
 - Verificado: typecheck, arquitectura, pruebas de paquetes, presupuesto (125,2 de 135 KB) y el extremo a extremo completo en local. Capturas en claro y oscuro comparadas con el prototipo.
-- Sigue: el 6 (despliegue en el entorno de pruebas y la prueba de Kevin en el iPhone al sol). Quedan para revisar pantalla por pantalla las demás de oficina (visitas, clientes, catálogo, informes, administración), que ya toman la base pero no se compararon una a una.
+- Visitas, clientes (lista y detalle), catálogo, informes, cotizaciones y administración (con el segundo factor) comparadas en claro y oscuro: las pastillas de filtro y de motivo pasan a borde fino con la marca al elegirlas, los técnicos de "Programar visita" van en una lista con líneas y las etiquetas de los campos pesan 500. El cambio de tema desde el selector se probó con foco y cursor encima.
+- Pantallas angostas de oficina arregladas: bajo 1100 px el logo queda en sus anillos y el conteo es una pastilla; bajo 640 px el menú pasa a una franja arriba (antes quedaba como columna a todo lo alto, porque la regla angosta estaba antes que la del menú).
+- Sigue: el 6 (despliegue en el entorno de pruebas y la prueba de Kevin en el iPhone al sol).
 
 Estado del repositorio al cerrar la sesión del 2026-09-29: el repositorio de GitHub se recreó con el historial sin coautor (PR #1 en borrador, abierto de nuevo) y `corte-0` está subida. 24a y 24b están desplegadas en el entorno de pruebas.
 
