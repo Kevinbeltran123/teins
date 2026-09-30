@@ -1,0 +1,1 @@
+ALTER TABLE "envios"."envios" ADD COLUMN "llave" uuid;

@@ -33,19 +33,26 @@ export interface Programacion {
   por: string;
   /** Ruta del PDF en el almacenamiento, si ya está listo: los envíos se encolan de una vez. */
   pdfRuta?: string | undefined;
+  /** La decisión de enviar (regla 4): si ya se programó con esta llave, no se programa otra vez. */
+  llave?: string | undefined;
 }
 
 /**
  * Crea un envío "En cola" por destinatario y canal, en la transacción de quien lo pide (publicar o
- * enviar otra vez). Sale cuando el PDF está listo (ADR-0028, parte 3).
+ * enviar otra vez). Sale cuando el PDF está listo (ADR-0028, parte 3). Devuelve cuántos creó: 0 si la llave
+ * ya se usó. Quien llama tiene bloqueada la fila de la versión, así que dos pedidos con la misma llave no se cruzan.
  */
 export async function programarEnvios(tx: TxOrganizacion, p: Programacion): Promise<number> {
   if (p.destinos.length === 0) return 0;
   if (!p.clienteId) throw problema("estado_invalido", "La versión no tiene cliente: no hay a quién enviarla");
+  if (p.llave) {
+    const [repetido] = await tx.select({ id: envios.id }).from(envios).where(and(eq(envios.versionId, p.versionId), eq(envios.llave, p.llave))).limit(1);
+    if (repetido) return 0;
+  }
   const destinatarios = await contactosDelCliente.paraEnviar(tx, p.clienteId, p.destinos);
   for (const d of destinatarios) {
     const id = randomUUID();
-    await tx.insert(envios).values({ id, organizacionId: p.organizacionId, versionId: p.versionId, contactoId: d.contactoId, contactoNombre: d.nombre, canal: d.canal, destino: d.destino, mensaje: p.mensaje, creadoPor: p.por });
+    await tx.insert(envios).values({ id, organizacionId: p.organizacionId, versionId: p.versionId, contactoId: d.contactoId, contactoNombre: d.nombre, canal: d.canal, destino: d.destino, mensaje: p.mensaje, creadoPor: p.por, llave: p.llave ?? null });
     if (p.pdfRuta) await encolarEnvio(tx, { organizacionId: p.organizacionId, envioId: id, pdfRuta: p.pdfRuta });
   }
   return destinatarios.length;

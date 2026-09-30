@@ -54,6 +54,8 @@ export const envios = esquemaEnvios.table(
     proveedorId: text("proveedor_id"),
     error: text("error"),
     creadoPor: text("creado_por").notNull(),
+    /** La decisión de enviar que lo creó (regla 4): repetirla no crea otro. Vacía al publicar y en los anteriores. */
+    llave: uuid("llave"),
     creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
     enviadoEn: marcaDeTiempo("enviado_en"),
     actualizadoEn: marcaDeTiempo("actualizado_en").notNull().defaultNow(),

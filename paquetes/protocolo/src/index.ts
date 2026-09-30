@@ -43,6 +43,7 @@ export {
   PaginaInformes,
   PaginaLevantamientos,
   ResultadoComando,
+  rutaVistaPreviaCotizacion,
   SaludDeDispositivo,
   SaludDispositivo,
   SesionPortal,

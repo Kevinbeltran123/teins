@@ -190,6 +190,31 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     expect(await bandeja()).toMatchObject({ envioSinEntregar: false });
   }, 90_000);
 
+  it("el mismo pedido con su llave (doble clic, respuesta perdida) sale una sola vez; otra llave es otra decisión (regla 4)", async () => {
+    const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.llave@cliente.example" });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+
+    const pedido = { destinos: [{ contactoId: ana!.id, canal: "correo" }], llave: randomUUID() };
+    const url = `/api/informes/${informeId}/versiones/1/enviar`;
+    // Doble clic: llegan juntos.
+    const dobles = await Promise.all([post(oficina.cookie, url, pedido), post(oficina.cookie, url, pedido)]);
+    for (const r of dobles) expect(r.statusCode, r.body).toBe(200);
+    await s.procesarCola();
+    // La respuesta se perdió y oficina reintenta cuando ya salió.
+    expect((await post(oficina.cookie, url, pedido)).statusCode).toBe(200);
+    await s.procesarCola();
+    expect(await enviosDe(oficina.cookie, informeId)).toHaveLength(1);
+    expect(correos.filter((c) => c.para === "ana.llave@cliente.example")).toHaveLength(1);
+
+    // Volver a enviar es una decisión nueva, con otra llave: sí sale.
+    expect((await post(oficina.cookie, url, { ...pedido, llave: randomUUID() })).statusCode).toBe(200);
+    expect(await enviosDe(oficina.cookie, informeId)).toHaveLength(2);
+    const { rows } = await s.propietario.pool.query("select count(*)::int as n from auditoria.registros where organizacion_id = $1 and tipo_evento = 'informe_enviado'", [organizacionId]);
+    expect(rows[0].n).toBe(2);
+  }, 90_000);
+
   it("no envía a contactos de otro cliente, ni por un canal que no recibe, ni una versión retirada", async () => {
     const otro = await informeListoParaPublicar();
     const [ajeno] = await crearContacto(otro.oficina.cookie, otro.clienteId, ANA);

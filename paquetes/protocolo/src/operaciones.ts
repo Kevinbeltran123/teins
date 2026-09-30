@@ -322,6 +322,12 @@ const Plano = z.object({ huella: Huella, nombre: z.string().trim().min(1).max(20
 const EstadoPdf = z.enum(["generando", "listo", "fallido"]);
 
 /** Canales por los que el informe le llega al cliente (ADR-0028). */
+/**
+ * Una decisión de enviar (regla 4): el mismo pedido repetido con su llave (doble clic, respuesta perdida) sale una
+ * sola vez. Opcional para la versión anterior del protocolo (N-1, ADR-0015).
+ */
+const LlaveDeEnvioAlCliente = Uuid.optional();
+
 export const CanalDeEnvio = z.enum(["correo", "whatsapp"]);
 /** Estado de un envío (ADR-0028, parte 4): solo avanza, salvo un rebote después de entregado. */
 export const EstadoDeEnvio = z.enum(["en_cola", "enviado", "entregado", "fallido"]);
@@ -658,6 +664,12 @@ export const SuscripcionAvisos = z
 
 export const ConfiguracionAvisos = z.object({ clavePublica: z.string().nullable() }).meta({ id: "ConfiguracionAvisos" });
 
+/**
+ * Vista previa de una cotización (iteración 24): el borrador guardado con la plantilla del PDF. No es una operación
+ * del contrato porque no responde JSON: es un documento HTML para un marco de oficina, con su propia CSP estricta.
+ */
+export const rutaVistaPreviaCotizacion = (id: string) => `/api/cotizaciones/${id}/vista-previa`;
+
 export const operaciones = {
   obtenerSesion: {
     metodo: "GET",
@@ -878,7 +890,7 @@ export const operaciones = {
     ruta: "/api/informes/{id}/versiones/{numero}/enviar",
     resumen: "Envía una versión publicada a contactos del cliente: volver a enviar o enviar a otro contacto (ADR-0028)",
     parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
-    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50) }),
+    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50), llave: LlaveDeEnvioAlCliente }),
     estadoExito: 200,
     respuesta: VersionPublicada,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
@@ -1141,7 +1153,7 @@ export const operaciones = {
     ruta: "/api/cotizaciones/{id}/versiones/{numero}/enviar",
     resumen: "Envía una versión publicada a contactos del cliente",
     parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
-    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50) }),
+    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50), llave: LlaveDeEnvioAlCliente }),
     estadoExito: 200,
     respuesta: VersionCotizacion,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],

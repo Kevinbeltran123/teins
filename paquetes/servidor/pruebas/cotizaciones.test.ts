@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { llaveDeEnvio } from "@teins/protocolo";
+import { llaveDeEnvio, rutaVistaPreviaCotizacion } from "@teins/protocolo";
 import type { LineaCantidad, VersionFormato } from "@teins/dominio";
 import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
@@ -189,6 +189,29 @@ describe("cotización desde las cantidades revisadas (ADR-0029, parte 2)", () =>
     const listado = (await e.oficina("GET", "/api/cotizaciones")).json().cotizaciones;
     expect(listado.find((c: { id: string }) => c.id === id)).toMatchObject({ vigente: 1, total: 1213766, envioSinEntregar: false });
   }, 120_000);
+
+  it("la vista previa es el borrador guardado con la plantilla del PDF, en un documento que no ejecuta nada (iteración 24)", async () => {
+    const e = await escenario();
+    await e.revisado([linea("a0000001", "Canaleta <b>metálica</b>", "4")]);
+    const { id } = (await e.oficina("POST", "/api/cotizaciones", { visitaId: e.visitaId })).json();
+    const detalle = (await e.oficina("GET", `/api/cotizaciones/${id}`)).json();
+    await e.oficina("POST", `/api/cotizaciones/${id}/borrador`, { version: 1, lineas: [{ ...detalle.lineas[0], precio: 25000 }], impuestos: { tipo: "iva" }, condiciones: detalle.condiciones });
+
+    const vista = await e.oficina("GET", rutaVistaPreviaCotizacion(id));
+    expect(vista.statusCode, vista.body).toBe(200);
+    expect(vista.headers["content-type"]).toContain("text/html");
+    expect(vista.headers["cache-control"]).toBe("no-store");
+    // Solo sus propios estilos y fuentes; ni scripts, ni conexiones, ni formularios, y solo dentro de oficina.
+    const csp = String(vista.headers["content-security-policy"]);
+    for (const directiva of ["default-src 'none'", "style-src 'unsafe-inline'", "font-src data:", "frame-ancestors 'self'", "sandbox"]) expect(csp).toContain(directiva);
+    expect(vista.body).toContain(detalle.numero);
+    expect(vista.body).toContain("Canaleta &lt;b&gt;metálica&lt;/b&gt;");
+    // 4 × 25.000 = 100.000, con IVA 19 %.
+    expect(vista.body).toContain("$ 119.000");
+
+    expect((await app.inject({ method: "GET", url: rutaVistaPreviaCotizacion(id), headers: { cookie: e.tecnico.cookie } })).statusCode).toBe(403);
+    expect((await e.oficina("GET", rutaVistaPreviaCotizacion(randomUUID()))).statusCode).toBe(404);
+  });
 
   it("la lista para cotizar solo trae levantamientos recibidos en los últimos 90 días", async () => {
     const e = await escenario();

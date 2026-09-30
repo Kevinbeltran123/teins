@@ -1,6 +1,8 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { rutaVistaPreviaCotizacion, Uuid } from "@teins/protocolo";
 import { calcularTotales, lineasDesdeCantidades, numeroDeCotizacion, validarCotizacion, type BorradorCotizacion, type LineaDeCotizacion } from "@teins/dominio";
 import type { Config } from "../../config";
 import { claveDeObjeto, type Almacenamiento } from "../../plataforma/almacenamiento";
@@ -9,7 +11,7 @@ import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
 import { fuenteIncrustada, imprimirPdf } from "../../plataforma/pdf";
 import { politicas } from "../../plataforma/politicas";
-import { registrarOperacion } from "../../plataforma/rutas";
+import { registrarDocumento, registrarOperacion } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
 import type { Catalogo } from "../catalogo";
 import { enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeCotizacion } from "../envios";
@@ -106,6 +108,32 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
     const [fila] = await tx.select().from(cotizaciones).where(eq(cotizaciones.id, id));
     if (!fila) throw problema("no_encontrado", "La cotización no existe");
     return fila;
+  }
+
+  /**
+   * La copia de la siguiente versión desde el borrador: la que se congela al publicar y la que muestra la vista
+   * previa. Salen de aquí las dos, para que la vista previa no se aparte del PDF.
+   */
+  async function siguienteVersion(tx: TxOrganizacion, c: typeof cotizaciones.$inferSelect, { organizacion, publicadaPor, publicadaEn }: { organizacion: string; publicadaPor: string; publicadaEn: Date }): Promise<ContenidoCotizacion> {
+    const visita = (await visitas.resumenes(tx, [c.visitaId])).get(c.visitaId);
+    if (!visita) throw problema("no_encontrado", "La visita de la cotización no existe");
+    const [{ numero } = { numero: 0 }] = await tx
+      .select({ numero: sql<number>`coalesce(max(${versionesCotizacion.numero}), 0)` })
+      .from(versionesCotizacion)
+      .where(eq(versionesCotizacion.cotizacionId, c.id));
+    // Copia congelada con sus precios y totales: cambiar la lista después no la toca (ADR-0029).
+    return {
+      numero: c.numero,
+      version: numero + 1,
+      publicadaEn: publicadaEn.toISOString(),
+      publicadaPor,
+      organizacion: { nombre: organizacion },
+      visita: { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, programadaPara: visita.programadaPara },
+      lineas: c.lineas,
+      impuestos: c.impuestos,
+      condiciones: c.condiciones,
+      totales: calcularTotales(c.lineas, c.impuestos),
+    };
   }
 
   /**
@@ -320,26 +348,8 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               .returning({ version: cotizaciones.version });
             if (reservada.length === 0) throw problema("conflicto_de_version", "Otra persona publicó o guardó esta cotización al mismo tiempo");
 
-            const visita = (await visitas.resumenes(tx, [c.visitaId])).get(c.visitaId);
-            if (!visita) throw problema("no_encontrado", "La visita de la cotización no existe");
-            const [{ numero } = { numero: 0 }] = await tx
-              .select({ numero: sql<number>`coalesce(max(${versionesCotizacion.numero}), 0)` })
-              .from(versionesCotizacion)
-              .where(eq(versionesCotizacion.cotizacionId, id));
             const publicadaEn = new Date();
-            // Copia congelada con sus precios y totales: cambiar la lista después no la toca (ADR-0029).
-            const contenido: ContenidoCotizacion = {
-              numero: c.numero,
-              version: numero + 1,
-              publicadaEn: publicadaEn.toISOString(),
-              publicadaPor: nombres.get(actor.usuarioId) ?? SIN_NOMBRE,
-              organizacion: { nombre: organizacion },
-              visita: { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, programadaPara: visita.programadaPara },
-              lineas: c.lineas,
-              impuestos: c.impuestos,
-              condiciones: c.condiciones,
-              totales: calcularTotales(c.lineas, c.impuestos),
-            };
+            const contenido = await siguienteVersion(tx, c, { organizacion, publicadaPor: nombres.get(actor.usuarioId) ?? SIN_NOMBRE, publicadaEn });
             const versionId = randomUUID();
             const [fila] = await tx
               .insert(versionesCotizacion)
@@ -367,6 +377,23 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
             });
             return versionConEnvios(tx, actor.organizacionId, fila!);
           });
+        },
+      });
+
+      // Lo que se va a publicar, con la plantilla del PDF, para un marco de oficina (iteración 24). Aproximado: el PDF
+      // pagina y pone el pie; lo que vale es la versión congelada.
+      registrarDocumento(app, {
+        ruta: rutaVistaPreviaCotizacion("{id}"),
+        politica: politicas.oficina,
+        parametros: z.object({ id: Uuid }),
+        manejar: async ({ parametros: { id }, actor }) => {
+          const organizacion = await identidad.nombreDeOrganizacion(actor.organizacionId);
+          const nombres = await identidad.nombres(actor.organizacionId, [actor.usuarioId]);
+          const contenido = await enOrganizacion(bd, actor.organizacionId, async (tx) =>
+            siguienteVersion(tx, await leer(tx, id), { organizacion, publicadaPor: nombres.get(actor.usuarioId) ?? SIN_NOMBRE, publicadaEn: new Date() }),
+          );
+          // En el PDF, los márgenes los pone la página (@page); en pantalla no hay página: se ponen al cuerpo.
+          return plantillaCotizacion(contenido, { fuente: fuenteIncrustada() }).replace("</head>", "<style>body { padding: 20mm 18mm; }</style></head>");
         },
       });
 
@@ -400,7 +427,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
             if (!version) throw problema("no_encontrado", "La versión no existe");
             // Sin PDF no hay qué adjuntar, y nada lo vuelve a generar: el envío quedaría en cola para siempre.
             if (version.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
-            await programarEnvios(tx, {
+            const programados = await programarEnvios(tx, {
               organizacionId: actor.organizacionId,
               versionId: version.id,
               clienteId: c.clienteId,
@@ -408,10 +435,14 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
               pdfRuta: version.pdfEstado === "listo" && version.pdfHuella ? claveDeObjeto(actor.organizacionId, version.pdfHuella) : undefined,
+              llave: cuerpo.llave,
             });
-            await registrar(tx, [
-              { organizacionId: actor.organizacionId, agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: "cotizacion_enviada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, destinos: cuerpo.destinos } },
-            ]);
+            // Un pedido repetido con su llave no creó nada: no es otro envío que registrar.
+            if (programados > 0) {
+              await registrar(tx, [
+                { organizacionId: actor.organizacionId, agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: "cotizacion_enviada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, destinos: cuerpo.destinos } },
+              ]);
+            }
             return versionConEnvios(tx, actor.organizacionId, version);
           }),
       });

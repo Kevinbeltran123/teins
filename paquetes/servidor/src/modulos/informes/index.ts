@@ -489,7 +489,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             if (fila.retiradaEn) throw problema("estado_invalido", "La versión está retirada del portal: publique una nueva para enviarla");
             // Sin PDF no hay qué adjuntar, y nada lo vuelve a generar: el envío quedaría en cola para siempre.
             if (fila.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
-            await programarEnvios(tx, {
+            const programados = await programarEnvios(tx, {
               organizacionId: actor.organizacionId,
               versionId: fila.id,
               clienteId: fila.clienteId,
@@ -497,10 +497,14 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
               pdfRuta: fila.pdfEstado === "listo" && fila.pdfHuella ? claveDeObjeto(actor.organizacionId, fila.pdfHuella) : undefined,
+              llave: cuerpo.llave,
             });
-            await registrar(tx, [
-              { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "informe_enviado", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, destinos: cuerpo.destinos } },
-            ]);
+            // Un pedido repetido con su llave no creó nada: no es otro envío que registrar.
+            if (programados > 0) {
+              await registrar(tx, [
+                { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "informe_enviado", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, destinos: cuerpo.destinos } },
+              ]);
+            }
             const actual = (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
             return { ...actual, envios: (await enviosDeVersiones(tx, [actual.id])).get(actual.id) };
           });
