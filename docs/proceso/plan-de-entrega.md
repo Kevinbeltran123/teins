@@ -30,10 +30,13 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 21 | Cotizaciones desde las cantidades | De la visita a la cotización sin volver a digitar (P27, QA-12) | Terminada y desplegada en el entorno de pruebas (precios de prueba; faltan los de TEINS) |
 | Iteración 22 | Campo rehecho con la dirección Recorrido (`DESIGN.md`) | Una app que los técnicos quieran usar: la captura sigue la visita paso a paso en vez de una lista interminable | Terminada, desplegada en el entorno de pruebas y aprobada por Kevin en su iPhone |
 | Iteración 23 | Oficina con la identidad Recorrido (`DESIGN.md`) | Oficina clara y sin recuadros: cada pantalla ordenada por lo que hace la persona, con búsqueda en las listas | Construida y desplegada en el entorno de pruebas (con la ronda de revisión, 2026-09-29); falta que Kevin la apruebe |
+| Iteración 24 | Robustez y protección: nada se pierde ni se hace sin querer | Borradores que se borran solos, dobles envíos, errores invisibles y acciones con consecuencias sin confirmar | 24a hecha en local; faltan el despliegue en pruebas y 24b a 24d |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
+
+**Iteración 24, robustez y protección (2026-09-29).** Aprobada por Kevin antes del rediseño visual (sección "Iteración 24"). 24a (los 12 fallos del grupo A) hecha y verificada en local el 2026-09-29, en siete commits. Siguiente: desplegarla en el entorno de pruebas (`campo`, `oficina`, `portal` y `worker`, con la migración 0029) y seguir con 24b. Producción se actualizó el 2026-09-29 en otra sesión (`README.md`, `produccion.md`).
 
 **Revisión de seguridad por áreas (2026-09-29).** Las correcciones de 4a a 4d están hechas, desplegadas en el entorno de pruebas y verificadas allí el 2026-09-29: salud de las tres superficies, cabeceras de seguridad, `verificar-exposicion.sh`, la IP real del cliente en el registro también con un `X-Forwarded-For` falso, respaldo cifrado con simulacro correcto (177 cadenas, 27 archivos) y los 22 del extremo a extremo en Chromium (un archivo por minuto: la suite seguida choca con el límite de ingresos por IP, `entorno-de-pruebas.md`). Las de 4e (campo y portal) están hechas, desplegadas en el entorno de pruebas y verificadas allí el 2026-09-29 con `e2e/pruebas/cierre-de-sesion.spec.ts` (2 de 2 en Chromium): sin otra clave para un técnico con borrado pendiente, cierre de sesión sin señal completado en el servidor al volver la señal, "Salir" del portal que dice si no llegó al servidor, diagnóstico solo con las fotos propias y avisos que solo abren la propia app. Tres hallazgos de 4e no eran errores: el motivo de la visita que ve el cliente se elige de la lista del lenguaje común (Mantenimiento, Cotización, Modificación), las huellas de los archivos a la vista las acepta ADR-0022 y el código del QR no es secreto (ADR-0009, parte 4). **Producción actualizada el 2026-09-29** a esta versión (iteraciones 9 a 23, migraciones 0014 a 0028 y la revisión de seguridad), en este orden: `railway config plan` (7 cambios y 2 borrados, los previstos); `infra/railway/claves-avisos.sh`, nuevo: producción se montó antes de la iteración 15 y su `worker` no tenía el par VAPID, sin el cual `campo` y `oficina` reciben la pública vacía por referencia y la configuración no las deja arrancar ni migrar; `infra/respaldos/clave.sh teins-produccion`; `railway config apply --yes --confirm-destructive` (después, el plan sin diferencias; el redespliegue de la imagen anterior falló en `oficina` y `portal` sin la variable del dueño y Railway dejó la versión que corría, como en pruebas); el despliegue de `campo`, que migró, y después `oficina`, `portal`, `worker` y `respaldos`. Verificado: los cinco en `SUCCESS`, cada superficie con el paquete recién compilado, salud y las 7 cabeceras de seguridad en las tres, `verificar-exposicion.sh`, la IP real en el registro también con `X-Forwarded-For: 203.0.113.77`, el primer respaldo cifrado (los volcados en claro pasaron a `cifrado/`) y el simulacro correcto (`produccion.md`). Los secretos, el `apply` y los despliegues los corrió Kevin: el clasificador de permisos no deja que un agente escriba en producción. En producción no se corre el extremo a extremo (ADR-0021); falta que Kevin entre a oficina con `administracion` y su segundo factor. Siguiente en la ronda de revisión: `/code-review max paquetes/campo`.
 
@@ -958,6 +961,70 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **El AIU no aplica a la instalación ni al mantenimiento de redes eléctricas** según la doctrina de la DIAN: la cotización admite IVA sobre el subtotal o AIU con IVA sobre la utilidad, y el contador de TEINS decide en cada caso.
 - **En iPhone, la app instalada no comparte datos con Safari** y los avisos solo llegan a la app instalada: la instalación va antes de iniciar sesión.
 - **La biblioteca `web-push` es MPL-2.0,** que la verificación de licencias ya admite.
+
+## Iteración 24 · Robustez y protección
+
+**Estado:** aprobada por Kevin el 2026-09-29. 24a hecha y verificada en local el 2026-09-29; falta desplegarla en el entorno de pruebas. Siguen 24b, 24c y 24d.
+
+**Para qué:** que nadie pierda trabajo ni haga algo sin querer. Cuatro auditorías de solo lectura (campo, oficina dos veces y transversal) encontraron borradores que se borran solos, acciones que se repiten con un doble toque, errores que no se ven y acciones con consecuencias sin confirmar. Va antes del rediseño visual: un flujo bonito que pierde datos no sirve.
+
+**Orden acordado:** iteración 24 → tema claro, oscuro y del sistema → base visual (tipografía, color, forma) → flujos.
+
+### Alcance
+
+**24a · Grupo A: fallos que pierden datos o bloquean** (cada uno con una prueba que falla antes de corregirlo)
+
+1. Informe y cotización: el borrador se borra al volver a la pestaña (`key={version}` con `refetchOnWindowFocus`).
+2. "Guardar y publicar" vuelve a montar la composición y el error de publicar no se ve.
+3. En oficina, la sesión vencida pierde el borrador: no hay manejo global del 401.
+4. Los códigos de respaldo del segundo factor se pierden al volver a la pestaña después de 60 segundos.
+5. Campo, "No se pudo obtener": borra el dato sin confirmar ni deshacer, y el texto queda desactualizado.
+6. Campo, "Foto eliminada": el "Deshacer" queda detrás del visor de fotos (capa superior del `<dialog>`).
+7. Campo, un doble toque en "Iniciar levantamiento" o "Agregar sección" crea duplicados.
+8. Campo: las fallas al guardar en el teléfono no se avisan.
+9. Campo: un error permanente de envío no tiene salida.
+10. Envíos al cliente sin idempotencia, sin vista previa y sin cancelar.
+11. Nadie lee `problema.campos` del servidor ("Revise cuerpo").
+12. Oficina sin pantalla de error ni de ruta inexistente; el portal sin captura de errores.
+
+**24b · Piezas compartidas en `paquetes/ui`:** `Confirmacion` con `nivel` obligatorio (deshacible, consecuencia, irreversible), salida protegida con cambios sin guardar, guardia de doble envío, interceptor de sesión vencida, errores por campo desde `problema.campos`, captura de errores y página 404 en español.
+
+**24c · Grupos B, C y E: aplicar la regla de `DESIGN.md`** a las acciones que hoy la incumplen (confirmaciones que faltan o sobran, "Deshacer" donde la acción se puede revertir, salida protegida en las ~12 pantallas con campos, doble envío en inicios de sesión, firma, reintentar y cerrar sesión, tipos de teclado y foco al primer error).
+
+**24d · Funciones que faltan, como propuesta:** reactivar usuario, soltar, reabrir o devolver una revisión, retirar cotización, editar o borrar comentario, cancelar un envío en cola, cambiar contraseña, desactivar el segundo factor, editar o quitar cliente o sitio, descartar borrador. Van con ADR nuevos (nunca se editan los aceptados) y no se construyen en esta ronda.
+
+### Decisiones de Kevin (2026-09-29)
+
+- "Enviar a oficina" sigue siendo una confirmación normal, no roja: `DESIGN.md` la clasifica como "consecuencias".
+- La vista previa de la cotización es el HTML de la misma `plantillaCotizacion(...)` del servidor en un marco, marcado como aproximado; el PDF congelado sigue siendo la fuente de verdad.
+
+### Terminado cuando
+
+| Criterio | Evidencia |
+|---|---|
+| 24a: los 12 fallos del grupo A corregidos, cada uno con una prueba que fallaba antes | Hecho en local el 2026-09-29. 1 a 3: `e2e/pruebas/borradores.spec.ts`; 4: la primera prueba de `administracion.spec.ts`; 5 a 9: `proteccion-campo.spec.ts`; 10: `envios.test.ts` (llave) y `cotizaciones.test.ts` (vista previa) del servidor, y `cotizaciones.spec.ts`; 11: `oficina/src/mensajes.test.ts`; 12: `errores-de-pantalla.spec.ts` |
+| Verificación completa | Tipos, arquitectura, licencias, auditoría y pruebas de los paquetes en verde (dos fallas intermitentes del servidor que pasan 3 de 3 solas, abajo); presupuesto de campo 124,1 de 135 KB; extremo a extremo completo en Chromium y WebKit: 71 pasan y 3 se saltan, como antes |
+| Desplegada en el entorno de pruebas | [pendiente: `campo`, `oficina`, `portal`, `worker` y la migración 0029] |
+| 24b, 24c y 24d | [pendientes] |
+
+### Decisiones tomadas al construirlo
+
+- **El borrador guarda contra la versión en que se basa lo escrito** (`oficina/src/borrador.ts`), no contra la última leída: si otra persona guardó en medio, el servidor responde conflicto en vez de pisarla. Sin cambios propios, sigue al servidor. Se quitó `key={version}`, que borraba lo escrito cada vez que el servidor subía la versión.
+- **Un error al releer no desmonta la pantalla** (informe, cotización y la raíz de oficina): la pantalla de error solo sale si nunca cargó. Sin conexión, el marco ya lo avisa.
+- **Sesión vencida: se ingresa de nuevo encima**, en un `<dialog>` que no se cierra, con la pantalla montada detrás. Cualquier 401 relee la sesión (`api.ts`). Si ingresa otra persona, todo se vuelve a montar (`key` del marco es el usuario): lo escrito por la anterior no queda a la vista.
+- **Las notificaciones van dentro del diálogo modal de encima.** Un `popover` sobre un `<dialog>` modal queda inerte en Chromium y WebKit (comprobado), así que el "Deshacer" del visor de fotos no se podía tocar.
+- **`useSinRepetir`** (`paquetes/ui`): bloqueo síncrono, porque el segundo toque llega antes de que React pinte el botón deshabilitado. Es la guardia de doble envío de 24b; ya la usan iniciar levantamiento, agregar repetición y reintentar envío.
+- **"No se pudo obtener"** ofrece "Deshacer" cuando reemplaza algo capturado, y el control se vuelve a montar con lo guardado: desmarcar ya no deja a la vista un valor que no está. `MarcaNoObtenido` separa `onMarcar` de `onMotivo`.
+- **Un rechazo permanente del envío** (formato retirado, enviado por otra persona, datos no aceptados) no lo resuelve el técnico: la salida es decir qué pasó, que lo capturado sigue en el teléfono, que oficina ya lo ve en "Teléfonos de campo" (ADR-0017) y reintentar cuando lo resuelvan. Volver el levantamiento a borrador cambiaría su ciclo de vida: si hace falta, va con ADR en 24d.
+- **Los envíos al cliente llevan llave** (regla 4, migración 0029): la fila de la versión ya se bloquea al programar, así que basta con guardar la llave en cada envío y revisarla dentro del bloqueo. La llave es opcional por N-1. Un pedido repetido no se vuelve a auditar.
+- **La vista previa de la cotización es un documento propio del servidor** (`/api/cotizaciones/{id}/vista-previa`, `registrarDocumento`), no un `srcdoc`: el `srcdoc` hereda la CSP de oficina (`style-src 'self'`) y la plantilla se vería sin estilos. El documento lleva su propia CSP (sin scripts, conexiones ni formularios, solo dentro de oficina). Muestra lo guardado, así que "Publicar" guarda primero si hay cambios.
+- **"Revise cuerpo" se traduce en oficina** (`textoDelServidor`): el servidor sigue listando las rutas en `problema.campos` y oficina nombra los datos como en la pantalla. Marcar cada campo en su formulario es de 24b.
+- **Fallas intermitentes vistas en la verificación, sin relación con el cambio:** `envios.test.ts` "si no se sabe si WhatsApp lo recibió" y `api.test.ts` "rechaza y elimina un archivo que dice ser JPEG", las dos con la cola del worker bajo carga (la segunda con el extremo a extremo corriendo a la vez); pasan 3 de 3 solas.
+
+### Fuera de la iteración 24
+
+- Las funciones de 24d, entre ellas cancelar un envío en cola: solo la propuesta.
+- Campo tampoco tiene captura de errores al dibujar: la auditoría la pidió para oficina y el portal; va en 24b con la pieza compartida (`CapturaDeErrores` ya existe).
 
 ## Iteración 23 · Oficina con la identidad Recorrido
 

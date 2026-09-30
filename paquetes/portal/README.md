@@ -15,3 +15,5 @@ Si la sesión se cierra sin que la persona haya salido (30 minutos sin uso, o TE
 Iteración 14 (dirección Consola, `DESIGN.md`): ingreso en un panel blanco con "TEINS" como marca (el logo sigue pendiente, sin el marcador visible para el cliente); informes en una lista con el sitio, la visita y la versión, y "Descargar" principal solo en el más reciente. El PDF baja como archivo (`Content-Disposition: attachment`): el cliente sigue en su lista.
 
 Revisión de seguridad 4e (2026-09-29): "Salir" solo vuelve al ingreso si el servidor cerró la sesión; si no responde, lo dice y los informes quedan a la vista, porque la cookie solo la cierra el servidor.
+
+Iteración 24 (24a, robustez): una falla al dibujar muestra "Algo falló al mostrar el portal." con "Volver a cargar" (`CapturaDeErrores` en `src/main.tsx`), en vez de la pantalla en blanco.
