@@ -1,0 +1,624 @@
+<title>Base visual de TEINS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap">
+<style>
+/* Base visual «Precisión» (elegida por Kevin el 2026-09-29): Geist, grises fríos casi neutros, el azul TEINS solo en
+   la acción, pesos de 400 a 600, radios de 7 a 12 px, bordes de 1 px. Seis pantallas clave en claro, oscuro y sistema.
+   La página alrededor sigue el tema del visor; la app, el que se elige arriba. */
+:root {
+  --pagina: #ECEEF2; --pagina-texto: #14161A; --pagina-sec: #50555F; --pagina-panel: #FFFFFF; --pagina-borde: #D6DAE1; --pagina-foco: #1F4FD1;
+  --curva: cubic-bezier(0.2, 0, 0, 1);
+  --fuente: "Geist", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; --pagina: #050608; --pagina-texto: #ECEEF2; --pagina-sec: #9BA1AD; --pagina-panel: #0E1116; --pagina-borde: #20252E; --pagina-foco: #8FB0FF; }
+}
+:root[data-theme="dark"] { color-scheme: dark; --pagina: #050608; --pagina-texto: #ECEEF2; --pagina-sec: #9BA1AD; --pagina-panel: #0E1116; --pagina-borde: #20252E; --pagina-foco: #8FB0FF; }
+
+/* ---- La app: tema claro ---- */
+.app, .app[data-tema="claro"] {
+  color-scheme: light;
+  --fondo: #FAFAFB; --sup: #FFFFFF; --sup2: #F3F4F6; --sup3: #E9EBEF; --linea: #E5E7EB; --linea-fuerte: #D5D8DE;
+  --texto: #111317; --sec: #5E646E; --ter: #6F7580;
+  --marca: #2F5FE8; --marca-texto: #FFFFFF; --marca-suave: rgba(47,95,232,.09); --marca-borde: rgba(47,95,232,.35);
+  --ok: #188A5B; --alerta: #A15C00; --peligro: #D22F34; --peligro-texto: #FFFFFF; --revision: #6B4FD3;
+  --sombra-capa: 0 0 0 1px rgba(17,19,23,.08), 0 18px 48px rgba(17,19,23,.16);
+  --sombra-boton: 0 1px 2px rgba(17,19,23,.06);
+  --velo: rgba(17,19,23,.28); --vitrina: #EEF1F7; --vitrina-punto: rgba(47,95,232,.16);
+}
+/* ---- La app: tema oscuro ---- */
+.app[data-tema="oscuro"] {
+  color-scheme: dark;
+  --fondo: #0A0B0D; --sup: #111316; --sup2: #17191D; --sup3: #1E2126; --linea: #23262C; --linea-fuerte: #2E323A;
+  --texto: #EDEEF0; --sec: #8B9099; --ter: #7C828C;
+  --marca: #3B6FF5; --marca-texto: #FFFFFF; --marca-suave: rgba(59,111,245,.14); --marca-borde: rgba(110,150,255,.45);
+  --ok: #3DBE8B; --alerta: #E8A33D; --peligro: #E5484D; --peligro-texto: #FFFFFF; --revision: #A38BFA;
+  --sombra-capa: 0 0 0 1px rgba(255,255,255,.06), 0 16px 48px rgba(0,0,0,.55);
+  --sombra-boton: 0 1px 2px rgba(0,0,0,.4);
+  --velo: rgba(3,4,6,.62); --vitrina: #0C1120; --vitrina-punto: rgba(110,150,255,.16);
+}
+/* ---- Del sistema: el claro de arriba, o el oscuro si el equipo lo pide ---- */
+@media (prefers-color-scheme: dark) {
+  .app[data-tema="sistema"] {
+    color-scheme: dark;
+    --fondo: #0A0B0D; --sup: #111316; --sup2: #17191D; --sup3: #1E2126; --linea: #23262C; --linea-fuerte: #2E323A;
+    --texto: #EDEEF0; --sec: #8B9099; --ter: #7C828C;
+    --marca: #3B6FF5; --marca-texto: #FFFFFF; --marca-suave: rgba(59,111,245,.14); --marca-borde: rgba(110,150,255,.45);
+    --ok: #3DBE8B; --alerta: #E8A33D; --peligro: #E5484D; --peligro-texto: #FFFFFF; --revision: #A38BFA;
+    --sombra-capa: 0 0 0 1px rgba(255,255,255,.06), 0 16px 48px rgba(0,0,0,.55);
+    --sombra-boton: 0 1px 2px rgba(0,0,0,.4);
+    --velo: rgba(3,4,6,.62); --vitrina: #0C1120; --vitrina-punto: rgba(110,150,255,.16);
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--pagina); color: var(--pagina-texto); font-family: var(--fuente); padding-inline: 16px; padding-block: 28px 56px; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--pagina-foco); outline-offset: 2px; }
+
+/* ---------- La página del prototipo ---------- */
+.envoltura { max-width: 1400px; margin-inline: auto; display: flex; flex-direction: column; gap: 20px; }
+.cabeza { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.cabeza h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.cabeza p { margin: 6px 0 0; color: var(--pagina-sec); max-width: 62ch; line-height: 1.5; font-size: 15px; }
+.mandos { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.segmentos { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--pagina-panel); border: 1px solid var(--pagina-borde); flex-wrap: wrap; }
+.segmentos button { border: 0; background: transparent; padding: 7px 12px; border-radius: 7px; font-weight: 500; font-size: 14px; color: var(--pagina-sec); }
+.segmentos button[aria-pressed="true"] { background: var(--pagina-texto); color: var(--pagina); }
+.porque { color: var(--pagina-sec); font-size: 14px; line-height: 1.5; max-width: 90ch; margin: 0; }
+.porque b { color: var(--pagina-texto); font-weight: 600; }
+
+/* ---------- La app ---------- */
+.app { font-family: var(--fuente); color: var(--texto); font-size: 14px; line-height: 1.5; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+.app svg { width: 16px; height: 16px; flex: none; stroke-width: 1.6; }
+.escena { display: flex; justify-content: center; }
+.ventana { width: 100%; position: relative; overflow: hidden; isolation: isolate; border-radius: 12px; background: var(--fondo); box-shadow: 0 0 0 1px var(--linea-fuerte), 0 30px 80px rgba(0,0,0,.22); height: 680px; display: grid; grid-template-columns: 208px minmax(0, 1fr); }
+.ventana.sola { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 760px) { .ventana { grid-template-columns: minmax(0, 1fr); height: 720px; } .menu { display: none; } }
+.menu { border-right: 1px solid var(--linea); padding: 16px 10px; display: flex; flex-direction: column; gap: 18px; }
+.marca-app { display: flex; align-items: center; gap: 9px; padding: 2px 8px; font-weight: 600; font-size: 14px; letter-spacing: .06em; }
+.marca-app i { width: 20px; height: 20px; border-radius: 5px; background: var(--marca); display: block; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.menu nav { display: flex; flex-direction: column; gap: 1px; }
+.menu .grupo { font-size: 12px; color: var(--ter); padding: 10px 8px 4px; font-weight: 500; }
+.menu a { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border-radius: 7px; color: var(--sec); text-decoration: none; font-size: 13px; }
+.menu a:hover { background: var(--sup2); color: var(--texto); }
+.menu a[aria-current="page"] { background: var(--sup2); color: var(--texto); font-weight: 500; }
+.menu a[aria-current="page"] svg { color: var(--marca); }
+.menu a .cuenta-num { margin-left: auto; font-size: 12px; color: var(--sec); font-weight: 500; }
+.menu .cuenta { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px 2px; border-top: 1px solid var(--linea); font-size: 13px; }
+.avatar { width: 26px; height: 26px; border-radius: 99px; background: var(--sup3); display: grid; place-items: center; font-size: 11px; font-weight: 500; flex: none; }
+.menu .cuenta small { display: block; color: var(--ter); font-size: 12px; }
+.contenido { min-width: 0; overflow: auto; display: flex; flex-direction: column; }
+.barra-sup { height: 48px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--linea); font-size: 13px; color: var(--sec); }
+.barra-sup b { color: var(--texto); font-weight: 500; }
+.pagina { padding: 22px 28px 60px; display: flex; flex-direction: column; gap: 18px; }
+.cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; }
+.cab h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+.cab .datos { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--sec); font-size: 13px; }
+.cab .datos span + span::before { content: "·"; margin-right: 14px; color: var(--ter); }
+.acciones { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.estado { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 99px; font-size: 12px; font-weight: 500; color: var(--revision); background: color-mix(in srgb, var(--revision) 12%, transparent); white-space: nowrap; }
+.estado i { width: 6px; height: 6px; border-radius: 99px; background: currentColor; }
+.estado.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.estado.enviado { color: var(--marca); background: var(--marca-suave); }
+.estado.gris { color: var(--sec); background: var(--sup2); }
+.guardado { display: inline-flex; align-items: center; gap: 7px; color: var(--sec); font-size: 13px; }
+.guardado i { width: 6px; height: 6px; border-radius: 99px; background: var(--alerta); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 7px; border: 0; font-size: 13px; font-weight: 500; background: var(--sup); color: var(--texto); box-shadow: inset 0 0 0 1px var(--linea-fuerte), var(--sombra-boton); white-space: nowrap; transition: background .15s var(--curva), transform .12s var(--curva); }
+.btn:hover { background: var(--sup2); }
+.btn:active { transform: translateY(1px); }
+.btn.principal { background: var(--marca); color: var(--marca-texto); box-shadow: inset 0 1px 0 rgba(255,255,255,.18), var(--sombra-boton); }
+.btn.principal:hover { filter: brightness(1.06); }
+.btn.grande { height: 40px; padding: 0 16px; font-size: 14px; border-radius: 8px; }
+.btn.ancho { width: 100%; }
+.kbd { font-size: 11px; opacity: .6; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; line-height: 16px; }
+
+/* Pestañas y búsqueda de la bandeja */
+.barra-lista { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid var(--linea); }
+.pestanas { display: flex; gap: 18px; }
+.pestanas button { border: 0; background: none; padding: 10px 0; margin-bottom: -1px; font-size: 13px; color: var(--sec); border-bottom: 2px solid transparent; display: flex; gap: 6px; align-items: center; }
+.pestanas button span { font-size: 12px; color: var(--ter); }
+.pestanas button[aria-selected="true"] { color: var(--texto); font-weight: 500; border-bottom-color: var(--texto); }
+.buscar { display: flex; align-items: center; gap: 8px; height: 32px; width: 260px; max-width: 100%; padding: 0 10px; border-radius: 7px; background: var(--sup); box-shadow: inset 0 0 0 1px var(--linea-fuerte); color: var(--ter); font-size: 13px; margin-bottom: 8px; }
+.buscar kbd { margin-left: auto; font: inherit; font-size: 11px; border: 1px solid var(--linea-fuerte); border-radius: 4px; padding: 0 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 500; color: var(--sec); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--linea); white-space: nowrap; }
+td { padding: 0 10px; height: 44px; border-bottom: 1px solid var(--linea); white-space: nowrap; }
+tbody tr { transition: background .12s; }
+tbody tr:hover { background: var(--sup2); }
+td .principal-celda { font-weight: 500; }
+td .sec { color: var(--sec); }
+td.num, th.num { text-align: right; }
+.espera { color: var(--sec); }
+.espera.larga { color: var(--alerta); font-weight: 500; }
+.persona { display: inline-flex; align-items: center; gap: 8px; }
+.persona .avatar { width: 22px; height: 22px; font-size: 10px; }
+
+/* Detalle */
+.detalle { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 28px; }
+@media (max-width: 980px) { .detalle { grid-template-columns: minmax(0, 1fr); } }
+.seccion h2 { margin: 0 0 6px; font-size: 13px; font-weight: 500; color: var(--sec); }
+.dato { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; padding: 11px 0; border-top: 1px solid var(--linea); }
+.dato:last-child { border-bottom: 1px solid var(--linea); }
+.dato .n { color: var(--sec); }
+.dato .v b { font-weight: 500; font-size: 15px; }
+.dato .v small { color: var(--sec); margin-left: 3px; }
+.fotos { display: flex; gap: 6px; }
+.fotos i { width: 54px; height: 40px; border-radius: 5px; background: linear-gradient(135deg, var(--sup3), var(--sup2)); box-shadow: inset 0 0 0 1px var(--linea-fuerte); display: block; }
+.carril { display: flex; flex-direction: column; gap: 14px; }
+.panel { border: 1px solid var(--linea); border-radius: 10px; background: var(--sup); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.panel h3 { margin: 0; font-size: 13px; font-weight: 500; }
+.panel p { margin: 0; color: var(--sec); font-size: 13px; line-height: 1.45; }
+.comentario { display: flex; gap: 8px; font-size: 13px; }
+.comentario .avatar { width: 22px; height: 22px; font-size: 10px; }
+.comentario small { display: block; color: var(--ter); }
+
+/* Cotización: el editor a la izquierda y el documento en vivo a la derecha (Mercury, Revolut Business, Acctual) */
+.cot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; flex: 1; }
+@media (max-width: 1100px) { .cot { grid-template-columns: minmax(0, 1fr); } .lienzo { display: none; } }
+.editor { min-width: 0; overflow: auto; padding: 22px 26px 60px; display: flex; flex-direction: column; gap: 22px; border-right: 1px solid var(--linea); }
+.editor .cab h1 { font-size: 20px; }
+.bloque { display: flex; flex-direction: column; gap: 8px; }
+.bloque > h2 { margin: 0; font-size: 13px; font-weight: 500; color: var(--sec); }
+.lineas { display: flex; flex-direction: column; border-top: 1px solid var(--linea); }
+.linea { display: grid; grid-template-columns: minmax(0, 1fr) 64px 104px 92px; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--linea); font-size: 13px; }
+.linea.cab-l { color: var(--sec); font-size: 12px; padding: 6px 0; }
+.linea .desc b { font-weight: 500; display: block; }
+.linea .num { text-align: right; }
+.celda-precio { width: 100%; height: 30px; border-radius: 6px; border: 0; background: var(--sup); box-shadow: inset 0 0 0 1px var(--linea-fuerte); text-align: right; padding: 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.celda-precio:focus { outline: none; box-shadow: inset 0 0 0 1px var(--marca), 0 0 0 3px var(--marca-suave); }
+.origen { display: block; font-size: 12px; color: var(--ter); }
+.agregar-linea { align-self: flex-start; border: 0; background: none; color: var(--marca); font-size: 13px; font-weight: 500; padding: 4px 0; display: inline-flex; gap: 6px; align-items: center; }
+.opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opcion { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; padding: 10px 12px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--linea); background: var(--sup); cursor: pointer; font-size: 13px; }
+.opcion input { margin: 2px 0 0; accent-color: var(--marca); }
+.opcion.elegida { box-shadow: inset 0 0 0 1px var(--marca-borde); background: var(--marca-suave); }
+.opcion small { display: block; color: var(--sec); font-size: 12px; }
+.fila-campos { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; }
+.campo-c { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--sec); }
+.campo-c input { height: 32px; border-radius: 7px; border: 0; background: var(--sup); box-shadow: inset 0 0 0 1px var(--linea-fuerte); padding: 0 10px; font-size: 13px; color: var(--texto); }
+.resumen { display: flex; justify-content: space-between; align-items: baseline; padding-top: 12px; border-top: 1px solid var(--linea); font-size: 13px; color: var(--sec); }
+.resumen b { font-size: 18px; font-weight: 600; color: var(--texto); letter-spacing: -0.01em; }
+.destinos { display: flex; flex-direction: column; border-top: 1px solid var(--linea); }
+.destinos label { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--linea); font-size: 13px; cursor: pointer; }
+.destinos input { accent-color: var(--marca); }
+.destinos small { color: var(--sec); margin-left: auto; font-size: 12px; }
+/* El lienzo: la hoja del PDF sobre el fondo, siempre en papel blanco */
+.lienzo { min-width: 0; overflow: auto; background: var(--sup2); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 24px 32px; }
+.lienzo-cab { width: 100%; max-width: 520px; display: flex; justify-content: space-between; align-items: center; }
+.lienzo-cab .nota-l { font-size: 12px; color: var(--ter); }
+.segmento-app { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--sup3); gap: 2px; }
+.segmento-app button { border: 0; background: none; padding: 5px 12px; border-radius: 6px; font-size: 12.5px; color: var(--sec); }
+.segmento-app button[aria-pressed="true"] { background: var(--sup); color: var(--texto); box-shadow: var(--sombra-boton); font-weight: 500; }
+.hoja-pdf { width: 100%; max-width: 520px; background: #FFFFFF; color: #15171A; border-radius: 4px; box-shadow: 0 0 0 1px rgba(17,19,23,.08), 0 10px 30px rgba(17,19,23,.14); padding: 34px 34px 40px; font-size: 10.5px; line-height: 1.5; display: flex; flex-direction: column; gap: 18px; }
+.hoja-pdf .enc { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.5px solid #002B81; padding-bottom: 12px; }
+.hoja-pdf .enc b { font-size: 15px; font-weight: 600; color: #002B81; letter-spacing: .02em; }
+.hoja-pdf .enc span { display: block; color: #525152; }
+.hoja-pdf .enc .der { text-align: right; }
+.hoja-pdf .enc .der b { color: #15171A; font-size: 12px; }
+.hoja-pdf .partes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.hoja-pdf .etq { font-size: 9px; color: #525152; text-transform: uppercase; letter-spacing: .06em; }
+.hoja-pdf table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.hoja-pdf th { text-align: left; font-weight: 600; color: #525152; font-size: 9px; padding: 5px 4px; border-bottom: 1px solid #E1E4EA; background: #F3F6FC; }
+.hoja-pdf td { padding: 6px 4px; height: auto; border-bottom: 1px solid #E1E4EA; white-space: normal; }
+.hoja-pdf .num { text-align: right; }
+.hoja-pdf .tot { align-self: flex-end; width: 58%; display: flex; flex-direction: column; }
+.hoja-pdf .tot div { display: flex; justify-content: space-between; padding: 3px 0; color: #525152; }
+.hoja-pdf .tot div span:last-child { color: #15171A; }
+.hoja-pdf .tot .gran { border-top: 1.5px solid #002B81; margin-top: 4px; padding-top: 7px; font-weight: 600; font-size: 12px; color: #15171A; }
+.hoja-pdf .cambio { animation: resaltar 1.2s var(--curva); border-radius: 2px; }
+@keyframes resaltar { from { background: rgba(47,95,232,.18); } }
+.correo { width: 100%; max-width: 520px; background: var(--sup); border-radius: 10px; box-shadow: 0 0 0 1px var(--linea); padding: 18px 20px; font-size: 13px; line-height: 1.55; display: flex; flex-direction: column; gap: 10px; }
+.correo .meta { color: var(--sec); font-size: 12px; display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 4px 10px; padding-bottom: 10px; border-bottom: 1px solid var(--linea); }
+.correo .adjunto { display: inline-flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--linea-fuerte); font-size: 12px; align-self: flex-start; }
+
+/* Inicio de sesión: el formulario a la izquierda y el producto en uso a la derecha (Laravel Cloud, folk, Pin) */
+.ingreso { height: 100%; display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr); }
+@media (max-width: 900px) { .ingreso { grid-template-columns: minmax(0, 1fr); } .vitrina { display: none; } }
+.lado-form { display: flex; flex-direction: column; padding: 26px 32px; }
+.lado-form .marca-app { padding: 0; }
+.centro-form { flex: 1; display: flex; align-items: center; justify-content: center; }
+.caja-ingreso { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 22px; }
+.caja-ingreso .titulo { display: flex; flex-direction: column; gap: 4px; }
+.caja-ingreso h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+.caja-ingreso .titulo p { margin: 0; color: var(--sec); font-size: 13.5px; }
+.caja-ingreso form { display: flex; flex-direction: column; gap: 14px; }
+.caja-ingreso .campo { display: flex; flex-direction: column; gap: 6px; }
+.caja-ingreso .fila-etq { display: flex; justify-content: space-between; align-items: baseline; }
+.caja-ingreso label { font-size: 13px; font-weight: 500; }
+.caja-ingreso .fila-etq a { font-size: 12px; color: var(--sec); text-decoration: none; }
+.caja-ingreso .fila-etq a:hover { color: var(--texto); }
+.con-ojo { position: relative; }
+.con-ojo button { position: absolute; right: 4px; top: 4px; width: 30px; height: 30px; border: 0; background: none; color: var(--ter); border-radius: 6px; display: grid; place-items: center; }
+.con-ojo button:hover { color: var(--texto); background: var(--sup2); }
+.entrada { width: 100%; height: 38px; border-radius: 8px; border: 0; background: var(--sup); box-shadow: inset 0 0 0 1px var(--linea-fuerte), var(--sombra-boton); padding: 0 11px; font-size: 14px; color: var(--texto); }
+.entrada:focus { outline: none; box-shadow: inset 0 0 0 1px var(--marca), 0 0 0 3px var(--marca-suave); }
+.separador { display: flex; align-items: center; gap: 12px; color: var(--ter); font-size: 12px; }
+.separador::before, .separador::after { content: ""; flex: 1; height: 1px; background: var(--linea); }
+.pie-ingreso { display: flex; justify-content: space-between; gap: 12px; color: var(--ter); font-size: 12px; }
+.pie-ingreso .en-linea { display: inline-flex; align-items: center; gap: 6px; }
+.pie-ingreso .en-linea i { width: 6px; height: 6px; border-radius: 99px; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
+/* La vitrina: el producto en uso, recortado contra el borde */
+.vitrina { position: relative; overflow: hidden; background: var(--vitrina); border-left: 1px solid var(--linea); }
+.vitrina::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(var(--vitrina-punto) 1px, transparent 1px); background-size: 20px 20px; mask-image: linear-gradient(to bottom, #000 30%, transparent 95%); }
+.vitrina .leyenda { position: absolute; left: 36px; top: 34px; z-index: 2; display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
+.vitrina .leyenda b { font-size: 15px; font-weight: 600; color: var(--texto); letter-spacing: -0.01em; }
+.vitrina .leyenda span { font-size: 13px; color: var(--sec); line-height: 1.45; }
+.mini { position: absolute; left: 36px; top: 124px; width: 820px; transform-origin: top left; scale: .9; border-radius: 10px; background: var(--fondo); box-shadow: 0 0 0 1px var(--linea-fuerte), 0 30px 70px rgba(10,20,50,.28); overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) 330px; animation: flotar-entra .8s var(--curva) both; }
+@keyframes flotar-entra { from { opacity: 0; translate: 0 14px; } }
+.mini .barra { grid-column: 1 / -1; height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid var(--linea); font-size: 12px; color: var(--sec); }
+.mini .barra b { color: var(--texto); font-weight: 500; }
+.mini .barra .pub { height: 24px; padding: 0 10px; border-radius: 6px; background: var(--marca); color: #fff; display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 500; }
+.mini .ed { padding: 16px 18px 90px; display: flex; flex-direction: column; gap: 8px; border-right: 1px solid var(--linea); }
+.mini .ed h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.mini .l { display: grid; grid-template-columns: minmax(0, 1fr) 90px 80px; gap: 8px; align-items: center; font-size: 11.5px; padding: 6px 0; border-top: 1px solid var(--linea); }
+.mini .l .p { height: 24px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--linea-fuerte); background: var(--sup); display: flex; align-items: center; justify-content: flex-end; padding: 0 7px; font-variant-numeric: tabular-nums; }
+.mini .l .p.escribiendo { box-shadow: inset 0 0 0 1px var(--marca), 0 0 0 3px var(--marca-suave); }
+.mini .l .t { text-align: right; font-variant-numeric: tabular-nums; }
+.mini .hoja { background: var(--sup2); padding: 14px; }
+.mini .papel { background: #fff; color: #15171A; border-radius: 3px; box-shadow: 0 6px 18px rgba(17,19,23,.14); padding: 16px; font-size: 8.5px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px; }
+.mini .papel .e { display: flex; justify-content: space-between; border-bottom: 1px solid #002B81; padding-bottom: 6px; }
+.mini .papel .e b { color: #002B81; font-size: 11px; font-weight: 600; }
+.mini .papel .r { display: flex; justify-content: space-between; border-bottom: 1px solid #E1E4EA; padding: 3px 0; }
+.mini .papel .tot { display: flex; justify-content: space-between; font-weight: 600; font-size: 10px; border-top: 1px solid #002B81; padding-top: 5px; margin-top: 4px; }
+.mini .papel .flash { animation: resaltar 1.2s var(--curva); border-radius: 2px; }
+.mini-tel { position: absolute; left: 76px; top: 330px; width: 240px; height: 360px; border-radius: 30px; background: var(--fondo); box-shadow: 0 0 0 6px #040507, 0 0 0 7px #22262d, 0 24px 50px rgba(10,20,50,.3); padding: 34px 14px 14px; display: flex; flex-direction: column; gap: 10px; animation: flotar-entra .8s .15s var(--curva) both; }
+.mini-tel .ok-envio { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 22px 8px 14px; }
+.mini-tel .chulo { width: 44px; height: 44px; border-radius: 99px; background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); display: grid; place-items: center; }
+.mini-tel .chulo svg { width: 22px; height: 22px; stroke-width: 2.2; }
+.mini-tel b { font-size: 15px; font-weight: 600; }
+.mini-tel span { font-size: 11.5px; color: var(--sec); }
+.mini-tel .etapa { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--sec); padding: 7px 4px; border-top: 1px solid var(--linea); }
+.mini-tel .etapa i { width: 14px; height: 14px; border-radius: 99px; background: var(--ok); display: grid; place-items: center; color: #fff; font-style: normal; font-size: 9px; }
+/* Confirmación */
+.velo { position: absolute; inset: 0; z-index: 20; background: var(--velo); backdrop-filter: blur(2px); animation: aparecer .2s var(--curva) both; }
+@keyframes aparecer { from { opacity: 0; } }
+.dialogo { position: absolute; z-index: 21; left: 50%; top: 50%; translate: -50% -50%; width: min(440px, calc(100% - 32px)); background: var(--sup); border-radius: 12px; box-shadow: var(--sombra-capa); animation: entrar .28s var(--curva) both; overflow: hidden; }
+@keyframes entrar { from { opacity: 0; scale: .97; } }
+.dialogo .dentro { padding: 20px 20px 16px; display: flex; flex-direction: column; gap: 12px; }
+.dialogo h2 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.35; }
+.consecuencias { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--linea); border-radius: 10px; }
+.consecuencias li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.4; }
+.consecuencias li + li { border-top: 1px solid var(--linea); }
+.consecuencias li svg { margin-top: 2px; color: var(--sec); }
+.consecuencias small { display: block; color: var(--sec); }
+.dialogo .pie { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; background: var(--sup2); border-top: 1px solid var(--linea); }
+
+/* Teléfono (campo) */
+.telefonos { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; }
+.telefono { width: 360px; max-width: 100%; height: 740px; border-radius: 42px; overflow: hidden; position: relative; background: var(--fondo); box-shadow: 0 0 0 9px #040507, 0 0 0 10px #22262d, 0 30px 70px rgba(0,0,0,.28); display: flex; flex-direction: column; }
+.tel-estado { height: 46px; display: flex; justify-content: space-between; align-items: center; padding: 0 28px; font-size: 14px; font-weight: 600; flex: none; }
+.tel-cab { padding: 6px 18px 14px; display: flex; flex-direction: column; gap: 10px; }
+.tel-cab .fila { display: flex; justify-content: space-between; align-items: center; color: var(--sec); font-size: 13px; }
+.progreso { height: 3px; border-radius: 99px; background: var(--sup3); overflow: hidden; }
+.progreso i { display: block; height: 100%; width: 58%; background: var(--marca); border-radius: 99px; }
+.tel-cab h1 { margin: 2px 0 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.tel-cab .hoy { color: var(--sec); font-size: 13px; }
+.tel-cuerpo { flex: 1; overflow: auto; padding: 0 16px 120px; display: flex; flex-direction: column; gap: 8px; }
+.tarjeta { background: var(--sup); border: 1px solid var(--linea); border-radius: 14px; padding: 14px 14px 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+.tarjeta strong { font-size: 16px; font-weight: 500; }
+.tarjeta .s { color: var(--sec); font-size: 13px; grid-column: 1; }
+.tarjeta .der { grid-row: 1 / span 2; grid-column: 2; }
+.tarjeta .ok { color: var(--ok); font-size: 12px; font-weight: 500; }
+.tarjeta .falta { color: var(--alerta); font-size: 12px; font-weight: 500; }
+.visita { background: var(--sup); border: 1px solid var(--linea); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.visita .ceja-v { display: flex; justify-content: space-between; color: var(--sec); font-size: 12px; font-weight: 500; }
+.visita .ceja-v b { color: var(--marca); font-weight: 500; }
+.visita h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+.visita .lugar { color: var(--sec); font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.lista-tel { display: flex; flex-direction: column; }
+.lista-tel div { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 12px 2px; border-top: 1px solid var(--linea); font-size: 14px; }
+.lista-tel .dia { color: var(--sec); font-size: 12px; line-height: 1.2; }
+.lista-tel .dia b { display: block; color: var(--texto); font-size: 16px; font-weight: 500; }
+.lista-tel small { display: block; color: var(--sec); font-size: 13px; }
+.tel-titulo-sec { margin: 14px 0 2px; font-size: 13px; font-weight: 500; color: var(--sec); }
+.agregar { height: 52px; border-radius: 14px; border: 1px dashed var(--linea-fuerte); background: transparent; color: var(--sec); font-size: 14px; font-weight: 500; }
+.tel-barra { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px 30px; background: linear-gradient(to top, var(--fondo) 72%, transparent); }
+.tel-barra .btn { height: 50px; font-size: 16px; border-radius: 12px; }
+.notif { position: absolute; left: 12px; right: 12px; bottom: 100px; z-index: 30; background: var(--texto); color: var(--fondo); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.35); display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 14px; min-height: 46px; font-size: 13px; font-weight: 500; overflow: hidden; }
+.notif span { flex: 1; }
+.notif button { border: 0; background: transparent; color: inherit; font-weight: 600; padding: 7px 10px; border-radius: 6px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fondo) 25%, transparent); }
+.notif::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--marca); transform-origin: left; animation: consumir 10s linear infinite; }
+@keyframes consumir { to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+</style>
+
+<div class="envoltura">
+  <div class="cabeza">
+    <div>
+      <h1>Base visual de TEINS · Precisión</h1>
+      <p>La dirección elegida en seis pantallas clave, antes de llevarla a la app. Elija la pantalla y el tema: del sistema sigue la configuración del equipo.</p>
+    </div>
+    <div class="mandos">
+      <div class="segmentos" role="group" aria-label="Tema" id="temas">
+        <button data-tema="sistema" aria-pressed="true">Sistema</button>
+        <button data-tema="claro" aria-pressed="false">Claro</button>
+        <button data-tema="oscuro" aria-pressed="false">Oscuro</button>
+      </div>
+    </div>
+  </div>
+  <div class="segmentos" role="group" aria-label="Pantalla" id="pantallas" style="align-self:flex-start"></div>
+  <p class="porque" id="porque"></p>
+  <div class="app" id="app" data-tema="sistema"></div>
+</div>
+
+<script>
+const ic = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${{
+  lev: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 14l2 2 4-4"/>',
+  cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  edif: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01"/>',
+  caja: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>',
+  rec: '<path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 1 1V2l-1 1-3-2-3 2-3-2-3 2z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  buscar: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  tel: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>',
+  enviar: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
+  llave: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2"/>',
+  mas: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  pin: '<path d="M12 22s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>',
+}[n]}</svg>`;
+
+const menu = (activa) => `
+  <aside class="menu"><div class="marca-app"><i></i>TEINS</div>
+    <nav aria-label="Secciones">
+      ${[["Levantamientos", "lev", "4"], ["Visitas", "cal"], ["Clientes", "edif"], ["Catálogo", "caja"]].map(([t, i, n]) => `<a href="#" ${t === activa ? 'aria-current="page"' : ""}>${ic(i)}${t}${n ? `<span class="cuenta-num">${n}</span>` : ""}</a>`).join("")}
+      <div class="grupo">Documentos</div>
+      ${[["Informes", "doc"], ["Cotizaciones", "rec"]].map(([t, i]) => `<a href="#" ${t === activa ? 'aria-current="page"' : ""}>${ic(i)}${t}</a>`).join("")}
+    </nav>
+    <div class="cuenta"><span class="avatar">LM</span><span>Laura Méndez<small>Oficina</small></span></div>
+  </aside>`;
+
+const PANTALLAS = {
+  bandeja: {
+    nombre: "Bandeja",
+    porque: "<b>Bandeja de oficina.</b> Lo que espera revisión, en una tabla densa y sin recuadros: pestañas subrayadas con su conteo, búsqueda con atajo, filas de 44 px y el tiempo de espera en ámbar desde dos días.",
+    html: () => `<div class="ventana">${menu("Levantamientos")}<div class="contenido">
+      <div class="barra-sup"><b>Levantamientos</b><span>Actualizado hace 1 min</span></div>
+      <div class="pagina">
+        <div class="cab"><div><h1>Levantamientos</h1><div class="datos"><span>4 esperan revisión</span><span>El más antiguo, desde el viernes</span></div></div></div>
+        <div><div class="barra-lista">
+          <div class="pestanas" role="tablist"><button role="tab" aria-selected="true">Esperando revisión <span>4</span></button><button role="tab" aria-selected="false">En revisión <span>2</span></button><button role="tab" aria-selected="false">Revisados</button></div>
+          <div class="buscar">${ic("buscar")}Buscar cliente, sitio o técnico<kbd>/</kbd></div>
+        </div>
+        <table><thead><tr><th>Cliente y sitio</th><th>Formato</th><th>Técnico</th><th>Recibido</th><th class="num">Lleva esperando</th></tr></thead><tbody>
+          ${[["Colegio Los Andes", "Bloque B", "Mantenimiento UPS", "MG", "María Gómez", "vie 25 sept · 4:10 p. m.", "4 días", true],
+             ["Clínica Santa Fe", "Sede Norte", "UPS y cuarto técnico", "JP", "Juan Pérez", "sáb 26 sept · 11:02 a. m.", "3 días", true],
+             ["Hotel Plaza Real", "Torre A", "Tableros y acometida", "JP", "Juan Pérez", "ayer · 5:48 p. m.", "Desde ayer", false],
+             ["Centro Comercial El Retiro", "Cuarto eléctrico 2", "Cotización", "AR", "Andrés Rojas", "hoy · 9:12 a. m.", "Hoy", false]]
+            .map(([c, s, f, ini, t, r, esp, larga]) => `<tr><td><span class="principal-celda">${c}</span> <span class="sec">· ${s}</span></td><td class="sec">${f}</td><td><span class="persona"><span class="avatar">${ini}</span>${t}</span></td><td class="sec">${r}</td><td class="num"><span class="espera ${larga ? "larga" : ""}">${esp}</span></td></tr>`).join("")}
+        </tbody></table></div>
+      </div></div></div>`,
+  },
+  detalle: {
+    nombre: "Detalle y confirmación",
+    porque: "<b>Detalle del levantamiento.</b> El dato a la izquierda en líneas finas, la revisión y los comentarios en un carril. La confirmación no lleva icono: la pregunta con el verbo, las consecuencias concretas y los atajos de teclado.",
+    html: () => `<div class="ventana">${menu("Levantamientos")}<div class="contenido">
+      <div class="barra-sup"><span>Levantamientos / <b>Clínica Santa Fe</b></span><span>Guardado 9:41 a. m.</span></div>
+      <div class="pagina"><div class="detalle"><div>
+        <div class="cab"><div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h1>Clínica Santa Fe · Sede Norte</h1><span class="estado"><i></i>En revisión</span></div>
+          <div class="datos"><span>UPS y cuarto técnico</span><span>Juan Pérez</span><span>Recibido el sábado, 11:02 a. m.</span></div></div></div>
+        <div class="seccion" style="margin-top:22px"><h2>Cuarto técnico</h2>
+          <div class="dato"><span class="n">Potencia nominal</span><span class="v"><b>20</b><small>kVA</small></span></div>
+          <div class="dato"><span class="n">Tensión de entrada</span><span class="v"><b>208</b><small>V trifásica</small></span></div>
+          <div class="dato"><span class="n">Descripción del sitio</span><span class="v">Cuarto con ventilación forzada, acceso por el sótano</span></div>
+          <div class="dato"><span class="n">Fotos del equipo</span><span class="v fotos"><i></i><i></i><i></i><i></i></span></div>
+        </div></div>
+        <div class="carril">
+          <div class="panel"><h3>Revisión</h3><p>Tomada por usted. Al marcarla revisada, queda lista para el informe.</p><button class="btn principal ancho">Marcar revisado</button></div>
+          <div class="panel"><h3>Comentarios · 2</h3><div class="comentario"><span class="avatar">LM</span><span>Falta la placa del segundo banco de baterías.<small>Sobre Fotos del equipo · 9:30 a. m.</small></span></div></div>
+        </div></div></div></div>
+      <div class="velo"></div>
+      <div class="dialogo" role="dialog" aria-modal="true" aria-labelledby="t-d"><div class="dentro">
+        <h2 id="t-d">¿Marcar revisado el levantamiento de Juan Pérez?</h2>
+        <ul class="consecuencias">
+          <li>${ic("doc")}<span>Queda listo para el informe de la visita<small>Ya no se corrige desde la revisión</small></span></li>
+          <li>${ic("tel")}<span>Juan Pérez lo ve como revisado en su teléfono<small>Con los 2 comentarios que le dejó</small></span></li>
+        </ul></div>
+        <div class="pie"><button class="btn">Cancelar <span class="kbd">Esc</span></button><button class="btn principal">Marcar revisado <span class="kbd">↵</span></button></div>
+      </div></div>`,
+  },
+  cotizacion: {
+    nombre: "Cotización",
+    porque: "<b>Cotización.</b> El editor a la izquierda y, a la derecha, el documento que recibe el cliente, en vivo: cambie un precio o los impuestos y la hoja se actualiza. Con la pestaña «Correo», lo que le llega a Marta Gil.",
+    html: () => `<div class="ventana">${menu("Cotizaciones")}<div class="contenido">
+      <div class="barra-sup"><span>Cotizaciones / <b>COT-2026-0045</b></span>
+        <span class="acciones"><span class="guardado" id="guardado"><i></i>Cambios sin guardar</span><button class="btn">Guardar borrador</button><button class="btn principal">${ic("enviar")}Publicar versión 1</button></span></div>
+      <div class="cot">
+        <div class="editor">
+          <div class="cab"><div><div style="display:flex;align-items:center;gap:10px"><h1>Cotización COT-2026-0045</h1><span class="estado gris"><i></i>Borrador</span></div>
+            <div class="datos"><span>Clínica Santa Fe · Sede Norte</span><span>Visita del lunes 28 de septiembre</span></div></div></div>
+          <div class="bloque"><h2>Líneas</h2>
+            <div class="lineas">
+              <div class="linea cab-l"><span>Descripción</span><span class="num">Cantidad</span><span class="num">Precio unitario</span><span class="num">Total</span></div>
+              ${cot.lineas.map((l, i) => `<div class="linea"><span class="desc"><b>${l.d}</b><span class="origen">${l.o}</span></span><span class="num">${l.c} ${l.u}</span>
+                <input class="celda-precio" data-precio="${i}" value="${miles(l.p)}" inputmode="numeric" aria-label="Precio de ${l.d}"><span class="num" data-t="linea-${i}">$ ${miles(l.c * l.p)}</span></div>`).join("")}
+            </div>
+            <button class="agregar-linea">${ic("mas")}Agregar línea</button>
+          </div>
+          <div class="bloque"><h2>Impuestos</h2>
+            <div class="opciones">
+              <label class="opcion ${cot.imp === "iva" ? "elegida" : ""}"><input type="radio" name="imp" value="iva" ${cot.imp === "iva" ? "checked" : ""}><span>IVA 19 %<small>Sobre el subtotal</small></span></label>
+              <label class="opcion ${cot.imp === "aiu" ? "elegida" : ""}"><input type="radio" name="imp" value="aiu" ${cot.imp === "aiu" ? "checked" : ""}><span>AIU<small>A 10 % · I 3 % · U 5 %, IVA sobre U</small></span></label>
+            </div>
+          </div>
+          <div class="bloque"><h2>Condiciones</h2>
+            <div class="fila-campos"><label class="campo-c">Validez (días)<input value="30" inputmode="numeric"></label><label class="campo-c">Forma de pago<input value="50 % al aprobar, 50 % al entregar"></label></div>
+          </div>
+          <div class="bloque"><h2>Se envía a</h2>
+            <div class="destinos"><label><input type="checkbox" checked>Marta Gil<small>Compras · correo</small></label><label><input type="checkbox">Andrés Ruiz<small>Mantenimiento · correo y WhatsApp</small></label></div>
+          </div>
+          <div class="resumen"><span>Total de la versión 1</span><b data-t="total">$ ${miles(totales().total)}</b></div>
+        </div>
+        <div class="lienzo">
+          <div class="lienzo-cab"><div class="segmento-app" role="group" aria-label="Vista previa"><button data-vista="pdf" aria-pressed="${cot.vista === "pdf"}">PDF</button><button data-vista="correo" aria-pressed="${cot.vista === "correo"}">Correo</button></div><span class="nota-l">Vista previa · se actualiza al escribir</span></div>
+          ${cot.vista === "pdf" ? hojaPdf() : correo()}
+        </div>
+      </div></div></div>`,
+  },
+  ingreso: {
+    nombre: "Inicio de sesión",
+    porque: "<b>Inicio de sesión.</b> El formulario a la izquierda y, a la derecha, TEINS en uso, como Laravel Cloud o folk: la cotización con su hoja en vivo (cada pocos segundos cambia un precio y la hoja se actualiza) y el teléfono con un envío recibido. Sin textos de venta.",
+    html: () => `<div class="ventana sola"><div class="ingreso">
+      <div class="lado-form">
+        <div class="marca-app"><i></i>TEINS</div>
+        <div class="centro-form"><div class="caja-ingreso">
+          <div class="titulo"><h1>Ingresar</h1><p>Con su usuario de TEINS.</p></div>
+          <form onsubmit="return false">
+            <div class="campo"><label for="u">Usuario</label><input id="u" class="entrada" value="laura.mendez" autocomplete="username"></div>
+            <div class="campo"><div class="fila-etq"><label for="c">Contraseña</label><a href="#" title="Pídale a administración que la restablezca">¿La olvidó?</a></div>
+              <div class="con-ojo"><input id="c" class="entrada" type="password" value="contrasena-de-prueba" autocomplete="current-password"><button type="button" aria-label="Mostrar la contraseña"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+            <button class="btn principal grande ancho">Ingresar</button>
+          </form>
+          <div class="separador">o</div>
+          <button class="btn grande ancho">${ic("llave")}Ingresar con llave de acceso</button>
+        </div></div>
+        <div class="pie-ingreso"><span class="en-linea"><i></i>Conectado al servidor</span><span>¿Problemas para entrar? Hable con administración</span></div>
+      </div>
+      <div class="vitrina" aria-hidden="true">
+        <div class="leyenda"><b>Del sitio al cliente, sin volver a digitar</b><span>Levantamientos en el teléfono, revisión en oficina, informes y cotizaciones que el cliente recibe.</span></div>
+        <div class="mini">
+          <div class="barra"><span>Cotizaciones / <b>COT-2026-0045</b></span><span class="pub">Publicar versión 1</span></div>
+          <div class="ed"><h3>Cotización COT-2026-0045</h3>
+            ${VITRINA.map((l, i) => `<div class="l"><span>${l.d}</span><span class="p" data-v="p-${i}">${miles(l.p)}</span><span class="t" data-v="t-${i}">$ ${miles(l.p * l.c)}</span></div>`).join("")}
+          </div>
+          <div class="hoja"><div class="papel">
+            <div class="e"><b>TEINS</b><span>COT-2026-0045 · v1</span></div>
+            <div>Clínica Santa Fe · Sede Norte</div>
+            ${VITRINA.map((l, i) => `<div class="r"><span>${l.d}</span><span data-v="h-${i}">$ ${miles(l.p * l.c)}</span></div>`).join("")}
+            <div class="tot"><span>Total</span><span data-v="total">$ ${miles(totalVitrina())}</span></div>
+          </div></div>
+        </div>
+        <div class="mini-tel"><div class="ok-envio"><span class="chulo">${ic("check")}</span><b>En oficina</b><span>Clínica Santa Fe · 12 fotos</span></div>
+          <div class="etapa"><i>✓</i>Guardado en el teléfono</div><div class="etapa"><i>✓</i>Fotos y dibujos · 12 de 12</div><div class="etapa"><i>✓</i>Recibido en oficina</div></div>
+      </div>
+    </div></div>`,
+  },
+  campo: {
+    nombre: "Campo",
+    porque: "<b>Campo.</b> El inicio con la siguiente visita arriba y su acción al alcance del pulgar; el paso de tableros con el avance, tarjetas finas y la notificación con «Deshacer» sobre el botón de abajo.",
+    html: () => `<div class="telefonos">
+      <div class="telefono"><div class="tel-estado"><span>7:52</span><span>●●●</span></div>
+        <div class="tel-cab"><span class="hoy">Martes 29 de septiembre</span><h1>Hola, Juan</h1></div>
+        <div class="tel-cuerpo">
+          <div class="visita"><div class="ceja-v"><span>Siguiente visita</span><b>Hoy · 9:00 a. m.</b></div>
+            <h2>Clínica Santa Fe</h2><div class="lugar"><span>Sede Norte · Calle [N] # [N]-[N]</span><span>Mantenimiento · UPS y cuarto técnico</span></div>
+            <button class="btn principal grande ancho">Iniciar levantamiento</button></div>
+          <p class="tel-titulo-sec">Esta semana</p>
+          <div class="lista-tel">
+            <div><span class="dia">jue<b>1</b></span><span>Hotel Plaza Real<small>Torre A · Tableros y acometida</small></span></div>
+            <div><span class="dia">vie<b>2</b></span><span>Colegio Los Andes<small>Bloque B · Mantenimiento UPS</small></span></div>
+          </div>
+        </div></div>
+      <div class="telefono"><div class="tel-estado"><span>9:41</span><span>●●●</span></div>
+        <div class="tel-cab"><div class="fila"><span>Paso 3 de 6 · Clínica Santa Fe</span><span>3/6</span></div><div class="progreso"><i></i></div><h1>Tableros</h1></div>
+        <div class="tel-cuerpo">
+          <div class="tarjeta"><strong>Tablero principal</strong><span class="s">Sótano · 63 A</span><span class="der"><span class="ok">✓ Completo</span></span></div>
+          <div class="tarjeta"><strong>Tablero 3</strong><span class="s">Piso 3 · 40 A</span><span class="der"><span class="falta">Falta 1 dato</span></span></div>
+          <button class="agregar">+ Agregar tablero</button>
+        </div>
+        <div class="notif" role="status"><span>Tablero 2 quitado</span><button>Deshacer</button></div>
+        <div class="tel-barra"><button class="btn principal ancho">Siguiente: materiales</button></div>
+      </div></div>`,
+  },
+};
+
+
+const miles = (n) => Math.round(n).toLocaleString("es-CO");
+const cot = {
+  imp: "aiu", vista: "pdf",
+  lineas: [
+    { d: "Cable UTP categoría 6A", o: "UTP-6A · Del catálogo", c: 30, u: "m", p: 4800 },
+    { d: "Canaleta metálica 40 × 25", o: "CAN-40 · Del catálogo", c: 12, u: "und", p: 18500 },
+    { d: "Mano de obra de instalación", o: "Agregada en oficina", c: 1, u: "gl", p: 850000 },
+  ],
+};
+function totales() {
+  const subtotal = cot.lineas.reduce((s, l) => s + l.c * l.p, 0);
+  if (cot.imp === "iva") return { subtotal, filas: [["IVA 19 %", subtotal * 0.19]], total: subtotal * 1.19 };
+  const a = subtotal * 0.1, i = subtotal * 0.03, u = subtotal * 0.05, iu = u * 0.19;
+  return { subtotal, filas: [["Administración 10 %", a], ["Imprevistos 3 %", i], ["Utilidad 5 %", u], ["IVA 19 % sobre la utilidad", iu]], total: subtotal + a + i + u + iu };
+}
+function hojaPdf() {
+  const t = totales();
+  return `<div class="hoja-pdf" aria-label="Vista previa del PDF">
+    <div class="enc"><div><b>TEINS</b><span>[LOGO] · NIT [N] · [Dirección]</span></div><div class="der"><b>Cotización COT-2026-0045</b><span>Versión 1 · 29 de septiembre de 2026</span><span>Válida hasta el 29 de octubre de 2026</span></div></div>
+    <div class="partes"><div><span class="etq">Cliente</span><div><b>Clínica Santa Fe</b></div><span>[NIT del cliente]</span></div><div><span class="etq">Sitio</span><div><b>Sede Norte</b></div><span>Calle [N] # [N]-[N] · visita del 28 sept 2026</span></div></div>
+    <table><thead><tr><th>Descripción</th><th class="num">Cant.</th><th>Und</th><th class="num">Precio</th><th class="num">Total</th></tr></thead><tbody>
+      ${cot.lineas.map((l, i) => `<tr><td>${l.d}</td><td class="num">${l.c}</td><td>${l.u}</td><td class="num" data-t="pdf-precio-${i}">$ ${miles(l.p)}</td><td class="num" data-t="pdf-linea-${i}">$ ${miles(l.c * l.p)}</td></tr>`).join("")}
+    </tbody></table>
+    <div class="tot" data-t="pdf-tot">${filasTotales(t)}</div>
+    <div><span class="etq">Condiciones</span><div>Validez: 30 días. Forma de pago: 50 % al aprobar, 50 % al entregar.</div></div>
+  </div>`;
+}
+const filasTotales = (t) => `<div><span>Subtotal</span><span>$ ${miles(t.subtotal)}</span></div>${t.filas.map(([n, v]) => `<div><span>${n}</span><span>$ ${miles(v)}</span></div>`).join("")}<div class="gran"><span>Total</span><span>$ ${miles(t.total)}</span></div>`;
+function correo() {
+  return `<div class="correo" aria-label="Vista previa del correo">
+    <div class="meta"><span>Para</span><span>Marta Gil &lt;compras@cliente.example&gt;</span><span>Asunto</span><span>Cotización COT-2026-0045 · Sede Norte</span></div>
+    <p style="margin:0">Hola, Marta:</p>
+    <p style="margin:0">Adjuntamos la cotización COT-2026-0045 para la Sede Norte, de la visita del 28 de septiembre. El total es de <b data-t="correo-total">$ ${miles(totales().total)}</b> y la oferta es válida por 30 días.</p>
+    <p style="margin:0;color:var(--sec)">TEINS</p>
+    <span class="adjunto">${ic("doc")}Cotización COT-2026-0045 - Clínica Santa Fe - versión 1.pdf</span>
+  </div>`;
+}
+/* Al escribir no se vuelve a pintar la pantalla (se perdería el foco): solo cambian las cifras, con un destello. */
+function recalcular(cambio) {
+  const t = totales();
+  const poner = (k, v) => { const el = document.querySelector(`[data-t="${k}"]`); if (el) { el.textContent = v; el.classList.remove("cambio"); void el.offsetWidth; el.classList.add("cambio"); } };
+  cot.lineas.forEach((l, i) => { if (cambio === undefined || cambio === i) { poner(`linea-${i}`, `$ ${miles(l.c * l.p)}`); poner(`pdf-precio-${i}`, `$ ${miles(l.p)}`); poner(`pdf-linea-${i}`, `$ ${miles(l.c * l.p)}`); } });
+  poner("total", `$ ${miles(t.total)}`); poner("correo-total", `$ ${miles(t.total)}`);
+  const tot = document.querySelector('[data-t="pdf-tot"]'); if (tot) tot.innerHTML = filasTotales(t);
+}
+document.addEventListener("input", (ev) => {
+  const i = ev.target.dataset?.precio;
+  if (i === undefined) return;
+  const n = Number(ev.target.value.replace(/\D/g, ""));
+  cot.lineas[+i].p = n;
+  ev.target.value = n ? miles(n) : "";
+  recalcular(+i);
+});
+document.addEventListener("change", (ev) => { if (ev.target.name === "imp") { cot.imp = ev.target.value; pintar(); } });
+document.addEventListener("click", (ev) => { const b = ev.target.closest("[data-vista]"); if (b) { cot.vista = b.dataset.vista; pintar(); } });
+
+const VITRINA = [{ d: "Cable UTP 6A", c: 30, p: 4800 }, { d: "Canaleta 40 × 25", c: 12, p: 18500 }, { d: "Mano de obra", c: 1, p: 850000 }];
+const totalVitrina = () => VITRINA.reduce((s, l) => s + l.c * l.p, 0) * 1.19;
+/* Cada pocos segundos alguien "escribe" un precio y la hoja del cliente cambia: la función que distingue a TEINS, en uso. */
+let reloj;
+function animarVitrina() {
+  clearInterval(reloj);
+  if (e.pantalla !== "ingreso" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const precios = [[4800, 5200], [18500, 17900], [850000, 920000]];
+  let paso = 0;
+  reloj = setInterval(() => {
+    const i = paso % 3, par = precios[i];
+    VITRINA[i].p = VITRINA[i].p === par[0] ? par[1] : par[0];
+    const poner = (k, v, clase) => { const el = document.querySelector(`[data-v="${k}"]`); if (!el) return; el.textContent = v; if (clase) { el.classList.remove(clase); void el.offsetWidth; el.classList.add(clase); } };
+    const campo = document.querySelector(`[data-v="p-${i}"]`);
+    campo?.classList.add("escribiendo");
+    poner(`p-${i}`, miles(VITRINA[i].p));
+    setTimeout(() => {
+      campo?.classList.remove("escribiendo");
+      poner(`t-${i}`, `$ ${miles(VITRINA[i].p * VITRINA[i].c)}`);
+      poner(`h-${i}`, `$ ${miles(VITRINA[i].p * VITRINA[i].c)}`, "flash");
+      poner("total", `$ ${miles(totalVitrina())}`, "flash");
+    }, 450);
+    paso++;
+  }, 2800);
+}
+
+const e = { pantalla: "ingreso", tema: "sistema" };
+function pintar() {
+  document.getElementById("pantallas").innerHTML = Object.entries(PANTALLAS).map(([k, p]) => `<button data-p="${k}" aria-pressed="${k === e.pantalla}">${p.nombre}</button>`).join("");
+  document.getElementById("porque").innerHTML = PANTALLAS[e.pantalla].porque;
+  const app = document.getElementById("app");
+  app.dataset.tema = e.tema;
+  app.innerHTML = `<div class="escena">${PANTALLAS[e.pantalla].html()}</div>`;
+  document.querySelectorAll("#temas button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tema === e.tema)));
+  animarVitrina();
+}
+document.getElementById("pantallas").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) { e.pantalla = b.dataset.p; pintar(); } });
+document.getElementById("temas").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) { e.tema = b.dataset.tema; pintar(); } });
+pintar();
+</script>

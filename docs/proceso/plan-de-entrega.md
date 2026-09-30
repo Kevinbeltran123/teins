@@ -962,6 +962,26 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **En iPhone, la app instalada no comparte datos con Safari** y los avisos solo llegan a la app instalada: la instalación va antes de iniciar sesión.
 - **La biblioteca `web-push` es MPL-2.0,** que la verificación de licencias ya admite.
 
+## Propuesta · Vista en vivo de los documentos
+
+**Estado:** propuesta del 2026-09-29, a partir del prototipo de la base visual Precisión (https://claude.ai/artifact/MkRSHwecL2gXCZQ8zfHCrY). A Kevin le pareció "un diferencial grandísimo" y pidió plantearla como una sola función. Falta aprobarla, darle número de iteración y escribir su ADR.
+
+**La idea:** mientras oficina trabaja, ve al lado el documento que va a recibir el cliente, tal como va a quedar, y se actualiza al escribir. Hoy solo se ve después de publicar, cuando ya no se puede cambiar.
+
+**Dónde se usa:**
+
+| Pantalla | Qué se ve en vivo |
+|---|---|
+| Cotización | La hoja de la cotización: cada precio, línea o cambio de impuestos se refleja al instante; pestaña "Correo" con el mensaje que recibe el contacto |
+| Informe | El informe completo en el orden del PDF: introducción, un capítulo por levantamiento incluido, conclusiones y planos |
+| Revisión de un levantamiento | Al corregir un dato, el capítulo del informe donde aparece, con el cambio resaltado y el valor anterior |
+| Envíos | El correo y el WhatsApp que salen, con el adjunto |
+| Campo (después) | En "Antes de enviar", lo que oficina va a recibir |
+
+**Arquitectura propuesta (va al ADR):** las plantillas del informe y la cotización salen del servidor a un paquete nuevo, `paquetes/documentos`, que solo depende de `dominio` (hoy ya solo dependen de él y de una función de escape). El servidor las sigue usando para imprimir el PDF; oficina las usa para dibujar la vista en vivo sin ir al servidor en cada tecla. Así la vista previa y el PDF salen del mismo código y no se pueden separar. Los estilos de la plantilla pasan a un archivo servido por la misma superficie, para que la CSP de oficina (`style-src 'self'`) los admita en un marco `srcdoc`. Queda por decidir cómo paginar en pantalla (hojas carta fijas o continuo con marcas de salto).
+
+**Lo que ya existe y se reemplaza:** la vista previa de la cotización de la iteración 24 (documento del servidor con la versión guardada), que pasaría a ser en vivo y sin guardar.
+
 ## Iteración 24 · Robustez y protección
 
 **Estado:** aprobada por Kevin el 2026-09-29. 24a hecha y desplegada en el entorno de pruebas el 2026-09-29; 24b hecha y verificada en local, sin desplegar. Siguen 24c y 24d.
