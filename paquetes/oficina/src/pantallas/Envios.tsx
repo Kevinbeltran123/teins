@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import { Aviso, Boton, Confirmacion, Insignia, Mail, MessageCircle, RefreshCw, Send, useNotificar } from "@teins/ui";
@@ -121,7 +121,8 @@ interface PropsEnvios {
   cliente: { id: string; nombre: string };
   version: { numero: number; pdf: "generando" | "listo" | "fallido"; envios: readonly Envio[] };
   contactos: readonly Contacto[] | undefined;
-  enviar: (destinos: Destino[]) => Promise<unknown>;
+  /** `llave`: la decisión de enviar (regla 4). El mismo pedido repetido con su llave sale una sola vez. */
+  enviar: (destinos: Destino[], llave: string) => Promise<unknown>;
   recargar: () => void;
   /** Acciones de la versión que van junto a "Enviar a otro contacto" (retirar del portal). */
   acciones?: ReactNode;
@@ -136,6 +137,8 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, 
   const [eligiendo, setEligiendo] = useState(false);
   const [reenviando, setReenviando] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Una llave por envío que se vuelve a enviar: reintentar después de un error no manda dos copias.
+  const llaves = useRef(new Map<string, string>());
   const envios = ultimosIntentos(version.envios);
   const sinLlegar = envios.filter((e) => e.estado === "fallido");
   const esperando = envios.some((e) => e.estado === "en_cola");
@@ -146,7 +149,9 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, 
     setReenviando(e.id);
     setError(null);
     try {
-      await enviar([{ contactoId: e.contacto.id, canal: e.canal }]);
+      const llave = llaves.current.get(e.id) ?? crypto.randomUUID();
+      llaves.current.set(e.id, llave);
+      await enviar([{ contactoId: e.contacto.id, canal: e.canal }], llave);
       recargar();
       notificar({ texto: `Envío a ${e.contacto.nombre} en cola` });
     } catch (causa) {
@@ -234,12 +239,14 @@ function EnviarAContactos({
   cliente: { id: string; nombre: string };
   numero: number;
   contactos: readonly Contacto[];
-  enviar: (destinos: Destino[]) => Promise<unknown>;
+  enviar: (destinos: Destino[], llave: string) => Promise<unknown>;
   alCerrar: () => void;
   alEnviar: () => void;
 }) {
   const notificar = useNotificar();
   const [elegidos, setElegidos] = useState<string[]>([]);
+  // Reintentar a los mismos es el mismo pedido; cambiar a quién es otra decisión.
+  const llave = useMemo(() => crypto.randomUUID(), [elegidos.join()]);
   const nombres = contactos.filter((c) => elegidos.includes(c.id)).map((c) => c.nombre);
   return (
     <Confirmacion
@@ -250,7 +257,7 @@ function EnviarAContactos({
       alCerrar={alCerrar}
       alTerminar={() => notificar({ texto: nombres.length === 1 ? `Envío a ${nombres[0]} en cola` : `${nombres.length} envíos en cola` })}
       accion={async () => {
-        await enviar(elegidos.map((contactoId) => ({ contactoId })));
+        await enviar(elegidos.map((contactoId) => ({ contactoId })), llave);
         alEnviar();
       }}
     >

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useBlocker } from "@tanstack/react-router";
 import { aDecimalColombiano, calcularTotales, normalizarDecimal, PORCENTAJE, type Impuestos, type LineaDeCotizacion } from "@teins/dominio";
-import { ErrorApi, type Respuesta } from "@teins/protocolo";
+import { ErrorApi, rutaVistaPreviaCotizacion, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
   Boton,
@@ -184,6 +184,19 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
     await publicar.mutateAsync({ version: guardada, destinatarios: elegidos });
   }
 
+  // La confirmación muestra lo que se va a publicar, que es lo guardado: si hay cambios, primero se guardan.
+  async function abrirPublicar() {
+    if (cambiado) {
+      try {
+        await guardarBorrador();
+      } catch {
+        return;
+      }
+    }
+    setDestinatarios(null);
+    setConfirmando(true);
+  }
+
   function recargarDescartando() {
     guardar.reset();
     publicar.reset();
@@ -264,10 +277,8 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
               variante="principal"
               icono={Send}
               disabled={!guardable || sinPrecio > 0 || borrador.lineas.length === 0}
-              onClick={() => {
-                setDestinatarios(null);
-                setConfirmando(true);
-              }}
+              cargando={guardar.isPending}
+              onClick={() => void abrirPublicar()}
             >
               {`Publicar versión ${siguiente}`}
             </Boton>
@@ -507,7 +518,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
                   cliente={{ id: c.clienteId, nombre: c.visita.cliente }}
                   version={vigente}
                   contactos={contactos.data?.contactos}
-                  enviar={(destinos) => cliente.llamar("enviarCotizacion", { parametros: { id: c.id, numero: vigente.numero }, cuerpo: { destinos } })}
+                  enviar={(destinos, llave) => cliente.llamar("enviarCotizacion", { parametros: { id: c.id, numero: vigente.numero }, cuerpo: { destinos, llave } })}
                   recargar={recargar}
                 />
               )
@@ -529,6 +540,11 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           <p>
             El total queda en <b style={{ color: "var(--texto)" }}>{pesos(totales.total)}</b>. Queda congelada con sus precios e impuestos: cambiar la lista de precios después no la afecta. Para corregir algo se publica una versión nueva, y la anterior se conserva.
           </p>
+          {/* La plantilla del PDF con lo guardado (iteración 24). Aproximada: el PDF pagina y pone el pie. */}
+          <figure className="vista-previa">
+            <iframe src={rutaVistaPreviaCotizacion(c.id)} sandbox="" title={`Vista previa de la versión ${siguiente}`} />
+            <figcaption className="ayuda">Vista previa aproximada: en el PDF pueden cambiar los saltos de página.</figcaption>
+          </figure>
           {contactos.isPending ? (
             <p className="ayuda">Cargando los contactos del cliente…</p>
           ) : contactos.isError ? (

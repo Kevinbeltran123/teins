@@ -732,6 +732,10 @@ dialog.capa-lateral .capa-pie, dialog.capa-centrado .capa-pie { display: grid; g
 dialog.capa-lateral .capa-pie { padding: 16px 24px 22px; border-top: 1px solid var(--borde); }
 dialog.capa-lateral .capa-pie > .btn, dialog.capa-centrado .capa-pie > .btn { min-height: 52px; padding: 0 22px; font-size: 16px; border-radius: 16px; }
 dialog.capa-lateral .capa-cerrar { top: 20px; right: 20px; width: 40px; height: 40px; background: var(--sup2); color: var(--texto); }
+/* Vista previa de la cotización: la hoja carta (816 px) a su tamaño, reducida para caber en la confirmación */
+.vista-previa { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.vista-previa iframe { width: 816px; height: 760px; zoom: .54; border: 2px solid var(--borde); border-radius: 20px; background: var(--papel); }
+
 dialog.capa-centrado { width: min(500px, calc(100vw - 32px)); background: var(--sup); border-radius: var(--r-capa); box-shadow: var(--sombra); animation: entrar-centro-capa .35s var(--resorte) both; }
 dialog.capa-centrado .capa-cabeza { flex-direction: column; gap: 16px; padding: 26px 26px 0; }
 dialog.capa-centrado .capa-cabeza h2 { font-size: 22px; font-weight: 800; line-height: 1.2; text-wrap: balance; }

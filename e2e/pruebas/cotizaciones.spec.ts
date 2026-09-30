@@ -110,6 +110,10 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   // Publicar: quien recibe cotizaciones viene marcado; el PDF se genera y sale.
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
   const confirmar = o.getByRole("dialog", { name: /¿Publicar la versión 1 de COT-/ });
+  // Antes de publicar se ve lo que recibe el cliente: lo guardado, con la plantilla del PDF (iteración 24).
+  const vista = confirmar.frameLocator('iframe[title="Vista previa de la versión 1"]');
+  await expect(vista.getByText("Mano de obra de instalación")).toBeVisible();
+  await expect(vista.getByText("$ 1.182.363")).toBeVisible();
   await expect(confirmar.getByRole("checkbox", { name: "Marta Gil" })).toBeChecked();
   await confirmar.getByRole("button", { name: "Publicar y enviar a 1" }).click();
   await expect(o.getByText("Versión 1 vigente")).toBeVisible();

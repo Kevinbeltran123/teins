@@ -335,7 +335,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
                   cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }}
                   version={vigente}
                   contactos={contactos.data?.contactos}
-                  enviar={(destinos) => cliente.llamar("enviarVersion", { parametros: { id: informe.id, numero: vigente.numero }, cuerpo: { destinos } })}
+                  enviar={(destinos, llave) => cliente.llamar("enviarVersion", { parametros: { id: informe.id, numero: vigente.numero }, cuerpo: { destinos, llave } })}
                   recargar={recargar}
                 />
               )
