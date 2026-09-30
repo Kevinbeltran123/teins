@@ -213,6 +213,7 @@ export function DetalleCliente({ id }: { id: string }) {
       )}
       {quitando && (
         <Confirmacion
+          nivel="consecuencia"
           titulo={`¿Quitar a ${quitando.nombre}?`}
           confirmar="Quitar contacto"
           mensajeDeError={mensajeDeProgramacion}

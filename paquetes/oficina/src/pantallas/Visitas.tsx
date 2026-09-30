@@ -563,7 +563,7 @@ function Cancelar({ v, alCerrar, alCancelar }: { v: Visita; alCerrar: () => void
       titulo={`¿Cancelar la visita a ${v.cliente.nombre}?`}
       confirmar="Cancelar visita"
       descartar="Volver"
-      peligro
+      nivel="irreversible"
       validar={() => (motivo.trim() === "" ? "Escriba por qué se cancela: queda en el registro." : null)}
       mensajeDeError={mensajeDeProgramacion}
       accion={() => accion.mutateAsync(undefined)}

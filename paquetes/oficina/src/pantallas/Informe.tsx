@@ -1,6 +1,6 @@
 import { cloneElement, isValidElement, useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useBlocker } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   ArrowDown,
@@ -23,6 +23,7 @@ import {
 } from "@teins/ui";
 import { cliente, consultas, esSesionVencida } from "../api";
 import { useBorrador } from "../borrador";
+import { useSalidaProtegida } from "../salida";
 import { aFechaCorta } from "../formato";
 import { mensajeDeAdministracion } from "../administracion";
 import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
@@ -126,8 +127,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
   const error = errorPlano ?? (esSesionVencida(guardar.error) ? null : guardar.error);
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
-  // Salir con cambios sin guardar pregunta antes, también al cerrar la pestaña (DESIGN.md).
-  const salida = useBlocker({ shouldBlockFn: () => cambiado, enableBeforeUnload: () => cambiado, withResolver: true });
+  const salida = useSalidaProtegida(cambiado);
   const vigente = vigenteDe(informe);
   const reciben = contactos.data ? contactos.data.contactos.filter((c) => receptores(contactos.data.contactos, "informes").includes(c.id)).map((c) => c.nombre) : [];
 
@@ -351,7 +351,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
         <Confirmacion
           titulo={`¿Publicar la versión ${siguiente}?`}
           confirmar={elegidos.length > 0 ? `Publicar y enviar a ${elegidos.length}` : `Publicar versión ${siguiente}`}
-          peligro
+          nivel="irreversible"
           mensajeDeError={(e) => mensajeDeInforme(e, nombreDe).join(" ")}
           alCerrar={() => setConfirmando(false)}
           alTerminar={() =>
@@ -370,11 +370,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           {elegidos.length > 0 && <p className="ayuda">Lo enviado no se puede recuperar, ni retirando la versión del portal.</p>}
         </Confirmacion>
       )}
-      {salida.status === "blocked" && (
-        <Confirmacion titulo="¿Salir sin guardar?" confirmar="Salir sin guardar" descartar="Seguir editando" peligro mensajeDeError={() => ""} alCerrar={salida.reset} accion={async () => salida.proceed()}>
-          <p>Los cambios del borrador que no guardó se pierden.</p>
-        </Confirmacion>
-      )}
+      {salida}
     </>
   );
 }
@@ -473,7 +469,7 @@ function RetirarVersion({ informeId, numero, envios, alCerrar, alRetirar }: { in
     <Confirmacion
       titulo={`¿Retirar la versión ${numero} del portal?`}
       confirmar={`Retirar la versión ${numero}`}
-      peligro
+      nivel="irreversible"
       validar={() => (motivo.trim() === "" ? "Escriba por qué se retira: queda en el registro." : null)}
       mensajeDeError={mensajeDeAdministracion}
       alCerrar={alCerrar}

@@ -261,6 +261,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
 
       {confirmandoSalida && (
         <Confirmacion
+          nivel="consecuencia"
           forma="inferior"
           titulo={`¿Cerrar sesión con ${levantamientos(porEnviar)} por enviar?`}
           confirmar="Cerrar sesión"

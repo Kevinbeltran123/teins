@@ -401,6 +401,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
 
       {pendiente?.accion === "restablecer" && (
         <Confirmacion
+          nivel="consecuencia"
           titulo={`¿Restablecer la contraseña de ${pendiente.u.nombre}?`}
           confirmar="Restablecer contraseña"
           mensajeDeError={mensajeDeAdministracion}
@@ -415,6 +416,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
       )}
       {pendiente?.accion === "administracion" && (
         <Confirmacion
+          nivel="consecuencia"
           titulo={pendiente.u.administrador ? `¿Quitarle la administración a ${pendiente.u.nombre}?` : `¿Dar administración a ${pendiente.u.nombre}?`}
           confirmar={pendiente.u.administrador ? "Quitar administración" : "Dar administración"}
           mensajeDeError={mensajeDeAdministracion}
@@ -432,7 +434,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
         <Confirmacion
           titulo={`¿Desactivar a ${pendiente.u.nombre}?`}
           confirmar="Desactivar usuario"
-          peligro
+          nivel="irreversible"
           mensajeDeError={mensajeDeAdministracion}
           alCerrar={() => setPendiente(null)}
           accion={() => desactivar.mutateAsync(pendiente.u)}
@@ -664,7 +666,7 @@ function Accesos() {
         <Confirmacion
           titulo={`¿Regenerar el acceso de ${regenerando.nombre}?`}
           confirmar="Regenerar acceso"
-          peligro
+          nivel="irreversible"
           mensajeDeError={mensajeDeAdministracion}
           alCerrar={() => setRegenerando(null)}
           accion={() => entregar(regenerando, true)}

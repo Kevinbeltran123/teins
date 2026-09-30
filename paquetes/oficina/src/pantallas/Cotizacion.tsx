@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useBlocker } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { aDecimalColombiano, calcularTotales, normalizarDecimal, PORCENTAJE, type Impuestos, type LineaDeCotizacion } from "@teins/dominio";
 import { ErrorApi, rutaVistaPreviaCotizacion, type Respuesta } from "@teins/protocolo";
 import {
@@ -24,6 +24,7 @@ import {
 } from "@teins/ui";
 import { cliente, esSesionVencida } from "../api";
 import { useBorrador } from "../borrador";
+import { useSalidaProtegida } from "../salida";
 import { consultasDeCotizaciones, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
 import { aFechaCorta, leerPesos, pesos } from "../formato";
 import { consultasDeProgramacion } from "../programacion";
@@ -137,7 +138,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const [confirmando, setConfirmando] = useState(false);
   const [destinatarios, setDestinatarios] = useState<string[] | null>(null);
   const contactos = useQuery(consultasDeProgramacion.cliente(c.clienteId));
-  const salida = useBlocker({ shouldBlockFn: () => cambiado, enableBeforeUnload: () => cambiado, withResolver: true });
+  const salida = useSalidaProtegida(cambiado);
 
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
   const cambiarLinea = (id: string, cambio: Partial<LineaEditable>) => actualizar({ lineas: borrador.lineas.map((l) => (l.id === id ? { ...l, ...cambio } : l)) });
@@ -531,7 +532,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
         <Confirmacion
           titulo={`¿Publicar la versión ${siguiente} de ${c.numero}?`}
           confirmar={elegidos.length > 0 ? `Publicar y enviar a ${elegidos.length}` : `Publicar versión ${siguiente}`}
-          peligro
+          nivel="irreversible"
           mensajeDeError={mensajeDeCotizacion}
           alCerrar={() => setConfirmando(false)}
           alTerminar={() => notificar({ texto: elegidos.length > 0 ? `Versión ${siguiente} publicada. Se envía cuando el PDF esté listo.` : `Versión ${siguiente} publicada. El PDF se está generando.` })}
@@ -555,11 +556,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           {elegidos.length > 0 && <p className="ayuda">Solo están marcados quienes reciben cotizaciones. Lo enviado no se puede recuperar.</p>}
         </Confirmacion>
       )}
-      {salida.status === "blocked" && (
-        <Confirmacion titulo="¿Salir sin guardar?" confirmar="Salir sin guardar" descartar="Seguir editando" peligro mensajeDeError={() => ""} alCerrar={salida.reset} accion={async () => salida.proceed()}>
-          <p>Los cambios del borrador que no guardó se pierden.</p>
-        </Confirmacion>
-      )}
+      {salida}
     </>
   );
 }

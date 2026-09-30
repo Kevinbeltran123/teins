@@ -65,9 +65,21 @@ const NOMBRE_DEL_DATO: Record<string, string> = {
 export function textoDelServidor(error: ErrorApi, respaldo: string): string {
   const campos = error.problema.campos;
   if (!campos?.length) return error.message || respaldo;
-  const nombres = [...new Set(campos.map((c) => NOMBRE_DEL_DATO[c.ruta.split(".").filter((s) => !/^\d+$/.test(s)).at(-1) ?? ""]))];
+  const nombres = [...new Set(campos.map((c) => NOMBRE_DEL_DATO[claveDeRuta(c.ruta)]))];
   if (nombres.includes(undefined) || nombres.length === 0) return "Revise los datos: alguno no tiene la forma esperada.";
   return `Revise ${new Intl.ListFormat("es", { type: "conjunction" }).format(nombres as string[])}: ${nombres.length === 1 ? "no tiene" : "no tienen"} la forma esperada.`;
+}
+
+/** "cuerpo.contactos.0.correo" → "correo": el dato, sin dónde viajó ni su posición en una lista. */
+const claveDeRuta = (ruta: string) => ruta.split(".").filter((s) => !/^\d+$/.test(s)).at(-1) ?? "";
+
+/**
+ * El error de un campo del formulario, si el servidor rechazó ese dato (`problema.campos`): para marcarlo junto al
+ * campo, además del aviso general. `clave` es la del esquema de protocolo ("correo", "celular").
+ */
+export function errorDelCampo(error: unknown, clave: string): string | undefined {
+  if (!(error instanceof ErrorApi)) return undefined;
+  return error.problema.campos?.some((c) => claveDeRuta(c.ruta) === clave) ? "Revise este dato: no tiene la forma esperada." : undefined;
 }
 
 /** Lo que una persona de oficina necesita saber de un error al guardar. */

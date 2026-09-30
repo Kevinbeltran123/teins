@@ -110,3 +110,21 @@ test("con la sesión vencida, ingresar de nuevo conserva el borrador y se puede 
   await expect(o.getByText("Todo guardado")).toBeVisible();
   await o.context().close();
 });
+
+test("salir con cambios sin guardar pregunta antes; seguir editando los conserva (iteración 24, salida protegida)", async ({ browser }) => {
+  const { o } = await informeEnBorrador(browser);
+  const introduccion = o.getByRole("textbox", { name: "Introducción" });
+  await introduccion.fill("Todavía sin guardar");
+  const menu = o.getByRole("navigation", { name: "Secciones" });
+
+  await menu.getByRole("link", { name: "Visitas" }).click();
+  const pregunta = o.getByRole("dialog", { name: "¿Salir sin guardar?" });
+  await pregunta.getByRole("button", { name: "Seguir editando" }).click();
+  await expect(pregunta).toHaveCount(0);
+  await expect(introduccion).toHaveValue("Todavía sin guardar");
+
+  await menu.getByRole("link", { name: "Visitas" }).click();
+  await o.getByRole("dialog", { name: "¿Salir sin guardar?" }).getByRole("button", { name: "Salir sin guardar" }).click();
+  await expect(o.getByRole("heading", { name: "Visitas" })).toBeVisible();
+  await o.context().close();
+});

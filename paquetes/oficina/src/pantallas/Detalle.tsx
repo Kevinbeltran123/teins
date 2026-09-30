@@ -306,12 +306,13 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
         </Aviso>
       )}
       {confirmando === "revisado" && (
-        <Confirmacion titulo="¿Marcar revisado?" confirmar="Marcar revisado" mensajeDeError={mensajeDeError} alCerrar={() => setConfirmando(null)} accion={() => marcar.mutateAsync(l.version)}>
+        <Confirmacion nivel="consecuencia" titulo="¿Marcar revisado?" confirmar="Marcar revisado" mensajeDeError={mensajeDeError} alCerrar={() => setConfirmando(null)} accion={() => marcar.mutateAsync(l.version)}>
           <p>Ya no se podrá corregir desde oficina, y queda listo para el informe de su visita.</p>
         </Confirmacion>
       )}
       {confirmando === "reasignar" && (
         <Confirmacion
+          nivel="consecuencia"
           titulo={`¿Quitarle la revisión a ${nombre}?`}
           confirmar="Tomar la revisión"
           mensajeDeError={mensajeDeError}

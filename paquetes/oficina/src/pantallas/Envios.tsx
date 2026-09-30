@@ -250,6 +250,7 @@ function EnviarAContactos({
   const nombres = contactos.filter((c) => elegidos.includes(c.id)).map((c) => c.nombre);
   return (
     <Confirmacion
+      nivel="consecuencia"
       titulo={`Enviar la versión ${numero} a otro contacto`}
       confirmar={nombres.length === 1 ? `Enviar a ${nombres[0]}` : nombres.length > 1 ? `Enviar a ${nombres.length}` : "Enviar"}
       validar={() => (elegidos.length === 0 ? "Marque a quién enviarla." : null)}

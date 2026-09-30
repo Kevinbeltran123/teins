@@ -200,6 +200,7 @@ export function Catalogo() {
       )}
       {desactivando && (
         <Confirmacion
+          nivel="consecuencia"
           titulo={`¿Desactivar ${desactivando.codigo}?`}
           confirmar="Desactivar ítem"
           mensajeDeError={mensajeDeError}

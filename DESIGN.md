@@ -200,7 +200,9 @@ Confirmar lo que se hace a menudo entrena a aceptar sin leer. Por eso hay tres n
 | Tiene consecuencias | Desactivar un usuario, restablecer una contraseña, dar o quitar administración, desactivar un ítem, marcar revisado, tomar una revisión ajena, quitar una llave, quitar una sección repetida, enviar a oficina, cerrar sesión con envíos pendientes, volver a firmar | `Confirmacion`: el título es una pregunta con el verbo ("¿Desactivar a Juan Pérez?"), el cuerpo dice la consecuencia, el botón repite el verbo. "Cancelar" recibe el foco |
 | No se deshace | Publicar un informe, retirar una versión, cancelar una visita, regenerar un acceso | Igual, con el botón de peligro, y el motivo escrito cuando queda en el registro |
 
-Los formularios con cambios sin guardar avisan antes de salir.
+En el código, `Confirmacion` exige `nivel`: `consecuencia` o `irreversible` (botón de peligro). Lo que se deshace fácil no usa `Confirmacion`.
+
+Los formularios con cambios sin guardar avisan antes de salir (`useSalidaProtegida` en oficina).
 
 ## Crear y editar
 

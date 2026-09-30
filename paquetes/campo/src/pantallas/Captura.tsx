@@ -649,6 +649,7 @@ function Borrador({
       )}
       {confirmando && (
         <Confirmacion
+          nivel="consecuencia"
           forma="inferior"
           titulo="¿Enviar a oficina?"
           confirmar="Enviar levantamiento"
@@ -772,7 +773,7 @@ function Repeticion({
       {quitando && (
         <Confirmacion
           forma="inferior"
-          peligro
+          nivel="irreversible"
           titulo={`¿Quitar ${repeticion.nombre}?`}
           confirmar={`Quitar ${etiqueta.toLowerCase()}`}
           accion={() => repositorio.quitarRepeticion(id, seccion.clave, repeticion.id, new Date())}
@@ -1150,6 +1151,7 @@ function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: stri
       )}
       {confirmando && firma && (
         <Confirmacion
+          nivel="consecuencia"
           forma="inferior"
           titulo="¿Volver a firmar?"
           confirmar="Volver a firmar"

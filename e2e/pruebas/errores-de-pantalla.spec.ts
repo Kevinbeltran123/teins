@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoAcceso, nuevoUsuario } from "../consola";
-import { OFICINA } from "../destino";
+import { CAMPO, OFICINA } from "../destino";
 import { iniciarSesion } from "./ayudas";
 
 /**
@@ -52,4 +52,18 @@ test("portal: si la pantalla falla al dibujarse, lo dice y ofrece volver a carga
   await page.getByRole("button", { name: "Volver a cargar" }).click();
   await expect(page.getByRole("heading", { name: /^Informes de / }).or(page.getByRole("heading", { name: "Sus informes técnicos" }))).toBeVisible();
   await expect(page.getByText("Algo falló al mostrar el portal.")).toHaveCount(0);
+});
+
+test("campo: si la pantalla falla al dibujarse, lo dice y ofrece volver a cargar; lo capturado sigue", async ({ page }) => {
+  const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
+  const { cliente } = nuevaVisitaConCliente(tecnico);
+  await page.goto(`${CAMPO}/`);
+  await iniciarSesion(page, tecnico);
+  const visita = page.getByRole("region", { name: "Siguiente visita" });
+  await expect(visita.getByText(cliente)).toBeVisible();
+  await romperLosIconos(page);
+  await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await expect(page.getByText("Algo falló al mostrar esta pantalla.")).toBeVisible();
+  await page.getByRole("button", { name: "Volver a cargar" }).click();
+  await expect(page.getByText(cliente).first()).toBeVisible();
 });

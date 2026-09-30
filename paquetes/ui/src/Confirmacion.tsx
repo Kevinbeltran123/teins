@@ -15,8 +15,12 @@ interface Props {
   confirmar: string;
   /** Texto del botón que no hace nada. "Cancelar", salvo que choque con la acción ("Cancelar visita": entonces "Volver"). */
   descartar?: string;
-  /** Lo que no se deshace o le corta el acceso a alguien: el botón va en rojo. */
-  peligro?: boolean;
+  /**
+   * Qué tan grave es (DESIGN.md, "Qué se confirma y qué se deshace"); obligatorio para que cada confirmación se
+   * clasifique. "consecuencia": se confirma con el botón principal. "irreversible": no se deshace, el botón va en
+   * rojo. Lo que se deshace fácil no lleva confirmación: se hace al instante y la notificación ofrece "Deshacer".
+   */
+  nivel: "consecuencia" | "irreversible";
   /** Lo que se confirma. Si falla, el diálogo sigue abierto con el mensaje: el error queda donde se causó. */
   accion: () => Promise<unknown>;
   /** Antes de la acción: el mensaje si falta algo (el motivo, por ejemplo). */
@@ -32,9 +36,10 @@ interface Props {
  * Confirmación de lo que tiene consecuencias (DESIGN.md: qué se confirma y qué se deshace). Mientras trabaja no se
  * puede cerrar, y el botón que no hace nada recibe el foco inicial: la acción que no se deshace nunca es la predeterminada.
  */
-export function Confirmacion({ titulo, children, confirmar, descartar = "Cancelar", peligro = false, accion, validar, mensajeDeError, alCerrar, alTerminar, forma = "centrado" }: Props) {
+export function Confirmacion({ titulo, children, confirmar, descartar = "Cancelar", nivel, accion, validar, mensajeDeError, alCerrar, alTerminar, forma = "centrado" }: Props) {
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const peligro = nivel === "irreversible";
 
   async function hacer() {
     const falta = validar?.();

@@ -80,7 +80,7 @@ export function MiCuenta({ nombre }: { nombre: string }) {
         <Confirmacion
           titulo={`¿Quitar ${quitando.nombre}?`}
           confirmar="Quitar llave"
-          peligro
+          nivel="irreversible"
           mensajeDeError={mensajeDeError}
           alCerrar={() => setQuitando(null)}
           alTerminar={() => notificar({ texto: "Llave de acceso quitada" })}
