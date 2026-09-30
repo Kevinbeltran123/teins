@@ -86,6 +86,7 @@ test("cantidades: el técnico anota líneas; oficina importa el catálogo, vincu
   const cantidad = o.getByRole("textbox", { name: "Cantidad de la línea 2" });
   await expect(cantidad).toHaveValue("2");
   await cantidad.fill("3");
+  await o.getByRole("textbox", { name: "Motivo de la corrección" }).fill("Se contaron tres en la foto");
   await o.getByRole("button", { name: "Guardar corrección" }).click();
   // La cantidad va con su unidad en la misma celda ("3 und").
   await expect(tabla.getByRole("cell", { name: /^3 / })).toBeVisible();

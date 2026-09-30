@@ -37,8 +37,8 @@ test("secciones repetibles: el técnico agrega tableros y quita uno; oficina los
   await page.getByRole("button", { name: "Listo este tablero" }).click();
   await expect(tableros.getByRole("button", { name: "Tablero principal" })).toBeVisible();
   await tableros.getByRole("button", { name: "Agregar tablero" }).click();
+  // Quitar es al instante y se deshace desde la notificación (iteración 24c).
   await page.getByRole("button", { name: "Quitar Tablero 3" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Quitar tablero", exact: true }).click();
   await expect(tableros.getByRole("button", { name: /^Tablero/ })).toHaveCount(2);
 
   await irARevisar(page);

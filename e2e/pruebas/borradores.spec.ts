@@ -118,13 +118,26 @@ test("salir con cambios sin guardar pregunta antes; seguir editando los conserva
   const menu = o.getByRole("navigation", { name: "Secciones" });
 
   await menu.getByRole("link", { name: "Visitas" }).click();
-  const pregunta = o.getByRole("dialog", { name: "¿Salir sin guardar?" });
+  const pregunta = o.getByRole("dialog", { name: /^¿Guardar los cambios/ });
   await pregunta.getByRole("button", { name: "Seguir editando" }).click();
   await expect(pregunta).toHaveCount(0);
   await expect(introduccion).toHaveValue("Todavía sin guardar");
 
   await menu.getByRole("link", { name: "Visitas" }).click();
-  await o.getByRole("dialog", { name: "¿Salir sin guardar?" }).getByRole("button", { name: "Salir sin guardar" }).click();
+  await o.getByRole("dialog", { name: /^¿Guardar los cambios/ }).getByRole("button", { name: "Salir sin guardar" }).click();
   await expect(o.getByRole("heading", { name: "Visitas" })).toBeVisible();
+  await o.context().close();
+});
+
+test("salir con cambios ofrece «Guardar y salir» primero, y guarda antes de irse (iteración 24c)", async ({ browser }) => {
+  const { o } = await informeEnBorrador(browser);
+  await o.getByRole("textbox", { name: "Introducción" }).fill("Se guarda al salir");
+  await o.getByRole("navigation", { name: "Secciones" }).getByRole("link", { name: "Visitas" }).click();
+  const guardarYSalir = o.getByRole("dialog", { name: /^¿Guardar los cambios/ }).getByRole("button", { name: "Guardar y salir" });
+  await expect(guardarYSalir).toBeFocused();
+  await guardarYSalir.click();
+  await expect(o.getByRole("heading", { name: "Visitas" })).toBeVisible();
+  await o.goBack();
+  await expect(o.getByRole("textbox", { name: "Introducción" })).toHaveValue("Se guarda al salir");
   await o.context().close();
 });

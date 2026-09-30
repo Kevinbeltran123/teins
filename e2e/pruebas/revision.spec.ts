@@ -49,6 +49,10 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await expect(a.getByText("Usted tiene la revisión.", { exact: false })).toBeVisible();
   await a.getByRole("button", { name: "Corregir potencia nominal" }).click();
   await a.getByRole("textbox", { name: "Nuevo valor de potencia nominal" }).fill("12,5");
+  // Sin motivo no se guarda: queda en el historial junto al valor anterior (iteración 24c).
+  await a.getByRole("button", { name: "Guardar corrección" }).click();
+  await expect(a.getByText("Escriba el motivo: queda en el historial junto al valor anterior.")).toBeVisible();
+  await expect(a.getByRole("textbox", { name: "Motivo de la corrección" })).toBeFocused();
   await a.getByRole("textbox", { name: "Motivo de la corrección" }).fill("La placa dice 12,5 kVA");
   await a.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(a.getByText("12,5 kVA", { exact: true })).toBeVisible();
@@ -75,6 +79,7 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await expect(b.getByText("Usted tiene la revisión.", { exact: false })).toBeVisible();
 
   await a.getByRole("textbox", { name: "Nuevo valor de descripción del sitio" }).fill("Cambio que no debe quedar");
+  await a.getByRole("textbox", { name: "Motivo de la corrección" }).fill("Prueba de conflicto E2E");
   await a.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(a.getByText("recargue para ver la versión actual", { exact: false }).or(a.getByText("Ya no tiene la revisión", { exact: false }))).toBeVisible();
   await a.getByRole("button", { name: "Recargar" }).click();

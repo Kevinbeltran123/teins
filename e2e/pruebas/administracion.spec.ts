@@ -87,6 +87,17 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   await expect(page.getByRole("row").nth(1)).toContainText(tecnico.nombre);
   await expect(page.getByRole("row").filter({ hasText: tecnico.nombre })).toContainText("Activo");
 
+  // Restablecer lista todo lo que pasa, también el segundo factor; para uno mismo no se ofrece (iteración 24c).
+  await page.getByRole("row").filter({ hasText: tecnico.nombre }).getByRole("button", { name: `Más acciones para ${tecnico.nombre}` }).click();
+  await page.getByRole("menuitem", { name: "Restablecer contraseña" }).click();
+  const restablecer = page.getByRole("dialog", { name: `¿Restablecer la contraseña de ${tecnico.nombre}?` });
+  await expect(restablecer.getByText("Se quitan su segundo factor y sus llaves de acceso")).toBeVisible();
+  await restablecer.getByRole("button", { name: "Cancelar" }).click();
+  await page.getByRole("searchbox", { name: "Buscar usuarios" }).fill(admin.usuario);
+  await expect(page.getByRole("row").filter({ hasText: admin.usuario })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Más acciones para ${admin.nombre}` })).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Buscar usuarios" }).fill("");
+
   // El técnico entra a campo con esa contraseña; su teléfono aparece en administración.
   const { cliente } = nuevaVisitaConCliente(tecnico);
   const telefono = await browser.newContext({ locale: "es-CO", viewport: { width: 390, height: 844 } });
