@@ -176,3 +176,23 @@ export function quitarRepeticion(levantamiento: Levantamiento, seccion: string, 
   const { [claveDeRepeticion(seccion, id)]: _quitada, ...respuestas } = sinLaRepeticion.respuestas;
   return { ...sinLaRepeticion, respuestas };
 }
+
+/**
+ * Deshace `quitarRepeticion` (iteración 24c): la repetición vuelve a su lugar con sus respuestas. Si ya está, no
+ * cambia nada, así un segundo "Deshacer" no la duplica.
+ */
+export function restaurarRepeticion(
+  levantamiento: Levantamiento,
+  seccion: string,
+  repeticion: { id: string; nombre: string },
+  posicion: number,
+  respuestas: Record<string, Valor> | undefined,
+  ahora: Date,
+): Levantamiento {
+  if (levantamiento.repeticiones?.[seccion]?.some((r) => r.id === repeticion.id)) return levantamiento;
+  const conLaRepeticion = editarRepeticiones(levantamiento, seccion, ahora, (lista) => {
+    lista.splice(Math.min(posicion, lista.length), 0, { ...repeticion });
+  });
+  if (!respuestas) return conLaRepeticion;
+  return { ...conLaRepeticion, respuestas: { ...conLaRepeticion.respuestas, [claveDeRepeticion(seccion, repeticion.id)]: respuestas } };
+}

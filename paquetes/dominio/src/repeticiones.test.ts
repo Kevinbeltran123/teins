@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VersionFormato } from "./formato";
-import { agregarRepeticion, crearLevantamiento, quitarRepeticion, renombrarRepeticion, responder } from "./levantamiento";
+import { agregarRepeticion, crearLevantamiento, quitarRepeticion, renombrarRepeticion, responder, restaurarRepeticion } from "./levantamiento";
 import { validarDefinicionFormato } from "./meta-esquema";
 import { bloques, claveDeRepeticion, leerClave, nombreDeDato, rutaLegible, VERSION_APP_REPETIBLES } from "./repeticiones";
 import { corregir } from "./revision";
@@ -138,5 +138,22 @@ describe("rutas mal formadas (revisión de código)", () => {
   it("una lista de repeticiones mal formada da un solo error, no errores en cascada", () => {
     const errores = validarRespuestas(formato, { "tableros~malo": { ubicacion: "x" } }, { tableros: [{ id: "MALO", nombre: "T" }] });
     expect(errores).toEqual([{ seccion: "tableros", codigo: "tipo_invalido" }]);
+  });
+
+  it("deshacer quitar devuelve la repetición a su lugar con sus respuestas (iteración 24c)", () => {
+    let l = crearLevantamiento(formato, "l9", ahora, undefined, nuevoId);
+    l = agregarRepeticion(l, formato, "tableros", "otro0011", ahora);
+    l = agregarRepeticion(l, formato, "tableros", "otro0012", ahora);
+    l = renombrarRepeticion(l, "tableros", "otro0011", "Tablero del sótano", ahora);
+    l = responder(l, claveDeRepeticion("tableros", "otro0011"), "ubicacion", "Sótano", ahora);
+    const antes = l;
+    const quitada = l.repeticiones!.tableros![1]!;
+    const respuestas = l.respuestas[claveDeRepeticion("tableros", "otro0011")];
+    l = quitarRepeticion(l, "tableros", "otro0011", ahora);
+    l = restaurarRepeticion(l, "tableros", quitada, 1, respuestas, ahora);
+    expect(l.repeticiones).toEqual(antes.repeticiones);
+    expect(l.respuestas).toEqual(antes.respuestas);
+    // Deshacer dos veces no la duplica.
+    expect(restaurarRepeticion(l, "tableros", quitada, 1, respuestas, ahora).repeticiones?.tableros).toHaveLength(3);
   });
 });
