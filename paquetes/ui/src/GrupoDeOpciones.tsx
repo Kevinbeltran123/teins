@@ -15,7 +15,7 @@ export function GrupoDeOpciones<T extends string>({
   const nombre = useId();
   return (
     <fieldset className="flex flex-col gap-1.5">
-      <legend className="mb-1.5 text-cuerpo font-bold">{etiqueta}</legend>
+      <legend className="mb-1.5 text-cuerpo font-medium">{etiqueta}</legend>
       <div className="flex flex-wrap gap-x-6">
         {opciones.map((o) => (
           <label

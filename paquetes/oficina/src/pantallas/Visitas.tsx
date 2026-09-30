@@ -320,7 +320,7 @@ function ElegirTecnicos({ tecnicos, elegidos, onCambio, error }: { tecnicos: Tec
   if (tecnicos.length === 0) return <Aviso tono="alerta">No hay técnicos activos. Quien administra los crea en Administración.</Aviso>;
   return (
     <fieldset className="casillas-filas flex flex-col gap-1">
-      <legend className="mb-1.5 text-cuerpo font-bold">Técnicos</legend>
+      <legend className="mb-1.5 text-cuerpo font-medium">Técnicos</legend>
       <div className="flex flex-col">
         {tecnicos.map((t) => (
           <Casilla key={t.id} marcada={elegidos.includes(t.id)} onCambio={(m) => onCambio(m ? [...elegidos, t.id] : elegidos.filter((x) => x !== t.id))}>

@@ -25,8 +25,6 @@
 /* ---------- La app ---------- */
 .app { background: var(--fondo); color: var(--texto); font-size: 14px; line-height: 1.5; min-height: 100dvh; display: grid; grid-template-columns: 208px minmax(0, 1fr); position: relative; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
 .app.sin-marco { grid-template-columns: minmax(0, 1fr); }
-@media (max-width: 1100px) { .app { grid-template-columns: 60px minmax(0, 1fr); } .menu .txt, .menu .grupo, .menu .usuario .quien { display: none; } .menu a, .menu .usuario { justify-content: center; } .menu .cuenta-num { position: absolute; top: 2px; right: 4px; } }
-@media (max-width: 640px) { .app { grid-template-columns: minmax(0, 1fr); } .menu { position: static; height: auto; flex-direction: row; overflow-x: auto; padding: 8px; gap: 4px; border-right: 0; border-bottom: 1px solid var(--borde); } .menu .marca, .menu .pie, .menu hr, .menu .grupo { display: none; } .menu nav { flex-direction: row; } .barra-sup { display: none; } }
 
 /* Menú lateral */
 .menu { background: var(--fondo); border-right: 1px solid var(--borde); padding: 16px 10px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; align-self: start; height: 100dvh; }
@@ -49,6 +47,10 @@
 .quien { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .quien small { color: var(--t-texto-terciario); font-size: 12px; }
 .usuario .salir { margin-left: auto; }
+
+/* Pantallas angostas: después de las reglas del menú, para que las reemplacen */
+@media (max-width: 1100px) { .app { grid-template-columns: 60px minmax(0, 1fr); } .menu .txt, .menu .grupo, .menu .usuario .quien { display: none; } .menu a, .menu .usuario { justify-content: center; } .menu .marca { padding: 2px 0; justify-content: center; } .menu .marca img { width: 30px !important; object-fit: cover; object-position: left center; } .menu .cuenta-num { position: absolute; top: 0; right: 2px; margin: 0; min-width: 16px; padding: 0 4px; border-radius: 999px; background: var(--marca); color: var(--marca-texto); font-size: 10px; line-height: 16px; text-align: center; } }
+@media (max-width: 640px) { .app { grid-template-columns: minmax(0, 1fr); } .menu { position: static; height: auto; flex-direction: row; overflow-x: auto; padding: 8px; gap: 4px; border-right: 0; border-bottom: 1px solid var(--borde); } .menu .marca, .menu .pie, .menu hr, .menu .grupo { display: none; } .menu nav { flex-direction: row; } }
 
 /* Contenido */
 .contenido { min-width: 0; display: flex; flex-direction: column; }
@@ -159,12 +161,12 @@ select.control { appearance: none; background-image: linear-gradient(45deg, tran
 .control.num { text-align: right; }
 
 .opciones { display: flex; flex-wrap: wrap; gap: 8px; }
-.opcion { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px; background: var(--sup2); font-weight: 500; cursor: pointer; border: 2px solid transparent; }
+.opcion { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: 999px; background: var(--sup); box-shadow: inset 0 0 0 1px var(--t-borde-suave); font-size: 13px; font-weight: 500; cursor: pointer; border: 0; }
 .opcion input { position: absolute; opacity: 0; pointer-events: none; }
-.opcion:has(input:checked) { background: var(--texto); color: var(--fondo); }
-.opcion:has(input:focus-visible) { outline: 3px solid var(--senal); outline-offset: 2px; }
-.casilla { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 8px; background: var(--sup2); cursor: pointer; }
-.casilla input { width: 20px; height: 20px; accent-color: var(--marca); margin: 2px 0 0; flex: none; }
+.opcion:has(input:checked) { background: var(--t-superficie-suave); color: var(--marca); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--marca) 35%, transparent); }
+.opcion:has(input:focus-visible) { outline: 2px solid var(--t-foco); outline-offset: 2px; }
+.casilla { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--sup); box-shadow: inset 0 0 0 1px var(--borde); cursor: pointer; font-size: 13px; }
+.casilla input { width: 16px; height: 16px; accent-color: var(--marca); margin: 2px 0 0; flex: none; }
 .casilla.apagada { opacity: .55; cursor: not-allowed; }
 .lista-casillas { display: flex; flex-direction: column; gap: 6px; }
 
@@ -574,10 +576,10 @@ mark { background: color-mix(in srgb, var(--senal) 35%, transparent); color: inh
 .imp-op span { color: var(--sec); }
 .imp-op .aiu { grid-column: 2; margin-top: 10px; max-width: 340px; }
 .segmentos { flex-wrap: wrap; }
-.segmentos label { white-space: nowrap; padding: 7px 12px; border-radius: 9px; font-weight: 500; font-size: 14px; cursor: pointer; color: var(--sec); }
+.segmentos label { white-space: nowrap; display: inline-flex; align-items: center; cursor: pointer; color: var(--sec); min-height: 32px; padding: 0 12px; border-radius: 999px; background: var(--sup); box-shadow: inset 0 0 0 1px var(--t-borde-suave); font-size: 13px; font-weight: 500; gap: 6px; }
 .segmentos input { position: absolute; opacity: 0; pointer-events: none; }
-.segmentos label:has(input:checked) { background: var(--texto); color: var(--fondo); }
-.segmentos label:has(input:focus-visible) { outline: 3px solid var(--senal); }
+.segmentos label:has(input:checked) { background: var(--t-superficie-suave); color: var(--marca); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--marca) 35%, transparent); }
+.segmentos label:has(input:focus-visible) { outline: 2px solid var(--t-foco); outline-offset: 2px; }
 .suma { display: flex; flex-direction: column; gap: 8px; }
 .suma .f { display: flex; justify-content: space-between; gap: 12px; }
 .suma .f span:first-child { color: var(--sec); }
@@ -666,13 +668,15 @@ dialog.capa-lateral input[name="precio"] { font-size: 24px; font-weight: 600; mi
 /* Informe */
 .btn.texto-peligro { color: var(--peligro); }
 .capitulo .icono-btn { flex: none; }
-/* Motivo como pastillas y técnicos como filas rellenas, como en el prototipo */
+/* Motivo como pastillas y técnicos como filas, con borde fino (Precisión) */
 .opciones-pastilla fieldset > div { gap: 8px; }
-.opciones-pastilla label { min-height: 40px; padding: 0 14px; border-radius: 999px; background: var(--sup2); font-weight: 500; gap: 8px; }
+.opciones-pastilla label { min-height: 32px; padding: 0 12px; border-radius: 999px; background: var(--sup); box-shadow: inset 0 0 0 1px var(--t-borde-suave); font-size: 13px; font-weight: 500; gap: 6px; }
 .opciones-pastilla label input { position: absolute; opacity: 0; pointer-events: none; }
-.opciones-pastilla label:has(input:checked) { background: var(--texto); color: var(--fondo); }
-.casillas-filas > div { gap: 6px; }
-.casillas-filas label { min-height: 44px; padding: 10px 14px; border-radius: 8px; background: var(--sup2); font-weight: 500; }
+.opciones-pastilla label:has(input:checked) { background: var(--t-superficie-suave); color: var(--marca); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--marca) 35%, transparent); }
+.casillas-filas > div { gap: 0; border: 1px solid var(--borde); border-radius: 8px; overflow: hidden; }
+.casillas-filas label { min-height: 36px; padding: 8px 12px; background: var(--sup); font-size: 13px; font-weight: 400; border-top: 1px solid var(--borde); }
+.casillas-filas label:first-child { border-top: 0; }
+.casillas-filas label:has(input:checked) { background: var(--t-superficie-suave); }
 .casillas-filas label input { accent-color: var(--marca); }
 /* Encabezado: el estado junto al título, fuera del h1 */
 .cabeza .titulo-fila { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
