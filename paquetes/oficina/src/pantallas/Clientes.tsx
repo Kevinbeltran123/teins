@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Tabla,
   useNotificar,
+  enfocarPrimerError,
 } from "@teins/ui";
 import { cliente } from "../api";
 import { consultasDeProgramacion, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
@@ -181,6 +182,7 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
       ...(direccion.trim() === "" ? { direccion: "Escriba la dirección del sitio." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
@@ -236,6 +238,7 @@ export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nomb
       ...(direccion.trim() === "" ? { direccion: "Escriba la dirección." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {

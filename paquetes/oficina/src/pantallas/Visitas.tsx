@@ -34,6 +34,9 @@ import {
   Tabla,
   Users,
   useNotificar,
+  enfocarPrimerError,
+  Smartphone,
+  TriangleAlert,
 } from "@teins/ui";
 import { cliente } from "../api";
 import { csvDetalle, csvResumen, descargar } from "../csv";
@@ -354,10 +357,11 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
     const faltan = {
       ...(!clienteId ? { cliente: "Elija el cliente." } : {}),
       ...(clienteId && !sitioId ? { sitio: "Elija el sitio." } : {}),
-      ...(!fecha ? { fecha: "Elija la fecha." } : {}),
+      ...(!fecha ? { fecha: "Elija la fecha." } : fecha < hoy ? { fecha: "Elija hoy o una fecha próxima." } : {}),
       ...(elegidos.length === 0 ? { tecnicos: "Asigne al menos un técnico." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
@@ -414,7 +418,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
           deshabilitado={!clienteId}
           opciones={sitios.map((s) => ({ valor: s.id, texto: `${s.nombre} · ${s.direccion}` }))}
         />
-        <CampoTexto etiqueta="Fecha" tipo="date" nombre="fecha" valorInicial={hoy} onCambio={setFecha} error={errores.fecha} />
+        <CampoTexto etiqueta="Fecha" tipo="date" minimo={hoy} nombre="fecha" valorInicial={hoy} onCambio={setFecha} error={errores.fecha} />
         <div className="opciones-pastilla">
           <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
         </div>
@@ -458,6 +462,14 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
   const [error, setError] = useState<string | null>(null);
   const accion = useAccionDeProgramacion(() => cliente.llamar("reasignarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, tecnicos: elegidos } }));
 
+  // Lo que cambia, antes de guardarlo (iteración 24c): quién deja de ver la visita y quién la recibe.
+  const nombreDe = (id: string) => tecnicos.data?.tecnicos.find((t) => t.id === id)?.nombre ?? v.tecnicos.find((t) => t.id === id)?.nombre ?? "Un técnico";
+  const antes = v.tecnicos.map((t) => t.id);
+  const salen = antes.filter((id) => !elegidos.includes(id)).map(nombreDe);
+  const entran = elegidos.filter((id) => !antes.includes(id)).map(nombreDe);
+  const lista = (nombres: string[]) => (nombres.length === 1 ? nombres[0]! : `${nombres.slice(0, -1).join(", ")} y ${nombres.at(-1)}`);
+  const verbo = entran.length > 0 ? `Reasignar a ${lista(entran)}` : salen.length > 0 ? `Quitar a ${lista(salen)}` : "Guardar técnicos";
+
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     if (elegidos.length === 0) return setErrorCampo("Asigne al menos un técnico.");
@@ -483,8 +495,8 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
           <Boton onClick={alCerrar} disabled={accion.isPending}>
             Cancelar
           </Boton>
-          <Boton type="submit" form={formulario} variante="principal" cargando={accion.isPending}>
-            Guardar técnicos
+          <Boton type="submit" form={formulario} variante="principal" cargando={accion.isPending} disabled={salen.length + entran.length === 0}>
+            {verbo}
           </Boton>
         </>
       }
@@ -497,7 +509,20 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
         ) : (
           <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} error={errorCampo} />
         )}
-        <p className="text-ayuda text-texto-secundario">Quien deja la visita la pierde de su teléfono; lo que ya empezó se conserva y lo puede enviar.</p>
+        {elegidos.length > 0 && salen.length + entran.length > 0 && (
+          <ul aria-label="Lo que cambia" className="flex flex-col gap-1.5 rounded-control bg-panel-hundido px-3 py-2.5 text-ayuda">
+            {salen.map((n) => (
+              <li key={`sale-${n}`}>
+                <b className="font-medium">{n}</b> deja de verla en su teléfono. Lo que ya empezó se conserva y lo puede enviar.
+              </li>
+            ))}
+            {entran.map((n) => (
+              <li key={`entra-${n}`}>
+                <b className="font-medium">{n}</b> la recibe en su teléfono.
+              </li>
+            ))}
+          </ul>
+        )}
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>
@@ -515,6 +540,7 @@ function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => vo
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     if (!fecha) return setErrorFecha("Elija la fecha.");
+    if (fecha < hoyLocal()) return setErrorFecha("Elija hoy o una fecha próxima.");
     setErrorFecha(undefined);
     setError(null);
     try {
@@ -544,7 +570,7 @@ function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => vo
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
         <div className="max-w-xs">
-          <CampoTexto etiqueta="Fecha nueva" tipo="date" valorInicial={v.programadaPara} onCambio={setFecha} error={errorFecha} />
+          <CampoTexto etiqueta="Fecha nueva" tipo="date" minimo={hoyLocal()} valorInicial={v.programadaPara} onCambio={setFecha} error={errorFecha} />
         </div>
         <div className="opciones-pastilla">
           <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
@@ -569,11 +595,15 @@ function Cancelar({ v, alCerrar, alCancelar }: { v: Visita; alCerrar: () => void
       accion={() => accion.mutateAsync(undefined)}
       alCerrar={alCerrar}
       alTerminar={alCancelar}
+      consecuencias={[
+        {
+          icono: Smartphone,
+          texto: `La visita del ${dia(v.programadaPara)} sale del teléfono de ${v.tecnicos.map((t) => t.nombre).join(" y ") || "sus técnicos"}`,
+          detalle: "Lo que ya empezaron se conserva y lo pueden enviar",
+        },
+        { icono: TriangleAlert, texto: "No se puede deshacer", detalle: "Si hace falta, programe otra visita" },
+      ]}
     >
-      <p>
-        La visita del {dia(v.programadaPara)} sale de los teléfonos de sus técnicos; lo que ya empezaron se conserva y lo pueden enviar. No se puede deshacer: si hace falta, programe
-        otra.
-      </p>
       <CampoTextoLargo etiqueta="Motivo de la cancelación" valor={motivo} onCambio={setMotivo} maximo={500} />
     </Confirmacion>
   );

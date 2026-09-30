@@ -8,7 +8,6 @@ import {
   Buscador,
   CampoTexto,
   CeldaTabla,
-  Confirmacion,
   Dialogo,
   EncabezadoPagina,
   EsqueletoLista,
@@ -27,6 +26,7 @@ import {
   Tabla,
   Upload,
   useNotificar,
+  enfocarPrimerError,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { mensajeDeAdministracion } from "../administracion";
@@ -50,7 +50,6 @@ export function Catalogo() {
   const [creando, setCreando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [editando, setEditando] = useState<Item | null>(null);
-  const [desactivando, setDesactivando] = useState<Item | null>(null);
   const [cambiandoPrecio, setCambiandoPrecio] = useState<Item | null>(null);
   const [soloSinPrecio, setSoloSinPrecio] = useState(false);
   // Cambiar precios es de administración (ADR-0029): el resto de oficina los ve.
@@ -149,7 +148,25 @@ export function Catalogo() {
                         opciones={[
                           { texto: "Editar", icono: Pencil, alElegir: () => setEditando(i) },
                           i.activo
-                            ? { texto: "Desactivar", peligro: true, alElegir: () => setDesactivando(i) }
+                            ? {
+                                texto: "Desactivar",
+                                // Se revierte con un toque: al instante y con "Deshacer", sin preguntar (DESIGN.md, iteración 24c).
+                                alElegir: () => {
+                                  setErrorFila(null);
+                                  activar.mutate(i, {
+                                    onSuccess: () =>
+                                      notificar({
+                                        texto: `${i.codigo} desactivado`,
+                                        accion: {
+                                          texto: "Deshacer",
+                                          alHacer: () =>
+                                            activar.mutate({ ...i, activo: false }, { onSuccess: () => destacar(i.id), onError: (e) => setErrorFila(`No se pudo volver a activar ${i.codigo}. ${mensajeDeError(e)}`) }),
+                                        },
+                                      }),
+                                    onError: (e) => setErrorFila(`No se pudo desactivar ${i.codigo}. ${mensajeDeError(e)}`),
+                                  });
+                                },
+                              }
                             : {
                                 texto: "Activar",
                                 alElegir: () => {
@@ -198,19 +215,6 @@ export function Catalogo() {
           }}
         />
       )}
-      {desactivando && (
-        <Confirmacion
-          nivel="consecuencia"
-          titulo={`¿Desactivar ${desactivando.codigo}?`}
-          confirmar="Desactivar ítem"
-          mensajeDeError={mensajeDeError}
-          alCerrar={() => setDesactivando(null)}
-          alTerminar={() => notificar({ texto: `${desactivando.codigo} desactivado` })}
-          accion={() => activar.mutateAsync(desactivando)}
-        >
-          <p>Deja de ofrecerse al vincular líneas nuevas. Las líneas ya vinculadas lo conservan, y se puede volver a activar.</p>
-        </Confirmacion>
-      )}
       {importando && <ImportarCatalogo administrador={administrador} alCerrar={() => setImportando(false)} alImportar={(texto) => notificar({ texto })} />}
       {cambiandoPrecio && (
         <CambiarPrecio
@@ -249,6 +253,7 @@ function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: 
       ...(unidad.trim() === "" ? { unidad: "Escriba la unidad." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {

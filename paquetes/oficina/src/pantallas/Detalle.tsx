@@ -516,14 +516,22 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
   const [nuevo, setNuevo] = useState<Valor | undefined>(valor);
   const [valido, setValido] = useState(true);
   const [motivo, setMotivo] = useState("");
+  const [faltaMotivo, setFaltaMotivo] = useState(false);
+  const idMotivo = `motivo-${seccion}-${campo.clave}`;
   const errorDelCampo = corregir.error instanceof ErrorApi ? corregir.error.problema.errores?.find((e) => e.seccion === seccion && e.campo === campo.clave) : undefined;
   const mensajeCampo = errorDelCampo ? mensajeDeValidacion[errorDelCampo.codigo as keyof typeof mensajeDeValidacion] : undefined;
   const marcado = esNoObtenido(nuevo);
 
   async function guardar(evento: FormEvent) {
     evento.preventDefault();
+    // El motivo queda en el historial junto al valor anterior (regla 8): sin él, el registro no dice por qué.
+    if (!motivo.trim()) {
+      setFaltaMotivo(true);
+      document.getElementById(idMotivo)?.focus();
+      return;
+    }
     try {
-      await corregir.mutateAsync({ version: l.version, correcciones: [{ seccion, campo: campo.clave, valor: nuevo ?? null }], ...(motivo.trim() ? { motivo: motivo.trim() } : {}) });
+      await corregir.mutateAsync({ version: l.version, correcciones: [{ seccion, campo: campo.clave, valor: nuevo ?? null }], motivo: motivo.trim() });
       cerrar();
     } catch {
       // El error queda a la vista en el formulario.
@@ -589,10 +597,24 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
         />
       )}
       <div className="campo">
-        <label htmlFor={`motivo-${seccion}-${campo.clave}`}>
-          Motivo de la corrección <small className="sec" style={{ fontWeight: 700, fontSize: 12 }}>opcional</small>
+        <label htmlFor={idMotivo}>
+          Motivo de la corrección <small className="sec">obligatorio · queda en el historial</small>
         </label>
-        <input id={`motivo-${seccion}-${campo.clave}`} className="control" placeholder="Queda en el historial junto al cambio" maxLength={500} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+        <input
+          id={idMotivo}
+          className={`control ${faltaMotivo && !motivo.trim() ? "error" : ""}`}
+          placeholder="Por ejemplo: la placa dice 25 kVA"
+          maxLength={500}
+          value={motivo}
+          aria-invalid={(faltaMotivo && !motivo.trim()) || undefined}
+          aria-describedby={faltaMotivo && !motivo.trim() ? `${idMotivo}-error` : undefined}
+          onChange={(e) => setMotivo(e.target.value)}
+        />
+        {faltaMotivo && !motivo.trim() && (
+          <p id={`${idMotivo}-error`} className="msj-error">
+            Escriba el motivo: queda en el historial junto al valor anterior.
+          </p>
+        )}
       </div>
       {corregir.isError && !errorDelCampo && (
         <Aviso tono="error">

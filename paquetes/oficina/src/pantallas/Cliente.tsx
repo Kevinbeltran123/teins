@@ -25,6 +25,7 @@ import {
   TriangleAlert,
   Users,
   useNotificar,
+  enfocarPrimerError,
 } from "@teins/ui";
 import { cliente } from "../api";
 import { aFechaHora } from "../formato";
@@ -309,6 +310,7 @@ function FormularioContacto({
       ...(recibeWhatsapp && !autorizado ? { autorizacion: "WhatsApp exige que el contacto haya autorizado los mensajes." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
@@ -340,8 +342,8 @@ function FormularioContacto({
         <CampoTexto etiqueta="Nombre" nombre="nombre" valorInicial={nombre} onCambio={setNombre} error={errores.nombre} autoComplete="off" />
         <CampoTexto etiqueta="Cargo (opcional)" nombre="cargo" valorInicial={cargo} onCambio={setCargo} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <CampoTexto etiqueta="Correo" nombre="correo" valorInicial={correo} onCambio={setCorreo} error={errores.correo} />
-          <CampoTexto etiqueta="Celular" nombre="celular" valorInicial={contacto?.celular ? celularLegible(contacto.celular) : ""} onCambio={setCelular} error={errores.celular} modoEntrada="text" />
+          <CampoTexto etiqueta="Correo" nombre="correo" tipo="email" modoEntrada="email" autoComplete="email" valorInicial={correo} onCambio={setCorreo} error={errores.correo} />
+          <CampoTexto etiqueta="Celular" nombre="celular" valorInicial={contacto?.celular ? celularLegible(contacto.celular) : ""} onCambio={setCelular} error={errores.celular} tipo="tel" modoEntrada="tel" autoComplete="tel" />
         </div>
         <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="etq" style={{ marginBottom: 6 }}>Recibe</legend>

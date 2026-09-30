@@ -138,7 +138,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const [confirmando, setConfirmando] = useState(false);
   const [destinatarios, setDestinatarios] = useState<string[] | null>(null);
   const contactos = useQuery(consultasDeProgramacion.cliente(c.clienteId));
-  const salida = useSalidaProtegida(cambiado);
+  const salida = useSalidaProtegida(cambiado, { que: `la cotización ${c.numero}`, guardar: guardarBorrador });
 
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
   const cambiarLinea = (id: string, cambio: Partial<LineaEditable>) => actualizar({ lineas: borrador.lineas.map((l) => (l.id === id ? { ...l, ...cambio } : l)) });

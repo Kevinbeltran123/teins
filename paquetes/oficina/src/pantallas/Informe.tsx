@@ -127,7 +127,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
   const error = errorPlano ?? (esSesionVencida(guardar.error) ? null : guardar.error);
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
-  const salida = useSalidaProtegida(cambiado);
+  const salida = useSalidaProtegida(cambiado, { que: "el informe", guardar: guardarBorrador });
   const vigente = vigenteDe(informe);
   const reciben = contactos.data ? contactos.data.contactos.filter((c) => receptores(contactos.data.contactos, "informes").includes(c.id)).map((c) => c.nombre) : [];
 

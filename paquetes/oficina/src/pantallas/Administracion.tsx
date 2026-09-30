@@ -34,6 +34,9 @@ import {
   Smartphone,
   Tabla,
   UserRound,
+  enfocarPrimerError,
+  Bell,
+  LogOut,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { consultasDeAdministracion, mensajeDeAdministracion, qrComoImagen, useAccion } from "../administracion";
@@ -370,11 +373,12 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
                   )}
                 </CeldaTabla>
                 <CeldaTabla derecha>
-                  {activo && (
+                  {activo && !propio && (
                     <MenuAcciones
                       etiqueta={`Más acciones para ${u.nombre}`}
                       opciones={[
-                        { texto: "Restablecer contraseña", icono: KeyRound, alElegir: () => setPendiente({ accion: "restablecer", u }) },
+                        // La propia se cambia desde "Mi cuenta" (24d): restablecerla aquí quitaría el segundo factor de quien administra.
+                        !propio && { texto: "Restablecer contraseña", icono: KeyRound, alElegir: () => setPendiente({ accion: "restablecer", u }) },
                         u.rol === "oficina" &&
                           !(propio && u.administrador) && { texto: u.administrador ? "Quitar administración" : "Dar administración", icono: ShieldCheck, alElegir: () => setPendiente({ accion: "administracion", u }) },
                         !propio && { texto: "Desactivar usuario", peligro: true, alElegir: () => setPendiente({ accion: "desactivar", u }) },
@@ -410,9 +414,13 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
             const { contrasena } = await restablecer.mutateAsync(pendiente.u);
             setCredencial({ nombre: pendiente.u.nombre, usuario: pendiente.u.usuario, contrasena, nuevo: false });
           }}
-        >
-          <p>Se genera una contraseña temporal para entregarle. Sus sesiones se cierran y sus llaves de acceso se quitan: si perdió un teléfono o un computador, ya no sirven para entrar.</p>
-        </Confirmacion>
+          consecuencias={[
+            { icono: KeyRound, texto: "Le entrega una contraseña temporal", detalle: "Se muestra una sola vez; entréguela en persona" },
+            { icono: LogOut, texto: "Se cierran sus sesiones en todos los equipos" },
+            { icono: ShieldCheck, texto: "Se quitan su segundo factor y sus llaves de acceso", detalle: pendiente.u.administrador ? "Para administrar tendrá que activar el segundo factor otra vez" : "Si perdió un teléfono o un computador, ya no sirven para entrar" },
+            { icono: Bell, texto: "Deja de recibir avisos hasta que los vuelva a activar" },
+          ]}
+        />
       )}
       {pendiente?.accion === "administracion" && (
         <Confirmacion
@@ -485,6 +493,7 @@ function NuevoUsuario({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (r
       ...(!USUARIO_VALIDO.test(usuario.trim()) ? { usuario: "De 3 a 30 letras minúsculas, números, punto o guion, sin espacios." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
