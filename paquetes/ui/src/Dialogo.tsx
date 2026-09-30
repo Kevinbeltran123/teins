@@ -117,7 +117,7 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
             {subtitulo && <p className="text-ayuda text-texto-secundario">{subtitulo}</p>}
           </div>
         </header>
-        <div className="capa-cuerpo flex grow flex-col gap-4 overflow-y-auto px-6 pb-6">{children}</div>
+        <div className="capa-cuerpo flex min-h-0 grow flex-col gap-4 overflow-y-auto px-6 pb-6">{children}</div>
         {pie && (
           <footer
             className={`capa-pie ${

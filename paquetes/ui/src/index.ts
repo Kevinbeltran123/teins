@@ -21,7 +21,7 @@ export { Dialogo, useModal } from "./Dialogo";
 export { DestinoBarraSuperior, EncabezadoPagina } from "./EncabezadoPagina";
 export { EsqueletoBloques, EsqueletoTabla } from "./Esqueleto";
 export { EstadoVacio } from "./EstadoVacio";
-export { EtiquetaCampo, MensajeError } from "./Etiqueta";
+export { enfocarPrimerError, EtiquetaCampo, MensajeError } from "./Etiqueta";
 export { GrupoDeOpciones } from "./GrupoDeOpciones";
 export * from "./iconos";
 export { CampoDeIngreso, claseBotonIngreso, MarcoDeIngreso, SeparadorIngreso } from "./Ingreso";

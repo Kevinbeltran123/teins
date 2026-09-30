@@ -28,3 +28,11 @@ export function MensajeError({ id, children }: { id: string; children: ReactNode
     </p>
   );
 }
+
+/**
+ * Después de validar un formulario con errores, el foco va al primer campo marcado (DESIGN.md: validar al enviar, cada
+ * campo con su mensaje). Espera al siguiente cuadro, cuando los campos ya llevan `aria-invalid`.
+ */
+export function enfocarPrimerError(formulario: string) {
+  requestAnimationFrame(() => document.getElementById(formulario)?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+}

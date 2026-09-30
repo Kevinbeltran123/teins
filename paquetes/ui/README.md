@@ -17,6 +17,7 @@ Los tokens de tamaño son neutros (`texto-cuerpo`, `control`, `fondo`): cada sup
 | `Logo` | El logo oficial (`src/logo-teins.png`); en oscuro, blanco por filtro. Donde está el logo no se escribe "TEINS" |
 | `MarcoDeIngreso`, `CampoDeIngreso`, `claseBotonIngreso`, `SeparadorIngreso` | Inicio de sesión de las tres superficies: logo, tarjeta de borde fino, campos de 46 px y el degradado quieto |
 | `DestinoBarraSuperior` | La barra superior del marco de oficina: `EncabezadoPagina` pone ahí la ubicación por un portal |
+| `enfocarPrimerError` | Después de validar un formulario con errores, lleva el foco al primer campo con `aria-invalid` (iteración 24c) |
 | `Boton`, `BotonIcono`, `claseBoton` | Variantes principal, secundaria, fantasma y peligro; tamaños normal y pequeño; `icono` opcional; `cargando` conserva el texto y el foco |
 | `Dialogo` | Modal sobre `<dialog>`: centrado, lateral (hoja de 480 px para crear y editar en oficina) o inferior (campo). `cerrable={false}` para lo que se entrega una sola vez. `useModal` es su mecánica, reutilizada por el visor |
 | `Confirmacion` | Título en pregunta, las consecuencias en su lista (`consecuencias`, sin icono de encabezado), botón con el verbo; con consecuencias y nada que escribir el foco empieza en la acción (↵ en oficina); la acción corre dentro y el error queda en el diálogo. `nivel` obligatorio: `consecuencia` o `irreversible` (botón de peligro), según la tabla de `DESIGN.md` |

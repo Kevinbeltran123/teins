@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
 import { Search } from "./iconos";
 import type { LineaEditable } from "./Cantidades";
+import { useNotificar } from "./Notificaciones";
 import { BotonAgregar } from "./Recorrido";
 
 /** Lee una cantidad escrita en campo ("12,5") como número; lo que no se lee cuenta como 0. */
@@ -40,7 +41,13 @@ export function EditorMateriales({
   // Las líneas con la nota abierta; una nota escrita siempre se ve.
   const [conNota, setConNota] = useState<ReadonlySet<string>>(new Set());
   const cambiar = (i: number, cambio: Partial<LineaEditable>) => onCambio(lineas.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
-  const quitar = (i: number) => onCambio(lineas.filter((_, j) => j !== i));
+  const notificar = useNotificar();
+  // Bajar a cero quita la línea al instante; "Deshacer" la devuelve (DESIGN.md, iteración 24c).
+  const quitar = (i: number) => {
+    const antes = [...lineas];
+    onCambio(lineas.filter((_, j) => j !== i));
+    notificar({ texto: `${lineas[i]!.descripcion.trim() || "Material"} quitado`, accion: { texto: "Deshacer", alHacer: () => onCambio(antes) } });
+  };
   const sumar = (i: number, delta: number) => {
     const siguiente = Math.max(0, numero(lineas[i]!.cantidad) + delta);
     if (siguiente === 0) quitar(i);

@@ -647,7 +647,7 @@ dialog.capa-lateral .capa-cerrar { top: 14px; right: 14px; }
 .vista-previa { margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .vista-previa iframe { width: 816px; height: 760px; zoom: .54; border: 2px solid var(--borde); border-radius: 10px; background: var(--papel); }
 
-dialog.capa-centrado { width: min(440px, calc(100vw - 32px)); background: var(--sup); border-radius: var(--r-capa); box-shadow: var(--sombra); animation: entrar-centro-capa .28s var(--curva) both; overflow: hidden; }
+dialog.capa-centrado { width: min(440px, calc(100vw - 32px)); background: var(--sup); border-radius: var(--r-capa); box-shadow: var(--sombra); animation: entrar-centro-capa .28s var(--curva) both; }
 dialog.capa-centrado .capa-cabeza { padding: 20px 20px 0; }
 dialog.capa-centrado .capa-cabeza h2 { font-size: 16px; font-weight: 600; line-height: 1.35; text-wrap: balance; }
 dialog.capa-centrado .capa-cuerpo { padding: 12px 20px 16px; gap: 12px; color: var(--texto); font-size: 13px; line-height: 1.5; }

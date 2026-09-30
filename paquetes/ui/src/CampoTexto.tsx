@@ -8,11 +8,14 @@ interface Props {
   obligatorio?: boolean | undefined;
   error?: string | undefined;
   deshabilitado?: boolean;
-  tipo?: "text" | "password" | "date";
+  /** "email" y "tel" abren el teclado de correo o de teléfono en el celular. */
+  tipo?: "text" | "password" | "date" | "email" | "tel";
+  /** La fecha más temprana que se acepta (AAAA-MM-DD), con `tipo="date"`. */
+  minimo?: string;
   autoComplete?: string;
   nombre?: string;
   /** Teclado del celular: "numeric" para códigos de verificación. */
-  modoEntrada?: "text" | "numeric" | "decimal";
+  modoEntrada?: "text" | "numeric" | "decimal" | "email" | "tel";
   /** Un nombre propuesto ("Hoja 3"): al enfocarlo queda seleccionado, y lo que se escribe lo reemplaza. */
   seleccionarAlEnfocar?: boolean;
   /** Varias líneas (el formato lo pide con `largo`). */
@@ -27,7 +30,7 @@ export const claseControl =
 export const claseConError = "animate-[sacudida_var(--t-duracion-estandar)_var(--t-curva)] border-2 border-error";
 
 /** No controlado: cada tecla se guarda sin volver a leer de la base, así el cursor no salta. */
-export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, error, deshabilitado, tipo = "text", autoComplete = "off", nombre, modoEntrada, seleccionarAlEnfocar, largo, valoresComunes }: Props) {
+export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, error, deshabilitado, tipo = "text", minimo, autoComplete = "off", nombre, modoEntrada, seleccionarAlEnfocar, largo, valoresComunes }: Props) {
   const id = useId();
   const campo = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   // Solo para marcar el valor común elegido; el campo sigue sin controlarse (el cursor no salta).
@@ -80,6 +83,7 @@ export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, erro
           id={id}
           name={nombre}
           type={tipo}
+          min={minimo}
           autoComplete={autoComplete}
           inputMode={modoEntrada}
           className={`${claseControl} ${error ? claseConError : ""}`}
