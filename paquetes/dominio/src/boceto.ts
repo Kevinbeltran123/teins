@@ -338,7 +338,7 @@ export interface OpcionesSvg {
 
 /** Una hoja como SVG: nítida a cualquier tamaño, en el PDF (QA-17). La cuadrícula es la de todo boceto. */
 export function hojaASvg(d: Pick<HojaBoceto, "ancho" | "alto" | "elementos">, opciones: OpcionesSvg = {}): string {
-  const { cuadricula = true, tinta = "#15171A", lineaDeCuadricula = "#DEDBD3", fondo = "#FFFFFF", fuente = "Atkinson Hyperlegible Next, sans-serif" } = opciones;
+  const { cuadricula = true, tinta = "#15171A", lineaDeCuadricula = "#DEDBD3", fondo = "#FFFFFF", fuente = "'Geist Variable', Geist, sans-serif" } = opciones;
   const partes: string[] = [`<rect width="${d.ancho}" height="${d.alto}" fill="${fondo}"/>`];
   if (cuadricula) {
     const lineas: string[] = [];

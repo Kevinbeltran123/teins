@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Building, CalendarDays, ClipboardCheck, FileText, LogOut, Package, Receipt, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
+import { Building, CalendarDays, ClipboardCheck, FileText, Logo, LogOut, Package, Receipt, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useConexion } from "../conexion";
@@ -71,7 +71,7 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
     <div className="app">
       <aside className="menu">
         <div className="marca">
-          <b>TEINS</b>
+          <Logo alto={30} />
         </div>
         <nav aria-label="Secciones">
           {SECCIONES.map(enlace)}

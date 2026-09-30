@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Bell, Boton, BotonIcono, Confirmacion, EncabezadoPagina, Insignia, KeyRound, LogOut, Plus, RefreshCw, ShieldCheck, Trash, useNotificar } from "@teins/ui";
+import { Aviso, Bell, Boton, BotonIcono, Confirmacion, EncabezadoPagina, GrupoDeOpciones, Insignia, KeyRound, LogOut, OPCIONES_DE_TEMA, Plus, RefreshCw, ShieldCheck, Trash, useNotificar, useTema } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { activarAvisos, desactivarAvisos, estadoAvisos, type EstadoAvisos } from "../avisos";
 import { aFechaHora } from "../formato";
@@ -72,6 +72,7 @@ export function MiCuenta({ nombre }: { nombre: string }) {
         )}
       </section>
 
+      <SelectorDeTema />
       <AvisosDelNavegador />
       <SesionActual />
       </div>
@@ -191,6 +192,17 @@ function SesionActual() {
           </Boton>
         </div>
       </div>
+    </section>
+  );
+}
+
+/** Claro, oscuro o el del sistema, recordado en este equipo (DESIGN.md, "Tema"). */
+function SelectorDeTema() {
+  const [tema, setTema] = useTema();
+  return (
+    <section>
+      <GrupoDeOpciones etiqueta="Tema" opciones={OPCIONES_DE_TEMA} valor={tema} onCambio={setTema} />
+      <p className="ayuda">Se recuerda en este equipo.</p>
     </section>
   );
 }

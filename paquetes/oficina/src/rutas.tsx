@@ -35,7 +35,7 @@ function Raiz() {
   const sesion = useQuery(consultas.sesion());
   if (sesion.isPending) {
     return (
-      <div aria-busy="true" aria-label="Abriendo TEINS Oficina" className="grid min-h-dvh place-items-center bg-fondo">
+      <div aria-busy="true" aria-label="Abriendo TEINS" className="grid min-h-dvh place-items-center bg-fondo">
         <p className="text-subtitulo font-extrabold tracking-wide text-superficie">TEINS</p>
       </div>
     );

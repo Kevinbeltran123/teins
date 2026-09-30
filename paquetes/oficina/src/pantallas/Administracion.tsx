@@ -251,7 +251,7 @@ function ActivarSegundoFactor({ alTerminar }: { alTerminar: () => void }) {
             </ul>
             <div className="flex flex-wrap gap-2">
               <a
-                href={`data:text/plain;charset=utf-8,${encodeURIComponent(`Códigos de respaldo de TEINS Oficina\n\n${codigos.join("\n")}\n`)}`}
+                href={`data:text/plain;charset=utf-8,${encodeURIComponent(`Códigos de respaldo de TEINS\n\n${codigos.join("\n")}\n`)}`}
                 download="codigos-de-respaldo-teins.txt"
                 className={claseBoton("secundaria", "pequeno")}
               >

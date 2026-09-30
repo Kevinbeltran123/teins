@@ -3,7 +3,7 @@
   "tailwindcss" y después este archivo; las clases solo existen para tokens.
 */
 @import "../tokens.css";
-@import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
+@import "@fontsource-variable/geist/wght.css";
 
 @theme inline {
   --color-*: initial;
@@ -22,6 +22,7 @@
   --color-panel-hundido: var(--t-panel-hundido);
   --color-texto: var(--t-texto);
   --color-texto-secundario: var(--t-texto-secundario);
+  --color-texto-terciario: var(--t-texto-terciario);
   --color-division: var(--t-division);
   --color-borde-suave: var(--t-borde-suave);
   --color-borde-control: var(--t-borde-control);
@@ -52,6 +53,12 @@
   --color-estado-anulado-texto: var(--t-estado-anulado-texto);
 
   --font-texto: var(--t-fuente-texto);
+  /* Precisión: pesos de 400 a 600. Las clases de más peso de las pantallas caen en 600 sin tocarlas. */
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+  --font-weight-black: 600;
 
   --text-cuerpo: var(--t-texto-cuerpo);
   --text-ayuda: var(--t-texto-ayuda);
@@ -65,6 +72,7 @@
 
   --shadow-capa: var(--t-sombra-capa);
   --shadow-menu: var(--t-sombra-menu);
+  --shadow-boton: var(--t-sombra-boton);
 
   --spacing-tactil: var(--t-tactil);
   --spacing-control: var(--t-control);
@@ -90,6 +98,7 @@
     color: var(--t-texto);
     background: var(--t-fondo);
     font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
   }
   /* Tailwind 4 deja el cursor de flecha en los botones: en escritorio, un botón debe verse accionable. */
   button:not(:disabled),

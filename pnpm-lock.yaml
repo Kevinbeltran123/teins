@@ -227,7 +227,7 @@ importers:
       '@fastify/static':
         specifier: ^10.1.4
         version: 10.1.4
-      '@fontsource-variable/atkinson-hyperlegible-next':
+      '@fontsource-variable/geist':
         specifier: ^5.3.0
         version: 5.3.0
       '@teins/dominio':
@@ -303,7 +303,7 @@ importers:
 
   paquetes/ui:
     dependencies:
-      '@fontsource-variable/atkinson-hyperlegible-next':
+      '@fontsource-variable/geist':
         specifier: ^5.3.0
         version: 5.3.0
       lucide-react:
@@ -1356,8 +1356,8 @@ packages:
   '@fastify/static@10.1.4':
     resolution: {integrity: sha512-YWYmXV0c3t/3DDyV32kRXJTgTY16FOkqtQ4mmBjbkWeukGR5n+Sr+7ppknNpS7hiRPrLU9zcySZZ1nLJVHTZkg==}
 
-  '@fontsource-variable/atkinson-hyperlegible-next@5.3.0':
-    resolution: {integrity: sha512-UnLzNUy1RWoLDfydAatP4NaRm99X/WbQEph7q/PymJnCFIOOwKOx3pBmp5ys8trO0dM+CKGuJgeZP9fAR4mQpA==}
+  '@fontsource-variable/geist@5.3.0':
+    resolution: {integrity: sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA==}
 
   '@graphile/logger@0.3.0':
     resolution: {integrity: sha512-0+79VNQYCIPQ7sD/rjQCvRV15k9zhWYHFc1QE7Bv0GLchgmxsTNtkKT1RSG8zCy0jPchel7x6o2RQ1dnnzhF0A==}
@@ -5817,7 +5817,7 @@ snapshots:
       fastq: 1.20.3
       glob: 13.0.6
 
-  '@fontsource-variable/atkinson-hyperlegible-next@5.3.0': {}
+  '@fontsource-variable/geist@5.3.0': {}
 
   '@graphile/logger@0.3.0': {}
 

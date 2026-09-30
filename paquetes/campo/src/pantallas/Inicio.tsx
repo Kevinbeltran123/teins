@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, Insignia, LogOut, MapPin, Smartphone, useSinRepetir } from "@teins/ui";
+import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LogOut, MapPin, OPCIONES_DE_TEMA, Smartphone, useSinRepetir, useTema } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
@@ -234,6 +234,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
                 <span className="text-ayuda text-texto-secundario">{sinConexion ? "Sin señal · lo capturado queda aquí" : "Conectado · todo al día"}</span>
               </span>
             </div>
+            <SelectorDeTema />
             <Diagnostico tecnicoId={usuario.id} />
             <button
               type="button"
@@ -458,3 +459,13 @@ const diaCorto = (iso: string) => {
   if (fecha.toDateString() === ayer.toDateString()) return "Ayer";
   return new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" }).format(fecha);
 };
+
+/** Claro, oscuro o el del sistema, recordado en este teléfono (DESIGN.md, "Tema"). */
+function SelectorDeTema() {
+  const [tema, setTema] = useTema();
+  return (
+    <div className="rounded-panel bg-panel-hundido px-4 py-3">
+      <GrupoDeOpciones etiqueta="Tema" opciones={OPCIONES_DE_TEMA} valor={tema} onCambio={setTema} />
+    </div>
+  );
+}
