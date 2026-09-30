@@ -31,7 +31,7 @@ export function EncabezadoDePaso({
         <BotonRedondo icono={ChevronLeft} etiqueta={etiquetaVolver} onClick={volver} />
         <div className="flex min-w-0 grow flex-col gap-1.5">
           <span className="truncate text-ayuda font-bold text-texto-secundario">{contexto}</span>
-          <div className="h-1.5 overflow-hidden rounded-full bg-panel-hundido" role="progressbar" aria-label="Avance del levantamiento" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(avance * 100)}>
+          <div className="h-[3px] overflow-hidden rounded-full bg-superficie-pista" role="progressbar" aria-label="Avance del levantamiento" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(avance * 100)}>
             <div className="h-full rounded-full bg-superficie transition-[width] duration-500 ease-t" style={{ width: `${Math.round(avance * 100)}%` }} />
           </div>
         </div>
@@ -58,7 +58,7 @@ export function BotonRedondo({ icono: Icono, etiqueta, onClick }: { icono: Lucid
       onClick={onClick}
       aria-label={etiqueta}
       title={etiqueta}
-      className="grid size-12 shrink-0 place-items-center rounded-full bg-panel-hundido active:scale-95 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-6"
+      className="grid size-11 shrink-0 place-items-center rounded-full bg-panel shadow-[inset_0_0_0_1px_var(--t-borde-suave)] active:scale-95 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-6"
     >
       <Icono aria-hidden />
     </button>
@@ -82,7 +82,7 @@ export function BotonSiguiente({ children, onClick, icono: Icono = ArrowRight, c
       disabled={disabled}
       onClick={onClick}
       aria-busy={cargando || undefined}
-      className="inline-flex min-h-15 grow items-center justify-center gap-2.5 rounded-control bg-superficie px-5 text-cuerpo font-extrabold text-sobre-superficie transition-transform active:scale-[0.97] disabled:opacity-50 aria-busy:opacity-80 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-[1.2em]"
+      className="inline-flex min-h-[50px] grow items-center justify-center gap-2.5 rounded-control bg-superficie px-5 text-cuerpo font-medium text-sobre-superficie shadow-[inset_0_1px_0_rgb(255_255_255/0.18),var(--t-sombra-boton)] transition-transform active:scale-[0.97] disabled:opacity-50 aria-busy:opacity-80 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-[1.2em]"
     >
       {children}
       <Icono aria-hidden />
@@ -159,10 +159,10 @@ export function TarjetaResumen({
       type="button"
       onClick={onClick}
       aria-label={etiqueta}
-      className="flex w-full animate-subir flex-col gap-3 rounded-panel bg-panel px-4.5 py-4 text-left active:scale-[0.99] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+      className="flex w-full animate-subir flex-col gap-3 rounded-panel border border-division bg-panel px-4.5 py-4 text-left active:scale-[0.99] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
     >
       <span className="flex items-center gap-3">
-        <strong className="min-w-0 grow text-subtitulo leading-tight font-extrabold">{titulo}</strong>
+        <strong className="min-w-0 grow text-[16px] leading-tight font-medium">{titulo}</strong>
         <span className={`shrink-0 rounded-full px-3 py-1 text-ayuda font-extrabold whitespace-nowrap ${completo ? "bg-exito-fondo text-exito-texto" : "bg-alerta-fondo text-alerta-texto"}`}>{estado}</span>
       </span>
       {datos.length > 0 && (
@@ -186,7 +186,7 @@ export function BotonAgregar({ children, onClick, disabled, icono: Icono }: { ch
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex min-h-15 w-full items-center justify-center gap-2 rounded-panel border-2 border-dashed border-borde-suave text-cuerpo font-extrabold disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-5"
+      className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-panel border border-dashed border-borde-suave text-[14px] font-medium text-texto-secundario disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-5"
     >
       <Icono aria-hidden />
       {children}
@@ -216,7 +216,7 @@ export function FilaDeRepaso({ titulo, detalle, falta, onEditar }: { titulo: str
 
 export function Repaso({ children, etiqueta }: { children: ReactNode; etiqueta: string }) {
   return (
-    <ul aria-label={etiqueta} className="overflow-hidden rounded-panel bg-panel">
+    <ul aria-label={etiqueta} className="overflow-hidden rounded-panel border border-division bg-panel">
       {children}
     </ul>
   );
@@ -250,7 +250,7 @@ export function FranjaSincronizacion({ enLinea, porSubir, guardado }: { enLinea:
       ? `Sin señal · ${pendiente} para subir. Puedes seguir.`
       : `Sin señal · ${guardado ? guardado.charAt(0).toLowerCase() + guardado.slice(1) : "todo queda en el teléfono"}. Puedes seguir.`;
   return (
-    <p role="status" className="flex items-center gap-2 rounded-control bg-panel px-3 py-2 text-ayuda font-bold text-texto-secundario">
+    <p role="status" className="flex items-center gap-2 rounded-control border border-division bg-panel px-3 py-2 text-ayuda font-bold text-texto-secundario">
       <span aria-hidden className={`size-2 shrink-0 rounded-full ${enLinea ? "bg-sync-ok" : "bg-sync-pendiente motion-safe:animate-pulse"}`} />
       {texto}
     </p>
@@ -365,7 +365,7 @@ export function ProcesoDeEnvio({
           {detalle}
         </p>
       </div>
-      <ol className="flex w-full flex-col gap-1 rounded-panel bg-panel p-2 text-left">
+      <ol className="flex w-full flex-col gap-1 rounded-panel border border-division bg-panel p-2 text-left">
         {etapas.map((e) => (
           <li key={e.texto} className="flex items-center gap-3 rounded-control px-3 py-2.5">
             <span

@@ -83,6 +83,10 @@
   --t-sombra-menu: 0 0 0 1px light-dark(rgb(17 19 23 / 0.08), rgb(255 255 255 / 0.06)), 0 8px 24px light-dark(rgb(17 19 23 / 0.12), rgb(0 0 0 / 0.45));
   --t-sombra-boton: 0 1px 2px light-dark(rgb(17 19 23 / 0.06), rgb(0 0 0 / 0.4));
 
+  /* El degradado quieto del inicio de sesión: los azules de TEINS en la mitad de abajo */
+  --t-resplandor-1: light-dark(#D3E4F4, #0F1E36);
+  --t-resplandor-2: light-dark(rgb(118 170 219 / 0.35), rgb(59 111 245 / 0.20));
+
   /* El logo oficial es a color; en oscuro se pinta en blanco (abajo) hasta tener la versión en negativo */
   --t-filtro-logo: none;
 
@@ -123,6 +127,8 @@
   --t-medida-radio: 0px;
   --t-medida-margen: 0px;
   --t-medida-foco: transparent;
+  --t-medida-borde: transparent;
+  --t-medida-halo: transparent;
   --t-medida-control-fondo: var(--t-control-fondo);
   --t-medida-control-borde: var(--t-control-borde);
   --t-medida-control-margen: 12px;
@@ -183,6 +189,8 @@
   --t-medida-radio: 14px;
   --t-medida-margen: 10px;
   --t-medida-foco: var(--t-superficie);
+  --t-medida-borde: var(--t-borde-suave);
+  --t-medida-halo: var(--t-superficie-suave);
   --t-medida-control-fondo: transparent;
   --t-medida-control-borde: transparent;
   --t-medida-control-margen: 0px;

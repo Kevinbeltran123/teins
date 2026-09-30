@@ -57,7 +57,7 @@ export function EditorMateriales({
       </span>
       {lineas.length === 0 && <p className="text-cuerpo text-texto-secundario">Busca en el catálogo lo que vas a usar. Si no está, agrégalo como línea libre.</p>}
       {lineas.map((l, i) => (
-        <div key={l.id} role="group" aria-label={`Línea ${i + 1}`} className="flex flex-col gap-3 rounded-panel bg-panel py-3.5 pr-3.5 pl-4.5 motion-safe:animate-subir">
+        <div key={l.id} role="group" aria-label={`Línea ${i + 1}`} className="flex flex-col gap-3 rounded-panel border border-division bg-panel py-3.5 pr-3.5 pl-4.5 motion-safe:animate-subir">
           <div className="flex items-center gap-3">
             <div className="flex min-w-0 grow flex-col">
               {l.catalogo ? (

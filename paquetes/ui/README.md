@@ -1,8 +1,10 @@
 # ui
 
-Componentes compartidos y tokens de diseño: dirección Consola en el portal (iteración 14) e identidad Recorrido en campo (iteración 22, `[data-superficie="campo"]` en `tokens.css`) y en oficina (iteración 23, `[data-superficie="oficina"]` y `oficina.css`). Ver `DESIGN.md`.
+Componentes compartidos y tokens de diseño de la base visual Precisión (2026-09-29, `prototipos/base-visual`), en campo, oficina y portal. Ver `DESIGN.md`.
 
-**Oficina (iteración 23):** `oficina.css` es el CSS del prototipo aprobado (`prototipos/oficina`), importado solo por oficina (`@teins/ui/oficina.css`). Los componentes compartidos llevan clases gancho (`btn`, `ins`, `aviso`, `vacio`, `capa-*`, `icono-btn`) que solo esa hoja pinta: en campo y en el portal no cambian.
+**Tema:** cada color de `tokens.css` lleva su valor claro y oscuro con `light-dark()`; lo elige `color-scheme`. Sin atributo sigue al sistema; `<html data-tema="claro|oscuro">` lo fija (`aplicarTema`, `useTema` y `OPCIONES_DE_TEMA` en `src/tema.ts`, recordado en `localStorage` con la llave `teins-tema`). Un elemento con `data-tema="claro"` (croquis, firma, hoja) se ve claro dentro del oscuro. Geist (`@fontsource-variable/geist`) es la única familia; `tema.css` lleva los pesos a 600 como máximo.
+
+**Oficina:** `oficina.css`, importado solo por oficina (`@teins/ui/oficina.css`), toma sus papeles de los tokens y tiene la escala de escritorio del prototipo. Los componentes compartidos llevan clases gancho (`btn`, `ins`, `aviso`, `vacio`, `capa-*`, `icono-btn`) que solo esa hoja pinta: en campo y en el portal no cambian.
 
 **Dependencias:** No depende de ningún otro paquete del monorepo. Iconos de Lucide (`lucide-react`, ISC), reexportados desde `src/iconos.ts`: ninguna superficie importa la biblioteca. `sideEffects` declarado para que cada superficie empaquete solo lo que usa.
 
@@ -12,9 +14,12 @@ Los tokens de tamaño son neutros (`texto-cuerpo`, `control`, `fondo`): cada sup
 
 | Componente | Para qué |
 |---|---|
+| `Logo` | El logo oficial (`src/logo-teins.png`); en oscuro, blanco por filtro. Donde está el logo no se escribe "TEINS" |
+| `MarcoDeIngreso`, `CampoDeIngreso`, `claseBotonIngreso`, `SeparadorIngreso` | Inicio de sesión de las tres superficies: logo, tarjeta de borde fino, campos de 46 px y el degradado quieto |
+| `DestinoBarraSuperior` | La barra superior del marco de oficina: `EncabezadoPagina` pone ahí la ubicación por un portal |
 | `Boton`, `BotonIcono`, `claseBoton` | Variantes principal, secundaria, fantasma y peligro; tamaños normal y pequeño; `icono` opcional; `cargando` conserva el texto y el foco |
 | `Dialogo` | Modal sobre `<dialog>`: centrado, lateral (hoja de 480 px para crear y editar en oficina) o inferior (campo). `cerrable={false}` para lo que se entrega una sola vez. `useModal` es su mecánica, reutilizada por el visor |
-| `Confirmacion` | Título en pregunta, consecuencia, botón con el verbo; la acción corre dentro y el error queda en el diálogo. `nivel` obligatorio: `consecuencia` o `irreversible` (botón de peligro), según la tabla de `DESIGN.md` |
+| `Confirmacion` | Título en pregunta, las consecuencias en su lista (`consecuencias`, sin icono de encabezado), botón con el verbo; con consecuencias y nada que escribir el foco empieza en la acción (↵ en oficina); la acción corre dentro y el error queda en el diálogo. `nivel` obligatorio: `consecuencia` o `irreversible` (botón de peligro), según la tabla de `DESIGN.md` |
 | `ProveedorNotificaciones`, `useNotificar` | Notificaciones de lo ya hecho, con una acción opcional ("Deshacer", "Ver"); abajo a la derecha en oficina, abajo en campo y sobre `[data-barra-inferior]`. Con un diálogo modal abierto van dentro de él: fuera, todo es inerte |
 | `useSinRepetir` | Una acción asíncrona que un doble toque hace una sola vez (bloqueo síncrono); devuelve también `ocupado` |
 | `CapturaDeErrores`, `FallaAlDibujar` | Si algo falla al dibujar, un aviso en español con "Volver a cargar" en vez de la pantalla en blanco (portal; oficina usa `FallaAlDibujar` en su enrutador) |

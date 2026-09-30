@@ -11,8 +11,8 @@ export type VarianteBoton = "principal" | "secundaria" | "fantasma" | "peligro";
 export type TamanoBoton = "normal" | "pequeno";
 
 const variantes: Record<VarianteBoton, string> = {
-  principal: "bg-superficie text-sobre-superficie not-disabled:hover:bg-superficie-elevada",
-  secundaria: "border border-borde-suave bg-panel text-texto not-disabled:hover:bg-panel-hundido",
+  principal: "bg-superficie text-sobre-superficie shadow-[inset_0_1px_0_rgb(255_255_255/0.18),var(--t-sombra-boton)] not-disabled:hover:brightness-106",
+  secundaria: "bg-panel text-texto shadow-[inset_0_0_0_1px_var(--t-borde-suave),var(--t-sombra-boton)] not-disabled:hover:bg-panel-hundido",
   fantasma: "bg-transparent text-superficie not-disabled:hover:bg-encima",
   peligro: "bg-peligro text-sobre-peligro not-disabled:hover:brightness-90",
 };
@@ -23,10 +23,10 @@ const tamanos: Record<TamanoBoton, string> = {
 };
 
 const base =
-  "inline-flex shrink-0 items-center justify-center rounded-control text-center font-bold transition-[background-color,filter,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 aria-busy:opacity-80 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-superficie [&_svg]:shrink-0";
+  "inline-flex shrink-0 items-center justify-center rounded-control text-center font-medium whitespace-nowrap transition-[background-color,filter,transform] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 aria-busy:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:shrink-0";
 
 /** Clase del botón, para enlaces que se ven como botón (navegación con forma de acción). */
-/** Ganchos de oficina.css (identidad Recorrido): en oficina el botón se ve como en el prototipo. */
+/** Ganchos de oficina.css: en oficina el botón toma la escala de escritorio del prototipo (prototipos/base-visual). */
 const ganchos: Record<VarianteBoton, string> = { principal: "btn principal", secundaria: "btn", fantasma: "btn fantasma", peligro: "btn peligro" };
 
 export const claseBoton = (variante: VarianteBoton = "secundaria", tamano: TamanoBoton = "normal") => `${base} ${variantes[variante]} ${tamanos[tamano]} ${ganchos[variante]}${tamano === "pequeno" ? " chico" : ""}`;

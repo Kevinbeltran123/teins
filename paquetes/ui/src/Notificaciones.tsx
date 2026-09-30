@@ -77,7 +77,7 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
       {visibles.map((n) => (
         <div
           key={n.id}
-          className="pointer-events-auto flex min-h-12 animate-aparecer items-center justify-between gap-3 rounded-control bg-notificacion py-1 pr-1 pl-4 text-cuerpo text-sobre-superficie shadow-menu"
+          className="pointer-events-auto flex min-h-12 animate-aparecer items-center justify-between gap-3 rounded-[10px] bg-notificacion py-1 pr-1 pl-4 text-cuerpo font-medium text-fondo shadow-menu"
         >
           <span className="py-2">{n.texto}</span>
           {n.accion && (
@@ -87,7 +87,7 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
                 n.accion!.alHacer();
                 quitar(n.id);
               }}
-              className="min-h-control-sm shrink-0 rounded-control px-3 font-extrabold text-acento hover:bg-sobre-superficie/10 focus-visible:outline-3 focus-visible:outline-acento"
+              className="min-h-control-sm shrink-0 rounded-[7px] px-3 font-semibold text-inherit shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--t-fondo)_25%,transparent)] hover:bg-fondo/10 focus-visible:outline-2 focus-visible:outline-fondo"
             >
               {n.accion.texto}
             </button>
