@@ -95,6 +95,8 @@ export E2E_CAMPO_URL=https://campo-production-2642.up.railway.app \
 for f in pruebas/*.spec.ts; do npx playwright test "$f" --project chromium --workers=1; sleep 65; done
 ```
 
+No corra a la vez la suite local y la del entorno: comparten `e2e/test-results`, donde la preparación escribe `usuarios.json`, y una corrida le cambia los usuarios y le borra los rastros a la otra (pasó el 2026-09-29 con `envio.spec.ts` y `administracion.spec.ts`).
+
 Si más adelante se conecta el repositorio de GitHub (`railway service source connect --repo Kevinbeltran123/teins --branch <rama> --service <servicio>`), cada subida a esa rama despliega sola.
 
 ## Prueba en iPhone y verificación manual

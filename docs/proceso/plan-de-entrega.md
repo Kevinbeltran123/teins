@@ -30,13 +30,13 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 21 | Cotizaciones desde las cantidades | De la visita a la cotización sin volver a digitar (P27, QA-12) | Terminada y desplegada en el entorno de pruebas (precios de prueba; faltan los de TEINS) |
 | Iteración 22 | Campo rehecho con la dirección Recorrido (`DESIGN.md`) | Una app que los técnicos quieran usar: la captura sigue la visita paso a paso en vez de una lista interminable | Terminada, desplegada en el entorno de pruebas y aprobada por Kevin en su iPhone |
 | Iteración 23 | Oficina con la identidad Recorrido (`DESIGN.md`) | Oficina clara y sin recuadros: cada pantalla ordenada por lo que hace la persona, con búsqueda en las listas | Construida y desplegada en el entorno de pruebas (con la ronda de revisión, 2026-09-29); falta que Kevin la apruebe |
-| Iteración 24 | Robustez y protección: nada se pierde ni se hace sin querer | Borradores que se borran solos, dobles envíos, errores invisibles y acciones con consecuencias sin confirmar | 24a hecha en local; faltan el despliegue en pruebas y 24b a 24d |
+| Iteración 24 | Robustez y protección: nada se pierde ni se hace sin querer | Borradores que se borran solos, dobles envíos, errores invisibles y acciones con consecuencias sin confirmar | 24a desplegada en pruebas; 24b hecha en local; faltan 24c y 24d |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
 
-**Iteración 24, robustez y protección (2026-09-29).** Aprobada por Kevin antes del rediseño visual (sección "Iteración 24"). 24a (los 12 fallos del grupo A) hecha y verificada en local el 2026-09-29, en siete commits. Siguiente: desplegarla en el entorno de pruebas (`campo`, `oficina`, `portal` y `worker`, con la migración 0029) y seguir con 24b. Producción se actualizó el 2026-09-29 en otra sesión (`README.md`, `produccion.md`).
+**Iteración 24, robustez y protección (2026-09-29).** Aprobada por Kevin antes del rediseño visual (sección "Iteración 24"). 24a (los 12 fallos del grupo A) hecha y desplegada en el entorno de pruebas el 2026-09-29, con sus 17 pruebas en verde allí. 24b (piezas compartidas) hecha y verificada en local, sin desplegar. Siguiente: 24c, aplicar la regla de `DESIGN.md` a las acciones de los grupos B, C y E con esas piezas. Producción se actualizó el 2026-09-29 en otra sesión (`README.md`, `produccion.md`).
 
 **Revisión de seguridad por áreas (2026-09-29).** Las correcciones de 4a a 4d están hechas, desplegadas en el entorno de pruebas y verificadas allí el 2026-09-29: salud de las tres superficies, cabeceras de seguridad, `verificar-exposicion.sh`, la IP real del cliente en el registro también con un `X-Forwarded-For` falso, respaldo cifrado con simulacro correcto (177 cadenas, 27 archivos) y los 22 del extremo a extremo en Chromium (un archivo por minuto: la suite seguida choca con el límite de ingresos por IP, `entorno-de-pruebas.md`). Las de 4e (campo y portal) están hechas, desplegadas en el entorno de pruebas y verificadas allí el 2026-09-29 con `e2e/pruebas/cierre-de-sesion.spec.ts` (2 de 2 en Chromium): sin otra clave para un técnico con borrado pendiente, cierre de sesión sin señal completado en el servidor al volver la señal, "Salir" del portal que dice si no llegó al servidor, diagnóstico solo con las fotos propias y avisos que solo abren la propia app. Tres hallazgos de 4e no eran errores: el motivo de la visita que ve el cliente se elige de la lista del lenguaje común (Mantenimiento, Cotización, Modificación), las huellas de los archivos a la vista las acepta ADR-0022 y el código del QR no es secreto (ADR-0009, parte 4). **Producción actualizada el 2026-09-29** a esta versión (iteraciones 9 a 23, migraciones 0014 a 0028 y la revisión de seguridad), en este orden: `railway config plan` (7 cambios y 2 borrados, los previstos); `infra/railway/claves-avisos.sh`, nuevo: producción se montó antes de la iteración 15 y su `worker` no tenía el par VAPID, sin el cual `campo` y `oficina` reciben la pública vacía por referencia y la configuración no las deja arrancar ni migrar; `infra/respaldos/clave.sh teins-produccion`; `railway config apply --yes --confirm-destructive` (después, el plan sin diferencias; el redespliegue de la imagen anterior falló en `oficina` y `portal` sin la variable del dueño y Railway dejó la versión que corría, como en pruebas); el despliegue de `campo`, que migró, y después `oficina`, `portal`, `worker` y `respaldos`. Verificado: los cinco en `SUCCESS`, cada superficie con el paquete recién compilado, salud y las 7 cabeceras de seguridad en las tres, `verificar-exposicion.sh`, la IP real en el registro también con `X-Forwarded-For: 203.0.113.77`, el primer respaldo cifrado (los volcados en claro pasaron a `cifrado/`) y el simulacro correcto (`produccion.md`). Los secretos, el `apply` y los despliegues los corrió Kevin: el clasificador de permisos no deja que un agente escriba en producción. En producción no se corre el extremo a extremo (ADR-0021); falta que Kevin entre a oficina con `administracion` y su segundo factor. Siguiente en la ronda de revisión: `/code-review max paquetes/campo`.
 
@@ -964,7 +964,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteración 24 · Robustez y protección
 
-**Estado:** aprobada por Kevin el 2026-09-29. 24a hecha y verificada en local el 2026-09-29; falta desplegarla en el entorno de pruebas. Siguen 24b, 24c y 24d.
+**Estado:** aprobada por Kevin el 2026-09-29. 24a hecha y desplegada en el entorno de pruebas el 2026-09-29; 24b hecha y verificada en local, sin desplegar. Siguen 24c y 24d.
 
 **Para qué:** que nadie pierda trabajo ni haga algo sin querer. Cuatro auditorías de solo lectura (campo, oficina dos veces y transversal) encontraron borradores que se borran solos, acciones que se repiten con un doble toque, errores que no se ven y acciones con consecuencias sin confirmar. Va antes del rediseño visual: un flujo bonito que pierde datos no sirve.
 
@@ -1004,8 +1004,9 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 |---|---|
 | 24a: los 12 fallos del grupo A corregidos, cada uno con una prueba que fallaba antes | Hecho en local el 2026-09-29. 1 a 3: `e2e/pruebas/borradores.spec.ts`; 4: la primera prueba de `administracion.spec.ts`; 5 a 9: `proteccion-campo.spec.ts`; 10: `envios.test.ts` (llave) y `cotizaciones.test.ts` (vista previa) del servidor, y `cotizaciones.spec.ts`; 11: `oficina/src/mensajes.test.ts`; 12: `errores-de-pantalla.spec.ts` |
 | Verificación completa | Tipos, arquitectura, licencias, auditoría y pruebas de los paquetes en verde (dos fallas intermitentes del servidor que pasan 3 de 3 solas, abajo); presupuesto de campo 124,1 de 135 KB; extremo a extremo completo en Chromium y WebKit: 71 pasan y 3 se saltan, como antes |
-| Desplegada en el entorno de pruebas | [pendiente: `campo`, `oficina`, `portal`, `worker` y la migración 0029] |
-| 24b, 24c y 24d | [pendientes] |
+| 24a desplegada en el entorno de pruebas | 2026-09-29: `campo` (aplicó la migración 0029), `oficina`, `portal` y `worker`, subidos desde lo ya en commits; salud de las tres superficies y los 17 del extremo a extremo de 24a en Chromium contra el entorno (`borradores`, `proteccion-campo`, `errores-de-pantalla`, `administracion`, `cotizaciones`, `informe-al-cliente`; un archivo por minuto) |
+| 24b: piezas compartidas | Hecha y verificada en local el 2026-09-29: `Confirmacion` con `nivel` obligatorio (los 20 usos clasificados; sin él no compila), `useSalidaProtegida` (prueba "salida protegida" en `borradores.spec.ts`), `errorDelCampo` (`oficina/src/mensajes.test.ts`), captura de errores en campo (`errores-de-pantalla.spec.ts`); extremo a extremo completo en local, 75 pasan y 3 se saltan. La guardia de doble envío, la sesión vencida y la captura de oficina y el portal salieron en 24a |
+| 24c y 24d | [pendientes] |
 
 ### Decisiones tomadas al construirlo
 
@@ -1021,10 +1022,16 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **"Revise cuerpo" se traduce en oficina** (`textoDelServidor`): el servidor sigue listando las rutas en `problema.campos` y oficina nombra los datos como en la pantalla. Marcar cada campo en su formulario es de 24b.
 - **Fallas intermitentes vistas en la verificación, sin relación con el cambio:** `envios.test.ts` "si no se sabe si WhatsApp lo recibió" y `api.test.ts` "rechaza y elimina un archivo que dice ser JPEG", las dos con la cola del worker bajo carga (la segunda con el extremo a extremo corriendo a la vez); pasan 3 de 3 solas.
 
+**En 24b:**
+
+- **`nivel` tiene dos valores, no tres:** "se deshace fácil" no usa `Confirmacion` sino la notificación con "Deshacer" (`DESIGN.md`). La migración fue mecánica (`peligro` → `irreversible`), así nada cambió a la vista; la clasificación de cada acción contra la tabla es de 24c. Ya se ve que tres no la cumplen: quitar una sección repetida, desactivar un usuario y quitar una llave llevan botón rojo y la tabla los pone en "tiene consecuencias".
+- **La salida protegida vive en oficina** (`src/salida.tsx`), no en `paquetes/ui`: depende del enrutador de oficina. Campo guarda cada dato al escribirlo y el portal no tiene formularios.
+- **La sesión vencida solo necesitaba oficina:** campo trabaja sin conexión y guarda en el teléfono (el envío queda en "Inicia sesión para enviar"), y el portal solo lee.
+- **`errorDelCampo` marca el campo con un texto general** ("Revise este dato: no tiene la forma esperada."): los mensajes de Zod del servidor están en inglés y no se muestran. Usarlo en cada formulario es de 24c.
+
 ### Fuera de la iteración 24
 
 - Las funciones de 24d, entre ellas cancelar un envío en cola: solo la propuesta.
-- Campo tampoco tiene captura de errores al dibujar: la auditoría la pidió para oficina y el portal; va en 24b con la pieza compartida (`CapturaDeErrores` ya existe).
 
 ## Iteración 23 · Oficina con la identidad Recorrido
 
