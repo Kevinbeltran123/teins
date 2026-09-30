@@ -3,12 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, ChevronRight, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, Inbox, Marcado, Pestanas, PieLista, RefreshCw, SinResultados, Tabla } from "@teins/ui";
 import { consultas } from "../api";
-import { aFechaCorta, aHora, cuantoLleva } from "../formato";
+import { aFechaCorta, aHora, cuantoLleva, iniciales } from "../formato";
 import { mensajeDeError } from "../mensajes";
 import { useBandeja, useTomar, type Estado } from "../revision";
 import { useRetrasado } from "../usarRetraso";
 
-const fotos = (n: number) => (n === 1 ? "1 foto" : `${n} fotos`);
 
 const PESTANAS: Record<Estado, { etiqueta: string; vacio: string; orden: string }> = {
   enviado: { etiqueta: "Esperando revisión", vacio: "Aparecen aquí cuando un técnico envía un levantamiento.", orden: "Del que más lleva esperando al más reciente" },
@@ -104,7 +103,13 @@ export function Bandeja() {
           <div>
             <Tabla
               etiqueta={PESTANAS[estado].etiqueta}
-              columnas={[{ titulo: "Cliente y sitio" }, { titulo: "Formato" }, { titulo: "Técnico" }, ...(conRevision ? [{ titulo: "Revisión" }] : []), { titulo: estado === "enviado" ? "Lleva esperando" : "Recibido", derecha: true }]}
+              columnas={[
+                { titulo: "Cliente y sitio" },
+                { titulo: "Formato" },
+                { titulo: "Técnico" },
+                ...(conRevision ? [{ titulo: "Revisión" }] : []),
+                ...(estado === "enviado" ? [{ titulo: "Recibido" }, { titulo: "Lleva esperando", derecha: true }] : [{ titulo: "Recibido", derecha: true }]),
+              ]}
             >
               {elementos.map((e, k) => {
                 const lleva = cuantoLleva(e.recibidoEn);
@@ -116,25 +121,42 @@ export function Bandeja() {
                         {e.visita ? <Marcado texto={e.visita.cliente} busqueda={buscar} /> : "Sin visita"}
                       </Link>
                       {e.visita && (
-                        <span className="sub">
+                        <span className="sec">
+                          {" · "}
                           <Marcado texto={e.visita.sitio} busqueda={buscar} />
                         </span>
                       )}
                     </CeldaTabla>
                     <CeldaTabla>
-                      <Marcado texto={e.nombreFormato ?? e.formato} busqueda={buscar} />
-                      <span className="sub">{fotos(e.fotos)}</span>
+                      <span className="sec">
+                        <Marcado texto={e.nombreFormato ?? e.formato} busqueda={buscar} />
+                      </span>
                     </CeldaTabla>
                     <CeldaTabla>
-                      <Marcado texto={e.tecnico.nombre} busqueda={buscar} />
+                      <span className="persona">
+                        <span className="avatar" aria-hidden>
+                          {iniciales(e.tecnico.nombre)}
+                        </span>
+                        <Marcado texto={e.tecnico.nombre} busqueda={buscar} />
+                      </span>
                     </CeldaTabla>
                     {conRevision && (
                       <CeldaTabla>{e.revisor ? e.revisor.id === sesion.data?.usuario.id ? <span className="fuerte">Usted</span> : e.revisor.nombre : <span className="sec">[Sin responsable]</span>}</CeldaTabla>
                     )}
-                    <CeldaTabla derecha>
-                      {estado === "enviado" && <span className={`espera ${lleva.dias >= 2 ? "larga" : ""}`}>{lleva.texto}</span>}
-                      <span className="sub">{aFechaCorta(e.recibidoEn)}</span>
-                    </CeldaTabla>
+                    {estado === "enviado" ? (
+                      <>
+                        <CeldaTabla>
+                          <span className="sec">{aFechaCorta(e.recibidoEn)}</span>
+                        </CeldaTabla>
+                        <CeldaTabla derecha>
+                          <span className={`espera ${lleva.dias >= 2 ? "larga" : ""}`}>{lleva.texto}</span>
+                        </CeldaTabla>
+                      </>
+                    ) : (
+                      <CeldaTabla derecha>
+                        <span className="sec">{aFechaCorta(e.recibidoEn)}</span>
+                      </CeldaTabla>
+                    )}
                   </FilaTabla>
                 );
               })}

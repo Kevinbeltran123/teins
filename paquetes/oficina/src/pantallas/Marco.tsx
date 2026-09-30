@@ -1,10 +1,11 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Building, CalendarDays, ClipboardCheck, FileText, Logo, LogOut, Package, Receipt, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
+import { Building, CalendarDays, ClipboardCheck, DestinoBarraSuperior, FileText, Logo, LogOut, Package, Receipt, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useConexion } from "../conexion";
+import { iniciales } from "../formato";
 import { useBandeja } from "../revision";
 
 interface Seccion {
@@ -18,26 +19,22 @@ const SECCIONES: Seccion[] = [
   { a: "/visitas", texto: "Visitas", icono: CalendarDays },
   { a: "/clientes", texto: "Clientes", icono: Building },
   { a: "/catalogo", texto: "Catálogo", icono: Package },
+];
+/** Lo que se entrega al cliente, agrupado como en el prototipo (prototipos/base-visual). */
+const DOCUMENTOS: Seccion[] = [
   { a: "/informes", texto: "Informes", icono: FileText },
   { a: "/cotizaciones", texto: "Cotizaciones", icono: Receipt },
 ];
 
-/** Iniciales para el distintivo de la cuenta: quien comparte computador ve de un vistazo quién está dentro. */
-const iniciales = (nombre: string) =>
-  nombre
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]!.toUpperCase())
-    .join("");
-
 /**
- * Marco de oficina (DESIGN.md, identidad Recorrido; prototipos/oficina): menú lateral con las secciones, la
- * activa con su marca amarilla, y el contenido a la derecha. Bajo 1100 px el menú queda en iconos.
+ * Marco de oficina (DESIGN.md, Precisión; prototipos/base-visual): menú lateral de 208 px con el logo, las secciones
+ * y la cuenta abajo; a la derecha, una barra superior de 48 px con la ubicación y el contenido. Bajo 1100 px el
+ * menú queda en iconos.
  */
 export function Marco({ nombre, administrador, children }: { nombre: string; administrador: boolean; children: ReactNode }) {
   const consultasCliente = useQueryClient();
   const enLinea = useConexion();
+  const [barra, setBarra] = useState<HTMLElement | null>(null);
   // Lo que espera revisión es el trabajo pendiente de oficina: por eso su cuenta va en el menú.
   const esperando = useBandeja("enviado").data?.pages[0]?.total ?? 0;
   // En Levantamientos la cifra ya está en el encabezado: repetirla en el menú no agrega nada.
@@ -56,7 +53,7 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
 
   const enlace = ({ a, texto, icono: Icono }: Seccion) => (
     <Link key={a} to={a} activeOptions={{ exact: a === "/" }} activeProps={{ "aria-current": "page" }} title={texto}>
-      <Icono aria-hidden size={20} />
+      <Icono aria-hidden size={16} strokeWidth={1.6} />
       <span className="txt">{texto}</span>
       {a === "/" && esperando > 0 && !enLevantamientos && (
         <span className="cuenta-num">
@@ -75,6 +72,8 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
         </div>
         <nav aria-label="Secciones">
           {SECCIONES.map(enlace)}
+          <div className="grupo">Documentos</div>
+          {DOCUMENTOS.map(enlace)}
           {administrador && (
             <>
               <hr />
@@ -94,22 +93,23 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
               </span>
             </Link>
             <button type="button" className="icono-btn limpio chico salir" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={() => void cerrarSesion()}>
-              <LogOut aria-hidden size={18} />
+              <LogOut aria-hidden size={16} strokeWidth={1.6} />
             </button>
           </div>
         </div>
       </aside>
-      <main className="contenido">
-        <div className="contenido-interior">
+      <div className="contenido">
+        <nav ref={setBarra} className="barra-sup" aria-label="Ubicación" />
+        <main className="contenido-interior">
           {!enLinea && (
             <div className="sin-conexion" role="status">
               <WifiOff aria-hidden size={20} />
               Sin conexión. Lo que ve puede no estar al día; se actualiza al recuperar la conexión.
             </div>
           )}
-          {children}
-        </div>
-      </main>
+          <DestinoBarraSuperior.Provider value={barra}>{children}</DestinoBarraSuperior.Provider>
+        </main>
+      </div>
     </div>
   );
 }
