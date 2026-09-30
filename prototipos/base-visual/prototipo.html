@@ -25,7 +25,7 @@
   --ok: #188A5B; --alerta: #A15C00; --peligro: #D22F34; --peligro-texto: #FFFFFF; --revision: #6B4FD3;
   --sombra-capa: 0 0 0 1px rgba(17,19,23,.08), 0 18px 48px rgba(17,19,23,.16);
   --sombra-boton: 0 1px 2px rgba(17,19,23,.06);
-  --velo: rgba(17,19,23,.28); --vitrina: #EEF1F7; --vitrina-punto: rgba(47,95,232,.16);
+  --velo: rgba(17,19,23,.28); --resplandor-1: rgba(23,115,176,.20); --resplandor-2: rgba(118,170,219,.30); --logo: #002B81;
 }
 /* ---- La app: tema oscuro ---- */
 .app[data-tema="oscuro"] {
@@ -36,7 +36,7 @@
   --ok: #3DBE8B; --alerta: #E8A33D; --peligro: #E5484D; --peligro-texto: #FFFFFF; --revision: #A38BFA;
   --sombra-capa: 0 0 0 1px rgba(255,255,255,.06), 0 16px 48px rgba(0,0,0,.55);
   --sombra-boton: 0 1px 2px rgba(0,0,0,.4);
-  --velo: rgba(3,4,6,.62); --vitrina: #0C1120; --vitrina-punto: rgba(110,150,255,.16);
+  --velo: rgba(3,4,6,.62); --resplandor-1: rgba(23,115,176,.30); --resplandor-2: rgba(59,111,245,.22); --logo: #EDEEF0;
 }
 /* ---- Del sistema: el claro de arriba, o el oscuro si el equipo lo pide ---- */
 @media (prefers-color-scheme: dark) {
@@ -48,7 +48,7 @@
     --ok: #3DBE8B; --alerta: #E8A33D; --peligro: #E5484D; --peligro-texto: #FFFFFF; --revision: #A38BFA;
     --sombra-capa: 0 0 0 1px rgba(255,255,255,.06), 0 16px 48px rgba(0,0,0,.55);
     --sombra-boton: 0 1px 2px rgba(0,0,0,.4);
-    --velo: rgba(3,4,6,.62); --vitrina: #0C1120; --vitrina-punto: rgba(110,150,255,.16);
+    --velo: rgba(3,4,6,.62); --resplandor-1: rgba(23,115,176,.30); --resplandor-2: rgba(59,111,245,.22); --logo: #EDEEF0;
   }
 }
 
@@ -75,7 +75,7 @@ button { cursor: pointer; }
 .app svg { width: 16px; height: 16px; flex: none; stroke-width: 1.6; }
 .escena { display: flex; justify-content: center; }
 .ventana { width: 100%; position: relative; overflow: hidden; isolation: isolate; border-radius: 12px; background: var(--fondo); box-shadow: 0 0 0 1px var(--linea-fuerte), 0 30px 80px rgba(0,0,0,.22); height: 680px; display: grid; grid-template-columns: 208px minmax(0, 1fr); }
-.ventana.sola { grid-template-columns: minmax(0, 1fr); }
+.ventana.sola { grid-template-columns: minmax(0, 1fr); height: 820px; }
 @media (max-width: 760px) { .ventana { grid-template-columns: minmax(0, 1fr); height: 720px; } .menu { display: none; } }
 .menu { border-right: 1px solid var(--linea); padding: 16px 10px; display: flex; flex-direction: column; gap: 18px; }
 .marca-app { display: flex; align-items: center; gap: 9px; padding: 2px 8px; font-weight: 600; font-size: 14px; letter-spacing: .06em; }
@@ -214,64 +214,32 @@ td.num, th.num { text-align: right; }
 .correo .meta { color: var(--sec); font-size: 12px; display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 4px 10px; padding-bottom: 10px; border-bottom: 1px solid var(--linea); }
 .correo .adjunto { display: inline-flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--linea-fuerte); font-size: 12px; align-self: flex-start; }
 
-/* Inicio de sesión: el formulario a la izquierda y el producto en uso a la derecha (Laravel Cloud, folk, Pin) */
-.ingreso { height: 100%; display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr); }
-@media (max-width: 900px) { .ingreso { grid-template-columns: minmax(0, 1fr); } .vitrina { display: none; } }
-.lado-form { display: flex; flex-direction: column; padding: 26px 32px; }
-.lado-form .marca-app { padding: 0; }
-.centro-form { flex: 1; display: flex; align-items: center; justify-content: center; }
-.caja-ingreso { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 22px; }
-.caja-ingreso .titulo { display: flex; flex-direction: column; gap: 4px; }
-.caja-ingreso h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
-.caja-ingreso .titulo p { margin: 0; color: var(--sec); font-size: 13.5px; }
-.caja-ingreso form { display: flex; flex-direction: column; gap: 14px; }
-.caja-ingreso .campo { display: flex; flex-direction: column; gap: 6px; }
-.caja-ingreso .fila-etq { display: flex; justify-content: space-between; align-items: baseline; }
-.caja-ingreso label { font-size: 13px; font-weight: 500; }
-.caja-ingreso .fila-etq a { font-size: 12px; color: var(--sec); text-decoration: none; }
-.caja-ingreso .fila-etq a:hover { color: var(--texto); }
+/* Inicio de sesión (Tana, Delphi, Mural): la marca arriba, una tarjeta de borde fino con campos de 46 px y un
+   resplandor quieto con los azules de TEINS al fondo. Nada se mueve. */
+.ingreso { position: relative; height: 100%; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; padding: 40px 20px 72px; background: var(--fondo); }
+.ingreso::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 115%, var(--resplandor-1), transparent 70%), radial-gradient(ellipse 45% 35% at 50% 108%, var(--resplandor-2), transparent 70%); pointer-events: none; }
+.ingreso > * { position: relative; }
+.logo-palabra { font-size: 26px; font-weight: 600; letter-spacing: .16em; color: var(--logo); display: inline-flex; align-items: center; gap: 10px; }
+.tarjeta-ingreso { width: 100%; max-width: 400px; background: var(--sup); border: 1px solid var(--linea); border-radius: 16px; box-shadow: 0 1px 2px rgba(17,19,23,.04), 0 12px 32px rgba(17,19,23,.06); padding: 34px 34px 30px; display: flex; flex-direction: column; gap: 22px; }
+.tarjeta-ingreso h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; text-align: center; }
+.tarjeta-ingreso form { display: flex; flex-direction: column; gap: 16px; }
+.tarjeta-ingreso .campo { display: flex; flex-direction: column; gap: 7px; }
+.tarjeta-ingreso .fila-etq { display: flex; justify-content: space-between; align-items: baseline; }
+.tarjeta-ingreso label { font-size: 14px; font-weight: 500; }
+.tarjeta-ingreso .fila-etq a { font-size: 13.5px; color: var(--sec); text-decoration: none; }
+.tarjeta-ingreso .fila-etq a:hover { color: var(--texto); }
 .con-ojo { position: relative; }
-.con-ojo button { position: absolute; right: 4px; top: 4px; width: 30px; height: 30px; border: 0; background: none; color: var(--ter); border-radius: 6px; display: grid; place-items: center; }
+.con-ojo button { position: absolute; right: 6px; top: 6px; width: 34px; height: 34px; border: 0; background: none; color: var(--ter); border-radius: 8px; display: grid; place-items: center; }
 .con-ojo button:hover { color: var(--texto); background: var(--sup2); }
-.entrada { width: 100%; height: 38px; border-radius: 8px; border: 0; background: var(--sup); box-shadow: inset 0 0 0 1px var(--linea-fuerte), var(--sombra-boton); padding: 0 11px; font-size: 14px; color: var(--texto); }
-.entrada:focus { outline: none; box-shadow: inset 0 0 0 1px var(--marca), 0 0 0 3px var(--marca-suave); }
-.separador { display: flex; align-items: center; gap: 12px; color: var(--ter); font-size: 12px; }
+.con-ojo button svg { width: 18px; height: 18px; }
+.entrada { width: 100%; height: 46px; border-radius: 10px; border: 0; background: var(--sup); box-shadow: inset 0 0 0 1px var(--linea-fuerte); padding: 0 14px; font-size: 15px; color: var(--texto); }
+.entrada:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--marca), 0 0 0 4px var(--marca-suave); }
+.btn.alto { height: 46px; font-size: 15px; border-radius: 10px; }
+.btn.alto svg { width: 18px; height: 18px; }
+.separador { display: flex; align-items: center; gap: 14px; color: var(--ter); font-size: 13px; }
 .separador::before, .separador::after { content: ""; flex: 1; height: 1px; background: var(--linea); }
-.pie-ingreso { display: flex; justify-content: space-between; gap: 12px; color: var(--ter); font-size: 12px; }
-.pie-ingreso .en-linea { display: inline-flex; align-items: center; gap: 6px; }
-.pie-ingreso .en-linea i { width: 6px; height: 6px; border-radius: 99px; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
-/* La vitrina: el producto en uso, recortado contra el borde */
-.vitrina { position: relative; overflow: hidden; background: var(--vitrina); border-left: 1px solid var(--linea); }
-.vitrina::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(var(--vitrina-punto) 1px, transparent 1px); background-size: 20px 20px; mask-image: linear-gradient(to bottom, #000 30%, transparent 95%); }
-.vitrina .leyenda { position: absolute; left: 36px; top: 34px; z-index: 2; display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
-.vitrina .leyenda b { font-size: 15px; font-weight: 600; color: var(--texto); letter-spacing: -0.01em; }
-.vitrina .leyenda span { font-size: 13px; color: var(--sec); line-height: 1.45; }
-.mini { position: absolute; left: 36px; top: 124px; width: 820px; transform-origin: top left; scale: .9; border-radius: 10px; background: var(--fondo); box-shadow: 0 0 0 1px var(--linea-fuerte), 0 30px 70px rgba(10,20,50,.28); overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) 330px; animation: flotar-entra .8s var(--curva) both; }
-@keyframes flotar-entra { from { opacity: 0; translate: 0 14px; } }
-.mini .barra { grid-column: 1 / -1; height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid var(--linea); font-size: 12px; color: var(--sec); }
-.mini .barra b { color: var(--texto); font-weight: 500; }
-.mini .barra .pub { height: 24px; padding: 0 10px; border-radius: 6px; background: var(--marca); color: #fff; display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 500; }
-.mini .ed { padding: 16px 18px 90px; display: flex; flex-direction: column; gap: 8px; border-right: 1px solid var(--linea); }
-.mini .ed h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.mini .l { display: grid; grid-template-columns: minmax(0, 1fr) 90px 80px; gap: 8px; align-items: center; font-size: 11.5px; padding: 6px 0; border-top: 1px solid var(--linea); }
-.mini .l .p { height: 24px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--linea-fuerte); background: var(--sup); display: flex; align-items: center; justify-content: flex-end; padding: 0 7px; font-variant-numeric: tabular-nums; }
-.mini .l .p.escribiendo { box-shadow: inset 0 0 0 1px var(--marca), 0 0 0 3px var(--marca-suave); }
-.mini .l .t { text-align: right; font-variant-numeric: tabular-nums; }
-.mini .hoja { background: var(--sup2); padding: 14px; }
-.mini .papel { background: #fff; color: #15171A; border-radius: 3px; box-shadow: 0 6px 18px rgba(17,19,23,.14); padding: 16px; font-size: 8.5px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px; }
-.mini .papel .e { display: flex; justify-content: space-between; border-bottom: 1px solid #002B81; padding-bottom: 6px; }
-.mini .papel .e b { color: #002B81; font-size: 11px; font-weight: 600; }
-.mini .papel .r { display: flex; justify-content: space-between; border-bottom: 1px solid #E1E4EA; padding: 3px 0; }
-.mini .papel .tot { display: flex; justify-content: space-between; font-weight: 600; font-size: 10px; border-top: 1px solid #002B81; padding-top: 5px; margin-top: 4px; }
-.mini .papel .flash { animation: resaltar 1.2s var(--curva); border-radius: 2px; }
-.mini-tel { position: absolute; left: 76px; top: 330px; width: 240px; height: 360px; border-radius: 30px; background: var(--fondo); box-shadow: 0 0 0 6px #040507, 0 0 0 7px #22262d, 0 24px 50px rgba(10,20,50,.3); padding: 34px 14px 14px; display: flex; flex-direction: column; gap: 10px; animation: flotar-entra .8s .15s var(--curva) both; }
-.mini-tel .ok-envio { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 22px 8px 14px; }
-.mini-tel .chulo { width: 44px; height: 44px; border-radius: 99px; background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); display: grid; place-items: center; }
-.mini-tel .chulo svg { width: 22px; height: 22px; stroke-width: 2.2; }
-.mini-tel b { font-size: 15px; font-weight: 600; }
-.mini-tel span { font-size: 11.5px; color: var(--sec); }
-.mini-tel .etapa { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--sec); padding: 7px 4px; border-top: 1px solid var(--linea); }
-.mini-tel .etapa i { width: 14px; height: 14px; border-radius: 99px; background: var(--ok); display: grid; place-items: center; color: #fff; font-style: normal; font-size: 9px; }
+.bajo-tarjeta { color: var(--sec); font-size: 14px; }
+.pie-ingreso { position: absolute; bottom: 22px; left: 0; right: 0; display: flex; justify-content: center; gap: 22px; color: var(--ter); font-size: 13px; }
 /* Confirmación */
 .velo { position: absolute; inset: 0; z-index: 20; background: var(--velo); backdrop-filter: blur(2px); animation: aparecer .2s var(--curva) both; }
 @keyframes aparecer { from { opacity: 0; } }
@@ -460,40 +428,22 @@ const PANTALLAS = {
   },
   ingreso: {
     nombre: "Inicio de sesión",
-    porque: "<b>Inicio de sesión.</b> El formulario a la izquierda y, a la derecha, TEINS en uso, como Laravel Cloud o folk: la cotización con su hoja en vivo (cada pocos segundos cambia un precio y la hoja se actualiza) y el teléfono con un envío recibido. Sin textos de venta.",
+    porque: "<b>Inicio de sesión.</b> Como Tana o Delphi: la marca arriba, una tarjeta de borde fino con campos de 46 px, el botón a lo ancho y la llave de acceso como alternativa. La vida la pone un resplandor quieto con los azules de TEINS, no una animación.",
     html: () => `<div class="ventana sola"><div class="ingreso">
-      <div class="lado-form">
-        <div class="marca-app"><i></i>TEINS</div>
-        <div class="centro-form"><div class="caja-ingreso">
-          <div class="titulo"><h1>Ingresar</h1><p>Con su usuario de TEINS.</p></div>
-          <form onsubmit="return false">
-            <div class="campo"><label for="u">Usuario</label><input id="u" class="entrada" value="laura.mendez" autocomplete="username"></div>
-            <div class="campo"><div class="fila-etq"><label for="c">Contraseña</label><a href="#" title="Pídale a administración que la restablezca">¿La olvidó?</a></div>
-              <div class="con-ojo"><input id="c" class="entrada" type="password" value="contrasena-de-prueba" autocomplete="current-password"><button type="button" aria-label="Mostrar la contraseña"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
-            <button class="btn principal grande ancho">Ingresar</button>
-          </form>
-          <div class="separador">o</div>
-          <button class="btn grande ancho">${ic("llave")}Ingresar con llave de acceso</button>
-        </div></div>
-        <div class="pie-ingreso"><span class="en-linea"><i></i>Conectado al servidor</span><span>¿Problemas para entrar? Hable con administración</span></div>
+      <span class="logo-palabra">TEINS</span>
+      <div class="tarjeta-ingreso">
+        <h1>Ingresar a TEINS</h1>
+        <form onsubmit="return false">
+          <div class="campo"><label for="u">Usuario</label><input id="u" class="entrada" value="laura.mendez" autocomplete="username"></div>
+          <div class="campo"><div class="fila-etq"><label for="c">Contraseña</label><a href="#" title="Pídale a administración que la restablezca">¿La olvidó?</a></div>
+            <div class="con-ojo"><input id="c" class="entrada" type="password" value="contrasena-de-prueba" autocomplete="current-password"><button type="button" aria-label="Mostrar la contraseña"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+          <button class="btn principal alto ancho">Ingresar</button>
+        </form>
+        <div class="separador">o</div>
+        <button class="btn alto ancho">${ic("llave")}Ingresar con llave de acceso</button>
       </div>
-      <div class="vitrina" aria-hidden="true">
-        <div class="leyenda"><b>Del sitio al cliente, sin volver a digitar</b><span>Levantamientos en el teléfono, revisión en oficina, informes y cotizaciones que el cliente recibe.</span></div>
-        <div class="mini">
-          <div class="barra"><span>Cotizaciones / <b>COT-2026-0045</b></span><span class="pub">Publicar versión 1</span></div>
-          <div class="ed"><h3>Cotización COT-2026-0045</h3>
-            ${VITRINA.map((l, i) => `<div class="l"><span>${l.d}</span><span class="p" data-v="p-${i}">${miles(l.p)}</span><span class="t" data-v="t-${i}">$ ${miles(l.p * l.c)}</span></div>`).join("")}
-          </div>
-          <div class="hoja"><div class="papel">
-            <div class="e"><b>TEINS</b><span>COT-2026-0045 · v1</span></div>
-            <div>Clínica Santa Fe · Sede Norte</div>
-            ${VITRINA.map((l, i) => `<div class="r"><span>${l.d}</span><span data-v="h-${i}">$ ${miles(l.p * l.c)}</span></div>`).join("")}
-            <div class="tot"><span>Total</span><span data-v="total">$ ${miles(totalVitrina())}</span></div>
-          </div></div>
-        </div>
-        <div class="mini-tel"><div class="ok-envio"><span class="chulo">${ic("check")}</span><b>En oficina</b><span>Clínica Santa Fe · 12 fotos</span></div>
-          <div class="etapa"><i>✓</i>Guardado en el teléfono</div><div class="etapa"><i>✓</i>Fotos y dibujos · 12 de 12</div><div class="etapa"><i>✓</i>Recibido en oficina</div></div>
-      </div>
+      <p class="bajo-tarjeta">¿Problemas para entrar? Hable con administración.</p>
+      <div class="pie-ingreso"><span>TEINS Oficina</span><span>© 2026</span></div>
     </div></div>`,
   },
   campo: {
@@ -582,32 +532,6 @@ document.addEventListener("input", (ev) => {
 document.addEventListener("change", (ev) => { if (ev.target.name === "imp") { cot.imp = ev.target.value; pintar(); } });
 document.addEventListener("click", (ev) => { const b = ev.target.closest("[data-vista]"); if (b) { cot.vista = b.dataset.vista; pintar(); } });
 
-const VITRINA = [{ d: "Cable UTP 6A", c: 30, p: 4800 }, { d: "Canaleta 40 × 25", c: 12, p: 18500 }, { d: "Mano de obra", c: 1, p: 850000 }];
-const totalVitrina = () => VITRINA.reduce((s, l) => s + l.c * l.p, 0) * 1.19;
-/* Cada pocos segundos alguien "escribe" un precio y la hoja del cliente cambia: la función que distingue a TEINS, en uso. */
-let reloj;
-function animarVitrina() {
-  clearInterval(reloj);
-  if (e.pantalla !== "ingreso" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const precios = [[4800, 5200], [18500, 17900], [850000, 920000]];
-  let paso = 0;
-  reloj = setInterval(() => {
-    const i = paso % 3, par = precios[i];
-    VITRINA[i].p = VITRINA[i].p === par[0] ? par[1] : par[0];
-    const poner = (k, v, clase) => { const el = document.querySelector(`[data-v="${k}"]`); if (!el) return; el.textContent = v; if (clase) { el.classList.remove(clase); void el.offsetWidth; el.classList.add(clase); } };
-    const campo = document.querySelector(`[data-v="p-${i}"]`);
-    campo?.classList.add("escribiendo");
-    poner(`p-${i}`, miles(VITRINA[i].p));
-    setTimeout(() => {
-      campo?.classList.remove("escribiendo");
-      poner(`t-${i}`, `$ ${miles(VITRINA[i].p * VITRINA[i].c)}`);
-      poner(`h-${i}`, `$ ${miles(VITRINA[i].p * VITRINA[i].c)}`, "flash");
-      poner("total", `$ ${miles(totalVitrina())}`, "flash");
-    }, 450);
-    paso++;
-  }, 2800);
-}
-
 const e = { pantalla: "ingreso", tema: "sistema" };
 function pintar() {
   document.getElementById("pantallas").innerHTML = Object.entries(PANTALLAS).map(([k, p]) => `<button data-p="${k}" aria-pressed="${k === e.pantalla}">${p.nombre}</button>`).join("");
@@ -616,7 +540,6 @@ function pintar() {
   app.dataset.tema = e.tema;
   app.innerHTML = `<div class="escena">${PANTALLAS[e.pantalla].html()}</div>`;
   document.querySelectorAll("#temas button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tema === e.tema)));
-  animarVitrina();
 }
 document.getElementById("pantallas").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) { e.pantalla = b.dataset.p; pintar(); } });
 document.getElementById("temas").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) { e.tema = b.dataset.tema; pintar(); } });
