@@ -287,32 +287,32 @@ const iniciales = (nombre: string) =>
     .join("");
 
 /**
- * Punto focal (DESIGN.md, Recorrido): la visita de ahora, con la barra amarilla al borde (Jobber), el avance
- * del levantamiento por pasos y la única acción principal.
+ * Punto focal (DESIGN.md; prototipos/base-visual, campo): la visita de ahora en una tarjeta de borde fino, con
+ * cuándo es en azul, el avance del levantamiento por pasos y la única acción principal.
  */
 function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal; levantamientos: LevantamientoLocal[]; contexto: Contexto }) {
   const borrador = levantamientos.find((l) => l.estado === "borrador");
   const formato = borrador ? formatoDe(contexto.formatos, borrador) : undefined;
   const resumen = borrador && formato ? resumenDeRecorrido(formato, borrador) : undefined;
   return (
-    <section aria-label="Siguiente visita" className="relative flex flex-col gap-4 overflow-hidden rounded-panel bg-panel py-5 pr-5 pl-6.5">
-      <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-acento" />
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-acento px-3 py-1 text-ayuda font-extrabold text-sobre-acento first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
-        <span className="rounded-full bg-panel-hundido px-3 py-1 text-ayuda font-extrabold">{visita.motivo}</span>
+    <section aria-label="Siguiente visita" className="flex flex-col gap-3 rounded-2xl border border-division bg-panel p-4">
+      <div className="flex justify-between gap-3 text-[12px] font-medium text-texto-secundario">
+        <span aria-hidden>Siguiente visita</span>
+        <span className="text-superficie first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
       </div>
-      <h2 className="text-titulo leading-tight font-extrabold">{visita.cliente.nombre}</h2>
-      <p className="-mt-2 flex items-start gap-2.5 text-cuerpo text-texto-secundario">
-        <MapPin aria-hidden className="mt-0.5 size-[18px] shrink-0" />
-        <span>
+      <h2 className="text-subtitulo leading-tight font-semibold tracking-[-0.01em]">{visita.cliente.nombre}</h2>
+      <p className="-mt-1 flex flex-col gap-0.5 text-[13px] text-texto-secundario">
+        <span className="flex items-start gap-1.5">
+          <MapPin aria-hidden className="mt-0.5 size-3.5 shrink-0" />
           {visita.sitio.nombre} · {visita.sitio.direccion}
         </span>
+        <span>{visita.motivo}</span>
       </p>
       {resumen && (
         <div className="flex flex-col gap-2">
           <div aria-hidden className="flex gap-1">
             {resumen.pasos.map((p, i) => (
-              <i key={p.id} className={`h-1.5 flex-1 rounded-full ${resumen.hechos[i] ? "bg-sync-ok" : p === resumen.siguiente ? "bg-acento" : "bg-panel-hundido"}`} />
+              <i key={p.id} className={`h-[3px] flex-1 rounded-full ${resumen.hechos[i] ? "bg-sync-ok" : p === resumen.siguiente ? "bg-superficie" : "bg-superficie-pista"}`} />
             ))}
           </div>
           <span className="text-ayuda text-texto-secundario">
@@ -331,12 +331,12 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
 function FilaVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal; levantamientos: LevantamientoLocal[]; contexto: Contexto }) {
   const [abierta, setAbierta] = useState(false);
   return (
-    <article className="flex flex-col gap-3 rounded-panel bg-panel p-4">
-      <button type="button" onClick={() => setAbierta((a) => !a)} aria-expanded={abierta} className="flex items-center gap-3.5 text-left focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco">
-        <span className="w-16 shrink-0 text-ayuda font-extrabold text-texto-secundario first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
+    <article className="flex flex-col gap-3 border-t border-division py-3">
+      <button type="button" onClick={() => setAbierta((a) => !a)} aria-expanded={abierta} className="flex min-h-11 items-center gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco">
+        <span className="w-16 shrink-0 text-[12px] leading-tight text-texto-secundario first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
         <span className="flex min-w-0 flex-col">
-          <strong className="text-cuerpo leading-snug">{`${visita.cliente.nombre} · ${visita.sitio.nombre}`}</strong>
-          <span className="text-ayuda text-texto-secundario">{visita.motivo}</span>
+          <strong className="text-[14px] leading-snug font-medium">{`${visita.cliente.nombre} · ${visita.sitio.nombre}`}</strong>
+          <span className="text-[13px] text-texto-secundario">{visita.motivo}</span>
         </span>
       </button>
       {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} />}

@@ -1125,7 +1125,7 @@ function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: stri
       ) : propio ? (
         <>
           <p className="text-cuerpo leading-relaxed text-texto-secundario">Vas a entregar el teléfono a quien te recibió. Firma una constancia de que estuviste en el sitio hoy.</p>
-          <div className="flex flex-col gap-0.5 rounded-panel bg-panel px-4.5 py-4">
+          <div className="flex flex-col gap-0.5 rounded-panel border border-division bg-panel px-4.5 py-4">
             <strong className="text-cuerpo">Constancia de visita</strong>
             <span className="text-ayuda text-texto-secundario">{`${visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : "Este sitio"} · ${diaCorto.format(new Date())}`}</span>
           </div>
@@ -1368,7 +1368,7 @@ function Enviado({
         </>
       ) : (
         estado && (
-          <div className="flex flex-col gap-3 rounded-panel bg-panel p-4">
+          <div className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-4">
             <p className={`text-cuerpo font-bold ${claseDeTono[estado.tono]}`} aria-live="polite">
               {estado.texto}
             </p>
@@ -1393,7 +1393,7 @@ function Enviado({
           </ul>
         </section>
       )}
-      <details open={levantamiento.estado !== "enviado" || undefined} className="group flex flex-col rounded-panel bg-panel [&[open]>summary]:mb-1">
+      <details open={levantamiento.estado !== "enviado" || undefined} className="group flex flex-col rounded-panel border border-division bg-panel [&[open]>summary]:mb-1">
         <summary className="flex min-h-tactil cursor-pointer items-center justify-between gap-3 rounded-panel px-4 text-cuerpo font-bold focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&::-webkit-details-marker]:hidden">
           Ver lo que enviaste
           <ChevronDown aria-hidden className="size-5 shrink-0 text-texto-secundario transition-transform duration-200 group-open:rotate-180" />
