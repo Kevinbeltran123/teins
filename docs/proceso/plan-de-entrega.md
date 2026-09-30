@@ -30,7 +30,7 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 21 | Cotizaciones desde las cantidades | De la visita a la cotización sin volver a digitar (P27, QA-12) | Terminada y desplegada en el entorno de pruebas (precios de prueba; faltan los de TEINS) |
 | Iteración 22 | Campo rehecho con la dirección Recorrido (`DESIGN.md`) | Una app que los técnicos quieran usar: la captura sigue la visita paso a paso en vez de una lista interminable | Terminada, desplegada en el entorno de pruebas y aprobada por Kevin en su iPhone |
 | Iteración 23 | Oficina con la identidad Recorrido (`DESIGN.md`) | Oficina clara y sin recuadros: cada pantalla ordenada por lo que hace la persona, con búsqueda en las listas | Construida y desplegada en el entorno de pruebas (con la ronda de revisión, 2026-09-29); falta que Kevin la apruebe |
-| Iteración 24 | Robustez y protección: nada se pierde ni se hace sin querer | Borradores que se borran solos, dobles envíos, errores invisibles y acciones con consecuencias sin confirmar | 24a y 24b desplegadas en pruebas; faltan 24c y 24d |
+| Iteración 24 | Robustez y protección: nada se pierde ni se hace sin querer | Borradores que se borran solos, dobles envíos, errores invisibles y acciones con consecuencias sin confirmar | 24a y 24b desplegadas en pruebas; 24c hecha en local; falta 24d |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -65,7 +65,8 @@ El paso 2, en este orden y comparando cada pantalla con el prototipo en capturas
 - Pantallas angostas de oficina arregladas: bajo 1100 px el logo queda en sus anillos y el conteo es una pastilla; bajo 640 px el menú pasa a una franja arriba (antes quedaba como columna a todo lo alto, porque la regla angosta estaba antes que la del menú).
 - **Desplegado en el entorno de pruebas el 2026-09-30** (commit 6d6c4e1: campo, oficina, portal y worker, sin variables ni migraciones nuevas). Verificado allí: salud de las tres superficies, cada una con la versión nueva (`<title>TEINS</title>`), las cabeceras de seguridad, `verificar-exposicion.sh` y el extremo a extremo en Chromium, un archivo por minuto: 22 de 23 a la primera; en `borradores.spec.ts` la quinta prueba no pasó del ingreso (el límite de 5 por minuto dentro del mismo archivo) y sola pasó.
 - **Aprobado por Kevin el 2026-09-30:** campo, oficina y portal en el entorno de pruebas, y las tres decisiones (sin el número de fotos en la bandeja, ↵ solo en lo que no es irreversible y sin nada que escribir, letra de 16 px en los campos de ingreso). El tema sigue por omisión al del sistema; cada técnico lo cambia en "Tu cuenta › Tema".
-- Sigue: la iteración 24c sobre la base nueva. **Prototipo hecho el 2026-09-30** (`prototipos/proteccion/prototipo.html`, https://claude.ai/artifact/EoVS2kxrxDJCoBGZoHTN7G), esperando el visto bueno de Kevin: el resumen clasifica cada acción y nueve casos se prueban en la pantalla. Propone, entre otras cosas: desactivar un ítem y quitar un tablero al instante con «Deshacer»; «Guardar y salir» primero al salir con cambios; el motivo obligatorio al corregir un dato; la hoja de reasignar dice quién deja de ver la visita y quién la recibe; restablecer contraseña lista las cuatro consecuencias (incluido el segundo factor) y no se ofrece para uno mismo; quitar la propia llave pasa a azul.
+- **Iteración 24c construida el 2026-09-30** (sección "Iteración 24", decisiones "En 24c"), verificada en local; falta desplegarla en el entorno de pruebas. Sigue: 24d (la propuesta de funciones que faltan, con ADR nuevos) o los flujos (Motion en oficina, View Transitions en campo), cuando Kevin decida.
+- Antes: **Prototipo de 24c hecho el 2026-09-30** (`prototipos/proteccion/prototipo.html`, https://claude.ai/artifact/EoVS2kxrxDJCoBGZoHTN7G), esperando el visto bueno de Kevin: el resumen clasifica cada acción y nueve casos se prueban en la pantalla. Propone, entre otras cosas: desactivar un ítem y quitar un tablero al instante con «Deshacer»; «Guardar y salir» primero al salir con cambios; el motivo obligatorio al corregir un dato; la hoja de reasignar dice quién deja de ver la visita y quién la recibe; restablecer contraseña lista las cuatro consecuencias (incluido el segundo factor) y no se ofrece para uno mismo; quitar la propia llave pasa a azul.
 
 Estado del repositorio al cerrar la sesión del 2026-09-29: el repositorio de GitHub se recreó con el historial sin coautor (PR #1 en borrador, abierto de nuevo) y `corte-0` está subida. 24a y 24b están desplegadas en el entorno de pruebas.
 
@@ -1017,7 +1018,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteración 24 · Robustez y protección
 
-**Estado:** aprobada por Kevin el 2026-09-29. 24a y 24b hechas y desplegadas en el entorno de pruebas el 2026-09-29. Siguen 24c (después de la base visual Precisión) y 24d.
+**Estado:** aprobada por Kevin el 2026-09-29. 24a y 24b hechas y desplegadas en el entorno de pruebas el 2026-09-29. 24c hecha en local el 2026-09-30 con su prototipo aprobado. Sigue 24d.
 
 **Para qué:** que nadie pierda trabajo ni haga algo sin querer. Cuatro auditorías de solo lectura (campo, oficina dos veces y transversal) encontraron borradores que se borran solos, acciones que se repiten con un doble toque, errores que no se ven y acciones con consecuencias sin confirmar. Va antes del rediseño visual: un flujo bonito que pierde datos no sirve.
 
@@ -1059,7 +1060,8 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 | Verificación completa | Tipos, arquitectura, licencias, auditoría y pruebas de los paquetes en verde (dos fallas intermitentes del servidor que pasan 3 de 3 solas, abajo); presupuesto de campo 124,1 de 135 KB; extremo a extremo completo en Chromium y WebKit: 71 pasan y 3 se saltan, como antes |
 | 24a desplegada en el entorno de pruebas | 2026-09-29: `campo` (aplicó la migración 0029), `oficina`, `portal` y `worker`, subidos desde lo ya en commits; salud de las tres superficies y los 17 del extremo a extremo de 24a en Chromium contra el entorno (`borradores`, `proteccion-campo`, `errores-de-pantalla`, `administracion`, `cotizaciones`, `informe-al-cliente`; un archivo por minuto) |
 | 24b: piezas compartidas | Hecha el 2026-09-29 y desplegada en el entorno de pruebas (`campo`, `oficina` y `portal`; las pruebas de salida protegida y de captura en campo, en verde contra el entorno): `Confirmacion` con `nivel` obligatorio (los 20 usos clasificados; sin él no compila), `useSalidaProtegida` (prueba "salida protegida" en `borradores.spec.ts`), `errorDelCampo` (`oficina/src/mensajes.test.ts`), captura de errores en campo (`errores-de-pantalla.spec.ts`); extremo a extremo completo en local, 75 pasan y 3 se saltan. La guardia de doble envío, la sesión vencida y la captura de oficina y el portal salieron en 24a |
-| 24c y 24d | [pendientes] |
+| 24c: la regla de `DESIGN.md` en los grupos B, C y E | Prototipo aprobado por Kevin el 2026-09-30 (`prototipos/proteccion/prototipo.html`). Hecho en local el mismo día, con pruebas que fallaban antes: `e2e/pruebas/proteccion-oficina.spec.ts` (desactivar con "Deshacer", reasignar dice qué pasa, contacto con errores por campo y foco, fechas desde hoy), `proteccion-campo.spec.ts` (tablero y material con "Deshacer", doble toque en "Firmar", botón atrás), `borradores.spec.ts` ("Guardar y salir"), `revision.spec.ts` (motivo obligatorio), `administracion.spec.ts` (restablecer lista el segundo factor; no para uno mismo) y `restaurarRepeticion` en `dominio` |
+| 24d | [pendiente: solo la propuesta, con ADR nuevos] |
 
 ### Decisiones tomadas al construirlo
 
@@ -1081,6 +1083,21 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **La salida protegida vive en oficina** (`src/salida.tsx`), no en `paquetes/ui`: depende del enrutador de oficina. Campo guarda cada dato al escribirlo y el portal no tiene formularios.
 - **La sesión vencida solo necesitaba oficina:** campo trabaja sin conexión y guarda en el teléfono (el envío queda en "Inicia sesión para enviar"), y el portal solo lee.
 - **`errorDelCampo` marca el campo con un texto general** ("Revise este dato: no tiene la forma esperada."): los mensajes de Zod del servidor están en inglés y no se muestran. Usarlo en cada formulario es de 24c.
+
+**En 24c:**
+
+- **Lo que se revierte no pregunta:** desactivar un ítem, quitar un tablero y bajar un material a cero pasan al instante con "Deshacer". El tablero vuelve a su lugar con lo escrito (`restaurarRepeticion` en `dominio`); `quitarRepeticion` devuelve lo quitado leído en la misma escritura, así "Deshacer" incluye lo último que se tecleó. Las fotos del tablero no se borran mientras tanto.
+- **Quitar una hoja del croquis ya se deshacía** con el "Deshacer" de la barra del editor (su historial): no lleva otra notificación.
+- **Importar CSV ya mostraba el resumen** ("2 ítems listos para importar") antes de "Importar 2 ítems": no cambió.
+- **Salir con cambios:** "Guardar y salir" es la acción principal y recibe el foco; "Salir sin guardar" va a la izquierda, en rojo. Sigue en informe y cotización: las demás pantallas con campos editan en hojas, que son modales, así que no se puede salir con una abierta.
+- **Restablecer contraseña** lista sus cuatro consecuencias (contraseña temporal, sesiones, segundo factor y llaves, avisos) y no aparece en la fila propia; la fila propia no tiene menú (todas sus opciones ya estaban ocultas).
+- **Corregir un dato exige motivo**, con el error en el campo y el foco en él. El servidor sigue aceptándolo opcional: la regla es de la pantalla.
+- **Reasignar** dice en la hoja quién deja de ver la visita y quién la recibe, y el botón nombra a quien la recibe ("Reasignar a María Gómez"). No se dice "con un aviso": el aviso de una visita reasignada no está confirmado.
+- **Formularios de oficina:** el foco va al primer campo con error (`enfocarPrimerError`), correo y celular con su teclado (`tipo="email"`/`"tel"`), y las fechas de programar y reprogramar desde hoy (también al enviar, porque los formularios usan `noValidate`).
+- **Campo:** el botón atrás del teléfono hace lo que la flecha de cada pantalla (`dispositivo/atras.ts`: una entrada de más en el historial mientras hay un levantamiento abierto); "Firmar" no se repite con un doble toque (`useSinRepetir`); Esc cierra la constancia como la equis.
+- **Desviaciones del prototipo:** Esc en la firma cierra sin preguntar, igual que la equis de hoy; en el croquis no se agregó Esc: una tecla cerraría a pantalla completa el trabajo de dibujo sin querer, y el editor ya tiene su "Listo".
+- **Visto al probar:** en un teléfono, oficina se desborda a lo ancho (la página mide 491 px en uno de 412) y la notificación queda en parte fuera de la pantalla. Oficina es de escritorio; queda como pendiente de diseño.
+- **Arreglado de paso:** el cuerpo de un diálogo centrado de oficina largo (reasignar con muchos técnicos) tapaba su pie: el diálogo no podía desplazarse desde el cambio a Precisión.
 
 ### Fuera de la iteración 24
 

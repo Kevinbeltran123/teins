@@ -118,13 +118,19 @@ Confirmar lo que se hace a menudo entrena a aceptar sin leer. Por eso hay tres n
 
 | Nivel | Ejemplos | Cómo |
 |---|---|---|
-| Se deshace fácil | Quitar una foto, una línea de cantidades | Se hace al instante y la notificación ofrece "Deshacer" |
-| Tiene consecuencias | Desactivar un usuario, restablecer una contraseña, dar o quitar administración, desactivar un ítem, marcar revisado, tomar una revisión ajena, quitar una llave, quitar una sección repetida, enviar a oficina, cerrar sesión con envíos pendientes, volver a firmar | `Confirmacion`: el título es una pregunta con el verbo ("¿Desactivar a Juan Pérez?"), las consecuencias concretas en su lista (`consecuencias`), el botón repite el verbo. Si no hay nada que escribir, la acción recibe el foco y en oficina se confirma con ↵ |
-| No se deshace | Publicar un informe, retirar una versión, cancelar una visita, regenerar un acceso | Igual, con el botón de peligro, el motivo escrito cuando queda en el registro y el foco en "Cancelar": nunca es la acción predeterminada, y no lleva ↵ |
+| Se deshace fácil | Quitar una foto, una línea de cantidades o un material, una sección repetida (un tablero); desactivar un ítem del catálogo; marcar "No se pudo obtener" | Se hace al instante y la notificación ofrece "Deshacer". En el croquis, el "Deshacer" de su barra |
+| Tiene consecuencias | Restablecer una contraseña, dar o quitar administración, marcar revisado, tomar una revisión ajena, quitar una llave, quitar un contacto, enviar a otro contacto, enviar a oficina, cerrar sesión con envíos pendientes, volver a firmar, salir con cambios sin guardar | `Confirmacion`: el título es una pregunta con el verbo ("¿Desactivar a Juan Pérez?"), las consecuencias concretas en su lista (`consecuencias`), el botón repite el verbo. Si no hay nada que escribir, la acción recibe el foco y en oficina se confirma con ↵ |
+| No se deshace | Publicar un informe o una cotización, retirar una versión, cancelar una visita, regenerar un acceso, desactivar un usuario (ordena borrar los datos de su teléfono) | Igual, con el botón de peligro, el motivo escrito cuando queda en el registro y el foco en "Cancelar": nunca es la acción predeterminada, y no lleva ↵ |
 
 En el código, `Confirmacion` exige `nivel`: `consecuencia` o `irreversible` (botón de peligro). Lo que se deshace fácil no usa `Confirmacion`.
 
-Los formularios con cambios sin guardar avisan antes de salir (`useSalidaProtegida` en oficina).
+Los formularios con cambios sin guardar avisan antes de salir (`useSalidaProtegida` en oficina), con "Guardar y salir" como acción principal y "Salir sin guardar" a la izquierda, en rojo.
+
+Lo que se hace en una hoja lateral (reasignar técnicos, reprogramar, importar) no lleva un segundo diálogo: la hoja ya es el paso deliberado, y dice antes del botón qué va a pasar ("Juan Pérez deja de verla en su teléfono"); el botón lo repite con el nombre ("Reasignar a María Gómez").
+
+Corregir un dato exige el motivo: queda en el historial junto al valor anterior. En los formularios, cada campo dice qué le falta, el foco va al primero con error y los de correo y teléfono abren su teclado.
+
+En campo, el botón atrás del teléfono hace lo que la flecha de la pantalla; en el inicio, sale de la app.
 
 ## Crear y editar
 
