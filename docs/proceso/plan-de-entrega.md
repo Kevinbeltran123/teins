@@ -47,6 +47,22 @@ El paso 2, en este orden y comparando cada pantalla con el prototipo en capturas
 5. Pantallas: inicio de sesión de oficina y campo como el prototipo (logo arriba, tarjeta de borde fino, campos de 46 px, degradado vertical con los azules de TEINS), marco de oficina (menú con el logo, barra superior de 48 px), bandeja, detalle, confirmación, cotización (solo la forma; la hoja en vivo es la propuesta aparte), campo y portal.
 6. Verificación completa, despliegue en el entorno de pruebas y prueba de Kevin en el iPhone al sol.
 
+**Avance del paso 2 (2026-09-30):**
+
+- Hechos 1 a 4, más el inicio de sesión del 5. `DESIGN.md` describe Precisión.
+- Tokens: una sola paleta con `light-dark()`, así que el tema lo elige `color-scheme` y una isla `data-tema="claro"` (croquis, firma, hoja) se ve clara sin repetir valores. `oficina.css` toma sus papeles de los tokens y pierde el amarillo. Pesos de 400 a 600 (las clases de más peso caen en 600 desde `tema.css`).
+- Geist en la interfaz y en los PDF. Selector de tema ("Del sistema", "Claro", "Oscuro") en la cuenta de campo y en "Mi cuenta" de oficina, recordado en el equipo (`teins-tema`); el portal sigue al sistema.
+- Logo oficial en el menú de oficina, los dos inicios de sesión y los PDF (portada del informe en blanco, encabezado de la cotización). Nombre público "TEINS" en los títulos, la etiqueta de carga y el archivo de códigos de respaldo.
+- Inicio de sesión de oficina, campo y portal igual al prototipo, con piezas compartidas en `paquetes/ui/src/Ingreso.tsx`. "¿La olvidó?" dice qué hacer al tocarlo. Los campos de ingreso miden 16 px de letra (15 en el prototipo) para que el iPhone no acerque la pantalla al escribir.
+- Marco de oficina: menú de 208 px con el grupo "Documentos" y barra superior de 48 px con la ubicación; `EncabezadoPagina` la pone ahí por un portal (`DestinoBarraSuperior`), sin tocar las pantallas.
+- Bandeja en filas de una línea, como el prototipo: cliente · sitio, formato en gris, el técnico con sus iniciales, "Recibido" y "Lleva esperando" aparte. El número de fotos sale: no está en el prototipo aprobado.
+- `Confirmacion` sin icono, con la lista `consecuencias` y los atajos Esc y ↵ en oficina. Decisión: con consecuencias y nada que escribir, el foco empieza en la acción (↵ confirma); lo irreversible deja el foco en "Cancelar" y no lleva ↵ (`DESIGN.md`). "Marcar revisado" ya usa la lista.
+- Detalle y cotización conservan su estructura con la forma de Precisión: carril de paneles de borde fino, filas de datos con líneas, impuestos como opciones con borde (una debajo de otra) y totales a 18 px.
+- Campo: tarjeta de la siguiente visita y lista de visitas como el prototipo; en claro, las tarjetas llevan borde de 1 px (blanco sobre casi blanco no se veía). Barra de paso de 3 px, botón de abajo de 50 px, "Agregar" punteado fino.
+- Arreglado de paso: la notificación en oscuro ponía texto blanco sobre fondo casi blanco.
+- Verificado: typecheck, arquitectura, pruebas de paquetes, presupuesto (125,2 de 135 KB) y el extremo a extremo completo en local. Capturas en claro y oscuro comparadas con el prototipo.
+- Sigue: el 6 (despliegue en el entorno de pruebas y la prueba de Kevin en el iPhone al sol). Quedan para revisar pantalla por pantalla las demás de oficina (visitas, clientes, catálogo, informes, administración), que ya toman la base pero no se compararon una a una.
+
 Estado del repositorio al cerrar la sesión del 2026-09-29: el repositorio de GitHub se recreó con el historial sin coautor (PR #1 en borrador, abierto de nuevo) y `corte-0` está subida. 24a y 24b están desplegadas en el entorno de pruebas.
 
 **Iteración 24, robustez y protección (2026-09-29).** Aprobada por Kevin antes del rediseño visual (sección "Iteración 24"). 24a (los 12 fallos del grupo A) hecha y desplegada en el entorno de pruebas el 2026-09-29, con sus 17 pruebas en verde allí. 24b (piezas compartidas) hecha y desplegada en el entorno de pruebas el 2026-09-29, con sus pruebas en verde allí. Siguiente: 24c, aplicar la regla de `DESIGN.md` a las acciones de los grupos B, C y E con esas piezas. Producción se actualizó el 2026-09-29 en otra sesión (`README.md`, `produccion.md`).

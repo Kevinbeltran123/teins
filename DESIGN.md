@@ -119,8 +119,8 @@ Confirmar lo que se hace a menudo entrena a aceptar sin leer. Por eso hay tres n
 | Nivel | Ejemplos | Cómo |
 |---|---|---|
 | Se deshace fácil | Quitar una foto, una línea de cantidades | Se hace al instante y la notificación ofrece "Deshacer" |
-| Tiene consecuencias | Desactivar un usuario, restablecer una contraseña, dar o quitar administración, desactivar un ítem, marcar revisado, tomar una revisión ajena, quitar una llave, quitar una sección repetida, enviar a oficina, cerrar sesión con envíos pendientes, volver a firmar | `Confirmacion`: el título es una pregunta con el verbo ("¿Desactivar a Juan Pérez?"), el cuerpo dice la consecuencia, el botón repite el verbo. "Cancelar" recibe el foco |
-| No se deshace | Publicar un informe, retirar una versión, cancelar una visita, regenerar un acceso | Igual, con el botón de peligro, y el motivo escrito cuando queda en el registro |
+| Tiene consecuencias | Desactivar un usuario, restablecer una contraseña, dar o quitar administración, desactivar un ítem, marcar revisado, tomar una revisión ajena, quitar una llave, quitar una sección repetida, enviar a oficina, cerrar sesión con envíos pendientes, volver a firmar | `Confirmacion`: el título es una pregunta con el verbo ("¿Desactivar a Juan Pérez?"), las consecuencias concretas en su lista (`consecuencias`), el botón repite el verbo. Si no hay nada que escribir, la acción recibe el foco y en oficina se confirma con ↵ |
+| No se deshace | Publicar un informe, retirar una versión, cancelar una visita, regenerar un acceso | Igual, con el botón de peligro, el motivo escrito cuando queda en el registro y el foco en "Cancelar": nunca es la acción predeterminada, y no lleva ↵ |
 
 En el código, `Confirmacion` exige `nivel`: `consecuencia` o `irreversible` (botón de peligro). Lo que se deshace fácil no usa `Confirmacion`.
 
