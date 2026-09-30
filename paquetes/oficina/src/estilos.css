@@ -1,0 +1,4 @@
+@import "tailwindcss";
+@import "@teins/ui/tema.css";
+@import "@teins/ui/oficina.css";
+@source "../../ui/src";

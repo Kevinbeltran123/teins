@@ -6,10 +6,11 @@ Instrucciones para cualquier agente de programación que trabaje en este reposit
 
 Sistema de levantamientos técnicos para TEINS: los técnicos capturan información en campo (con o sin conexión) desde una PWA, oficina la revisa y corrige con trazabilidad, y el cliente descarga el informe PDF desde un portal. Monolito modular en TypeScript sobre PostgreSQL.
 
-**Estado:** documentación y estructura listas. El código empieza con el primer recorrido completo del plan de entrega.
+**Estado:** el avance vive en `docs/proceso/plan-de-entrega.md`, que es la fuente de verdad (mapa de cortes, qué entró, qué quedó fuera, decisiones y próximo paso). Resumen al 2026-09-25: recorrido delgado completo (cortes 0 a 5: captura, envío, bajada, revisión, informe con PDF y portal del cliente), más las iteraciones 6 (administración con segundo factor) y 7 (visitas y clientes desde oficina), y producción provisional montada y respaldada (iteración 8, `docs/proceso/produccion.md`; sin datos reales hasta transferirla a TEINS, ADR-0021), desplegado en el entorno de pruebas de Railway (`docs/proceso/entorno-de-pruebas.md`). Pendientes: prueba en iPhone (aplazada por Kevin) y respuestas de TEINS para ajustar el informe. Iteraciones 9 (secciones repetibles), 10 (bocetos), 11 (cantidades con catálogo), 12 (cifrado local, ADR-0022) y 13 (llaves de acceso) terminadas en el entorno de pruebas, con la prueba en iPhone en espera. Iteración 14 (interfaz rehecha con la dirección Consola, `DESIGN.md`, y columna "Visita" en la bandeja) terminada y desplegada en el entorno de pruebas. El 2026-09-26 Kevin aprobó el plan de las iteraciones 15 a 21 (avisos push e instalación guiada, firma del cliente, catálogo en campo, bocetos con enderezado y símbolos, informe por correo y WhatsApp, cotizaciones; sección "Iteraciones 15 a 21" del plan de entrega). Iteraciones 15 (avisos push, ADR-0023, e instalación guiada), 16 (firma del cliente, ADR-0024), 17 (catálogo en el teléfono, ADR-0025), 18 (croquis a pantalla completa con hojas, formas enderezadas, cotas y mover, ADR-0026) y 19 (símbolos en el croquis, ADR-0027) terminadas y desplegadas en el entorno de pruebas. Iteración 20 (contactos del cliente e informe por correo y WhatsApp, ADR-0028) terminada y desplegada en el entorno de pruebas el 2026-09-27: el correo sale por Resend y WhatsApp sigue simulado hasta tener el número de prueba de Meta. WhatsApp en espera por un problema con la cuenta de Meta de Kevin. Iteración 21 (cotizaciones desde las cantidades, ADR-0029) construida el 2026-09-27: con ella se cierra el plan de las iteraciones 15 a 21. Iteración 22 (2026-09-27): campo rehecho con la dirección Recorrido (`DESIGN.md`, ADR-0030), a partir de una línea base, una crítica con impeccable, referencias de Mobbin y un prototipo navegable en `prototipos/campo/`; desplegada en el entorno de pruebas. Iteración 23 (2026-09-27): oficina con la identidad Recorrido, igual al prototipo `prototipos/oficina/` (CSS en `paquetes/ui/oficina.css`); desplegada en el entorno de pruebas el 2026-09-29, falta que Kevin la apruebe. Iteración 24 (robustez y protección, aprobada el 2026-09-29, antes del rediseño visual): 24a (los 12 fallos del grupo A) desplegada en el entorno de pruebas; 24b (piezas compartidas: `Confirmacion` con `nivel`, salida protegida, errores por campo) también desplegada; faltan 24c y 24d. El 2026-09-29 Kevin aprobó la base visual Precisión (Geist); el siguiente paso es llevarla a la app (`plan-de-entrega.md`, "Próximo paso") (sección "Iteración 24" del plan). Siguiente: la prueba en iPhone de las fases 9 a 19 y lo que entregue TEINS (precios, plantilla P29, tributario, numeración, símbolos).
 
 ## Antes de tocar cualquier cosa, lee en este orden
 
+0. `docs/proceso/plan-de-entrega.md`: dónde va el proyecto y cuál es el próximo paso. Empieza siempre aquí.
 1. `docs/producto/contexto.md`: qué problema se resuelve.
 2. `docs/arquitectura/01-impulsores.md`: restricciones (R-n) y escenarios de calidad (QA-n). Toda decisión se justifica contra ellos.
 3. `docs/arquitectura/02-modelo-dominio.md`: lenguaje común, agregados, estados, reglas del negocio.
@@ -20,9 +21,26 @@ Sistema de levantamientos técnicos para TEINS: los técnicos capturan informaci
 
 Si una tarea contradice un ADR aceptado, **no lo ignores ni lo edites**: detente, explica el conflicto y propone un ADR nuevo que lo reemplace (plantilla en `docs/adr/0000-plantilla.md`).
 
+## Retomar el trabajo en una sesión nueva
+
+1. Lee el plan de entrega: el corte en curso, su tabla "Terminado cuando", sus "Decisiones tomadas al construirlo" y la sección "Próximo paso".
+2. Revisa la rama y los commits: `git log --oneline -15`. El trabajo de los cortes 0 a 5 y las iteraciones 6 a 15 vive en la rama `corte-0`, con commits por área; está en GitHub con el pull request #1 en borrador y la integración continua en verde.
+3. Levanta el entorno local y corre la verificación completa (sección "Comandos"). Si algo no pasa en verde, eso es lo primero.
+4. No repitas decisiones ya tomadas: están en los ADR y en "Decisiones tomadas al construirlo". Si una no convence, propón un ADR nuevo.
+
+## Al cerrar un corte (o una fase de trabajo)
+
+Una tarea no está cerrada hasta que la documentación dice lo mismo que el código:
+
+- `docs/proceso/plan-de-entrega.md`: estado en el mapa, tabla "Terminado cuando" con evidencia, decisiones tomadas, lo que quedó fuera y en qué corte se resuelve, y el próximo paso.
+- `README.md`: tabla de estado.
+- `README.md` de cada paquete tocado: qué contiene y cómo se usa.
+- Sección "Comandos" de este archivo si cambió cómo se corre o se verifica.
+- Si una decisión cambia un ADR aceptado: ADR nuevo, nunca editar el anterior.
+
 ## Stack
 
-TypeScript, Node LTS, pnpm · Fastify, Zod, Drizzle, PostgreSQL, Graphile Worker · React, Vite, Tailwind, shadcn/ui · Dexie (IndexedDB) · Better Auth · S3 · Playwright + pdf-lib · perfect-freehand. El detalle y el porqué de cada elección están en el índice de `docs/adr/README.md`.
+TypeScript 6, Node 24, pnpm · Fastify, Zod, Drizzle, PostgreSQL, Graphile Worker · React, Vite, Tailwind, shadcn/ui · Dexie (IndexedDB) · Better Auth · S3 · Playwright + pdf-lib · perfect-freehand. El detalle y el porqué de cada elección están en el índice de `docs/adr/README.md`.
 
 ## Estructura y dependencias
 
@@ -35,6 +53,8 @@ paquetes/
   oficina/     Aplicación en línea.
   portal/      Portal del cliente. Nunca importa oficina ni campo.
   ui/          Componentes y tokens compartidos.
+e2e/           Pruebas de extremo a extremo (Playwright, Chromium y WebKit).
+scripts/       Verificaciones de la integración continua (licencias, presupuesto).
 ```
 
 Dentro de `servidor`, un módulo **nunca** lee tablas de otro ni importa sus partes internas: usa su interfaz pública o eventos.
@@ -56,7 +76,9 @@ Dentro de `servidor`, un módulo **nunca** lee tablas de otro ni importa sus par
 
 ## Trabajo de interfaz
 
-- La dirección está en `DESIGN.md`. Respeta el punto focal definido para cada pantalla.
+- La dirección está en `DESIGN.md` (Consola desde la iteración 14). Respeta el punto focal definido para cada pantalla y la jerarquía: el título es la sección del menú, las subsecciones son pestañas.
+- **Todo se justifica:** cada dato, texto, filtro o acción en pantalla responde a qué decisión o acción de la persona ayuda (`DESIGN.md`, "La regla"). Lo que no tiene respuesta no va.
+- Confirmar o deshacer según las consecuencias (tabla de `DESIGN.md`); crear en hoja lateral y lo nuevo primero y resaltado.
 - Aplica el filtro **antislop** durante el trabajo. Lo instala el desarrollador con `npx antislop-ai` en la raíz; **un agente nunca descarga ni instala skills por su cuenta**.
 - Toda vista con datos diseña los estados vacío, cargando, error y sin conexión.
 - Textos en español de Colombia, con el vocabulario de TEINS, sin raya larga (—).
@@ -80,4 +102,22 @@ Un corte vertical está terminado cuando:
 
 ## Comandos
 
-Se definirán con el primer recorrido completo. Hasta entonces no hay código que ejecutar.
+Node 24 (`.nvmrc`), pnpm por corepack (`corepack enable`) y Docker con Compose.
+
+Entorno local (detalle en `paquetes/servidor/README.md`):
+
+- `docker compose up -d --wait`: PostgreSQL y S3 locales.
+- `pnpm --filter @teins/servidor migrar` · `sembrar` · `dev:web` · `dev:worker`.
+- Administración por comando: `crear-usuario`, `desactivar-usuario`, `marcar-administrador`, `crear-cliente`, `crear-visita`, `reasignar-visita`, `publicar-formato`, `crear-acceso-cliente`, `generar-claves-avisos` (tabla en `paquetes/servidor/README.md`). Usuarios, accesos de clientes y retiro de versiones también tienen pantalla en oficina (iteración 6), para quien tiene la marca de administrador y el segundo factor activo; clientes, sitios y visitas, para toda persona de oficina (iteración 7).
+- Railway (detalle en `docs/proceso/produccion.md`): `railway config plan` / `apply` sobre `.railway/railway.ts`; `infra/railway/montar.sh <proyecto>` monta un entorno desde cero; `infra/railway/verificar-exposicion.sh` comprueba que solo las tres superficies se alcanzan desde internet; `railway run --service respaldos infra/respaldos/simulacro.sh` hace el simulacro de restauración (los respaldos van cifrados con `RESPALDOS_CLAVE`); `pnpm --filter @teins/servidor verificar-integridad` verifica las cadenas de una base.
+- `pnpm dev:campo` (5173), `pnpm --filter @teins/oficina dev` (5174) y `pnpm --filter @teins/portal dev` (5175); reenvían `/api` al servidor.
+
+Verificación, en el orden de la integración continua (ADR-0018):
+
+- `pnpm typecheck`
+- `pnpm arquitectura`: fronteras entre paquetes y módulos (`.dependency-cruiser.cjs`).
+- `pnpm licencias`: sin AGPL ni licencias sin revisar (`scripts/verificar-licencias.mjs`).
+- `pnpm audit --prod --audit-level high`
+- `pnpm test`: dominio, contrato, campo, oficina (CSV) y servidor (este último levanta PostgreSQL y S3 con Testcontainers).
+- `pnpm presupuesto`: JavaScript inicial de campo (compile campo antes).
+- `pnpm --filter @teins/e2e test`: extremo a extremo en Chromium y WebKit (requiere `docker compose up`). Contra el entorno de pruebas: `E2E_CAMPO_URL`, `E2E_OFICINA_URL` y `E2E_PORTAL_URL` (ver `docs/proceso/entorno-de-pruebas.md`).

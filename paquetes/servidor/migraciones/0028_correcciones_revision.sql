@@ -1,0 +1,4 @@
+ALTER TABLE "avisos"."suscripciones" DROP CONSTRAINT "suscripciones_endpoint_unique";--> statement-breakpoint
+CREATE INDEX "levantamientos_visita_idx" ON "levantamientos"."levantamientos" USING btree ("organizacion_id","visita_id");--> statement-breakpoint
+ALTER TABLE "avisos"."suscripciones" ADD CONSTRAINT "suscripciones_endpoint_unico" UNIQUE("organizacion_id","endpoint");--> statement-breakpoint
+ALTER POLICY "registros_portal_organizacion" ON "auditoria"."registros" TO teins_portal USING (organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid and agregado_tipo = 'acceso_cliente') WITH CHECK (organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid and agregado_tipo = 'acceso_cliente');

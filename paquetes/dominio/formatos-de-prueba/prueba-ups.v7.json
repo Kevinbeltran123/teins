@@ -1,0 +1,101 @@
+{
+  "formato": "prueba-ups",
+  "version": 7,
+  "nombre": "Formato de prueba",
+  "appMinima": 7,
+  "secciones": [
+    {
+      "clave": "cuarto_tecnico",
+      "titulo": "Cuarto técnico",
+      "campos": [
+        {
+          "clave": "descripcion",
+          "etiqueta": "Descripción del sitio",
+          "tipo": "texto"
+        },
+        {
+          "clave": "potencia_nominal",
+          "etiqueta": "Potencia nominal",
+          "tipo": "medida",
+          "unidades": [
+            "kVA",
+            "kW"
+          ],
+          "obligatorio": true
+        },
+        {
+          "clave": "distancia_tablero",
+          "etiqueta": "Distancia al tablero",
+          "tipo": "medida",
+          "unidades": [
+            "m",
+            "cm"
+          ]
+        },
+        {
+          "clave": "fotos_equipo",
+          "etiqueta": "Fotos del equipo",
+          "tipo": "foto",
+          "obligatorio": true
+        },
+        {
+          "clave": "croquis",
+          "etiqueta": "Croquis del cuarto",
+          "tipo": "boceto"
+        },
+        {
+          "clave": "materiales",
+          "etiqueta": "Materiales",
+          "tipo": "cantidades",
+          "unidades": [
+            "und",
+            "m"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "tableros",
+      "titulo": "Tableros",
+      "repetible": {
+        "etiqueta": "Tablero",
+        "min": 0,
+        "max": 10
+      },
+      "campos": [
+        {
+          "clave": "ubicacion",
+          "etiqueta": "Ubicación del tablero",
+          "tipo": "texto",
+          "obligatorio": true
+        },
+        {
+          "clave": "corriente",
+          "etiqueta": "Corriente nominal",
+          "tipo": "medida",
+          "unidades": [
+            "A"
+          ],
+          "obligatorio": true
+        },
+        {
+          "clave": "foto",
+          "etiqueta": "Foto del tablero",
+          "tipo": "foto"
+        }
+      ]
+    },
+    {
+      "clave": "cierre",
+      "titulo": "Cierre de la visita",
+      "campos": [
+        {
+          "clave": "firma_cliente",
+          "etiqueta": "Firma de quien recibe la visita",
+          "tipo": "firma",
+          "declaracion": "Confirmo que {tecnico}, de TEINS, visitó {sitio} el {fecha}."
+        }
+      ]
+    }
+  ]
+}

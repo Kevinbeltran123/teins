@@ -37,13 +37,23 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0011](0011-framework-de-interfaz.md) | React con Vite y presupuesto de rendimiento | Aceptada |
 | [0012](0012-eventos-y-trabajos.md) | Cola transaccional en PostgreSQL como outbox | Aceptada |
 | [0013](0013-generacion-de-pdf.md) | PDF desde HTML con Chromium, almacenado al publicar | Aceptada |
-| [0014](0014-api-y-notificaciones.md) | API orientada a tareas con OpenAPI; notificaciones por consulta | Aceptada |
+| [0014](0014-api-y-notificaciones.md) | API orientada a tareas con OpenAPI; notificaciones por consulta | Aceptada; los avisos push de la parte 2 los decide 0023 |
 | [0015](0015-actualizacion-y-versionado.md) | Actualización en momento seguro y compatibilidad N-1 | Aceptada |
 | [0016](0016-infraestructura-y-despliegue.md) | Contenedor propio sobre datos gestionados, en cuentas de TEINS | Aceptada |
 | [0017](0017-observabilidad.md) | Registros, errores con privacidad y salud de dispositivos | Aceptada |
 | [0018](0018-pruebas-y-reglas-de-arquitectura.md) | Pruebas guiadas por riesgo y reglas ejecutables | Aceptada |
-| [0019](0019-bocetos.md) | Bocetos vectoriales con perfect-freehand | Aceptada |
+| [0019](0019-bocetos.md) | Bocetos vectoriales con perfect-freehand | Aceptada; hojas, formas y editor de la versión 2 en 0026 |
 | [0020](0020-marca-por-organizacion.md) | Marca por organización con tokens de diseño | Aceptada |
+| [0021](0021-produccion-provisional-transferible.md) | Producción provisional en un proyecto transferible, sin datos reales hasta que pase a TEINS | Aceptada |
+| [0022](0022-cifrado-local-en-campo.md) | Cifrado local en campo: qué se sella, cómo se escribe y cómo se migra | Aceptada |
+| [0023](0023-avisos-push.md) | Avisos push con Web Push estándar, un trabajo por suscripción y texto sin datos del cliente | Aceptada |
+| [0024](0024-firma-del-cliente.md) | Firma del cliente como constancia de la visita, guardada con el formato de los bocetos | Aceptada |
+| [0025](0025-catalogo-en-el-telefono.md) | El catálogo baja al teléfono y la línea de cantidad puede llegar vinculada | Aceptada |
+| [0026](0026-bocetos-con-formas.md) | Bocetos versión 2: hojas con nombre, formas enderezadas, cotas y mover, en un editor a pantalla completa | Aceptada |
+| [0027](0027-simbolos-de-los-bocetos.md) | Símbolos de los bocetos: biblioteca como datos de la organización, copiada en el boceto que la usa | Aceptada |
+| [0028](0028-envio-del-informe-al-cliente.md) | Envío del informe al cliente por correo (Resend) y WhatsApp (Cloud API de Meta), con contactos del cliente y estado por envío | Aceptada |
+| [0029](0029-cotizaciones.md) | Cotizaciones desde las cantidades revisadas, con lista de precios con historia, IVA o AIU y versiones inmutables | Aceptada |
+| [0030](0030-presupuesto-de-campo-para-el-rediseno.md) | El presupuesto de JavaScript inicial de campo sube a 135 KB para el rediseño Recorrido | Aceptada |
 
 ### Estados
 

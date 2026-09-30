@@ -1,0 +1,94 @@
+{
+  "descripcion": "Casos de conformidad del validador de respuestas (ADR-0006, ADR-0018). Todo validador de TEINS debe producir exactamente estos errores. Datos ficticios.",
+  "formato": {
+    "formato": "prueba",
+    "version": 1,
+    "secciones": [
+      {
+        "clave": "cuarto",
+        "titulo": "Cuarto técnico",
+        "campos": [
+          { "clave": "descripcion", "etiqueta": "Descripción", "tipo": "texto" },
+          { "clave": "responsable", "etiqueta": "Responsable en sitio", "tipo": "texto", "obligatorio": true },
+          { "clave": "potencia", "etiqueta": "Potencia", "tipo": "medida", "unidades": ["kVA", "kW"], "obligatorio": true },
+          { "clave": "distancia", "etiqueta": "Distancia", "tipo": "medida", "unidades": ["m"] },
+          { "clave": "fotos", "etiqueta": "Fotos", "tipo": "foto", "obligatorio": true, "min": 2 }
+        ]
+      }
+    ]
+  },
+  "casos": [
+    {
+      "nombre": "completo y válido",
+      "respuestas": { "cuarto": { "responsable": "Operario de prueba", "potencia": { "valor": "12.5", "unidad": "kVA" }, "fotos": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"] } },
+      "errores": []
+    },
+    {
+      "nombre": "sin respuestas: faltan los obligatorios",
+      "respuestas": {},
+      "errores": [
+        { "seccion": "cuarto", "campo": "responsable", "codigo": "campo_obligatorio" },
+        { "seccion": "cuarto", "campo": "potencia", "codigo": "campo_obligatorio" },
+        { "seccion": "cuarto", "campo": "fotos", "codigo": "campo_obligatorio" }
+      ]
+    },
+    {
+      "nombre": "texto en blanco cuenta como vacío",
+      "respuestas": { "cuarto": { "responsable": "   ", "potencia": { "noObtenido": true, "motivo": "Tablero cerrado" }, "fotos": { "noObtenido": true, "motivo": "Sin acceso" } } },
+      "errores": [{ "seccion": "cuarto", "campo": "responsable", "codigo": "campo_obligatorio" }]
+    },
+    {
+      "nombre": "no obtenido necesita motivo y solo aplica a obligatorios",
+      "respuestas": { "cuarto": { "responsable": { "noObtenido": true, "motivo": " " }, "descripcion": { "noObtenido": true, "motivo": "x" }, "potencia": { "valor": "1", "unidad": "kW" }, "fotos": { "noObtenido": true, "motivo": "Sin acceso" } } },
+      "errores": [
+        { "seccion": "cuarto", "campo": "descripcion", "codigo": "no_obtenido_no_permitido" },
+        { "seccion": "cuarto", "campo": "responsable", "codigo": "motivo_requerido" }
+      ]
+    },
+    {
+      "nombre": "medida con número no canónico o unidad ajena",
+      "respuestas": { "cuarto": { "responsable": "A", "potencia": { "valor": "12,5", "unidad": "kVA" }, "distancia": { "valor": "3", "unidad": "cm" }, "fotos": { "noObtenido": true, "motivo": "Sin acceso" } } },
+      "errores": [
+        { "seccion": "cuarto", "campo": "potencia", "codigo": "medida_invalida" },
+        { "seccion": "cuarto", "campo": "distancia", "codigo": "unidad_no_permitida" }
+      ]
+    },
+    {
+      "nombre": "número con ceros a la izquierda no es canónico",
+      "respuestas": { "cuarto": { "responsable": "A", "potencia": { "valor": "007", "unidad": "kW" }, "fotos": { "noObtenido": true, "motivo": "Sin acceso" } } },
+      "errores": [{ "seccion": "cuarto", "campo": "potencia", "codigo": "medida_invalida" }]
+    },
+    {
+      "nombre": "fotos por debajo del mínimo, repetidas o con huella inválida",
+      "respuestas": { "cuarto": { "responsable": "A", "potencia": { "valor": "1", "unidad": "kW" }, "fotos": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] } },
+      "errores": [{ "seccion": "cuarto", "campo": "fotos", "codigo": "fotos_insuficientes" }]
+    },
+    {
+      "nombre": "fotos repetidas",
+      "respuestas": { "cuarto": { "responsable": "A", "potencia": { "valor": "1", "unidad": "kW" }, "fotos": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] } },
+      "errores": [{ "seccion": "cuarto", "campo": "fotos", "codigo": "foto_invalida" }]
+    },
+    {
+      "nombre": "huella en mayúsculas no es válida",
+      "respuestas": { "cuarto": { "responsable": "A", "potencia": { "valor": "1", "unidad": "kW" }, "fotos": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"] } },
+      "errores": [{ "seccion": "cuarto", "campo": "fotos", "codigo": "foto_invalida" }]
+    },
+    {
+      "nombre": "secciones y campos que el formato no define",
+      "respuestas": { "otra": {}, "cuarto": { "extra": "x", "responsable": "A", "potencia": { "valor": "1", "unidad": "kW" }, "fotos": { "noObtenido": true, "motivo": "Sin acceso" } } },
+      "errores": [
+        { "seccion": "otra", "codigo": "seccion_desconocida" },
+        { "seccion": "cuarto", "campo": "extra", "codigo": "campo_desconocido" }
+      ]
+    },
+    {
+      "nombre": "tipos equivocados",
+      "respuestas": { "cuarto": { "responsable": 5, "potencia": "12", "fotos": "a" } },
+      "errores": [
+        { "seccion": "cuarto", "campo": "responsable", "codigo": "tipo_invalido" },
+        { "seccion": "cuarto", "campo": "potencia", "codigo": "tipo_invalido" },
+        { "seccion": "cuarto", "campo": "fotos", "codigo": "tipo_invalido" }
+      ]
+    }
+  ]
+}

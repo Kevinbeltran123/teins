@@ -1,0 +1,215 @@
+/*
+  Tema de Tailwind sobre los tokens semánticos. Las superficies importan
+  "tailwindcss" y después este archivo; las clases solo existen para tokens.
+*/
+@import "../tokens.css";
+@import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
+
+@theme inline {
+  --color-*: initial;
+  --color-superficie: var(--t-superficie);
+  --color-superficie-elevada: var(--t-superficie-elevada);
+  --color-superficie-pista: var(--t-superficie-pista);
+  --color-superficie-suave: var(--t-superficie-suave);
+  --color-sobre-superficie: var(--t-sobre-superficie);
+  --color-sobre-superficie-tenue: var(--t-sobre-superficie-tenue);
+  --color-sobre-superficie-suave: var(--t-sobre-superficie-suave);
+  --color-acento: var(--t-acento);
+  --color-sobre-acento: var(--t-sobre-acento);
+  --color-resaltado: var(--t-resaltado);
+  --color-fondo: var(--t-fondo);
+  --color-panel: var(--t-panel);
+  --color-panel-hundido: var(--t-panel-hundido);
+  --color-texto: var(--t-texto);
+  --color-texto-secundario: var(--t-texto-secundario);
+  --color-division: var(--t-division);
+  --color-borde-suave: var(--t-borde-suave);
+  --color-borde-control: var(--t-borde-control);
+  --color-borde-activo: var(--t-borde-activo);
+  --color-foco: var(--t-foco);
+  --color-encima: var(--t-encima);
+  --color-sync-ok: var(--t-sync-ok);
+  --color-sync-pendiente: var(--t-sync-pendiente);
+  --color-sync-error: var(--t-sync-error);
+  --color-error: var(--t-error);
+  --color-peligro: var(--t-peligro);
+  --color-sobre-peligro: var(--t-sobre-peligro);
+  --color-peligro-fondo: var(--t-peligro-fondo);
+  --color-exito-fondo: var(--t-exito-fondo);
+  --color-exito-texto: var(--t-exito-texto);
+  --color-alerta-fondo: var(--t-alerta-fondo);
+  --color-alerta-texto: var(--t-alerta-texto);
+  --color-notificacion: var(--t-notificacion);
+  --color-velo: var(--t-velo);
+  --color-visor: var(--t-visor);
+  --color-estado-enviado-fondo: var(--t-estado-enviado-fondo);
+  --color-estado-enviado-texto: var(--t-estado-enviado-texto);
+  --color-estado-revision-fondo: var(--t-estado-revision-fondo);
+  --color-estado-revision-texto: var(--t-estado-revision-texto);
+  --color-estado-revisado-fondo: var(--t-estado-revisado-fondo);
+  --color-estado-revisado-texto: var(--t-estado-revisado-texto);
+  --color-estado-anulado-fondo: var(--t-estado-anulado-fondo);
+  --color-estado-anulado-texto: var(--t-estado-anulado-texto);
+
+  --font-texto: var(--t-fuente-texto);
+
+  --text-cuerpo: var(--t-texto-cuerpo);
+  --text-ayuda: var(--t-texto-ayuda);
+  --text-subtitulo: var(--t-subtitulo);
+  --text-titulo: var(--t-titulo);
+  --text-cifra-focal: var(--t-cifra-focal);
+
+  --radius-control: var(--t-radio-control);
+  --radius-panel: var(--t-radio-panel);
+  --radius-capa: var(--t-radio-capa);
+
+  --shadow-capa: var(--t-sombra-capa);
+  --shadow-menu: var(--t-sombra-menu);
+
+  --spacing-tactil: var(--t-tactil);
+  --spacing-control: var(--t-control);
+  --spacing-control-sm: var(--t-control-sm);
+
+  --ease-t: var(--t-curva);
+  --default-transition-duration: var(--t-duracion-rapida);
+  --default-transition-timing-function: var(--t-curva);
+
+  --animate-resaltar: resaltar var(--t-duracion-resaltado) var(--t-curva) backwards;
+  --animate-aparecer: aparecer var(--t-duracion-estandar) var(--t-curva) both;
+  --animate-entrar-lateral: entrar-lateral var(--t-duracion-pantalla) var(--t-curva) both;
+  --animate-subir: subir var(--t-duracion-pantalla) var(--t-curva) both;
+  /* Editor de bocetos (ADR-0026): la hoja a la que se pasa entra desde su lado; el anillo de enderezar se llena. */
+  --animate-hoja-siguiente: hoja-siguiente var(--t-duracion-estandar) var(--t-curva) both;
+  --animate-hoja-anterior: hoja-anterior var(--t-duracion-estandar) var(--t-curva) both;
+  --animate-llenar-anillo: llenar-anillo 350ms linear both;
+}
+
+@layer base {
+  body {
+    font-family: var(--t-fuente-texto);
+    color: var(--t-texto);
+    background: var(--t-fondo);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Tailwind 4 deja el cursor de flecha en los botones: en escritorio, un botón debe verse accionable. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label:has(> input[type="file"]:not(:disabled)) {
+    cursor: pointer;
+  }
+  /* Una sola familia (DESIGN.md): claves y códigos tampoco usan la monoespaciada del navegador. */
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--t-fuente-texto);
+  }
+  /*
+    Con una barra de acciones fija abajo (campo, Captura), lo que recibe el foco o se desplaza a la vista queda
+    por encima de ella y no debajo (WCAG 2.4.11).
+  */
+  html:has([data-barra-inferior]) {
+    scroll-padding-bottom: 8rem;
+  }
+  /* Con un diálogo abierto, lo de atrás no se desplaza. */
+  html:has(dialog[open]) {
+    overflow: hidden;
+  }
+}
+
+/* Error de validación: sacudida corta para señalar dónde está (DESIGN.md, movimiento). */
+@keyframes sacudida {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+/* Lo recién creado aparece resaltado y el resaltado se desvanece. */
+@keyframes resaltar {
+  0%, 40% { background-color: var(--t-resaltado); }
+  100% { background-color: transparent; }
+}
+
+@keyframes aparecer {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes entrar-lateral {
+  from { transform: translateX(32px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@keyframes subir {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@keyframes hoja-siguiente {
+  from { transform: translateX(40%); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+@keyframes hoja-anterior {
+  from { transform: translateX(-40%); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+/* El trazo del anillo mide 100 (pathLength): se llena de 0 a 100. */
+@keyframes llenar-anillo {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Sin movimiento: lo recién creado queda resaltado, sin desvanecerse, hasta salir de la pantalla. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-resaltar {
+    animation: none;
+    background-color: var(--t-resaltado);
+  }
+}
+
+/* El chulo de enviado se dibuja (ChuloDeExito). */
+@keyframes trazo {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+/*
+  Pasar de un paso a otro en campo (DESIGN.md, Recorrido): el navegador captura las dos pantallas
+  (View Transitions) y este CSS las mueve. Adelante, la nueva entra por la derecha; atrás, por la izquierda.
+*/
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--t-duracion-pantalla);
+  animation-timing-function: var(--t-curva);
+}
+:root[data-direccion="adelante"]::view-transition-old(root) { animation-name: paso-sale-izquierda; }
+:root[data-direccion="adelante"]::view-transition-new(root) { animation-name: paso-entra-derecha; }
+:root[data-direccion="atras"]::view-transition-old(root) { animation-name: paso-sale-derecha; }
+:root[data-direccion="atras"]::view-transition-new(root) { animation-name: paso-entra-izquierda; }
+@keyframes paso-sale-izquierda { to { transform: translateX(-25%); opacity: 0; } }
+@keyframes paso-entra-derecha { from { transform: translateX(100%); } }
+@keyframes paso-sale-derecha { to { transform: translateX(100%); } }
+@keyframes paso-entra-izquierda { from { transform: translateX(-25%); opacity: 0; } }
+
+/* Entregar el teléfono para la firma: el icono gira como quien lo pasa (HojaDeFirma). */
+@keyframes entregar {
+  to { transform: rotate(-90deg); }
+}
+
+/* Cola de subida en Enviado: una franja que recorre la barra mientras hay señal. */
+@keyframes cargando {
+  from { translate: -100% 0; }
+  to { translate: 300% 0; }
+}
+
+/* El número de datos que faltan late tres veces al aparecer (ListaFaltantes). */
+@keyframes latido {
+  50% { transform: scale(1.18); }
+}
+
+/* Algo que corre sin avance medible (ProcesoDeEnvio). */
+@keyframes giro {
+  to { transform: rotate(360deg); }
+}

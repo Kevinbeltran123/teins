@@ -1,0 +1,16 @@
+{
+  "name": "@teins/dominio",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./formatos-de-prueba/*": "./formatos-de-prueba/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "fast-check": "^4.10.2"
+  }
+}

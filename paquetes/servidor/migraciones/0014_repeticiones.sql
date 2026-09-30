@@ -1,0 +1,1 @@
+ALTER TABLE "levantamientos"."levantamientos" ADD COLUMN "repeticiones" jsonb DEFAULT '{}'::jsonb NOT NULL;

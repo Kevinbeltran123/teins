@@ -146,7 +146,7 @@ Su avance se **deduce** de sus levantamientos e informes. Solo *Cancelada* es ex
 3. Para enviar, todo campo obligatorio tiene valor o está marcado "no se pudo obtener" con motivo.
 4. Tras el envío, el técnico no edita. Cada cambio de oficina se registra con autor, fecha, campo, valor anterior y nuevo.
 5. Una medida siempre lleva una unidad permitida para su campo.
-6. Una línea de cantidad requiere descripción, cantidad mayor que cero y unidad; el vínculo al catálogo lo completa oficina.
+6. Una línea de cantidad requiere descripción, cantidad mayor que cero y unidad. El técnico puede elegir el ítem del catálogo al capturarla; oficina confirma, cambia o completa el vínculo (ADR-0025).
 7. Las líneas de cantidad nunca guardan precio.
 8. Una versión de formato publicada no se modifica; los levantamientos conservan la suya.
 9. Un informe solo incluye levantamientos de la misma visita en estado Revisado.

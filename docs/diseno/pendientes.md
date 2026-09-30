@@ -2,16 +2,12 @@
 
 ## Pantallas por diseñar
 
-En orden de prioridad. Todas parten de `DESIGN.md`.
+La dirección cambió a **Consola** en la iteración 14 (`DESIGN.md`); el lienzo guarda las tres direcciones comparadas en la página "v0.3 · Direcciones". Todas las pantallas existentes se rehicieron con ella. La instalación guiada y los avisos (iteración 15) están en la página "v0.4 · Avisos e instalación". Lo que queda:
 
-1. **Oficina · Revisión:** detalle del levantamiento, corrección por campo, historial de cambios, comentarios al técnico, toma de revisión.
-2. **Estados de las pantallas existentes:** vacío, cargando, error y sin conexión; en campo, además pendiente de enviar y enviando.
-3. **Campo · Editor de bocetos** (ADR-0019).
-4. **Ingreso** con usuario y passkey (ADR-0009), e instalación guiada de la PWA en iPhone.
-5. **Portal del cliente:** acceso con QR y clave, lista y descarga de informes.
-6. **Plantilla del PDF** (ADR-0013), con los mismos tokens.
-7. **Oficina · Composición y publicación del informe.**
-8. **Administración:** usuarios, accesos de cliente, dispositivos, formatos.
+1. **Lienzo con el juego completo de Consola:** el lienzo tiene la dirección elegida en dos pantallas (accesos de clientes y captura); falta pasar al lienzo las demás tal como quedaron en código, para revisar con TEINS.
+2. **Nombre del formato en la bandeja:** la columna "Formato" muestra la clave (`prueba-ups`), no el nombre que ve el técnico; el nombre solo viaja en el detalle.
+3. **Logo en vector** (insumo de TEINS): con todas las superficies claras sirve la versión a color.
+4. **Plantilla del PDF** (ADR-0013) con los mismos tokens, cuando TEINS responda P22, P23 y P26.
 
 ## Supuestos de diseño
 
@@ -39,18 +35,17 @@ Si alguno es falso, cambian tamaños y densidades, no el estilo.
 
 | Necesidad | Herramienta |
 |---|---|
-| Base de componentes | shadcn/ui (Base UI), copiada a `paquetes/ui` y reestilizada |
-| Iconos | Lucide |
-| Fuentes | Barlow Condensed, Atkinson Hyperlegible Next y Mono, autoalojadas con Fontsource |
-| Tablas de oficina | TanStack Table + TanStack Virtual |
-| Formularios | React Hook Form + esquemas Zod de `protocolo` |
-| Notificaciones breves | Sonner |
-| Paleta de comandos (oficina) | cmdk |
+| Base de componentes | Propia, en `paquetes/ui`, sobre los elementos del navegador (`<dialog>`, popover) y los tokens |
+| Iconos | Lucide (`lucide-react`, ISC), reexportado desde `@teins/ui` |
+| Fuentes | Atkinson Hyperlegible Next, única familia, autoalojada con Fontsource |
+| Tablas de oficina | `Tabla` de `ui`; TanStack Table + Virtual si una lista llega a miles de filas |
+| Formularios | Estado local con validación al enviar y mensaje por campo; esquemas Zod de `protocolo` en el servidor |
+| Notificaciones breves | `ProveedorNotificaciones` de `ui` (propio: CSS, sin dependencia) |
+| Paleta de comandos (oficina) | cmdk, cuando haga falta |
 | Gráficos del tablero | Gráficos de shadcn (Recharts), con los tokens |
-| Movimiento | CSS y View Transitions en campo; Motion solo en oficina |
+| Movimiento | CSS en todas las superficies; Motion disponible solo para oficina |
 | Fechas y números | API `Intl` con `es-CO` |
 | Íconos de instalación PWA | Generador de recursos PWA |
-| Catálogo de componentes | Storybook |
 | Accesibilidad | axe-core dentro de Playwright (WCAG 2.2 AA) |
 | Regresión visual | Capturas con Playwright |
-| Diseño | Lienzo de Claude (https://claude.ai/artifact/A77tYXi713xNbTMacNzM8v) o Figma |
+| Diseño | Lienzo de Claude (https://claude.ai/artifact/A77tYXi713xNbTMacNzM8v) |

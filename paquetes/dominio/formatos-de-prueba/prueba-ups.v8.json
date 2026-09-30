@@ -1,0 +1,177 @@
+{
+  "formato": "prueba-ups",
+  "version": 8,
+  "nombre": "Formato de prueba",
+  "appMinima": 11,
+  "secciones": [
+    {
+      "clave": "llegada",
+      "titulo": "Llegada",
+      "campos": [
+        {
+          "clave": "fotos_llegada",
+          "etiqueta": "Fotos de llegada",
+          "tipo": "foto",
+          "puestos": [
+            "Fachada",
+            "Acceso"
+          ]
+        },
+        {
+          "clave": "quien_recibe",
+          "etiqueta": "¿Quién te recibe?",
+          "tipo": "texto",
+          "largo": true
+        }
+      ]
+    },
+    {
+      "clave": "cuarto_tecnico",
+      "titulo": "Cuarto técnico",
+      "campos": [
+        {
+          "clave": "potencia_nominal",
+          "etiqueta": "Potencia nominal",
+          "tipo": "medida",
+          "unidades": [
+            "kVA",
+            "kW"
+          ],
+          "obligatorio": true,
+          "valoresComunes": [
+            "15",
+            "30",
+            "45",
+            "75",
+            "112,5"
+          ]
+        },
+        {
+          "clave": "distancia_tablero",
+          "etiqueta": "Distancia al tablero",
+          "tipo": "medida",
+          "unidades": [
+            "m",
+            "cm"
+          ]
+        },
+        {
+          "clave": "fotos_equipo",
+          "etiqueta": "Fotos del equipo",
+          "tipo": "foto",
+          "obligatorio": true,
+          "puestos": [
+            "Placa",
+            "Vista general",
+            "Tablero abierto"
+          ]
+        },
+        {
+          "clave": "descripcion",
+          "etiqueta": "Descripción del sitio",
+          "tipo": "texto",
+          "largo": true
+        }
+      ]
+    },
+    {
+      "clave": "tableros",
+      "titulo": "Tableros",
+      "repetible": {
+        "etiqueta": "Tablero",
+        "min": 0,
+        "max": 10
+      },
+      "campos": [
+        {
+          "clave": "ubicacion",
+          "etiqueta": "Ubicación del tablero",
+          "tipo": "texto",
+          "obligatorio": true,
+          "valoresComunes": [
+            "Sótano",
+            "Piso 1",
+            "Piso 2",
+            "Cubierta"
+          ]
+        },
+        {
+          "clave": "corriente",
+          "etiqueta": "Corriente nominal",
+          "tipo": "medida",
+          "unidades": [
+            "A"
+          ],
+          "obligatorio": true,
+          "valoresComunes": [
+            "32",
+            "63",
+            "100",
+            "125"
+          ]
+        },
+        {
+          "clave": "circuitos",
+          "etiqueta": "Circuitos",
+          "tipo": "medida",
+          "unidades": [
+            "und"
+          ],
+          "valoresComunes": [
+            "6",
+            "12",
+            "18",
+            "24"
+          ]
+        },
+        {
+          "clave": "foto",
+          "etiqueta": "Foto del tablero",
+          "tipo": "foto",
+          "puestos": [
+            "Abierto",
+            "Placa"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "materiales",
+      "titulo": "Materiales",
+      "campos": [
+        {
+          "clave": "materiales",
+          "etiqueta": "Materiales",
+          "tipo": "cantidades",
+          "unidades": [
+            "und",
+            "m"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "croquis",
+      "titulo": "Croquis",
+      "campos": [
+        {
+          "clave": "croquis",
+          "etiqueta": "Croquis del cuarto",
+          "tipo": "boceto"
+        }
+      ]
+    },
+    {
+      "clave": "cierre",
+      "titulo": "Firma del cliente",
+      "campos": [
+        {
+          "clave": "firma_cliente",
+          "etiqueta": "Firma de quien recibe la visita",
+          "tipo": "firma",
+          "declaracion": "Confirmo que {tecnico}, de TEINS, visitó {sitio} el {fecha}."
+        }
+      ]
+    }
+  ]
+}

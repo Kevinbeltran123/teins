@@ -1,0 +1,234 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from "fastify";
+import type { z } from "zod";
+import {
+  CABECERA_VERSION,
+  operaciones,
+  VERSION_MINIMA_ACEPTADA,
+  VERSION_PROTOCOLO,
+  type Consulta,
+  type Cuerpo,
+  type NombreOperacion,
+  type Operacion,
+  type Parametros,
+  type RespuestaServidor,
+} from "@teins/protocolo";
+import type { Actor } from "./actor";
+import { problema } from "./errores";
+import { evaluar, type Politica } from "./politicas";
+
+declare module "fastify" {
+  interface FastifyContextConfig {
+    politica?: Politica;
+    operacion?: NombreOperacion;
+  }
+  interface FastifyInstance {
+    resolverActor(solicitud: FastifyRequest, respuesta?: FastifyReply): Promise<Actor | null>;
+  }
+}
+
+export interface Entrada<N extends NombreOperacion> {
+  cuerpo: Cuerpo<N>;
+  parametros: Parametros<N>;
+  consulta: Consulta<N>;
+  actor: Actor;
+  correlacion: string;
+  /** Cabecera Origin del navegador. En las que modifican, el servidor ya rechazó los orígenes ajenos. */
+  origen: string | undefined;
+}
+
+export type Manejador<N extends NombreOperacion> = (entrada: Entrada<N>) => Promise<RespuestaServidor<N>>;
+
+/** `/api/archivos/{huella}` → `/api/archivos/:huella` */
+const rutaFastify = (ruta: string) => ruta.replace(/\{(\w+)\}/g, ":$1");
+
+function validar<T extends z.ZodType>(esquema: T | undefined, valor: unknown, donde: string): z.output<T> | undefined {
+  if (!esquema) return undefined;
+  const resultado = esquema.safeParse(valor ?? {});
+  if (!resultado.success) {
+    throw problema("entrada_invalida", `Revise ${donde}`, {
+      campos: resultado.error.issues.slice(0, 20).map((i) => ({ ruta: [donde, ...i.path].join("."), mensaje: i.message })),
+    });
+  }
+  return resultado.data;
+}
+
+function verificarVersion(solicitud: FastifyRequest) {
+  const version = Number(solicitud.headers[CABECERA_VERSION]);
+  // Regla N-1 (ADR-0015): se aceptan la versión actual y la anterior.
+  if (!Number.isInteger(version) || version < VERSION_MINIMA_ACEPTADA || version > VERSION_PROTOCOLO) {
+    throw problema("version_protocolo_no_soportada", undefined, { versionMinima: VERSION_MINIMA_ACEPTADA });
+  }
+}
+
+/**
+ * Registra una operación del contrato con su política. La entrada se valida con los esquemas
+ * de `protocolo` y la salida también: un campo de más o de menos es un error del servidor, no del cliente.
+ */
+export function registrarOperacion<N extends NombreOperacion>(
+  app: FastifyInstance,
+  nombre: N,
+  opciones: { politica: Extract<Politica, { tipo: "roles" }>; manejar: Manejador<N> },
+): void {
+  registrar(
+    app,
+    nombre,
+    opciones.politica,
+    async (solicitud, respuesta) => {
+      const actor = await app.resolverActor(solicitud, respuesta);
+      const decision = evaluar(opciones.politica, actor);
+      if (decision !== "permitido") throw problema(decision);
+      return actor!;
+    },
+    opciones.manejar,
+  );
+}
+
+/**
+ * Operación que se autentica con el secreto del dispositivo y no con la sesión: la orden de borrado
+ * debe llegar aunque la revocación ya borró las sesiones (ADR-0009). El manejador verifica el secreto.
+ */
+export function registrarOperacionDeDispositivo<N extends NombreOperacion>(
+  app: FastifyInstance,
+  nombre: N,
+  manejar: (entrada: Omit<Entrada<N>, "actor">) => Promise<RespuestaServidor<N>>,
+): void {
+  registrar(app, nombre, { tipo: "secreto_de_dispositivo" }, async () => null, manejar);
+}
+
+/** Lo que una operación del portal puede hacer con su cookie y saber del origen. */
+export interface ContextoPortal {
+  ip: string;
+  token: string | undefined;
+  ponerSesion(token: string, segundos: number): void;
+  quitarSesion(): void;
+}
+
+export interface OpcionesPortal<N extends NombreOperacion, S> {
+  /** Solo el ingreso es público (con límite de intentos); todo lo demás exige la sesión del portal. */
+  publica?: string;
+  nombreCookie: string;
+  seguro: boolean;
+  resolverSesion: (token: string) => Promise<S | null>;
+  /** La sesión se desliza con cada uso: la cookie se renueva con esta duración. */
+  duracionSesionS: number;
+  manejar: (entrada: Omit<Entrada<N>, "actor"> & { sesion: S; portal: ContextoPortal }) => Promise<RespuestaServidor<N>>;
+}
+
+const leerCookie = (cabecera: string | undefined, nombre: string) =>
+  cabecera
+    ?.split(";")
+    .map((c) => c.trim().split("="))
+    .find(([k]) => k === nombre)?.[1];
+
+/**
+ * Operación del portal del cliente: su propia cookie en su propio host (ADR-0016), `HttpOnly`,
+ * `SameSite=Strict` y, en producción, `Secure` con el prefijo `__Host-`.
+ */
+export function registrarOperacionDelPortal<N extends NombreOperacion, S>(app: FastifyInstance, nombre: N, opciones: OpcionesPortal<N, S>): void {
+  const op: Operacion = operaciones[nombre];
+  const atributos = `Path=/; HttpOnly; SameSite=Strict${opciones.seguro ? "; Secure" : ""}`;
+  app.route({
+    method: op.metodo,
+    url: rutaFastify(op.ruta),
+    config: { politica: opciones.publica ? { tipo: "publica", motivo: opciones.publica } : { tipo: "sesion_de_portal" }, operacion: nombre },
+    handler: async (solicitud, respuesta) => {
+      const token = leerCookie(solicitud.headers.cookie, opciones.nombreCookie);
+      let sesion: S | null = null;
+      if (!opciones.publica) {
+        sesion = token ? await opciones.resolverSesion(token) : null;
+        if (!sesion) throw problema("no_autenticado", "Ingrese con su clave");
+      }
+      const portal: ContextoPortal = {
+        ip: solicitud.ip,
+        token,
+        ponerSesion: (valor, segundos) => void respuesta.header("set-cookie", `${opciones.nombreCookie}=${valor}; Max-Age=${segundos}; ${atributos}`),
+        quitarSesion: () => void respuesta.header("set-cookie", `${opciones.nombreCookie}=; Max-Age=0; ${atributos}`),
+      };
+      if (sesion && token) portal.ponerSesion(token, opciones.duracionSesionS);
+      const resultado = await opciones.manejar({
+        cuerpo: validar(op.cuerpo, solicitud.body, "cuerpo") as Cuerpo<N>,
+        parametros: validar(op.parametros, solicitud.params, "parametros") as Parametros<N>,
+        consulta: validar(op.consulta, solicitud.query, "consulta") as Consulta<N>,
+        correlacion: solicitud.id,
+        origen: solicitud.headers.origin,
+        sesion: sesion as S,
+        portal,
+      });
+      respuesta.status(op.estadoExito);
+      return op.respuesta.parse(resultado);
+    },
+  });
+}
+
+/** La autorización va antes de validar la entrada: sin permiso, no se revela nada del contrato. */
+function registrar<N extends NombreOperacion, A>(
+  app: FastifyInstance,
+  nombre: N,
+  politica: Politica,
+  autorizar: (solicitud: FastifyRequest, respuesta: FastifyReply) => Promise<A>,
+  manejar: (entrada: Omit<Entrada<N>, "actor"> & { actor: A }) => Promise<RespuestaServidor<N>>,
+): void {
+  const op: Operacion = operaciones[nombre];
+  app.route({
+    method: op.metodo,
+    url: rutaFastify(op.ruta),
+    config: { politica, operacion: nombre },
+    handler: async (solicitud, respuesta) => {
+      if (op.sincronizacion) verificarVersion(solicitud);
+      const actor = await autorizar(solicitud, respuesta);
+      const resultado = await manejar({
+        cuerpo: validar(op.cuerpo, solicitud.body, "cuerpo") as Cuerpo<N>,
+        parametros: validar(op.parametros, solicitud.params, "parametros") as Parametros<N>,
+        consulta: validar(op.consulta, solicitud.query, "consulta") as Consulta<N>,
+        actor,
+        correlacion: solicitud.id,
+        origen: solicitud.headers.origin,
+      });
+      respuesta.status(op.estadoExito);
+      return op.respuesta.parse(resultado);
+    },
+  });
+}
+
+/**
+ * Un documento HTML para un marco de la propia superficie (la vista previa de una cotización), fuera del contrato
+ * JSON. Lleva su propia CSP: solo sus estilos y fuentes incrustadas, sin scripts, conexiones ni formularios, y solo
+ * dentro de la superficie. La autorización va antes de validar, como en las operaciones.
+ */
+export function registrarDocumento<P extends z.ZodType>(
+  app: FastifyInstance,
+  opciones: { ruta: string; politica: Extract<Politica, { tipo: "roles" }>; parametros: P; manejar: (entrada: { parametros: z.output<P>; actor: Actor }) => Promise<string> },
+): void {
+  app.route({
+    method: "GET",
+    url: rutaFastify(opciones.ruta),
+    config: { politica: opciones.politica },
+    handler: async (solicitud, respuesta) => {
+      const actor = await app.resolverActor(solicitud, respuesta);
+      const decision = evaluar(opciones.politica, actor);
+      if (decision !== "permitido") throw problema(decision);
+      const html = await opciones.manejar({ parametros: validar(opciones.parametros, solicitud.params, "parametros") as z.output<P>, actor: actor! });
+      return respuesta
+        .header("content-type", "text/html; charset=utf-8")
+        .header("cache-control", "no-store")
+        .header("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox")
+        .send(html);
+    },
+  });
+}
+
+/** Rutas fuera del contrato (salud, especificación, autenticación). Deben declarar por qué son públicas. */
+export function registrarRutaPublica(app: FastifyInstance, opciones: Omit<RouteOptions, "config"> & { motivo: string }): void {
+  const { motivo, ...ruta } = opciones;
+  app.route({ ...ruta, config: { politica: { tipo: "publica", motivo } } });
+}
+
+/** Denegar por defecto (ADR-0009): una ruta sin política impide arrancar el servidor. */
+export function exigirPoliticas(app: FastifyInstance, registradas: Set<string>): void {
+  app.addHook("onRoute", (ruta) => {
+    if (!ruta.config?.politica) {
+      throw new Error(`La ruta ${String(ruta.method)} ${ruta.url} no declara política de autorización`);
+    }
+    for (const metodo of [ruta.method].flat()) registradas.add(`${metodo} ${ruta.url}`);
+  });
+}

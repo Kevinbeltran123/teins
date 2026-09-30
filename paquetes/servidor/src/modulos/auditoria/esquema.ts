@@ -1,0 +1,58 @@
+import { sql } from "drizzle-orm";
+import { customType, index, integer, pgPolicy, pgSchema, smallint, text, unique, uuid } from "drizzle-orm/pg-core";
+import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId, rolPortal } from "../../plataforma/esquema-comun";
+
+const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
+
+/**
+ * jsonb que devuelve lo que entrega pg, sin el segundo JSON.parse de drizzle: con él, el texto
+ * "12345" volvía como el número 12345 y la cadena de hashes reportaba una alteración falsa.
+ */
+const jsonb = customType<{ data: unknown; driverData: unknown }>({
+  dataType: () => "jsonb",
+  toDriver: (valor) => JSON.stringify(valor),
+  fromDriver: (valor) => valor,
+});
+
+export const auditoria = pgSchema("auditoria");
+
+/**
+ * Registro semántico con cadena de hashes por agregado (ADR-0008). La aplicación solo inserta
+ * y lee: no tiene permiso de actualizar ni borrar (nivel 1), y la cadena detecta alteraciones (nivel 2b).
+ */
+export const registros = auditoria.table(
+  "registros",
+  {
+    id: uuid("id").primaryKey(),
+    organizacionId: organizacionId(),
+    agregadoTipo: text("agregado_tipo").notNull(),
+    agregadoId: text("agregado_id").notNull(),
+    secuencia: integer("secuencia").notNull(),
+    tipoEvento: text("tipo_evento").notNull(),
+    rutaCampo: text("ruta_campo"),
+    valorAnterior: jsonb("valor_anterior"),
+    valorNuevo: jsonb("valor_nuevo"),
+    autorId: text("autor_id").notNull(),
+    horaServidor: marcaDeTiempo("hora_servidor").notNull(),
+    horaDispositivo: marcaDeTiempo("hora_dispositivo"),
+    correlacion: text("correlacion").notNull(),
+    motivo: text("motivo"),
+    versionFormatoRegistro: smallint("version_formato_registro").notNull(),
+    hashAnterior: bytea("hash_anterior"),
+    hash: bytea("hash").notNull(),
+  },
+  (t) => [
+    unique("registros_cadena_unica").on(t.organizacionId, t.agregadoTipo, t.agregadoId, t.secuencia),
+    index("registros_correlacion_idx").on(t.correlacion),
+    aislamientoPorOrganizacion("registros"),
+    // El portal solo lee y escribe las cadenas de los accesos de clientes (ingresos y descargas): nunca
+    // correcciones, contactos ni el resto de la auditoría de la organización (ADR-0009, parte 3; QA-4).
+    pgPolicy("registros_portal_organizacion", {
+      as: "permissive",
+      to: rolPortal,
+      for: "all",
+      using: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid and agregado_tipo = 'acceso_cliente'`,
+      withCheck: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid and agregado_tipo = 'acceso_cliente'`,
+    }),
+  ],
+).enableRLS();

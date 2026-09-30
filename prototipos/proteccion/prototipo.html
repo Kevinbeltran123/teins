@@ -1,0 +1,453 @@
+<title>Confirmar y deshacer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;700;800&display=swap">
+<style>
+/* Prototipo de la iteración 24c: cómo se confirma, se deshace y se avisa en TEINS. Guía a la izquierda, la pantalla real
+   a la derecha (oficina en escritorio, campo en el teléfono), con la identidad Recorrido. Todo el movimiento es CSS. */
+:root {
+  --fuente: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+  --curva: cubic-bezier(0.2, 0, 0, 1);
+  --resorte: linear(0, 0.35 12%, 0.75 25%, 1.02 40%, 1.06 50%, 1.02 62%, 1 78%, 1);
+  /* Página del prototipo (fuera de la pantalla) */
+  --pagina: #E9ECF1; --pagina-texto: #15171A; --pagina-sec: #525152; --pagina-panel: #FFFFFF; --pagina-borde: #D5DAE3;
+  /* La app, tema oscuro Recorrido (DESIGN.md) */
+  --fondo: #0B0F17; --sup: #151B26; --sup2: #1E2634; --sup3: #273042; --borde: #2C3647; --texto: #F3F5F9; --sec: #AEB6C6;
+  --marca: #6E9BFF; --marca-texto: #0B0F17; --senal: #FFC21A; --exito: #3DD68C;
+  --peligro: #FF8A8A; --peligro-fondo: #FF6B6B; --peligro-texto: #0B0F17;
+  --aviso-fondo: #F3F5F9; --aviso-texto: #0B0F17; --aviso-accion: #1F4FD1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; --pagina: #06080D; --pagina-texto: #EEF1F6; --pagina-sec: #A7ADB9; --pagina-panel: #111620; --pagina-borde: #232B39; }
+}
+:root[data-theme="dark"] { color-scheme: dark; --pagina: #06080D; --pagina-texto: #EEF1F6; --pagina-sec: #A7ADB9; --pagina-panel: #111620; --pagina-borde: #232B39; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--pagina); color: var(--pagina-texto); font-family: var(--fuente); padding-inline: 16px; padding-block: 28px 48px; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+svg { width: 18px; height: 18px; flex: none; }
+:focus-visible { outline: 3px solid var(--senal); outline-offset: 2px; }
+
+/* Guía a la izquierda, pantalla a la derecha */
+.escena { max-width: 1440px; margin-inline: auto; display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1180px) { .escena { grid-template-columns: 340px minmax(0, 1fr); align-items: start; } }
+.guia { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+@media (min-width: 1180px) { .guia { position: sticky; top: 24px; } }
+.ceja { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--pagina-sec); }
+.guia h1 { margin: 0; font-size: 30px; font-weight: 800; line-height: 1.1; text-wrap: balance; }
+.guia > p { margin: 0; color: var(--pagina-sec); line-height: 1.5; font-size: 15px; }
+.casos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.casos button { width: 100%; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--pagina-borde); background: var(--pagina-panel); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: baseline; }
+.casos .sup { grid-row: span 2; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--pagina-sec); width: 54px; }
+.casos b { font-size: 14px; }
+.casos span:last-child { font-size: 12.5px; color: var(--pagina-sec); }
+.casos button[aria-current="true"] { outline: 3px solid var(--senal); outline-offset: 1px; }
+.nota { background: var(--pagina-panel); border: 1px solid var(--pagina-borde); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.5; }
+.nota h2 { margin: 0; font-size: 15px; font-weight: 800; }
+.nota p { margin: 0; }
+.nota .antes { color: var(--pagina-sec); }
+.nota a { color: inherit; font-weight: 700; }
+.nota ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.probar { font-size: 13px; font-weight: 800; color: var(--pagina-texto); display: flex; gap: 8px; align-items: center; }
+.probar::before { content: ""; width: 8px; height: 8px; border-radius: 99px; background: var(--senal); flex: none; }
+
+/* ---------- La app ---------- */
+.marco { position: relative; min-width: 0; }
+.ventana { position: relative; overflow: hidden; isolation: isolate; border-radius: 18px; background: var(--fondo); color: var(--texto); box-shadow: 0 0 0 1px #1a2130, 0 30px 70px rgba(0,0,0,.35); height: 720px; display: grid; grid-template-columns: 216px minmax(0, 1fr); font-size: 15px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .ventana { grid-template-columns: minmax(0, 1fr); height: 760px; } .menu { display: none; } }
+.menu { border-right: 1px solid var(--borde); padding: 20px 12px; display: flex; flex-direction: column; gap: 16px; }
+.menu .logo { font-weight: 800; letter-spacing: .12em; font-size: 16px; padding: 0 10px; }
+.menu nav { display: flex; flex-direction: column; gap: 2px; }
+.menu a { position: relative; display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 10px; border-radius: 12px; color: var(--sec); text-decoration: none; font-weight: 700; font-size: 14.5px; }
+.menu a:hover { background: var(--sup); color: var(--texto); }
+.menu a[aria-current="page"] { background: var(--sup2); color: var(--texto); }
+.menu a[aria-current="page"]::before { content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 4px; border-radius: 0 4px 4px 0; background: var(--senal); }
+.menu svg { width: 18px; height: 18px; flex: none; }
+.contenido { min-width: 0; overflow: auto; padding: 26px 32px 80px; display: flex; flex-direction: column; gap: 20px; }
+.migas { color: var(--sec); font-weight: 700; font-size: 14px; display: inline-flex; gap: 4px; align-items: center; align-self: flex-start; }
+.migas svg { width: 16px; height: 16px; }
+.cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; }
+.cab h1 { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.15; text-wrap: balance; }
+.cab .datos { color: var(--sec); font-size: 14px; display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+.acciones { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.estado-guardado { display: inline-flex; align-items: center; gap: 8px; color: var(--sec); font-weight: 700; font-size: 14px; }
+.estado-guardado i { width: 8px; height: 8px; border-radius: 99px; background: var(--exito); }
+.estado-guardado.cambios i { background: var(--senal); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 12px; border: 0; font-weight: 800; font-size: 14.5px; background: var(--sup2); color: var(--texto); white-space: nowrap; transition: transform .15s var(--curva), background .2s var(--curva); }
+.btn:hover { background: var(--sup3); }
+.btn:active { transform: scale(.97); }
+.btn.principal { background: var(--marca); color: var(--marca-texto); }
+.btn.principal:hover { background: color-mix(in srgb, var(--marca) 88%, white); }
+.btn.peligro { background: var(--peligro-fondo); color: var(--peligro-texto); }
+.btn.texto-peligro { background: transparent; color: var(--peligro); padding-inline: 10px; }
+.btn.texto-peligro:hover { background: color-mix(in srgb, var(--peligro) 12%, transparent); }
+.btn.fantasma { background: transparent; color: var(--sec); }
+.btn.fantasma:hover { background: var(--sup2); color: var(--texto); }
+.btn.chico { min-height: 32px; padding: 0 12px; font-size: 13.5px; border-radius: 10px; }
+.btn svg { width: 17px; height: 17px; }
+.btn[aria-busy="true"] { opacity: .75; pointer-events: none; }
+.btn .giro { width: 16px; height: 16px; border-radius: 99px; border: 2px solid currentColor; border-right-color: transparent; animation: girar .7s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* Filas sin recuadros: espacio y líneas finas */
+.lista { display: flex; flex-direction: column; }
+.fila { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 14px 4px; border-bottom: 1px solid color-mix(in srgb, var(--borde) 70%, transparent); transition: opacity .3s var(--curva), background .6s var(--curva); }
+.fila:first-child { border-top: 1px solid color-mix(in srgb, var(--borde) 70%, transparent); }
+.fila .t { font-weight: 800; min-width: 0; }
+.fila .s { color: var(--sec); font-size: 13.5px; grid-column: 1; }
+.fila .der { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 8px; align-items: center; }
+.fila.inactiva .t, .fila.inactiva .s { opacity: .5; }
+.fila.recien { background: color-mix(in srgb, var(--senal) 10%, transparent); }
+.pastilla { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; padding: 3px 10px; border-radius: 99px; background: var(--sup2); color: var(--sec); }
+.pastilla.ok { color: var(--exito); background: color-mix(in srgb, var(--exito) 14%, transparent); }
+.pastilla.revision { color: #C3A6FF; background: color-mix(in srgb, #C3A6FF 14%, transparent); }
+.pastilla.apagada { color: var(--sec); }
+.seccion-t { font-size: 13px; font-weight: 800; color: var(--sec); letter-spacing: .02em; margin: 0; }
+.doc { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
+.doc h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.texto-doc { width: 100%; min-height: 120px; border-radius: 14px; border: 2px solid transparent; background: var(--sup); padding: 14px 16px; line-height: 1.55; resize: vertical; }
+.texto-doc:focus { outline: none; border-color: var(--senal); }
+
+/* ---------- Capas ---------- */
+.velo { position: absolute; inset: 0; z-index: 20; background: rgba(4, 6, 11, .6); animation: aparecer .22s var(--curva) both; }
+@keyframes aparecer { from { opacity: 0; } }
+/* Confirmación: sin icono, título con el verbo, consecuencias concretas, botones compactos a la derecha (Linear, Stripe). */
+.confirmar { position: absolute; z-index: 21; left: 50%; top: 50%; width: min(460px, calc(100% - 32px)); translate: -50% -50%; background: var(--sup); border: 1px solid var(--borde); border-radius: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.5); padding: 22px 22px 18px; display: flex; flex-direction: column; gap: 14px; animation: entrar-confirmar .32s var(--resorte) both; }
+@keyframes entrar-confirmar { from { opacity: 0; scale: .96; } }
+.confirmar h2 { margin: 0; font-size: 19px; font-weight: 800; line-height: 1.25; text-wrap: balance; }
+.confirmar p { margin: 0; color: var(--sec); line-height: 1.5; }
+.consecuencias { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.consecuencias li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--borde) 70%, transparent); color: var(--texto); line-height: 1.4; font-size: 14.5px; }
+.consecuencias li svg { width: 18px; height: 18px; color: var(--sec); margin-top: 1px; }
+.consecuencias li small { display: block; color: var(--sec); font-size: 13px; }
+.confirmar .pie { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
+.confirmar .pie .izq { margin-right: auto; }
+.confirmar .campo { display: flex; flex-direction: column; gap: 6px; }
+.confirmar label { font-weight: 700; font-size: 14px; }
+.control { width: 100%; min-height: 42px; border-radius: 12px; border: 2px solid transparent; background: var(--sup2); padding: 10px 12px; color: var(--texto); line-height: 1.4; }
+.control:focus { outline: none; border-color: var(--senal); }
+.control.error { border-color: var(--peligro); animation: sacudida .38s var(--curva); }
+@keyframes sacudida { 20%, 60% { translate: -5px 0; } 40%, 80% { translate: 5px 0; } }
+.msj-error { color: var(--peligro); font-size: 13px; font-weight: 700; display: flex; gap: 6px; align-items: center; }
+.msj-error svg { width: 15px; height: 15px; flex: none; }
+.ayuda { color: var(--sec); font-size: 13px; }
+
+/* Notificación de lo ya hecho, con "Deshacer" y el tiempo que queda para usarlo */
+.notif { position: absolute; z-index: 30; right: 24px; bottom: 24px; width: min(380px, calc(100% - 32px)); background: var(--aviso-fondo); color: var(--aviso-texto); border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,.45); overflow: hidden; animation: subir-notif .4s var(--resorte) both; }
+.telefono .notif { left: 12px; right: 12px; bottom: 104px; width: auto; }
+@keyframes subir-notif { from { opacity: 0; translate: 0 16px; } }
+.notif .dentro { display: flex; align-items: center; gap: 12px; padding: 4px 4px 4px 16px; min-height: 50px; }
+.notif .dentro span { flex: 1; font-weight: 700; font-size: 14.5px; }
+.notif button { border: 0; background: none; color: var(--aviso-accion); font-weight: 800; padding: 8px 12px; border-radius: 10px; }
+.notif button:hover { background: rgba(11,15,23,.07); }
+.notif .tiempo { height: 3px; background: color-mix(in srgb, var(--aviso-accion) 30%, transparent); }
+.notif .tiempo i { display: block; height: 100%; background: var(--aviso-accion); transform-origin: left; animation: consumir var(--dur, 10s) linear forwards; }
+@keyframes consumir { to { transform: scaleX(0); } }
+
+/* Hoja lateral para crear (oficina) */
+.hoja { position: absolute; z-index: 21; top: 0; right: 0; bottom: 0; width: min(440px, 100%); background: var(--sup); border-radius: 22px 0 0 22px; box-shadow: 0 24px 60px rgba(0,0,0,.5); display: flex; flex-direction: column; animation: entrar-lado .38s var(--curva) both; }
+@keyframes entrar-lado { from { translate: 40px 0; opacity: 0; } }
+.hoja header { padding: 22px 24px 8px; }
+.hoja header h2 { margin: 0; font-size: 21px; font-weight: 800; }
+.hoja header p { margin: 4px 0 0; color: var(--sec); font-size: 14px; }
+.hoja .cuerpo { padding: 12px 24px; display: flex; flex-direction: column; gap: 16px; overflow: auto; flex: 1; }
+.hoja footer { padding: 14px 24px 20px; border-top: 1px solid var(--borde); display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---------- El teléfono (campo) ---------- */
+.telefono-escena { display: flex; justify-content: center; }
+.telefono { width: 390px; max-width: 100%; height: 780px; border-radius: 44px; overflow: hidden; position: relative; isolation: isolate; background: var(--fondo); color: var(--texto); box-shadow: 0 0 0 10px #05070B, 0 30px 60px rgba(0,0,0,.35); display: flex; flex-direction: column; }
+.tel-cab { padding: 54px 18px 12px; display: flex; flex-direction: column; gap: 6px; }
+.tel-cab .ctx { color: var(--sec); font-size: 13px; font-weight: 700; }
+.tel-cab h1 { margin: 0; font-size: 28px; font-weight: 800; }
+.tel-cuerpo { flex: 1; overflow: auto; padding: 4px 16px 120px; display: flex; flex-direction: column; gap: 10px; }
+.tarjeta { background: var(--sup); border-radius: 22px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; transition: opacity .3s var(--curva); }
+.tarjeta.nueva { animation: entrar-confirmar .42s var(--resorte) both; }
+.tarjeta .fila-t { display: flex; align-items: center; gap: 10px; }
+.tarjeta strong { font-size: 18px; flex: 1; }
+.tarjeta .s { color: var(--sec); font-size: 14px; }
+.tarjeta .ok { color: var(--exito); font-weight: 800; font-size: 13px; }
+.tel-btn-quitar { border: 0; background: transparent; color: var(--sec); width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; }
+.tel-btn-quitar:hover { background: var(--sup2); color: var(--texto); }
+.tel-btn-quitar svg { width: 20px; height: 20px; }
+.barra { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 30px; background: linear-gradient(to top, var(--fondo) 70%, transparent); z-index: 5; }
+.btn-siguiente { width: 100%; min-height: 56px; border-radius: 18px; border: 0; background: var(--marca); color: var(--marca-texto); font-weight: 800; font-size: 17px; }
+.agregar { width: 100%; min-height: 56px; border-radius: 20px; border: 2px dashed var(--borde); background: transparent; color: var(--sec); font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.agregar svg { width: 20px; height: 20px; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+
+<div class="escena">
+  <aside class="guia" aria-label="Guía del prototipo">
+    <div class="ceja">TEINS · Iteración 24c</div>
+    <h1>Confirmar solo lo que tiene consecuencias</h1>
+    <p>Cada acción se trata según lo que cuesta equivocarse: lo que se deshace pasa al instante con "Deshacer"; lo que tiene consecuencias pregunta y dice cuáles; lo que no se deshace pregunta en rojo. Toque el caso y pruébelo en la pantalla.</p>
+    <ul class="casos" id="casos"></ul>
+    <section class="nota" id="nota" aria-live="polite"></section>
+  </aside>
+  <main class="marco" id="marco"></main>
+</div>
+
+<script>
+const ic = (n) => {
+  const p = {
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
+    alerta: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+    usuario: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    telefono: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>',
+    documento: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>',
+    campana: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>',
+    calendario: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    portapapeles: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 14l2 2 4-4"/>',
+    caja: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+    recibo: '<path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 1 1V2l-1 1-3-2-3 2-3-2-3 2z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+    edificio: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+    mas: '<path d="M12 5v14M5 12h14"/>',
+    atras: '<path d="m15 18-6-6 6-6"/>',
+    candado: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    guardar: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+  }[n];
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+};
+
+/* ---------- Los casos ---------- */
+const CASOS = [
+  {
+    id: "revisado", donde: "Oficina", titulo: "Tiene consecuencias", sub: "Marcar un levantamiento revisado",
+    antes: "Antes: un diálogo con un icono grande en un círculo y una frase general.",
+    ahora: "Ahora: la pregunta con el verbo, lo que pasa en concreto (quién lo ve y dónde) y el botón azul con el mismo verbo. Sin icono: el título ya lo dice.",
+    probar: "Toque «Marcar revisado».",
+    refs: [["Linear · borrar un equipo", "https://mobbin.com/screens/b1d9a761-cf3b-4070-afd5-c8063ad60c3e"], ["Stripe · cancelar un reembolso", "https://mobbin.com/screens/49670294-fe7b-4294-989a-cf7ba72ff1d1"]],
+  },
+  {
+    id: "cancelar", donde: "Oficina", titulo: "No se deshace", sub: "Cancelar una visita",
+    antes: "Antes: el mismo diálogo que todo lo demás, con el motivo opcional.",
+    ahora: "Ahora: el botón en rojo, lo que pasa en el teléfono del técnico y el motivo obligatorio, porque queda en el registro. «Volver» en vez de «Cancelar», que chocaría con la acción.",
+    probar: "Toque «Cancelar visita» e intente confirmar sin motivo.",
+    refs: [["Linear · retirar un equipo", "https://mobbin.com/screens/e12db837-1358-4b0e-ab73-fea4512e5539"]],
+  },
+  {
+    id: "salir", donde: "Oficina", titulo: "Salir sin guardar", sub: "Irse de una cotización con cambios",
+    antes: "Antes: «Salir sin guardar» o «Seguir editando». Para no perder nada había que volver, guardar y salir otra vez.",
+    ahora: "Ahora: la salida que casi siempre se quiere va primero, «Guardar y salir». Descartar queda a la izquierda, en rojo y como texto.",
+    probar: "Escriba algo en las notas y toque «Visitas» en el menú.",
+    refs: [["OpenAI · salir sin guardar", "https://mobbin.com/screens/27ee1460-45f9-4307-a0f3-da5ce1b4a250"], ["Customer.io · cambios sin guardar", "https://mobbin.com/screens/25eb3dc6-8fb5-4b98-a213-7503d661e8ab"]],
+  },
+  {
+    id: "deshacer", donde: "Oficina", titulo: "Se deshace", sub: "Desactivar un ítem del catálogo",
+    antes: "Antes: pedía confirmar algo que se revierte con un toque. Confirmar lo frecuente entrena a aceptar sin leer.",
+    ahora: "Ahora: pasa al instante, la fila queda atenuada y la notificación ofrece «Deshacer». La línea de abajo dice cuánto tiempo queda para usarlo.",
+    probar: "Toque «Desactivar» en una fila y después «Deshacer».",
+    refs: [["Quicken · deshacer", "https://mobbin.com/screens/e9042731-b020-4b97-b8b7-b5ad5a97db06"], ["Asana · proyecto borrado", "https://mobbin.com/screens/36cb9092-004d-4cfa-abc7-930e4a7ff931"]],
+  },
+  {
+    id: "tablero", donde: "Campo", titulo: "Se deshace", sub: "Quitar un tablero",
+    antes: "Antes: un diálogo rojo para quitar un tablero, en medio de la visita.",
+    ahora: "Ahora: se quita al instante y la notificación, sobre el botón de abajo, ofrece «Deshacer» con todo lo que tenía escrito.",
+    probar: "Toque la papelera de «Tablero 2».",
+    refs: [["Quicken · deshacer", "https://mobbin.com/screens/e9042731-b020-4b97-b8b7-b5ad5a97db06"]],
+  },
+];
+
+const e = { caso: "revisado", capa: null, notif: null, motivo: "", motivoError: false, ocupado: false, notas: "No incluye obra civil.", notasGuardadas: "No incluye obra civil.", pagina: "cotizacion", items: [], tableros: [] };
+const reiniciar = () => {
+  Object.assign(e, { capa: null, notif: null, motivo: "", motivoError: false, ocupado: false, notas: e.notasGuardadas, pagina: "cotizacion" });
+  e.revisado = false; e.cancelada = false;
+  e.items = [
+    { codigo: "CAB-6A", desc: "Cable UTP categoría 6A", precio: "$ 4.800 / m", activo: true },
+    { codigo: "CAN-40", desc: "Canaleta metálica 40 × 25", precio: "$ 18.500 / und", activo: true },
+    { codigo: "TOM-DOB", desc: "Toma doble polo a tierra", precio: "$ 9.200 / und", activo: true },
+    { codigo: "BRK-20", desc: "Breaker 1 × 20 A", precio: "$ 23.000 / und", activo: true },
+  ];
+  e.tableros = [
+    { id: 1, nombre: "Tablero principal", s: "Sótano · 63 A", completo: true },
+    { id: 2, nombre: "Tablero 2", s: "Piso 2 · 32 A", completo: true },
+    { id: 3, nombre: "Tablero 3", s: "Piso 3 · falta 1 dato", completo: false },
+  ];
+};
+
+let temporizador;
+function notificar(texto, deshacer, dur = 10) {
+  clearTimeout(temporizador);
+  e.notif = { texto, deshacer, dur, n: (e.notif?.n ?? 0) + 1 };
+  temporizador = setTimeout(() => { e.notif = null; pintar(); }, dur * 1000);
+}
+
+/* ---------- Oficina ---------- */
+const SECCIONES = [["Levantamientos", "portapapeles"], ["Visitas", "calendario"], ["Clientes", "edificio"], ["Catálogo", "caja"], ["Informes", "documento"], ["Cotizaciones", "recibo"]];
+const menu = (activa) => `
+  <aside class="menu"><div class="logo">TEINS</div>
+    <nav aria-label="Secciones">${SECCIONES.map(([t, i]) => `<a href="#" data-a="menu" data-v="${t}" ${t === activa ? 'aria-current="page"' : ""}>${ic(i)}${t}</a>`).join("")}</nav>
+  </aside>`;
+
+function oficina() {
+  const activa = { revisado: "Levantamientos", cancelar: "Visitas", salir: e.pagina === "visitas" ? "Visitas" : "Cotizaciones", deshacer: "Catálogo" }[e.caso];
+  return `<div class="ventana">${menu(activa)}<div class="contenido">${pantallaOficina()}</div>${capaOficina()}${notificacion()}</div>`;
+}
+
+function pantallaOficina() {
+  if (e.caso === "revisado") return `
+    <span class="migas">${ic("atras")} Levantamientos</span>
+    <div class="cab"><div><h1>Clínica Santa Fe · Sede Norte</h1><div class="datos"><span>UPS y cuarto técnico</span><span>Juan Pérez</span><span>Recibido hoy, 9:12 a. m.</span></div></div>
+      <div class="acciones">${e.revisado ? `<span class="pastilla ok">${ic("check")} Revisado</span>` : `<span class="pastilla revision">En revisión</span><button class="btn principal" data-a="abrir">Marcar revisado</button>`}</div></div>
+    <p class="seccion-t">Cuarto técnico</p>
+    <div class="lista">
+      <div class="fila"><span class="t">Potencia nominal</span><span class="s">20 kVA</span></div>
+      <div class="fila"><span class="t">Descripción del sitio</span><span class="s">Cuarto con ventilación forzada, acceso por el sótano</span></div>
+      <div class="fila"><span class="t">Fotos del equipo</span><span class="s">4 fotos</span></div>
+    </div>`;
+  if (e.caso === "cancelar") return `
+    <div class="cab"><div><h1>Visitas</h1><div class="datos"><span>Esta semana · 6 visitas</span></div></div><div class="acciones"><button class="btn principal">${ic("mas")} Programar visita</button></div></div>
+    <p class="seccion-t">Hoy · martes 29 de septiembre</p>
+    <div class="lista">
+      <div class="fila ${e.cancelada ? "inactiva" : ""}"><span class="t">Clínica Santa Fe · Sede Norte</span><span class="s">Mantenimiento · Juan Pérez</span>
+        <span class="der">${e.cancelada ? `<span class="pastilla apagada">Cancelada</span>` : `<button class="btn chico" data-a="abrir">Cancelar visita</button>`}</span></div>
+      <div class="fila"><span class="t">Colegio Los Andes · Bloque B</span><span class="s">Cotización · María Gómez</span><span class="der"><button class="btn chico">Cancelar visita</button></span></div>
+    </div>`;
+  if (e.caso === "salir") {
+    if (e.pagina === "visitas") return `
+      <div class="cab"><div><h1>Visitas</h1><div class="datos"><span>Esta semana · 6 visitas</span></div></div></div>
+      <p class="ayuda">Llegó aquí desde la cotización. Toque «Cotizaciones» para volver y probar otra vez.</p>`;
+    const cambiado = e.notas !== e.notasGuardadas;
+    return `
+      <span class="migas">${ic("atras")} Cotizaciones</span>
+      <div class="cab"><div><h1>Cotización COT-2026-0045</h1><div class="datos"><span>Clínica Santa Fe · Sede Norte</span><span>Visita del lunes 28 de septiembre</span></div></div>
+        <div class="acciones"><span class="estado-guardado ${cambiado ? "cambios" : ""}"><i></i>${cambiado ? "Cambios sin guardar" : "Todo guardado"}</span>${cambiado ? `<button class="btn" data-a="guardar">Guardar borrador</button>` : ""}<button class="btn principal">Publicar versión 1</button></div></div>
+      <div class="doc"><h2>Condiciones</h2><label class="ayuda" for="notas">Notas para el cliente</label>
+        <textarea id="notas" class="texto-doc" data-a="notas">${e.notas}</textarea></div>`;
+  }
+  if (e.caso === "deshacer") return `
+    <div class="cab"><div><h1>Catálogo</h1><div class="datos"><span>${e.items.filter((i) => i.activo).length} activos</span></div></div><div class="acciones"><button class="btn">Importar CSV</button><button class="btn principal">${ic("mas")} Nuevo ítem</button></div></div>
+    <div class="lista">${e.items.map((it, i) => `
+      <div class="fila ${it.activo ? "" : "inactiva"} ${it.recien ? "recien" : ""}"><span class="t">${it.codigo} · ${it.desc}</span><span class="s">${it.precio}</span>
+        <span class="der">${it.activo ? `<button class="btn chico fantasma" data-a="desactivar" data-v="${i}">Desactivar</button>` : `<span class="pastilla apagada">Inactivo</span><button class="btn chico fantasma" data-a="activar" data-v="${i}">Activar</button>`}</span></div>`).join("")}
+    </div>`;
+  return "";
+}
+
+function capaOficina() {
+  if (!e.capa) return "";
+  const cargando = (t) => (e.ocupado ? `<span class="giro" aria-hidden="true"></span>${t}` : t);
+  if (e.capa === "revisado") return `<div class="velo" data-a="cerrar"></div>
+    <div class="confirmar" role="dialog" aria-modal="true" aria-labelledby="t-c">
+      <h2 id="t-c">¿Marcar revisado el levantamiento de Juan Pérez?</h2>
+      <ul class="consecuencias">
+        <li>${ic("documento")}<span>Queda listo para el informe de la visita<small>Ya no se corrige desde la revisión</small></span></li>
+        <li>${ic("telefono")}<span>Juan Pérez lo ve como revisado en su teléfono<small>Con los 2 comentarios que le dejó</small></span></li>
+      </ul>
+      <div class="pie"><button class="btn" data-a="cerrar" autofocus>Cancelar</button><button class="btn principal" data-a="confirmar" ${e.ocupado ? 'aria-busy="true"' : ""}>${cargando("Marcar revisado")}</button></div>
+    </div>`;
+  if (e.capa === "cancelar") return `<div class="velo" data-a="cerrar"></div>
+    <div class="confirmar" role="dialog" aria-modal="true" aria-labelledby="t-c">
+      <h2 id="t-c">¿Cancelar la visita a Clínica Santa Fe?</h2>
+      <ul class="consecuencias">
+        <li>${ic("telefono")}<span>Juan Pérez deja de verla en su teléfono<small>Le llega el aviso «Oficina canceló esta visita»</small></span></li>
+        <li>${ic("calendario")}<span>Queda en la lista como cancelada<small>Para volver a ir, se programa una visita nueva</small></span></li>
+      </ul>
+      <div class="campo"><label for="motivo">Motivo</label>
+        <textarea id="motivo" class="control ${e.motivoError ? "error" : ""}" rows="2" data-a="motivo" placeholder="Por ejemplo: el cliente pidió cambiar la fecha">${e.motivo}</textarea>
+        ${e.motivoError ? `<span class="msj-error">${ic("alerta")}Escriba el motivo: queda en el registro de la visita.</span>` : `<span class="ayuda">Queda en el registro de la visita.</span>`}</div>
+      <div class="pie"><button class="btn" data-a="cerrar" autofocus>Volver</button><button class="btn peligro" data-a="confirmar" ${e.ocupado ? 'aria-busy="true"' : ""}>${cargando("Cancelar visita")}</button></div>
+    </div>`;
+  if (e.capa === "salir") return `<div class="velo" data-a="cerrar"></div>
+    <div class="confirmar" role="dialog" aria-modal="true" aria-labelledby="t-c">
+      <h2 id="t-c">¿Guardar los cambios de la cotización?</h2>
+      <p>Cambió las notas para el cliente y no las ha guardado.</p>
+      <div class="pie"><button class="btn texto-peligro izq" data-a="descartar">Descartar</button><button class="btn" data-a="cerrar" autofocus>Seguir editando</button><button class="btn principal" data-a="guardar-salir" ${e.ocupado ? 'aria-busy="true"' : ""}>${cargando("Guardar y salir")}</button></div>
+    </div>`;
+  return "";
+}
+
+/* ---------- Campo ---------- */
+function campo() {
+  return `<div class="telefono-escena"><div class="telefono">
+    <div class="tel-cab"><span class="ctx">Paso 3 de 6 · Tableros</span><h1>Tableros</h1></div>
+    <div class="tel-cuerpo">${e.tableros.map((t) => `
+      <div class="tarjeta ${t.nuevo ? "nueva" : ""}"><div class="fila-t"><strong>${t.nombre}</strong>
+        <button class="tel-btn-quitar" data-a="quitar-tablero" data-v="${t.id}" aria-label="Quitar ${t.nombre}">${ic("trash")}</button></div>
+        <span class="s">${t.s}</span>${t.completo ? `<span class="ok">Completo</span>` : ""}</div>`).join("")}
+      <button class="agregar">${ic("mas")} Agregar tablero</button>
+    </div>
+    <div class="barra"><button class="btn-siguiente">Siguiente: materiales</button></div>
+    ${notificacion()}
+  </div></div>`;
+}
+
+function notificacion() {
+  if (!e.notif) return "";
+  return `<div class="notif" role="status" style="--dur:${e.notif.dur}s" data-n="${e.notif.n}"><div class="dentro"><span>${e.notif.texto}</span>${e.notif.deshacer ? `<button data-a="deshacer">Deshacer</button>` : ""}</div>${e.notif.deshacer ? `<div class="tiempo"><i></i></div>` : ""}</div>`;
+}
+
+/* ---------- Pintar ---------- */
+function pintar() {
+  const c = CASOS.find((x) => x.id === e.caso);
+  document.getElementById("casos").innerHTML = CASOS.map((x) => `<li><button data-a="caso" data-v="${x.id}" aria-current="${x.id === e.caso}"><span class="sup">${x.donde}</span><b>${x.titulo}</b><span>${x.sub}</span></button></li>`).join("");
+  document.getElementById("nota").innerHTML = `<h2>${c.sub}</h2><p class="antes">${c.antes}</p><p>${c.ahora}</p><span class="probar">${c.probar}</span><ul>${c.refs.map(([t, u]) => `<li><a href="${u}" target="_blank" rel="noopener">${t}</a> (Mobbin)</li>`).join("")}</ul>`;
+  const foco = document.activeElement?.id;
+  const sel = foco && document.activeElement.selectionStart;
+  document.getElementById("marco").innerHTML = c.donde === "Campo" ? campo() : oficina();
+  if (foco && document.getElementById(foco)) {
+    const el = document.getElementById(foco);
+    el.focus();
+    if (sel !== undefined && el.setSelectionRange) el.setSelectionRange(sel, sel);
+  } else document.querySelector("[autofocus]")?.focus();
+}
+
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+async function confirmar() {
+  if (e.capa === "cancelar" && e.motivo.trim() === "") { e.motivoError = true; pintar(); document.getElementById("motivo")?.focus(); return; }
+  e.ocupado = true; pintar();
+  await esperar(650);
+  if (e.capa === "revisado") { e.revisado = true; notificar("Levantamiento marcado revisado"); }
+  if (e.capa === "cancelar") { e.cancelada = true; notificar("Visita cancelada. Juan Pérez ya recibió el aviso."); }
+  e.capa = null; e.ocupado = false; pintar();
+}
+
+document.addEventListener("click", async (ev) => {
+  const t = ev.target.closest("[data-a]");
+  if (!t) return;
+  const a = t.dataset.a, v = t.dataset.v;
+  if (a === "notas" || a === "motivo") return;
+  ev.preventDefault();
+  if (a === "caso") { e.caso = v; reiniciar(); return pintar(); }
+  if (a === "abrir") { e.capa = e.caso; return pintar(); }
+  if (a === "cerrar" && !e.ocupado) { e.capa = null; return pintar(); }
+  if (a === "confirmar") return confirmar();
+  if (a === "menu") {
+    if (e.caso !== "salir") return;
+    if (v === "Cotizaciones") { e.pagina = "cotizacion"; return pintar(); }
+    if (e.notas !== e.notasGuardadas) { e.capa = "salir"; e.destino = v; return pintar(); }
+    e.pagina = "visitas"; return pintar();
+  }
+  if (a === "guardar") { e.notasGuardadas = e.notas; notificar("Borrador guardado"); return pintar(); }
+  if (a === "descartar") { e.notas = e.notasGuardadas; e.capa = null; e.pagina = "visitas"; return pintar(); }
+  if (a === "guardar-salir") { e.ocupado = true; pintar(); await esperar(600); e.notasGuardadas = e.notas; e.capa = null; e.ocupado = false; e.pagina = "visitas"; notificar("Borrador guardado"); return pintar(); }
+  if (a === "desactivar") {
+    const it = e.items[+v]; it.activo = false; it.recien = false;
+    notificar(`${it.codigo} desactivado`, () => { it.activo = true; it.recien = true; });
+    return pintar();
+  }
+  if (a === "activar") { e.items[+v].activo = true; notificar(`${e.items[+v].codigo} activado`); return pintar(); }
+  if (a === "quitar-tablero") {
+    const i = e.tableros.findIndex((x) => x.id === +v); const [quitado] = e.tableros.splice(i, 1);
+    e.tableros.forEach((x) => (x.nuevo = false));
+    notificar(`${quitado.nombre} quitado`, () => { quitado.nuevo = true; e.tableros.splice(i, 0, quitado); });
+    return pintar();
+  }
+  if (a === "deshacer" && e.notif?.deshacer) { e.notif.deshacer(); e.notif = null; clearTimeout(temporizador); return pintar(); }
+});
+document.addEventListener("input", (ev) => {
+  const a = ev.target.dataset?.a;
+  if (a === "notas") { e.notas = ev.target.value; const antes = e.notas !== e.notasGuardadas; pintarCabecera(antes); }
+  if (a === "motivo") { e.motivo = ev.target.value; if (e.motivoError && e.motivo.trim()) { e.motivoError = false; pintar(); } }
+});
+/* Escribir no vuelve a pintar el área de texto: solo el estado de guardado. */
+function pintarCabecera() { const foco = document.activeElement; pintar(); foco?.id && document.getElementById(foco.id)?.focus(); }
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && e.capa && !e.ocupado) { e.capa = null; pintar(); } });
+
+reiniciar();
+pintar();
+</script>

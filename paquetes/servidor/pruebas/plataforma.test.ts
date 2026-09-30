@@ -1,0 +1,232 @@
+import { randomUUID } from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
+import { sql } from "drizzle-orm";
+import { chromium } from "playwright-core";
+import { PDFDocument } from "pdf-lib";
+import { enOrganizacion } from "../src/plataforma/base-de-datos";
+import { encolar } from "../src/plataforma/cola";
+import { archivos } from "../src/modulos/archivos/esquema";
+import { leerCadena, registrar, verificarCadena } from "../src/modulos/auditoria";
+import { leerCambios, registrarCambios } from "../src/modulos/cambios";
+import { contieneTexto } from "../src/plataforma/busqueda";
+import { cerrarNavegador, imprimirPdf } from "../src/plataforma/pdf";
+import { conexionesDePrueba, nuevaOrganizacion } from "./ayudas";
+
+const { app, propietario } = conexionesDePrueba();
+const huella = () => randomUUID().replaceAll("-", "").repeat(2);
+
+/** Drizzle envuelve el error de PostgreSQL; el motivo real está en la causa. */
+const causa = (error: unknown) => String((error as { cause?: { message?: string } }).cause?.message ?? error);
+async function rechazaPorPermiso(promesa: Promise<unknown>) {
+  const error = await promesa.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  expect(causa(error)).toMatch(/permission denied/);
+}
+
+describe("seguridad por fila (ADR-0009)", () => {
+  it("una organización no ve ni escribe datos de otra, y sin organización no se ve nada", async () => {
+    const [a, b] = await Promise.all([nuevaOrganizacion(propietario), nuevaOrganizacion(propietario)]);
+    const h = huella();
+    await enOrganizacion(app.bd, a, (tx) =>
+      tx.insert(archivos).values({ organizacionId: a, huella: h, tipo: "image/jpeg", bytes: 1, estado: "pendiente", creadoPor: "u" }),
+    );
+
+    const deA = await enOrganizacion(app.bd, a, (tx) => tx.select().from(archivos));
+    const deB = await enOrganizacion(app.bd, b, (tx) => tx.select().from(archivos));
+    const sinOrganizacion = await app.bd.select().from(archivos);
+    expect(deA.map((f) => f.huella)).toEqual([h]);
+    expect(deB).toEqual([]);
+    expect(sinOrganizacion).toEqual([]);
+
+    await expect(
+      enOrganizacion(app.bd, b, (tx) =>
+        tx.insert(archivos).values({ organizacionId: a, huella: huella(), tipo: "image/jpeg", bytes: 1, estado: "pendiente", creadoPor: "u" }),
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe("permisos del rol de la aplicación", () => {
+  it("toda tabla de negocio tiene seguridad por fila y la aplicación no puede borrar en ninguna", async () => {
+    const { rows } = await propietario.pool.query<{ tabla: string; rls: boolean; borrar: boolean }>(`
+      select n.nspname || '.' || c.relname as tabla, c.relrowsecurity as rls,
+             has_table_privilege('teins_app', c.oid, 'DELETE') as borrar
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where c.relkind = 'r' and n.nspname in ('formatos', 'archivos', 'auditoria', 'levantamientos', 'cambios', 'clientes', 'visitas', 'catalogo', 'envios', 'cotizaciones')
+      order by 1`);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const fila of rows) {
+      expect(fila, fila.tabla).toMatchObject({ rls: true, borrar: false });
+    }
+  });
+
+  it("la auditoría, los formatos, el registro de cambios y los comentarios no se pueden modificar desde la aplicación", async () => {
+    const { rows } = await propietario.pool.query<{ tabla: string; actualizar: boolean }>(`
+      select t as tabla, has_table_privilege('teins_app', t, 'UPDATE') as actualizar
+      from unnest(array['auditoria.registros', 'formatos.versiones', 'cambios.registro', 'levantamientos.comentarios']) as t`);
+    expect(rows.every((r) => !r.actualizar)).toBe(true);
+  });
+});
+
+describe("auditoría con cadena de hashes (ADR-0008)", () => {
+  const evento = (organizacionId: string, agregadoId: string, n: number) => ({
+    organizacionId,
+    agregadoTipo: "levantamiento" as const,
+    agregadoId,
+    tipoEvento: "levantamiento_enviado" as const,
+    autorId: "u1",
+    correlacion: `c${n}`,
+    valorNuevo: { n, texto: "Cuarto de prueba", lista: [1, 2] },
+  });
+
+  it("encadena por agregado y detecta la alteración de un eslabón", async () => {
+    const org = await nuevaOrganizacion(propietario);
+    const id = randomUUID();
+    await enOrganizacion(app.bd, org, (tx) => registrar(tx, [evento(org, id, 1), evento(org, id, 2)]));
+    await enOrganizacion(app.bd, org, (tx) => registrar(tx, [evento(org, id, 3)]));
+
+    expect(await enOrganizacion(app.bd, org, (tx) => verificarCadena(tx, org, "levantamiento", id))).toEqual({ integra: true, eslabones: 3 });
+
+    // Solo alguien con acceso de dueño puede alterar la tabla; la cadena lo delata.
+    await propietario.pool.query(
+      `update auditoria.registros set valor_nuevo = '{"n": 99}' where agregado_id = $1 and secuencia = 2`,
+      [id],
+    );
+    expect(await enOrganizacion(app.bd, org, (tx) => verificarCadena(tx, org, "levantamiento", id))).toEqual({
+      integra: false,
+      primerEslabonRoto: 2,
+    });
+  });
+
+  it("un texto que parece JSON conserva su tipo al leerlo y la cadena sigue íntegra", async () => {
+    const org = await nuevaOrganizacion(propietario);
+    const id = randomUUID();
+    const textos = ["12345", "12.50", "true", "null"];
+    await enOrganizacion(app.bd, org, (tx) =>
+      registrar(tx, textos.map((t, n) => ({ ...evento(org, id, n), valorAnterior: t, valorNuevo: t }))),
+    );
+    expect(await enOrganizacion(app.bd, org, (tx) => verificarCadena(tx, org, "levantamiento", id))).toEqual({ integra: true, eslabones: 4 });
+    const leidos = await enOrganizacion(app.bd, org, (tx) => leerCadena(tx, org, "levantamiento", id));
+    expect(leidos.eventos.map((r) => r.valorNuevo)).toEqual(textos);
+    expect(leidos.verificacion).toEqual({ integra: true, eslabones: 4 });
+  });
+
+  it("la aplicación no puede actualizar ni borrar registros", async () => {
+    const org = await nuevaOrganizacion(propietario);
+    const id = randomUUID();
+    await enOrganizacion(app.bd, org, (tx) => registrar(tx, [evento(org, id, 1)]));
+    await rechazaPorPermiso(enOrganizacion(app.bd, org, (tx) => tx.execute(sql`update auditoria.registros set motivo = 'x'`)));
+    await rechazaPorPermiso(enOrganizacion(app.bd, org, (tx) => tx.execute(sql`delete from auditoria.registros`)));
+  });
+
+  it("escrituras simultáneas en la misma cadena no se pisan", async () => {
+    const org = await nuevaOrganizacion(propietario);
+    const id = randomUUID();
+    await Promise.all(
+      Array.from({ length: 8 }, (_, n) => enOrganizacion(app.bd, org, (tx) => registrar(tx, [evento(org, id, n)]))),
+    );
+    expect(await enOrganizacion(app.bd, org, (tx) => verificarCadena(tx, org, "levantamiento", id))).toEqual({ integra: true, eslabones: 8 });
+  });
+});
+
+describe("cola transaccional (ADR-0012)", () => {
+  const contar = async (llave: string) =>
+    (
+      await propietario.pool.query<{ n: string }>(
+        "select count(*) as n from graphile_worker.jobs where task_identifier = 'archivos.verificar' and key = $1",
+        [llave],
+      )
+    ).rows[0]!.n;
+
+  it("un trabajo encolado en una transacción revertida no existe; en una confirmada, sí", async () => {
+    const org = await nuevaOrganizacion(propietario);
+    const revertida = huella();
+    await expect(
+      enOrganizacion(app.bd, org, async (tx) => {
+        await encolar(tx, "archivos.verificar", { organizacionId: org, huella: revertida }, { llave: revertida });
+        throw new Error("falla después de encolar");
+      }),
+    ).rejects.toThrow("falla después de encolar");
+    expect(await contar(revertida)).toBe("0");
+
+    const confirmada = huella();
+    await enOrganizacion(app.bd, org, (tx) => encolar(tx, "archivos.verificar", { organizacionId: org, huella: confirmada }, { llave: confirmada }));
+    expect(await contar(confirmada)).toBe("1");
+  });
+});
+
+describe("punto de control seguro (ADR-0005, patrón 3)", () => {
+  const cambio = (organizacionId: string, entidadId: string) => ({ organizacionId, entidad: "formato" as const, entidadId, operacion: "cambio" as const });
+  const pausa = (ms: number) => new Promise<"esperando">((r) => setTimeout(() => r("esperando"), ms));
+
+  it("una transacción que confirma después nunca queda detrás de un punto de control ya leído", async () => {
+    const [org, otra] = await Promise.all([nuevaOrganizacion(propietario), nuevaOrganizacion(propietario)]);
+    let liberar!: () => void;
+    const abierta = new Promise<void>((r) => (liberar = r));
+    const lenta = enOrganizacion(app.bd, org, async (tx) => {
+      await registrarCambios(tx, [cambio(org, "lenta@1")]);
+      await abierta;
+    });
+    await pausa(100);
+
+    // Sin el bloqueo, la rápida obtendría un número mayor y confirmaría primero: un dispositivo que la
+    // leyera avanzaría su punto de control más allá de la lenta y se la saltaría para siempre.
+    const rapida = enOrganizacion(app.bd, org, (tx) => registrarCambios(tx, [cambio(org, "rapida@1")]));
+    expect(await Promise.race([rapida.then(() => "confirmo" as const), pausa(300)])).toBe("esperando");
+    expect(await enOrganizacion(app.bd, org, (tx) => leerCambios(tx, "u", 0, 10))).toEqual([]);
+
+    // El bloqueo es por organización: las demás no esperan.
+    await enOrganizacion(app.bd, otra, (tx) => registrarCambios(tx, [cambio(otra, "ajena@1")]));
+
+    liberar();
+    await Promise.all([lenta, rapida]);
+    const leidos = await enOrganizacion(app.bd, org, (tx) => leerCambios(tx, "u", 0, 10));
+    expect(leidos.map((c) => c.entidadId)).toEqual(["lenta@1", "rapida@1"]);
+    expect(leidos[0]!.secuencia).toBeLessThan(leidos[1]!.secuencia);
+  });
+
+  it("un cambio de una transacción revertida no existe", async () => {
+    const org = await nuevaOrganizacion(propietario);
+    await expect(
+      enOrganizacion(app.bd, org, async (tx) => {
+        await registrarCambios(tx, [cambio(org, "revertido@1")]);
+        throw new Error("falla después de registrar");
+      }),
+    ).rejects.toThrow("falla después de registrar");
+    expect(await enOrganizacion(app.bd, org, (tx) => leerCambios(tx, "u", 0, 10))).toEqual([]);
+  });
+});
+
+describe("búsqueda sin mayúsculas ni tildes", () => {
+  it("encuentra mayúsculas con tilde aunque la base no sepa pasarlas a minúscula (locale C)", async () => {
+    const encuentra = async (valor: string, texto: string) => {
+      const { rows } = await propietario.bd.execute<{ si: boolean }>(sql`select ${contieneTexto(sql`${valor}::text collate "C"`, texto)} as si`);
+      return rows[0]!.si;
+    };
+    expect(await encuentra("NÚÑEZ ÁLVAREZ", "nunez")).toBe(true);
+    expect(await encuentra("NÚÑEZ ÁLVAREZ", "Álvarez")).toBe(true);
+    expect(await encuentra("Gómez", "gomez")).toBe(true);
+    expect(await encuentra("Gómez", "nunez")).toBe(false);
+  });
+});
+
+describe("impresión a PDF (ADR-0013)", () => {
+  it("los documentos seguidos o simultáneos comparten un Chromium; cerrado, el siguiente abre otro", async () => {
+    const lanzar = vi.spyOn(chromium, "launch");
+    const documento = (titulo: string) =>
+      imprimirPdf({ html: `<p>${titulo}</p>`, pie: "<span></span>", planos: [], metadatos: { titulo, autor: "Prueba", fecha: new Date("2026-09-29T00:00:00Z") } });
+    try {
+      await documento("uno");
+      await Promise.all([documento("dos"), documento("tres"), documento("cuatro")]);
+      expect(lanzar).toHaveBeenCalledTimes(1);
+      await cerrarNavegador();
+      expect((await PDFDocument.load(await documento("cinco"))).getTitle()).toBe("cinco");
+      expect(lanzar).toHaveBeenCalledTimes(2);
+    } finally {
+      lanzar.mockRestore();
+      await cerrarNavegador();
+    }
+  });
+});

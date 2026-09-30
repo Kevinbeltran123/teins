@@ -1,0 +1,20 @@
+{
+  "name": "@teins/protocolo",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./llaves": "./src/llaves.ts",
+    "./openapi": "./src/openapi.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
+    "@teins/dominio": "workspace:*",
+    "zod": "^4.6.5",
+    "zod-openapi": "^6.0.2"
+  }
+}
