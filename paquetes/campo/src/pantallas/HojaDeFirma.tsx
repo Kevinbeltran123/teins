@@ -1,6 +1,6 @@
-import { useRef, useState, type PointerEvent as EventoPuntero } from "react";
+import { useEffect, useRef, useState, type PointerEvent as EventoPuntero } from "react";
 import { bocetoVacio, LIENZO, LIMITES_BOCETO, type DocumentoBoceto, type ElementoBoceto, type Punto, type PuntoConPresion } from "@teins/dominio";
-import { Aviso, BotonIcono, CampoTexto, ElementoDeBoceto, Firma, MensajeError, Smartphone, X } from "@teins/ui";
+import { Aviso, BotonIcono, CampoTexto, ElementoDeBoceto, Firma, MensajeError, Smartphone, useSinRepetir, X } from "@teins/ui";
 import { contornoDe } from "../dibujo/trazo";
 
 const GROSOR = 9;
@@ -70,6 +70,18 @@ export default function HojaDeFirma({
     }
   }
 
+  // Un doble toque en "Firmar" guarda una sola vez (iteración 24c): el segundo llega antes de que se pinte "guardando".
+  const [firmarUnaVez] = useSinRepetir(firmar);
+
+  // Esc cierra como la equis, salvo mientras guarda (iteración 24c; con teclado, en una tableta).
+  useEffect(() => {
+    const alTeclado = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && estado !== "guardando") cerrar();
+    };
+    window.addEventListener("keydown", alTeclado);
+    return () => window.removeEventListener("keydown", alTeclado);
+  }, [estado, cerrar]);
+
   const enProceso: ElementoBoceto | null = enCurso ? { tipo: "trazo", grosor: GROSOR, puntos: enCurso.puntos, contorno: contornoDe(enCurso.puntos, enCurso.lapiz, GROSOR) } : null;
 
   return (
@@ -116,7 +128,7 @@ export default function HojaDeFirma({
         <button
           type="button"
           aria-busy={estado === "guardando" || undefined}
-          onClick={() => void firmar()}
+          onClick={() => void firmarUnaVez()}
           className="h-15 grow rounded-control bg-superficie text-subtitulo font-extrabold text-sobre-superficie active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
         >
           Firmar

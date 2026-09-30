@@ -2,6 +2,7 @@ import {
   agregarFoto,
   agregarRepeticion,
   archivosReferenciados,
+  claveDeRepeticion,
   enviarLevantamiento,
   esBoceto,
   esFirma,
@@ -9,6 +10,7 @@ import {
   quitarRepeticion,
   renombrarRepeticion,
   responder,
+  restaurarRepeticion,
   serializarBoceto,
   TIPO_ARCHIVO_BOCETO,
   type DocumentoBoceto,
@@ -180,7 +182,17 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
       return modificar(id, (l) => renombrarRepeticion(l, seccion, repeticion, nombre, ahora));
     },
     quitarRepeticion(id, seccion, repeticion, ahora) {
-      return modificar(id, (l) => quitarRepeticion(l, seccion, repeticion, ahora));
+      return escribir(id, async (actual) => {
+        const posicion = actual.repeticiones?.[seccion]?.findIndex((r) => r.id === repeticion) ?? -1;
+        const quitada = posicion >= 0 ? actual.repeticiones![seccion]![posicion]! : undefined;
+        return {
+          resultado: quitada && { repeticion: { ...quitada }, posicion, respuestas: actual.respuestas[claveDeRepeticion(seccion, repeticion)] },
+          levantamiento: { ...quitarRepeticion(actual, seccion, repeticion, ahora), tecnicoId: actual.tecnicoId },
+        };
+      });
+    },
+    restaurarRepeticion(id, seccion, repeticion, posicion, respuestas, ahora) {
+      return modificar(id, (l) => restaurarRepeticion(l, seccion, repeticion, posicion, respuestas, ahora));
     },
 
     agregarFoto(id, seccion, campo, archivo, ahora) {

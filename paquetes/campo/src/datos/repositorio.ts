@@ -3,6 +3,13 @@ import type { ArchivoLocal, LevantamientoLocal } from "./modelo";
 
 export type { ArchivoLocal, LevantamientoLocal } from "./modelo";
 
+/** Lo que se quitó de una sección repetida, para devolverlo con "Deshacer". */
+export interface RepeticionQuitada {
+  repeticion: { id: string; nombre: string };
+  posicion: number;
+  respuestas: Record<string, Valor> | undefined;
+}
+
 /** Archivo recién capturado: aún no se sube. */
 export type ArchivoNuevo = Omit<ArchivoLocal, "subida" | "ultimoErrorDeSubida">;
 
@@ -21,8 +28,13 @@ export interface RepositorioLevantamientos {
   /** Secciones repetibles (iteración 9): agrega al final, con el primer nombre libre ("Tablero 3"). */
   agregarRepeticion(id: string, formato: VersionFormato, seccion: string, ahora: Date): Promise<void>;
   renombrarRepeticion(id: string, seccion: string, repeticion: string, nombre: string, ahora: Date): Promise<void>;
-  /** Quita la repetición con sus respuestas. */
-  quitarRepeticion(id: string, seccion: string, repeticion: string, ahora: Date): Promise<void>;
+  /**
+   * Quita la repetición con sus respuestas y devuelve lo quitado, leído en la misma escritura: así "Deshacer" tiene
+   * también lo último que se escribió (iteración 24c).
+   */
+  quitarRepeticion(id: string, seccion: string, repeticion: string, ahora: Date): Promise<RepeticionQuitada | undefined>;
+  /** Deshace `quitarRepeticion` (iteración 24c): la devuelve a su lugar con sus respuestas. */
+  restaurarRepeticion(id: string, seccion: string, repeticion: { id: string; nombre: string }, posicion: number, respuestas: Record<string, Valor> | undefined, ahora: Date): Promise<void>;
   /**
    * Bocetos (iteración 10): el documento se guarda como archivo por su huella y la respuesta apunta a él,
    * en una transacción. La versión anterior se borra si nada más la usa. No sube hasta enviar (ADR-0019).

@@ -1,4 +1,4 @@
-import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { pasosDe, type Paso } from "../recorrido";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -93,6 +93,7 @@ import { procesarFoto } from "../fotos/procesar";
 import { fechaHora, horaExacta } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos } from "../formatos";
 import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion, porQueNoEntro, QUE_HACER_CON_EL_RECHAZO } from "../mensajes";
+import { useBotonAtras } from "../dispositivo/atras";
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 
@@ -119,6 +120,9 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   const envio = useLiveQuery(async () => (await db.envios.get(id)) ?? null, [id]);
   const servidor = useLiveQuery(() => estadoDe(db, id), [id]);
   const formatos = useFormatos();
+  // El botón atrás del teléfono hace lo que la flecha de la pantalla (iteración 24c): el borrador dice cuál es.
+  const atrasDelBorrador = useRef<(() => void) | null>(null);
+  useBotonAtras(() => (atrasDelBorrador.current ?? volver)());
   const visita = useLiveQuery(async () => {
     const l = await repositorio.obtener(id);
     return l?.visitaId && l.tecnicoId ? visitaDe(db, l.tecnicoId, l.visitaId) : null;
@@ -164,6 +168,7 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
           nombre={formatos ? nombreDeFormato(formatos, levantamiento.formato) : "Levantamiento"}
           contexto={visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : "Levantamiento suelto"}
           volver={volver}
+          atras={atrasDelBorrador}
         />
       </div>
     );
@@ -300,6 +305,7 @@ function Borrador({
   nombre,
   contexto,
   volver,
+  atras,
 }: {
   id: string;
   formato: VersionFormato;
@@ -308,6 +314,7 @@ function Borrador({
   nombre: string;
   contexto: string;
   volver: () => void;
+  atras: RefObject<(() => void) | null>;
 }) {
   const pasos = pasosDe(formato);
   const enLinea = useServidorAlcanzable();
@@ -381,6 +388,9 @@ function Borrador({
 
   const ir = (destino: Vista, direccion: "adelante" | "atras" = "adelante") => navegar(direccion, () => setVista(destino));
   const recorrido = () => ir({ tipo: "recorrido" }, "atras");
+  // Lo mismo que la flecha de cada vista: del paso o de Revisar al recorrido, de un tablero a su paso, del recorrido a mis visitas.
+  atras.current = vista.tipo === "recorrido" ? volver : vista.tipo === "repeticion" ? () => ir({ tipo: "paso", paso: vista.seccion }, "atras") : recorrido;
+  useEffect(() => () => void (atras.current = null), [atras]);
   const despuesDe = (pasoId: string): Vista => {
     const siguiente = pasos[pasos.findIndex((p) => p.id === pasoId) + 1];
     return siguiente ? { tipo: "paso", paso: siguiente.id } : { tipo: "revisar" };
@@ -453,7 +463,9 @@ function Borrador({
         id={id}
         seccion={clave}
         campo={campo}
-        inicial={inicial.respuestas[clave]?.[campo.clave]}
+        // Un tablero se abre en su propia pantalla, que se monta cada vez: parte de lo guardado, así uno devuelto con
+        // "Deshacer" (o agregado después de abrir el borrador) se ve con lo que tiene.
+        inicial={(leerClave(clave).repeticion ? actual : inicial).respuestas[clave]?.[campo.clave]}
         actual={actual.respuestas[clave]?.[campo.clave]}
         error={porClave.get(claveDeError(clave, campo.clave))}
         alGuardar={() => alGuardar(clave, campo.clave)}
@@ -741,9 +753,28 @@ function Repeticion({
   volver: () => void;
   children: ReactNode;
 }) {
-  const [quitando, setQuitando] = useState(false);
   const vigilar = useContext(VigilarGuardado);
+  const notificar = useNotificar();
   const etiqueta = seccion.repetible!.etiqueta;
+
+  /**
+   * Quitar es al instante y se deshace desde la notificación (DESIGN.md, iteración 24c): está en el teléfono, así que
+   * "Deshacer" lo devuelve a su lugar con lo escrito. Las fotos siguen guardadas mientras tanto.
+   */
+  async function quitar() {
+    const escritura = repositorio.quitarRepeticion(id, seccion.clave, repeticion.id, new Date());
+    vigilar(escritura);
+    const quitada = await escritura.catch(() => undefined);
+    volver();
+    if (!quitada) return;
+    notificar({
+      texto: `${repeticion.nombre} quitado`,
+      accion: {
+        texto: "Deshacer",
+        alHacer: () => vigilar(repositorio.restaurarRepeticion(id, seccion.clave, quitada.repeticion, quitada.posicion, quitada.respuestas, new Date())),
+      },
+    });
+  }
   return (
     <>
       <EncabezadoDePaso contexto={`${seccion.titulo} · ${repeticion.nombre}`} avance={avance} volver={volver} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
@@ -761,7 +792,7 @@ function Repeticion({
             }}
           />
           <div>
-            <Boton variante="fantasma" icono={Trash} aria-label={`Quitar ${repeticion.nombre}`} onClick={() => setQuitando(true)}>
+            <Boton variante="fantasma" icono={Trash} aria-label={`Quitar ${repeticion.nombre}`} onClick={() => void quitar()}>
               {`Quitar ${etiqueta.toLowerCase()}`}
             </Boton>
           </div>
@@ -770,20 +801,6 @@ function Repeticion({
       <BarraDePaso>
         <BotonSiguiente icono={Check} onClick={volver}>{`Listo este ${etiqueta.toLowerCase()}`}</BotonSiguiente>
       </BarraDePaso>
-      {quitando && (
-        <Confirmacion
-          forma="inferior"
-          nivel="irreversible"
-          titulo={`¿Quitar ${repeticion.nombre}?`}
-          confirmar={`Quitar ${etiqueta.toLowerCase()}`}
-          accion={() => repositorio.quitarRepeticion(id, seccion.clave, repeticion.id, new Date())}
-          mensajeDeError={() => "No se pudo quitar. Intenta de nuevo."}
-          alCerrar={() => setQuitando(false)}
-          alTerminar={volver}
-        >
-          <p>Se borra lo que llenaste en {repeticion.nombre}. Las fotos que tomaste en él también dejan de ir en el levantamiento.</p>
-        </Confirmacion>
-      )}
     </>
   );
 }
