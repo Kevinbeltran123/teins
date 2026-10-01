@@ -95,7 +95,11 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   // Luis la marca revisada.
   await b.getByRole("button", { name: "Marcar revisado" }).click();
   await b.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await expect(b.getByText(`Revisado por ${luis.nombre}.`, { exact: false })).toBeVisible();
+  // El estado cambia en su lugar: el chulo de "Revisado", quién lo revisó y una notificación (iteración 27).
+  const revision = b.getByRole("region", { name: "Revisión" });
+  await expect(revision.getByRole("heading", { name: "Revisado" })).toBeVisible();
+  await expect(revision.getByText(`Por ${luis.nombre}.`, { exact: false })).toBeVisible();
+  await expect(b.getByRole("status").getByText("Marcado revisado")).toBeVisible();
   await b.getByRole("tab", { name: "Historial" }).click();
   await expect(b.getByRole("region", { name: "Historial de cambios" }).getByText(`que tenía ${ana.nombre}`, { exact: false })).toBeVisible();
 

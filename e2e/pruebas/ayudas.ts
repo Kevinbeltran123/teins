@@ -64,11 +64,14 @@ export async function volverALaPestana(page: Page) {
  * más abajo, así que se carga más hasta encontrarlo.
  */
 export async function filaDeLaBandeja(pagina: Page, nombre: string): Promise<Locator> {
-  const fila = pagina.getByRole("row").filter({ hasText: nombre });
-  const mas = pagina.getByRole("button", { name: "Cargar más" });
+  // Dentro del panel de la bandeja: al llegar desde otra sección, la navegación se aplica dentro de una transición
+  // (iteración 27) y las filas de la pantalla anterior siguen un instante a la vista.
+  const panel = pagina.getByRole("tabpanel", { name: /^(Esperando revisión|En revisión|Revisados)$/ });
+  const fila = panel.getByRole("row").filter({ hasText: nombre });
+  const mas = panel.getByRole("button", { name: "Cargar más" });
   for (let i = 0; i < 20; i++) {
     // Espera a que la página cargue: o aparece la fila, o el botón para cargar más, o la lista termina.
-    await fila.or(mas).or(pagina.getByRole("row").last()).first().waitFor();
+    await fila.or(mas).or(panel.getByRole("row").last()).first().waitFor();
     if (await fila.count()) return fila;
     if (!(await mas.isVisible())) break;
     await mas.click();
