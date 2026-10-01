@@ -49,6 +49,11 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await expect(a.getByText("Usted tiene la revisión.", { exact: false })).toBeVisible();
   await a.getByRole("button", { name: "Corregir potencia nominal" }).click();
   await a.getByRole("textbox", { name: "Nuevo valor de potencia nominal" }).fill("12,5");
+  // Antes de guardar, el capítulo del informe ya muestra el valor nuevo y el anterior (ADR-0031).
+  await a.getByRole("button", { name: "Ver cómo queda en el informe" }).click();
+  const capitulo = a.frameLocator('iframe[title="Capítulo del informe"]');
+  await expect(capitulo.getByText("12,5 kVA")).toBeVisible();
+  await expect(capitulo.locator('td[data-antes="Antes: 10 kVA · sin guardar"]')).toHaveCount(1);
   // Sin motivo no se guarda: queda en el historial junto al valor anterior (iteración 24c).
   await a.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(a.getByText("Escriba el motivo: queda en el historial junto al valor anterior.")).toBeVisible();
@@ -56,6 +61,7 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await a.getByRole("textbox", { name: "Motivo de la corrección" }).fill("La placa dice 12,5 kVA");
   await a.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(a.getByText("12,5 kVA", { exact: true })).toBeVisible();
+  await expect(capitulo.locator('tr.vista-corregido td[data-antes="Antes: 10 kVA"]')).toHaveCount(1);
   // El historial va en su pestaña del carril.
   await a.getByRole("tab", { name: "Historial" }).click();
   const historial = a.getByRole("region", { name: "Historial de cambios" });

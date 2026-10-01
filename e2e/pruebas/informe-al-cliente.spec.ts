@@ -148,9 +148,13 @@ test("si el PDF no se pudo generar, el envío no se ofrece otra vez: se publica 
   // Empieza como un PDF, así que se verifica, pero no se puede anexar: el PDF del informe falla.
   await o.locator("input[type=file]").setInputFiles({ name: "Plano dañado.pdf", mimeType: "application/pdf", buffer: Buffer.from(`%PDF-1.7 ${randomUUID()} sin estructura`) });
   await expect(o.getByRole("textbox", { name: "Nombre del plano 1" })).toHaveValue("Plano dañado");
+  // Al verificarlo, el servidor ve que no se puede anexar: lo dicen la fila, la ficha de la hoja y la confirmación.
+  await expect(o.getByText("No se puede anexar al informe", { exact: false })).toBeVisible({ timeout: 30_000 });
+  await expect(o.frameLocator('iframe[title^="Vista previa del informe"]').locator(".vista-anexo.ilegible")).toContainText("no se puede anexar");
   await o.getByRole("button", { name: "Guardar borrador" }).click();
   await expect(o.getByText("Todo guardado")).toBeVisible();
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
+  await expect(o.getByRole("dialog").getByText("El plano «Plano dañado» no se puede anexar")).toBeVisible();
   await expect(async () => {
     await o.getByRole("dialog").getByRole("button", { name: /^Publicar/ }).click();
     await expect(o.getByText("Versión 1 vigente")).toBeVisible({ timeout: 3_000 });

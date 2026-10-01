@@ -49,6 +49,14 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
   await o.getByRole("textbox", { name: "Introducción" }).fill("Primera versión del informe E2E.");
   await o.locator("input[type=file]").setInputFiles({ name: "Planta del cuarto.pdf", mimeType: "application/pdf", buffer: pdfDePrueba() });
   await expect(o.getByRole("textbox", { name: "Nombre del plano 1" })).toHaveValue("Planta del cuarto");
+  // Al lado, el informe como lo recibe el cliente, al escribir (ADR-0031): la introducción, el capítulo y el plano
+  // como ficha, porque no se dibuja.
+  const hoja = o.frameLocator('iframe[title^="Vista previa del informe"]');
+  await expect(hoja.getByText("Primera versión del informe E2E.")).toBeVisible();
+  await expect(hoja.getByText("Levantamiento 1 de 1")).toBeVisible();
+  // El servidor cuenta sus páginas al verificarlo: la fila y la ficha dicen cuántas anexa.
+  await expect(o.getByText("1 página", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(hoja.locator(".vista-anexo").filter({ hasText: "Planta del cuarto" })).toContainText("1 página, se anexa al final del PDF");
   await o.getByRole("button", { name: "Guardar borrador" }).click();
   await expect(o.getByText("Todo guardado")).toBeVisible();
 
@@ -65,6 +73,7 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
 
   // Versión 2 con otra introducción: la 1 sigue ahí, con su PDF.
   await o.getByRole("textbox", { name: "Introducción" }).fill("Segunda versión del informe E2E.");
+  await expect(hoja.getByText("Segunda versión del informe E2E.")).toBeVisible();
   await o.getByRole("button", { name: "Publicar versión 2" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 2" }).click();
   await expect(o.getByText("Versión 2 vigente")).toBeVisible();
