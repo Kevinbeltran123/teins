@@ -35,6 +35,8 @@ export const Sesion = z
       administrador: z.boolean().default(false),
       /** Segundo factor activo: obligatorio para administrar (ADR-0009). */
       segundoFactor: z.boolean().default(false),
+      /** Entró con una contraseña temporal: debe cambiarla antes de cualquier otra cosa (ADR-0033). */
+      debeCambiarContrasena: z.boolean().default(false),
     }),
     /** Hasta cuándo el dispositivo puede trabajar sin contacto (ADR-0009, parte 2). Cada bajada lo renueva. */
     permisoLocalHasta: Fecha,
@@ -432,9 +434,15 @@ export const UsuarioAdministrado = z
     administrador: z.boolean(),
     segundoFactor: z.boolean(),
     desactivadoEn: Fecha.nullable(),
+    /** Todavía tiene la contraseña temporal que se le entregó (ADR-0033). */
+    debeCambiarContrasena: z.boolean(),
     creadoEn: Fecha,
   })
   .meta({ id: "UsuarioAdministrado" });
+
+/** Contraseñas como las acepta el ingreso: de 10 a 128 caracteres (ADR-0009). */
+const ContrasenaNueva = z.string().min(10).max(128);
+const ContrasenaEscrita = z.string().min(1).max(128);
 
 export const SaludDeDispositivo = z
   .object({
@@ -981,6 +989,15 @@ export const operaciones = {
     respuesta: UsuarioAdministrado,
     errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "estado_invalido"],
   },
+  reactivarUsuarioAdministrado: {
+    metodo: "POST",
+    ruta: "/api/administracion/usuarios/{id}/reactivar",
+    resumen: "Vuelve a dar acceso a un usuario desactivado con contraseña temporal (se muestra una vez); no deshace órdenes de borrado (ADR-0033)",
+    parametros: z.object({ id: z.string() }),
+    estadoExito: 200,
+    respuesta: z.object({ usuario: UsuarioAdministrado, contrasena: z.string() }),
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "estado_invalido"],
+  },
   marcarAdministrador: {
     metodo: "POST",
     ruta: "/api/administracion/usuarios/{id}/administrador",
@@ -1244,6 +1261,24 @@ export const operaciones = {
     estadoExito: 201,
     respuesta: ClienteConSitios,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
+  },
+  cambiarContrasena: {
+    metodo: "POST",
+    ruta: "/api/cuenta/contrasena",
+    resumen: "Cambia la propia contraseña con la actual; cierra las demás sesiones y quita la marca de temporal (ADR-0033)",
+    cuerpo: z.object({ actual: ContrasenaEscrita, nueva: ContrasenaNueva }),
+    estadoExito: 200,
+    respuesta: z.object({}),
+    errores: ["no_autenticado", "entrada_invalida", "credencial_incorrecta", "demasiadas_solicitudes"],
+  },
+  quitarSegundoFactor: {
+    metodo: "POST",
+    ruta: "/api/cuenta/segundo-factor/quitar",
+    resumen: "Quita el propio segundo factor con la contraseña y un código vigente; no para quien administra (ADR-0033)",
+    cuerpo: z.object({ contrasena: ContrasenaEscrita, codigo: z.string().regex(/^\d{6}$/) }),
+    estadoExito: 200,
+    respuesta: z.object({}),
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida", "credencial_incorrecta", "estado_invalido", "demasiadas_solicitudes"],
   },
   listarTecnicos: {
     metodo: "GET",

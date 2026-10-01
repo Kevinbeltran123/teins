@@ -21,6 +21,10 @@ export const ESTADO_POR_CODIGO = {
   cotizacion_invalida: 422,
   /** Administrar exige segundo factor activo (ADR-0009). */
   segundo_factor_requerido: 403,
+  /** Con la contraseña temporal solo se cambia la contraseña o se sale (ADR-0033). */
+  cambio_de_contrasena_requerido: 403,
+  /** La contraseña o el código que se escribió no es el correcto; `campos` dice cuál (no es una sesión vencida). */
+  credencial_incorrecta: 422,
   archivos_faltantes: 409,
   archivos_en_verificacion: 409,
   archivo_demasiado_grande: 413,
@@ -49,6 +53,8 @@ export const REINTENTABLE: Readonly<Record<CodigoProblema, boolean>> = {
   informe_invalido: false,
   cotizacion_invalida: false,
   segundo_factor_requerido: false,
+  cambio_de_contrasena_requerido: false,
+  credencial_incorrecta: false,
   archivos_faltantes: true,
   archivos_en_verificacion: true,
   archivo_demasiado_grande: false,
