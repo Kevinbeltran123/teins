@@ -25,7 +25,7 @@ interface Props {
   /** false: ni Esc, ni un clic fuera, ni una equis lo cierran (lo que se muestra una sola vez, o mientras trabaja). */
   cerrable?: boolean;
   forma?: keyof typeof formas;
-  /** Amplio: contenido en dos columnas, como el QR con sus pasos. */
+  /** Amplio: contenido en dos columnas, como el QR con sus pasos; en una hoja lateral, 680 px para un documento en vivo. */
   amplio?: boolean;
   /**
    * Una lista para elegir con un toque (la biblioteca de símbolos): el foco queda en el diálogo y no en su primer
@@ -100,7 +100,7 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
       {...modal}
       aria-labelledby={tituloId}
       tabIndex={focoEnElDialogo ? -1 : undefined}
-      className={`capa-${forma} bg-panel p-0 text-texto shadow-capa backdrop:bg-velo ${amplio && forma === "centrado" ? "w-[min(820px,calc(100vw-32px))]" : ""} ${focoEnElDialogo ? "outline-none" : ""} ${formas[forma]}`}
+      className={`capa-${forma} bg-panel p-0 text-texto shadow-capa backdrop:bg-velo ${amplio && forma === "centrado" ? "w-[min(820px,calc(100vw-32px))]" : ""} ${amplio && forma === "lateral" ? "amplio" : ""} ${focoEnElDialogo ? "outline-none" : ""} ${formas[forma]}`}
     >
       <div className={`flex flex-col ${forma === "lateral" || forma === "hoja" ? "h-full" : "max-h-[inherit]"}`}>
         {forma === "hoja" && <span aria-hidden className="mx-auto mt-2.5 h-1.5 w-11 shrink-0 rounded-full bg-borde-suave" />}
