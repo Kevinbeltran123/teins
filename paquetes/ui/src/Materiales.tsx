@@ -4,6 +4,7 @@ import { Search } from "./iconos";
 import type { LineaEditable } from "./Cantidades";
 import { useNotificar } from "./Notificaciones";
 import { BotonAgregar } from "./Recorrido";
+import { useLoNuevo } from "./transicion";
 
 /** Lee una cantidad escrita en campo ("12,5") como número; lo que no se lee cuenta como 0. */
 const numero = (texto: string) => {
@@ -38,6 +39,8 @@ export function EditorMateriales({
   buscar?: (() => void) | undefined;
 }) {
   const id = useId();
+  // Solo la línea recién agregada entra animada; las demás no se animan otra vez al volver al paso.
+  const esNueva = useLoNuevo(lineas.map((l) => l.id));
   // Las líneas con la nota abierta; una nota escrita siempre se ve.
   const [conNota, setConNota] = useState<ReadonlySet<string>>(new Set());
   const cambiar = (i: number, cambio: Partial<LineaEditable>) => onCambio(lineas.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
@@ -64,7 +67,7 @@ export function EditorMateriales({
       </span>
       {lineas.length === 0 && <p className="text-cuerpo text-texto-secundario">Busca en el catálogo lo que vas a usar. Si no está, agrégalo como línea libre.</p>}
       {lineas.map((l, i) => (
-        <div key={l.id} role="group" aria-label={`Línea ${i + 1}`} className="flex flex-col gap-3 rounded-panel border border-division bg-panel py-3.5 pr-3.5 pl-4.5 motion-safe:animate-subir">
+        <div key={l.id} role="group" aria-label={`Línea ${i + 1}`} className={`flex flex-col gap-3 rounded-panel border border-division bg-panel py-3.5 pr-3.5 pl-4.5 ${esNueva(l.id) ? "motion-safe:animate-subir" : ""}`}>
           <div className="flex items-center gap-3">
             <div className="flex min-w-0 grow flex-col">
               {l.catalogo ? (

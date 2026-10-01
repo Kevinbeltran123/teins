@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
 import { Camera } from "./iconos";
 import { VisorFotos, type FotoVisible } from "./VisorFotos";
+import { useLoNuevo } from "./transicion";
 
 interface Props {
   etiqueta: string;
@@ -22,6 +23,8 @@ interface Props {
 export function CampoFotos({ etiqueta, fotos, procesando, onAgregar, onQuitar, obligatorio, error, soloLectura, puestos = [] }: Props) {
   const id = useId();
   const [abierta, setAbierta] = useState<number | null>(null);
+  // Solo la foto recién tomada entra animada; las que ya estaban no se animan otra vez al volver al paso.
+  const esNueva = useLoNuevo(fotos.map((f) => f.id));
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
@@ -40,7 +43,7 @@ export function CampoFotos({ etiqueta, fotos, procesando, onAgregar, onQuitar, o
         // Las fotos y el lugar para la siguiente van en la misma cuadrícula: se ve cuántas hay y dónde va la otra.
         <ul aria-labelledby={`${id}-etiqueta`} className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
           {fotos.map((f, i) => (
-            <li key={f.id} className="motion-safe:animate-subir">
+            <li key={f.id} className={esNueva(f.id) ? "motion-safe:animate-subir" : undefined}>
               <button
                 type="button"
                 onClick={() => setAbierta(i)}

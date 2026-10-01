@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { sinMovimiento } from "./transicion";
 
 /*
   Un documento en vivo (ADR-0031): la hoja que va a recibir el cliente, dibujada en un marco del mismo origen y sin
@@ -130,7 +131,7 @@ export function HojaEnVivo({ html, ancho, titulo, estilosEnLinea = false, alPint
     // La posición dentro de la hoja, reducida, más donde empieza la hoja en el lienzo; deja ver la cabecera fija.
     const inicio = marco.current.parentElement!.getBoundingClientRect().top - lienzo.getBoundingClientRect().top + lienzo.scrollTop;
     const cabecera = lienzo.querySelector<HTMLElement>(":scope > .lienzo-cab")?.offsetHeight ?? 0;
-    lienzo.scrollTo({ top: inicio + el.getBoundingClientRect().top * escala.current - cabecera - 16, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    lienzo.scrollTo({ top: inicio + el.getBoundingClientRect().top * escala.current - cabecera - 16, behavior: sinMovimiento() ? "auto" : "smooth" });
   }
 
   // Al escribir: el cuerpo nuevo en el siguiente cuadro, una sola vez por cuadro.

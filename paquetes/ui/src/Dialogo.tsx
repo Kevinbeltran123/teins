@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, type MouseEvent, type PointerEvent, type ReactNode, type SyntheticEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, type MouseEvent, type PointerEvent, type ReactNode, type RefObject, type SyntheticEvent } from "react";
 import { BotonIcono } from "./Boton";
 import { X, type LucideIcon } from "./iconos";
+import { sinMovimiento } from "./transicion";
 
 const formas = {
   /** Confirmaciones y lo que se entrega una sola vez: interrumpe a propósito. */
@@ -87,12 +88,52 @@ export function useModal(cerrable: boolean, alCerrar: () => void, focoEnElDialog
 }
 
 /**
+ * El diálogo también sale (iteración 27): quien lo usa lo quita con una condición, así que al desmontarse se deja
+ * una copia inerte, con lo que mostraba, que sale en 200 ms y se borra. Se copia antes de que React lo quite
+ * (efecto de diseño) y se muestra solo si de verdad se quitó: StrictMode desmonta y vuelve a montar sin quitarlo.
+ */
+function useSalida(ref: RefObject<HTMLDialogElement | null>, forma: string) {
+  useLayoutEffect(() => {
+    const elemento = ref.current!;
+    return () => {
+      if (sinMovimiento() || !elemento.open) return;
+      const copia = elemento.cloneNode(true) as HTMLDialogElement;
+      // Lo escrito no está en los atributos: se copia para que no se vea vacío mientras sale.
+      const campos = elemento.querySelectorAll("input, textarea, select");
+      copia.querySelectorAll<HTMLInputElement>("input, textarea, select").forEach((campo, i) => {
+        const original = campos[i] as HTMLInputElement | undefined;
+        if (!original) return;
+        if (campo.type === "checkbox" || campo.type === "radio") campo.checked = original.checked;
+        else if (campo.type !== "file") campo.value = original.value;
+      });
+      copia.querySelectorAll("[id]").forEach((conId) => conId.removeAttribute("id"));
+      copia.removeAttribute("aria-labelledby");
+      copia.setAttribute("aria-hidden", "true");
+      copia.inert = true;
+      copia.classList.add("capa-saliendo");
+      copia.dataset.forma = forma;
+      const velo = document.createElement("div");
+      velo.className = "velo-saliendo";
+      queueMicrotask(() => {
+        if (elemento.isConnected) return;
+        document.body.append(velo, copia);
+        setTimeout(() => {
+          velo.remove();
+          copia.remove();
+        }, 200);
+      });
+    };
+  }, []);
+}
+
+/**
  * Diálogo modal sobre el elemento <dialog> del navegador: el foco queda dentro, lo de atrás queda inerte y
- * Esc funciona sin JavaScript de animación (el movimiento es CSS, DESIGN.md). Se abre al montarse: quien lo
+ * Esc funciona sin JavaScript de animación (el movimiento es CSS, DESIGN.md; al quitarse, sale con useSalida). Se abre al montarse: quien lo
  * usa lo muestra u oculta con una condición, y cada apertura empieza limpia.
  */
 export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerrar, cerrable = true, forma = "centrado", amplio = false, focoEnElDialogo = false, tono = "" }: Props) {
   const modal = useModal(cerrable, alCerrar, focoEnElDialogo);
+  useSalida(modal.ref, forma);
   const tituloId = useId();
 
   return (

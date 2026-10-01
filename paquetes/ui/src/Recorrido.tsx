@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, type LucideIcon } from "./iconos";
 
 /**
@@ -16,6 +16,7 @@ export function EncabezadoDePaso({
   etiquetaVolver,
   contador,
   alContador,
+  transicion,
 }: {
   contexto: string;
   /** De 0 a 1. */
@@ -24,15 +25,20 @@ export function EncabezadoDePaso({
   etiquetaVolver: string;
   contador?: string | undefined;
   alContador?: (() => void) | undefined;
+  /**
+   * Nombre de transición (iteración 27): el mismo que la tarjeta de la visita en el inicio, para que la tarjeta se
+   * convierta en esta cabecera. Entre pasos, la cabecera se queda y solo crece la barra de avance.
+   */
+  transicion?: string | undefined;
 }) {
   return (
-    <header className="sticky top-0 z-20 bg-fondo/95 pt-[env(safe-area-inset-top)] backdrop-blur">
+    <header className="sticky top-0 z-20 bg-fondo/95 pt-[env(safe-area-inset-top)] backdrop-blur" style={transicion ? { viewTransitionName: transicion } : undefined}>
       <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-2.5">
         <BotonRedondo icono={ChevronLeft} etiqueta={etiquetaVolver} onClick={volver} />
         <div className="flex min-w-0 grow flex-col gap-1.5">
           <span className="truncate text-ayuda font-bold text-texto-secundario">{contexto}</span>
           <div className="h-[3px] overflow-hidden rounded-full bg-superficie-pista" role="progressbar" aria-label="Avance del levantamiento" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(avance * 100)}>
-            <div className="h-full rounded-full bg-superficie transition-[width] duration-500 ease-t" style={{ width: `${Math.round(avance * 100)}%` }} />
+            <div className="h-full rounded-full bg-superficie transition-[width] duration-500 ease-t motion-reduce:transition-none" style={{ width: `${Math.round(avance * 100)}%`, viewTransitionName: "progreso" }} />
           </div>
         </div>
         {contador && alContador && (
@@ -65,10 +71,13 @@ export function BotonRedondo({ icono: Icono, etiqueta, onClick }: { icono: Lucid
   );
 }
 
-/** La acción del paso, abajo y al alcance del pulgar. El degradado deja ver que el contenido sigue. */
+/**
+ * La acción del paso, abajo y al alcance del pulgar. El degradado deja ver que el contenido sigue. Entre pasos no se
+ * desliza: se queda en su lugar (iteración 27).
+ */
 export function BarraDePaso({ children }: { children: ReactNode }) {
   return (
-    <div data-barra-inferior className="fixed inset-x-0 bottom-0 z-20 bg-linear-to-t from-fondo from-70% to-transparent">
+    <div data-barra-inferior className="fixed inset-x-0 bottom-0 z-20 bg-linear-to-t from-fondo from-70% to-transparent" style={{ viewTransitionName: "barra-paso" }}>
       <div className="mx-auto flex max-w-xl gap-3 px-4 pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">{children}</div>
     </div>
   );
@@ -146,6 +155,7 @@ export function TarjetaResumen({
   datos,
   onClick,
   etiqueta,
+  nueva = false,
 }: {
   titulo: string;
   estado: string;
@@ -153,13 +163,15 @@ export function TarjetaResumen({
   datos: readonly { etiqueta: string; valor: string }[];
   onClick: () => void;
   etiqueta?: string;
+  /** Recién agregada a la vista: entra animada. Las que ya estaban no se animan otra vez al volver (iteración 27). */
+  nueva?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={etiqueta}
-      className="flex w-full animate-subir flex-col gap-3 rounded-panel border border-division bg-panel px-4.5 py-4 text-left active:scale-[0.99] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+      className={`${nueva ? "motion-safe:animate-subir" : ""} flex w-full flex-col gap-3 rounded-panel border border-division bg-panel px-4.5 py-4 text-left active:scale-[0.99] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco`}
     >
       <span className="flex items-center gap-3">
         <strong className="min-w-0 grow text-[16px] leading-tight font-medium">{titulo}</strong>
@@ -222,35 +234,31 @@ export function Repaso({ children, etiqueta }: { children: ReactNode; etiqueta: 
   );
 }
 
-/** Enviado: el chulo se dibuja (CSS) y dice qué pasó; lo que sigue va debajo. */
-export function ChuloDeExito({ titulo, children }: { titulo: string; children?: ReactNode }) {
-  return (
-    <div className="flex flex-col items-center gap-3 py-4 text-center">
-      <svg viewBox="0 0 120 120" className="size-24" aria-hidden>
-        <circle cx="60" cy="60" r="52" pathLength={100} fill="none" className="stroke-sync-ok [stroke-dasharray:100] motion-safe:animate-[trazo_700ms_var(--t-curva)_both]" strokeWidth="6" />
-        <path d="M36 62l16 16 32-34" pathLength={100} fill="none" className="stroke-sync-ok [stroke-dasharray:100] motion-safe:animate-[trazo_420ms_520ms_var(--t-curva)_both]" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <h2 className="text-titulo leading-tight font-extrabold">{titulo}</h2>
-      {children}
-    </div>
-  );
-}
-
 /**
  * Franja de sincronización (VSCO, Mobbin): una línea que dice si todo está a salvo, sin estorbar. Sin señal,
- * el punto late y dice que se puede seguir.
+ * el punto late y dice que se puede seguir. Cuando la cola se vacía a la vista, dice «Todo subido» en verde
+ * (iteración 27).
  */
 export function FranjaSincronizacion({ enLinea, porSubir, guardado }: { enLinea: boolean; porSubir: number; guardado?: string | undefined }) {
+  const antes = useRef(porSubir);
+  const [recienSubido, setRecienSubido] = useState(false);
+  useEffect(() => {
+    if (antes.current > 0 && porSubir === 0) setRecienSubido(true);
+    if (porSubir > 0) setRecienSubido(false);
+    antes.current = porSubir;
+  }, [porSubir]);
   const pendiente = porSubir === 1 ? "1 levantamiento espera" : `${porSubir} levantamientos esperan`;
   const texto = enLinea
     ? porSubir > 0
       ? `${guardado ?? "Guardado en el teléfono"} · subiendo ${porSubir === 1 ? "1 levantamiento" : `${porSubir} levantamientos`}`
-      : `${guardado ?? "Guardado en el teléfono"} · todo subido`
+      : recienSubido
+        ? "Todo subido"
+        : `${guardado ?? "Guardado en el teléfono"} · todo subido`
     : porSubir > 0
       ? `Sin señal · ${pendiente} para subir. Puedes seguir.`
       : `Sin señal · ${guardado ? guardado.charAt(0).toLowerCase() + guardado.slice(1) : "todo queda en el teléfono"}. Puedes seguir.`;
   return (
-    <p role="status" className="flex items-center gap-2 rounded-control border border-division bg-panel px-3 py-2 text-ayuda font-bold text-texto-secundario">
+    <p role="status" className={`flex items-center gap-2 rounded-control border border-division bg-panel px-3 py-2 text-ayuda font-bold ${enLinea && recienSubido ? "text-exito-texto" : "text-texto-secundario"}`}>
       <span aria-hidden className={`size-2 shrink-0 rounded-full ${enLinea ? "bg-sync-ok" : "bg-sync-pendiente motion-safe:animate-pulse"}`} />
       {texto}
     </p>
@@ -306,6 +314,8 @@ export function ListaFaltantes({ datos, sacudir = 0, titulo }: { datos: readonly
 
 export type EstadoDeProceso = "enviando" | "esperando" | "listo" | "error";
 export interface EtapaDeProceso {
+  /** Fija aunque el texto cambie ("1 de 3", "2 de 3"): la etapa no se vuelve a montar ni a animar. */
+  clave: string;
   texto: string;
   estado: "hecho" | "en_curso" | "espera" | "error";
 }
@@ -346,7 +356,7 @@ export function ProcesoDeEnvio({
             pathLength={100}
             strokeDasharray="100"
             strokeDashoffset={medido === null ? 72 : 100 - Math.max(4, medido * 100)}
-            className={`${color} transition-[stroke-dashoffset,stroke] duration-700 ease-t`}
+            className={`${color} transition-[stroke-dashoffset,stroke] duration-700 ease-t motion-reduce:transition-none`}
           />
         </svg>
         <span aria-hidden className="absolute inset-0 grid place-items-center">
@@ -367,7 +377,7 @@ export function ProcesoDeEnvio({
       </div>
       <ol className="flex w-full flex-col gap-1 rounded-panel border border-division bg-panel p-2 text-left">
         {etapas.map((e) => (
-          <li key={e.texto} className="flex items-center gap-3 rounded-control px-3 py-2.5">
+          <li key={e.clave} className="flex items-center gap-3 rounded-control px-3 py-2.5">
             <span
               aria-hidden
               className={`grid size-7 shrink-0 place-items-center rounded-full [&_svg]:size-4 ${

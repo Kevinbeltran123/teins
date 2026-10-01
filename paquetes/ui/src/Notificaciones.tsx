@@ -1,15 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { sinMovimiento } from "./transicion";
 
 export interface Notificacion {
   /** Qué pasó, en participio: "Cliente creado", "Foto eliminada". Nunca un error: esos quedan donde ocurrieron. */
   texto: string;
-  /** Una sola acción de una palabra, que también exista en la pantalla o que deshaga lo recién hecho. */
+  /**
+   * Una sola acción corta: el siguiente paso de lo recién hecho ("Agregar contactos", "Ver en Canceladas"), algo que
+   * también exista en la pantalla o deshacerlo.
+   */
   accion?: { texto: string; alHacer: () => void } | undefined;
 }
 
 interface Visible extends Notificacion {
   id: number;
+  /** Sale en 200 ms antes de quitarse (iteración 27). */
+  saliendo?: boolean;
 }
 
 /** 5 s; con acción, 10 s para alcanzar a usarla (Polaris). Nunca más de tres a la vez. */
@@ -34,13 +40,24 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
   const quitar = useCallback((id: number) => {
     clearTimeout(temporizadores.current.get(id));
     temporizadores.current.delete(id);
-    setVisibles((lista) => lista.filter((n) => n.id !== id));
+    if (sinMovimiento()) {
+      setVisibles((lista) => lista.filter((n) => n.id !== id));
+      return;
+    }
+    setVisibles((lista) => lista.map((n) => (n.id === id ? { ...n, saliendo: true } : n)));
+    temporizadores.current.set(
+      id,
+      setTimeout(() => {
+        temporizadores.current.delete(id);
+        setVisibles((lista) => lista.filter((n) => n.id !== id));
+      }, 200),
+    );
   }, []);
 
   const notificar = useCallback(
     (notificacion: Notificacion) => {
       const id = siguiente.current++;
-      setVisibles((lista) => [...lista, { ...notificacion, id }].slice(-MAXIMO));
+      setVisibles((lista) => [...lista.filter((n) => !n.saliendo), { ...notificacion, id }].slice(-MAXIMO));
       temporizadores.current.set(
         id,
         setTimeout(() => quitar(id), notificacion.accion ? DURACION_CON_ACCION_MS : DURACION_MS),
@@ -77,7 +94,8 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
       {visibles.map((n) => (
         <div
           key={n.id}
-          className="pointer-events-auto flex min-h-12 animate-aparecer items-center justify-between gap-3 rounded-[10px] bg-notificacion py-1 pr-1 pl-4 text-cuerpo font-medium text-fondo shadow-menu"
+          className={`${n.saliendo ? "animate-sale-abajo" : "animate-entra-abajo"} pointer-events-auto flex min-h-12 items-center justify-between gap-3 rounded-[10px] bg-notificacion py-1 pr-1 pl-4 text-cuerpo font-medium text-fondo shadow-menu`}
+          aria-hidden={n.saliendo || undefined}
         >
           <span className="py-2">{n.texto}</span>
           {n.accion && (

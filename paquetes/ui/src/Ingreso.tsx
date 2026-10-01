@@ -103,7 +103,7 @@ export function CampoDeIngreso({
 
 /** Botones de la tarjeta de ingreso, a lo ancho y de 46 px: el principal en la marca, el otro con borde fino. */
 export const claseBotonIngreso = (principal: boolean) =>
-  `flex h-[46px] w-full items-center justify-center gap-[7px] rounded-[10px] text-[15px] font-medium whitespace-nowrap transition-[background-color,filter,transform] duration-150 active:translate-y-px disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-[18px] ${
+  `flex h-[46px] w-full items-center justify-center gap-[7px] rounded-[10px] text-[15px] font-medium whitespace-nowrap transition-[background-color,filter,transform] duration-150 motion-reduce:transition-none active:translate-y-px disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-[18px] ${
     principal
       ? "bg-superficie text-sobre-superficie shadow-[inset_0_1px_0_rgb(255_255_255/0.18),var(--t-sombra-boton)] hover:brightness-106"
       : "bg-panel text-texto shadow-[inset_0_0_0_1px_var(--t-borde-suave),var(--t-sombra-boton)] hover:bg-panel-hundido"

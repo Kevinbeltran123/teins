@@ -39,7 +39,7 @@ export type { Notificacion } from "./Notificaciones";
 export { BotonHerramienta, Pastilla } from "./Pastilla";
 export { EditorMateriales } from "./Materiales";
 export { CampoFlotante } from "./CampoFlotante";
-export { BarraDePaso, BotonAgregar, BotonRedondo, BotonSiguiente, ChuloDeExito, EncabezadoDePaso, FilaDeRepaso, FranjaSincronizacion, ListaFaltantes, ProcesoDeEnvio, type DatoFaltante, type EstadoDeProceso, type EtapaDeProceso, ListaRecorrido, PasoDelRecorrido, Repaso, TarjetaResumen, type EstadoDePaso } from "./Recorrido";
+export { BarraDePaso, BotonAgregar, BotonRedondo, BotonSiguiente, EncabezadoDePaso, FilaDeRepaso, FranjaSincronizacion, ListaFaltantes, ProcesoDeEnvio, type DatoFaltante, type EstadoDeProceso, type EtapaDeProceso, ListaRecorrido, PasoDelRecorrido, Repaso, TarjetaResumen, type EstadoDePaso } from "./Recorrido";
 export { Pestanas } from "./Pestanas";
 export type { Pestana } from "./Pestanas";
 export { SelectorDeArchivo } from "./SelectorDeArchivo";
@@ -52,3 +52,5 @@ export { BarraLista, Buscador, coincide, EsqueletoLista, Marcado, normalizarText
 export { useSinRepetir } from "./useSinRepetir";
 export { aplicarTema, OPCIONES_DE_TEMA, temaGuardado, useTema } from "./tema";
 export type { Tema } from "./tema";
+export { conTransicion, nombreDeTransicion, sinMovimiento, useCapaQueSale, useLoNuevo, useNombreEnPantalla } from "./transicion";
+export type { Direccion } from "./transicion";

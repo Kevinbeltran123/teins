@@ -19,6 +19,7 @@ export function EncabezadoPagina({
   descripcion,
   acciones,
   accionesEnBarra = false,
+  transicion,
 }: {
   titulo: ReactNode;
   /** El nivel superior, como enlace con la clase `migas`: "Levantamientos", "Informes". */
@@ -31,6 +32,11 @@ export function EncabezadoPagina({
   acciones?: ReactNode;
   /** En un documento en vivo, las acciones van a la barra superior (prototipos/vista-en-vivo). */
   accionesEnBarra?: boolean;
+  /**
+   * Nombre de transición del título (nombreDeTransicion): el mismo en el enlace de la fila de la lista hace que, al
+   * abrirla, el título de la fila se convierta en el del detalle (iteración 27).
+   */
+  transicion?: string | undefined;
 }) {
   const barra = useContext(DestinoBarraSuperior);
   const destinoAcciones = useContext(DestinoAccionesBarra);
@@ -54,7 +60,7 @@ export function EncabezadoPagina({
         {migas && !barra && <nav aria-label="Migas de pan">{migas}</nav>}
         {/* El estado va junto al título, pero fuera de él: el título se lee solo ("Cotización COT-2026-0017"). */}
         <div className="titulo-fila">
-          <h1>{titulo}</h1>
+          <h1 style={transicion ? { viewTransitionName: transicion } : undefined}>{titulo}</h1>
           {estado}
         </div>
         {descripcion && <div className="meta">{descripcion}</div>}

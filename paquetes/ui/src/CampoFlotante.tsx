@@ -40,7 +40,7 @@ export function CampoFlotante({
         />
         <label
           htmlFor={id}
-          className="pointer-events-none absolute top-1/2 left-0 -translate-y-1/2 text-cuerpo text-texto-secundario transition-all duration-200 ease-t peer-focus:top-3.5 peer-focus:text-[13px] peer-focus:font-bold peer-[:not(:placeholder-shown)]:top-3.5 peer-[:not(:placeholder-shown)]:text-[13px] peer-[:not(:placeholder-shown)]:font-bold"
+          className="pointer-events-none absolute top-1/2 left-0 -translate-y-1/2 text-cuerpo text-texto-secundario transition-all duration-200 ease-t motion-reduce:transition-none peer-focus:top-3.5 peer-focus:text-[13px] peer-focus:font-bold peer-[:not(:placeholder-shown)]:top-3.5 peer-[:not(:placeholder-shown)]:text-[13px] peer-[:not(:placeholder-shown)]:font-bold"
         >
           {etiqueta}
         </label>
