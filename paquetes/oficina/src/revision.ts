@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CuerpoEntrada } from "@teins/protocolo";
+import { conTransicion } from "@teins/ui";
 import { cliente, REFRESCO_BANDEJA_MS } from "./api";
 
 export type Estado = "enviado" | "en_revision" | "revisado";
@@ -17,10 +18,14 @@ export function useBandeja(estado: Estado, buscar = "") {
   });
 }
 
-/** Después de cualquier acción de revisión, el detalle, el historial y la bandeja se vuelven a leer. */
+/**
+ * Después de cualquier acción de revisión, el detalle, el historial y la bandeja se vuelven a leer, en una
+ * transición: el estado cambia en su lugar y lo corregido destella (iteración 27).
+ */
 function useRefrescar() {
   const consultas = useQueryClient();
-  return (id: string) => Promise.all([consultas.invalidateQueries({ queryKey: ["levantamiento", id] }), consultas.invalidateQueries({ queryKey: ["bandeja"] })]);
+  return (id: string) =>
+    conTransicion(() => Promise.all([consultas.invalidateQueries({ queryKey: ["levantamiento", id] }), consultas.invalidateQueries({ queryKey: ["bandeja"] })]));
 }
 
 export function useTomar() {

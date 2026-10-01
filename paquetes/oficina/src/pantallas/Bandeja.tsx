@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, ChevronRight, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, Inbox, Marcado, Pestanas, PieLista, RefreshCw, SinResultados, Tabla } from "@teins/ui";
+import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, ChevronRight, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, Inbox, Marcado, nombreDeTransicion, Pestanas, PieLista, RefreshCw, SinResultados, Tabla } from "@teins/ui";
 import { consultas } from "../api";
 import { aFechaCorta, aHora, cuantoLleva, iniciales } from "../formato";
 import { mensajeDeError } from "../mensajes";
@@ -111,21 +111,24 @@ export function Bandeja() {
                 ...(estado === "enviado" ? [{ titulo: "Recibido" }, { titulo: "Lleva esperando", derecha: true }] : [{ titulo: "Recibido", derecha: true }]),
               ]}
             >
-              {elementos.map((e, k) => {
+              {elementos.map((e) => {
                 const lleva = cuantoLleva(e.recibidoEn);
                 return (
-                  <FilaTabla key={e.id} abrir indice={k}>
+                  <FilaTabla key={e.id} abrir clave={e.id}>
                     {/* De qué cliente es: lo primero que oficina busca para saber qué revisar (iteración 14). */}
                     <CeldaTabla>
-                      <Link to="/levantamientos/$id" params={{ id: e.id }} className="enlace">
-                        {e.visita ? <Marcado texto={e.visita.cliente} busqueda={buscar} /> : "Sin visita"}
-                      </Link>
-                      {e.visita && (
-                        <span className="sec">
-                          {" · "}
-                          <Marcado texto={e.visita.sitio} busqueda={buscar} />
-                        </span>
-                      )}
+                      {/* Al abrirlo, este título se convierte en el del detalle (iteración 27). */}
+                      <span data-transicion={nombreDeTransicion("lev", e.id)}>
+                        <Link to="/levantamientos/$id" params={{ id: e.id }} className="enlace">
+                          {e.visita ? <Marcado texto={e.visita.cliente} busqueda={buscar} /> : "Sin visita"}
+                        </Link>
+                        {e.visita && (
+                          <span className="sec">
+                            {" · "}
+                            <Marcado texto={e.visita.sitio} busqueda={buscar} />
+                          </span>
+                        )}
+                      </span>
                     </CeldaTabla>
                     <CeldaTabla>
                       <span className="sec">

@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
-import { Aviso, Boton, claseBoton, EncabezadoPagina, FallaAlDibujar, RefreshCw, useModal } from "@teins/ui";
-import { consultas, esSesionVencida, olvidarContrasenaDeIngreso } from "./api";
+import { Aviso, Boton, claseBoton, conTransicion, EncabezadoPagina, FallaAlDibujar, RefreshCw, useModal, useNotificar, type Direccion } from "@teins/ui";
+import { clienteDeConsultas, consultas, esSesionVencida, olvidarContrasenaDeIngreso } from "./api";
 import { Administracion } from "./pantallas/Administracion";
 import { Bandeja } from "./pantallas/Bandeja";
 import { Catalogo } from "./pantallas/Catalogo";
@@ -18,6 +18,7 @@ import { IniciarSesion } from "./pantallas/IniciarSesion";
 import { Marco } from "./pantallas/Marco";
 import { MiCuenta } from "./pantallas/MiCuenta";
 import { Visitas } from "./pantallas/Visitas";
+import { consultasDeProgramacion } from "./programacion";
 
 /**
  * La sesión venció con una pantalla abierta: se ingresa de nuevo encima de ella, sin desmontarla, y lo que la
@@ -40,6 +41,14 @@ function Raiz() {
   useEffect(() => {
     if (conPermanente) olvidarContrasenaDeIngreso();
   }, [conPermanente]);
+  // Al ingresar de nuevo encima de la pantalla, se dice que lo que estaba haciendo sigue ahí (iteración 27).
+  const vencida = esSesionVencida(sesion.error);
+  const estabaVencida = useRef(false);
+  const notificar = useNotificar();
+  useEffect(() => {
+    if (estabaVencida.current && !vencida && sesion.data) notificar({ texto: "Sesión recuperada: lo que estaba haciendo sigue aquí" });
+    estabaVencida.current = vencida;
+  }, [vencida, sesion.data, notificar]);
   if (sesion.isPending) {
     return (
       <div aria-busy="true" aria-label="Abriendo TEINS" className="grid min-h-dvh place-items-center bg-fondo">
@@ -77,14 +86,23 @@ function Raiz() {
   );
 }
 
+/**
+ * Lo que el detalle necesita para su título, si llega pronto: así, al abrirlo, el título de la fila se convierte en
+ * el del detalle (iteración 27). Si tarda, el detalle abre con su esqueleto; si falla, el detalle dice el error.
+ */
+const antesDeAbrir = (lectura: Promise<unknown>) =>
+  Promise.race([lectura.catch(() => undefined), new Promise((listo) => setTimeout(listo, 400))]).then(() => undefined);
+
 const raiz = createRootRoute({ component: Raiz });
 const bandeja = createRoute({ getParentRoute: () => raiz, path: "/", component: Bandeja });
 const detalle = createRoute({
   getParentRoute: () => raiz,
   path: "levantamientos/$id",
+  loader: ({ params }) => antesDeAbrir(clienteDeConsultas.ensureQueryData(consultas.levantamiento(params.id))),
   component: function RutaDetalle() {
     const { id } = detalle.useParams();
-    return <Detalle id={id} />;
+    // Otro levantamiento (el siguiente de la serie) empieza limpio: sin pestañas ni correcciones del anterior.
+    return <Detalle key={id} id={id} />;
   },
 });
 
@@ -103,6 +121,7 @@ const clientes = createRoute({ getParentRoute: () => raiz, path: "clientes", com
 const detalleDeCliente = createRoute({
   getParentRoute: () => raiz,
   path: "clientes/$id",
+  loader: ({ params }) => antesDeAbrir(clienteDeConsultas.ensureQueryData(consultasDeProgramacion.cliente(params.id))),
   component: function RutaCliente() {
     const { id } = detalleDeCliente.useParams();
     return <DetalleCliente id={id} />;
@@ -158,10 +177,41 @@ export const router = createRouter({
   defaultErrorComponent: () => <FallaAlDibujar texto="Algo falló al mostrar esta pantalla." />,
   defaultOnCatch: (error) => console.error("Falla al dibujar la pantalla", error),
   defaultNotFoundComponent: NoExiste,
+  // Al pasar el cursor por un enlace ya se lee lo que el detalle necesita, para que abra con su título (iteración 27).
+  defaultPreload: "intent",
 });
+
+/** La sección del menú a la que pertenece una ruta: la bandeja y el detalle de un levantamiento son la misma. */
+const seccionDe = (ruta: string) => {
+  const [primera = "", id] = ruta.split("/").filter(Boolean);
+  return { seccion: primera === "" || primera === "levantamientos" ? "levantamientos" : primera, id };
+};
+
+/**
+ * Navegar es una View Transition (iteración 27), por `conTransicion`: el menú y la barra no se mueven; lo que tiene
+ * nombre, sí. Cambiar de sección desvanece el contenido; pasar de un detalle a otro de la misma (el siguiente
+ * levantamiento) lo desliza; de la lista al detalle no lleva dirección: el título de la fila se convierte en el del
+ * detalle. Solo cuando cambia la ruta: volver a la misma (otra vez el enlace del menú) no anima nada, y así la
+ * pantalla no queda esperando una confirmación de pintado que el enrutador no da cuando no cambia nada.
+ */
+let navegacion: { animar: boolean; direccion?: Direccion } = { animar: false };
+router.subscribe("onBeforeNavigate", ({ fromLocation, toLocation, pathChanged }) => {
+  if (!fromLocation || !pathChanged) {
+    navegacion = { animar: false };
+    return;
+  }
+  const de = seccionDe(fromLocation.pathname);
+  const a = seccionDe(toLocation.pathname);
+  navegacion = { animar: true, direccion: de.seccion !== a.seccion ? "seccion" : de.id && a.id && de.id !== a.id ? "adelante" : "fundido" };
+});
+router.startViewTransition = (actualizar) => (navegacion.animar ? conTransicion(actualizar, navegacion.direccion) : actualizar());
 
 declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
+  }
+  /** El siguiente paso que ofreció una notificación ("Agregar contactos"): la pantalla de destino lo resalta. */
+  interface HistoryState {
+    siguiente?: "contactos";
   }
 }

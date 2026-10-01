@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import {
   Aviso,
@@ -15,12 +15,14 @@ import {
   Buscador,
   Insignia,
   Marcado,
+  nombreDeTransicion,
   SinResultados,
   EstadoVacio,
   FilaTabla,
   Plus,
   RefreshCw,
   Tabla,
+  useLoNuevo,
   useNotificar,
   enfocarPrimerError,
 } from "@teins/ui";
@@ -40,9 +42,13 @@ export function Clientes() {
   const [recientes, setRecientes] = useState<string[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
+  const navegar = useNavigate();
 
   const todos = consulta.data?.clientes ?? [];
-  const ordenados = [...recientes.map((id) => todos.find((c) => c.id === id)).filter((c): c is Cliente => Boolean(c)), ...todos.filter((c) => !recientes.includes(c.id))];
+  // Lo que llega después de abrir la pantalla (lo recién creado) entra primero y resaltado, en la misma transición;
+  // lo cambiado (un sitio agregado) se resalta en su lugar.
+  const esNuevo = useLoNuevo(consulta.data?.clientes.map((c) => c.id));
+  const ordenados = [...todos.filter((c) => esNuevo(c.id)), ...todos.filter((c) => !esNuevo(c.id))];
   const b = normalizar(busqueda.trim());
   const visibles = b === "" ? ordenados : ordenados.filter((c) => normalizar([c.nombre, ...c.sitios.map((s) => `${s.nombre} ${s.direccion}`)].join(" ")).includes(b));
 
@@ -92,14 +98,10 @@ export function Clientes() {
             <SinResultados texto={busqueda.trim()} onQuitar={() => setBusqueda("")} />
           ) : (
             <Tabla etiqueta="Clientes y sus sitios" columnas={[{ titulo: "Cliente" }, { titulo: "Sitios" }, { titulo: "Reciben el informe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
-              {visibles.map((c, k) => (
-                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)} abrir indice={k}>
+              {visibles.map((c) => (
+                <FilaTabla key={c.id} resaltada={esNuevo(c.id) || recientes.includes(c.id)} abrir clave={c.id}>
                   <CeldaTabla>
-                    <Link
-                      to="/clientes/$id"
-                      params={{ id: c.id }}
-                      className="enlace"
-                    >
+                    <Link to="/clientes/$id" params={{ id: c.id }} className="enlace" data-transicion={nombreDeTransicion("nombre", c.id)}>
                       <Marcado texto={c.nombre} busqueda={busqueda} />
                     </Link>
                   </CeldaTabla>
@@ -146,7 +148,11 @@ export function Clientes() {
             setCreando(false);
             setBusqueda("");
             destacar(c.id);
-            notificar({ texto: `Cliente creado: ${c.nombre}` });
+            // El siguiente paso: sin contactos, el informe de este cliente solo quedaría en el portal (ADR-0028).
+            notificar({
+              texto: `Cliente creado: ${c.nombre}`,
+              accion: { texto: "Agregar contactos", alHacer: () => void navegar({ to: "/clientes/$id", params: { id: c.id }, state: { siguiente: "contactos" } }) },
+            });
           }}
         />
       )}

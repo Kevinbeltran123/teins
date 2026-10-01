@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { CELULAR, ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
@@ -10,6 +10,7 @@ import {
   Confirmacion,
   Dialogo,
   EncabezadoPagina,
+  nombreDeTransicion,
   EsqueletoLista,
   ChevronLeft,
   Mail,
@@ -26,6 +27,7 @@ import {
   Users,
   useNotificar,
   enfocarPrimerError,
+  useLoNuevo,
 } from "@teins/ui";
 import { cliente } from "../api";
 import { aFechaHora } from "../formato";
@@ -65,6 +67,9 @@ export function DetalleCliente({ id }: { id: string }) {
   const [agregandoSitio, setAgregandoSitio] = useState(false);
   // Lo creado o cambiado en esta visita a la pantalla: va primero y resaltado (DESIGN.md, crear y editar).
   const [recientes, setRecientes] = useState<string[]>([]);
+  // Se llegó desde "Agregar contactos" al crear el cliente: "Nuevo contacto" queda con el foco (iteración 27).
+  const esNuevo = useLoNuevo(consulta.data?.contactos.map((c) => c.id));
+  const pedirContactos = useLocation({ select: (l) => l.state.siguiente === "contactos" });
 
   if (consulta.isPending) {
     return (
@@ -92,7 +97,8 @@ export function DetalleCliente({ id }: { id: string }) {
   }
 
   const detalle = consulta.data;
-  const contactos = [...recientes.map((r) => detalle.contactos.find((c) => c.id === r)).filter((c): c is Contacto => Boolean(c)), ...detalle.contactos.filter((c) => !recientes.includes(c.id))];
+  // Lo creado entra primero y resaltado en la misma transición; lo cambiado se resalta en su lugar (iteración 27).
+  const contactos = [...detalle.contactos.filter((c) => esNuevo(c.id)), ...detalle.contactos.filter((c) => !esNuevo(c.id))];
   const guardado = (actualizado: Detalle, nombre: string, nuevo: boolean) => {
     const anteriores = new Set(detalle.contactos.map((c) => c.id));
     const id = nuevo ? actualizado.contactos.find((c) => !anteriores.has(c.id))?.id : editando !== "nuevo" ? editando?.id : undefined;
@@ -106,6 +112,7 @@ export function DetalleCliente({ id }: { id: string }) {
       <EncabezadoPagina
         migas={migas}
         titulo={detalle.nombre}
+        transicion={nombreDeTransicion("nombre", detalle.id)}
         descripcion={
           <>
             <span>
@@ -117,7 +124,13 @@ export function DetalleCliente({ id }: { id: string }) {
           </>
         }
         acciones={
-          <Boton variante="principal" icono={Plus} onClick={() => setEditando("nuevo")}>
+          <Boton
+            variante="principal"
+            icono={Plus}
+            onClick={() => setEditando("nuevo")}
+            autoFocus={pedirContactos && detalle.contactos.length === 0}
+            className={pedirContactos && detalle.contactos.length === 0 ? "foco-anillo" : ""}
+          >
             Nuevo contacto
           </Boton>
         }
@@ -134,8 +147,8 @@ export function DetalleCliente({ id }: { id: string }) {
             </EstadoVacio>
           ) : (
             <Tabla etiqueta={`Contactos de ${detalle.nombre}`} columnas={[{ titulo: "Contacto" }, { titulo: "Cómo le llega" }, { titulo: "Recibe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
-              {contactos.map((c, k) => (
-                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)} indice={k}>
+              {contactos.map((c) => (
+                <FilaTabla key={c.id} resaltada={esNuevo(c.id) || recientes.includes(c.id)} clave={c.id}>
                   <CeldaTabla>
                     <span className="fuerte">{c.nombre}</span>
                     {c.cargo && <span className="sub">{c.cargo}</span>}

@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import {
@@ -19,6 +19,7 @@ import {
   Casilla,
   CeldaTabla,
   Confirmacion,
+  conTransicion,
   Dialogo,
   Download,
   EncabezadoPagina,
@@ -102,8 +103,17 @@ export function Visitas() {
   const hoy = hoyLocal();
   const consulta = useQuery(consultasDeProgramacion.visitas(vista, hoy));
   const proximas = useQuery(consultasDeProgramacion.visitas("proximas", hoy));
+  const consultas = useQueryClient();
   const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
   const cerrarEdicion = () => setEdicion(null);
+  /** Lo destacado queda en la pestaña donde quedó la visita: si es otra, se cambia a ella (con lo nuevo ya leído). */
+  const mostrarEn = (destino: Vista, id: string) =>
+    void conTransicion(async () => {
+      if (destino !== vista) await consultas.fetchQuery(consultasDeProgramacion.visitas(destino, hoy)).catch(() => undefined);
+      setVista(destino);
+      setBusqueda("");
+      destacar(id);
+    });
 
   const todas = consulta.data?.visitas ?? [];
   const filtradas = todas.filter((v) => coincide(busqueda, v.cliente.nombre, v.sitio.nombre, v.sitio.direccion, ...v.tecnicos.map((t) => t.nombre)));
@@ -117,7 +127,6 @@ export function Visitas() {
   }
   const deHoy = proximas.data?.visitas.filter((v) => v.programadaPara === hoy).length;
   const cantidadProximas = proximas.data?.visitas.length;
-  let k = 0;
 
   return (
     <>
@@ -192,7 +201,7 @@ export function Visitas() {
                   </td>
                 </tr>
                 {d.visitas.map((v) => (
-                  <FilaVisita key={v.id} visita={v} indice={k++} busqueda={busqueda} resaltada={recientes.includes(v.id)} editar={(tipo) => setEdicion({ tipo, v })} />
+                  <FilaVisita key={v.id} visita={v} busqueda={busqueda} resaltada={recientes.includes(v.id)} editar={(tipo) => setEdicion({ tipo, v })} />
                 ))}
               </CuerpoTabla>
             ))}
@@ -206,7 +215,8 @@ export function Visitas() {
           alCerrar={() => setProgramando(false)}
           alProgramar={(v) => {
             setProgramando(false);
-            destacar(v.id);
+            if (vista === "proximas") destacar(v.id);
+            else mostrarEn("proximas", v.id);
             notificar({ texto: `Visita programada: ${v.cliente}, ${dia(v.programadaPara)}` });
           }}
         />
@@ -233,7 +243,16 @@ export function Visitas() {
           }}
         />
       )}
-      {edicion?.tipo === "cancelar" && <Cancelar v={edicion.v} alCerrar={cerrarEdicion} alCancelar={() => notificar({ texto: `Visita cancelada: ${edicion.v.cliente.nombre}` })} />}
+      {edicion?.tipo === "cancelar" && (
+        <Cancelar
+          v={edicion.v}
+          alCerrar={cerrarEdicion}
+          alCancelar={() => {
+            const id = edicion.v.id;
+            notificar({ texto: `Visita cancelada: ${edicion.v.cliente.nombre}`, accion: { texto: "Ver en Canceladas", alHacer: () => mostrarEn("canceladas", id) } });
+          }}
+        />
+      )}
       {edicion?.tipo === "exportar" && <ExportarCantidades v={edicion.v} alCerrar={cerrarEdicion} />}
     </>
   );
@@ -255,9 +274,9 @@ function Avance({ v }: { v: Visita }) {
   );
 }
 
-function FilaVisita({ visita: v, indice, busqueda, resaltada, editar }: { visita: Visita; indice: number; busqueda: string; resaltada: boolean; editar: (tipo: Edicion["tipo"]) => void }) {
+function FilaVisita({ visita: v, busqueda, resaltada, editar }: { visita: Visita; busqueda: string; resaltada: boolean; editar: (tipo: Edicion["tipo"]) => void }) {
   return (
-    <FilaTabla resaltada={resaltada} indice={indice}>
+    <FilaTabla resaltada={resaltada} clave={v.id}>
       <CeldaTabla>
         <span className="fuerte">
           <Marcado texto={v.cliente.nombre} busqueda={busqueda} />

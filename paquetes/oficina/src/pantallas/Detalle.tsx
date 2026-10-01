@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -40,14 +40,18 @@ import {
   HojasDeBoceto,
   Insignia,
   Link2,
+  nombreDeTransicion,
   MarcaNoObtenido,
   MessageSquare,
   Pencil,
   RefreshCw,
   Send,
+  sinMovimiento,
   Smartphone,
   TriangleAlert,
   UserRound,
+  useLoNuevo,
+  useNotificar,
   VisorFotos,
   type AnclaDeHoja,
   type LineaEditable,
@@ -55,10 +59,10 @@ import {
 } from "@teins/ui";
 import { consultas } from "../api";
 import { consultasDeCatalogo, useVincular } from "../catalogo";
-import { aFechaCorta } from "../formato";
+import { aFechaCorta, cuantoLleva } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
-import { useComentar, useCorregir, useMarcarRevisado, useTomar } from "../revision";
+import { useBandeja, useComentar, useCorregir, useMarcarRevisado, useTomar } from "../revision";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { Lienzo, VistaDeDocumento } from "./Lienzo";
 
@@ -151,7 +155,7 @@ export function Detalle({ id }: { id: string }) {
   const conCambios = (clave: string) => [...correcciones.keys()].some((k) => k.split("|")[0]!.startsWith(clave));
   const conFaltantes = (bs: typeof todos) => bs.some((b) => b.seccion.campos.some((c) => esNoObtenido(l.respuestas[b.clave]?.[c.clave])));
 
-  const irA = (seccion: string) => document.getElementById(`sec-${seccion}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const irA = (seccion: string) => document.getElementById(`sec-${seccion}`)?.scrollIntoView({ behavior: sinMovimiento() ? "auto" : "smooth", block: "start" });
   const nombreFormato = `${l.formatoDefinicion.nombre ?? l.formato} v${l.versionFormato}`;
 
   return (
@@ -159,7 +163,13 @@ export function Detalle({ id }: { id: string }) {
       <EncabezadoPagina
         migas={migas}
         titulo={l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : `Levantamiento de ${l.tecnico.nombre}`}
-        estado={<Insignia tono={estado.tono}>{estado.texto}</Insignia>}
+        transicion={nombreDeTransicion("lev", l.id)}
+        estado={
+          // El estado cambia en su lugar al tomar o marcar revisado (iteración 27).
+          <span className="inline-flex" style={{ viewTransitionName: nombreDeTransicion("estado", l.id) }}>
+            <Insignia tono={estado.tono}>{estado.texto}</Insignia>
+          </span>
+        }
         descripcion={
           <>
             <span>
@@ -216,7 +226,7 @@ export function Detalle({ id }: { id: string }) {
               ))}
             </div>
           </div>
-          <aside className="carril" aria-label="Revisión y comentarios">
+          <aside className="carril" aria-label="Revisión y comentarios" style={{ viewTransitionName: "carril" }}>
             <PanelRevision l={l} mia={mia} correcciones={correcciones.size} recargar={recargar} />
             <div className="grupo-c">
               <div className="mini-tabs" role="tablist" aria-label="Comentarios, historial y el informe">
@@ -248,7 +258,11 @@ export function Detalle({ id }: { id: string }) {
 function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; mia: boolean; correcciones: number; recargar: () => void }) {
   const tomar = useTomar();
   const marcar = useMarcarRevisado(l.id);
+  const notificar = useNotificar();
   const [confirmando, setConfirmando] = useState<"revisado" | "reasignar" | null>(null);
+  // El chulo se dibuja solo cuando se acaba de marcar revisado, no cada vez que se abre uno ya revisado.
+  const revisadoAlAbrir = useRef(l.estado === "revisado");
+  const tomada = () => notificar({ texto: "Revisión tomada: ya puede corregir" });
   const error = tomar.error ?? marcar.error;
   const invalidos = marcar.error instanceof ErrorApi ? (marcar.error.problema.errores ?? []) : [];
   const etiqueta = (seccion: string, campo?: string) => (campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo) : rutaLegible(l.formatoDefinicion, l.repeticiones, seccion));
@@ -259,17 +273,17 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
   if (l.estado === "enviado") {
     texto = "Nadie ha tomado este levantamiento. Tómelo para corregirlo y marcarlo revisado.";
     accion = (
-      <Boton variante="principal" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version })}>
+      <Boton variante="principal" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada })}>
         Tomar para revisar
       </Boton>
     );
   } else if (l.estado === "revisado") {
     texto = (
       <>
-        Revisado por <b>{l.revisor?.nombre ?? "[Sin responsable]"}</b>. {l.visita ? "Ya se puede incluir en el informe de su visita." : "No tiene visita, así que no entra en un informe."}
+        Por <b>{l.revisor?.nombre ?? "[Sin responsable]"}</b>. {l.visita ? `Queda listo para el informe de la visita; ${l.tecnico.nombre} lo ve como revisado en su teléfono.` : "No tiene visita, así que no entra en un informe."}
       </>
     );
-    accion = l.visita && <AbrirInforme visitaId={l.visita.id} />;
+    accion = <SiguienteEnSerie actual={l.id} visitaId={l.visita?.id ?? null} />;
   } else if (mia) {
     texto = "Usted tiene la revisión. Corrija lo que haga falta y márquelo revisado cuando esté listo.";
     accion = (
@@ -288,21 +302,27 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
 
   return (
     <section className="grupo-c" aria-label="Revisión">
-      <h2>Revisión</h2>
+      {l.estado === "revisado" ? (
+        <h2 className="chulo-revisado">
+          <i>
+            <svg className={revisadoAlAbrir.current ? undefined : "chulo"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ "--largo": 24 } as CSSProperties} aria-hidden>
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          </i>
+          Revisado
+        </h2>
+      ) : (
+        <h2>Revisión</h2>
+      )}
       <p className="ayuda" style={{ fontSize: 14 }}>
         {texto}
       </p>
-      {accion && <div>{accion}</div>}
+      {accion && <div className="col" style={{ gap: 8 }}>{accion}</div>}
       {correcciones > 0 && (
         <span className="corregido" style={{ margin: 0 }}>
           <Pencil aria-hidden size={13} />
           {correcciones === 1 ? "1 dato corregido" : `${correcciones} datos corregidos`}
         </span>
-      )}
-      {l.estado === "revisado" && (
-        <svg className="chulo" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--exito)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ "--largo": 24 } as CSSProperties} aria-hidden>
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
       )}
       {error && (
         <Aviso tono="error">
@@ -341,6 +361,7 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
           mensajeDeError={mensajeDeError}
           alCerrar={() => setConfirmando(null)}
           accion={() => marcar.mutateAsync(l.version)}
+          alTerminar={() => notificar({ texto: "Marcado revisado" })}
         />
       )}
       {confirmando === "reasignar" && (
@@ -351,6 +372,7 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
           mensajeDeError={mensajeDeError}
           alCerrar={() => setConfirmando(null)}
           accion={() => tomar.mutateAsync({ id: l.id, version: l.version, reasignar: true })}
+          alTerminar={tomada}
         >
           <p>Si tiene cambios sin guardar, los perderá. El cambio de responsable queda registrado.</p>
         </Confirmacion>
@@ -359,12 +381,43 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
   );
 }
 
-function AbrirInforme({ visitaId }: { visitaId: string }) {
+/**
+ * Revisar en serie (iteración 27): al marcar revisado, el que más lleva esperando, con cuántos quedan, para seguir
+ * sin volver a la lista. Abrirlo desliza el cuerpo y deja el carril en su sitio.
+ */
+function SiguienteEnSerie({ actual, visitaId }: { actual: string; visitaId: string | null }) {
+  const esperando = useBandeja("enviado");
+  const navegar = useNavigate();
+  const primera = esperando.data?.pages[0];
+  const siguiente = primera?.elementos.find((e) => e.id !== actual);
+  const quedan = primera ? primera.total - (primera.elementos.some((e) => e.id === actual) ? 1 : 0) : 0;
+  if (esperando.isPending) return visitaId && <AbrirInforme visitaId={visitaId} />;
+  return (
+    <>
+      {siguiente ? (
+        <>
+          <Boton variante="principal" className="siguiente-serie" onClick={() => void navegar({ to: "/levantamientos/$id", params: { id: siguiente.id } })}>
+            <span>Siguiente: {siguiente.visita?.cliente ?? `Levantamiento de ${siguiente.tecnico.nombre}`}</span>
+            <small>
+              {siguiente.nombreFormato ?? siguiente.formato} de {siguiente.tecnico.nombre} · lleva {cuantoLleva(siguiente.recibidoEn).texto}
+            </small>
+          </Boton>
+          <span className="quedan">{quedan === 1 ? "Queda 1 esperando revisión" : `Quedan ${quedan} esperando revisión`}</span>
+        </>
+      ) : (
+        <span className="quedan">No queda nada esperando revisión.</span>
+      )}
+      {visitaId && <AbrirInforme visitaId={visitaId} principal={!siguiente} />}
+    </>
+  );
+}
+
+function AbrirInforme({ visitaId, principal = true }: { visitaId: string; principal?: boolean }) {
   const abrir = useAbrirInformeDeVisita();
   const navegar = useNavigate();
   return (
     <>
-      <Boton variante="principal" icono={FileText} cargando={abrir.isPending} onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}>
+      <Boton variante={principal ? "principal" : "secundaria"} icono={FileText} cargando={abrir.isPending} onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}>
         Abrir el informe de esta visita
       </Boton>
       {abrir.isError && <Aviso tono="error">{mensajeDeError(abrir.error)}</Aviso>}
@@ -394,6 +447,9 @@ function FilaCampo({
   dejarDeComentar: () => void;
 }) {
   const [corrigiendo, setCorrigiendo] = useState(false);
+  // Cada corrección guardada hace destellar el dato otra vez (iteración 27).
+  const [corregido, setCorregido] = useState(0);
+  const notificar = useNotificar();
   const valor = l.respuestas[seccion]?.[campo.clave];
   const hilo = l.comentarios.filter((c) => c.seccion === seccion && c.campo === campo.clave);
   const nombreEnFrase = campo.etiqueta.toLowerCase();
@@ -402,7 +458,19 @@ function FilaCampo({
     return (
       <div className="dato editando" id={idDato(seccion, campo.clave)}>
         <span className="nombre">{campo.etiqueta}</span>
-        <EditorCorreccion l={l} seccion={seccion} campo={campo} valor={valor} cerrar={() => setCorrigiendo(false)} recargar={recargar} />
+        <EditorCorreccion
+          l={l}
+          seccion={seccion}
+          campo={campo}
+          valor={valor}
+          cerrar={() => setCorrigiendo(false)}
+          alGuardar={() => {
+            setCorrigiendo(false);
+            setCorregido((n) => n + 1);
+            notificar({ texto: `Corrección guardada: ${campo.etiqueta}` });
+          }}
+          recargar={recargar}
+        />
       </div>
     );
   }
@@ -411,7 +479,7 @@ function FilaCampo({
   const corregible = mia && campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "firma";
 
   return (
-    <div className="dato" id={idDato(seccion, campo.clave)}>
+    <div key={corregido} className={`dato ${corregido > 0 ? "recien" : ""}`} id={idDato(seccion, campo.clave)}>
       <span className="nombre">
         {campo.etiqueta}
         {hilo.length > 0 && (
@@ -530,7 +598,23 @@ function ValorDelCampo({
 }
 
 /** Corrección de un campo, con las mismas reglas del envío (QA-8: queda con valor anterior y nuevo). */
-function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: Levantamiento; seccion: string; campo: DefinicionCampo; valor: Valor | undefined; cerrar: () => void; recargar: () => void }) {
+function EditorCorreccion({
+  l,
+  seccion,
+  campo,
+  valor,
+  cerrar,
+  alGuardar,
+  recargar,
+}: {
+  l: Levantamiento;
+  seccion: string;
+  campo: DefinicionCampo;
+  valor: Valor | undefined;
+  cerrar: () => void;
+  alGuardar: () => void;
+  recargar: () => void;
+}) {
   const corregir = useCorregir(l.id);
   const noObtenidoAntes = esNoObtenido(valor);
   const [nuevo, setNuevo] = useState<Valor | undefined>(valor);
@@ -555,7 +639,7 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
     }
     try {
       await corregir.mutateAsync({ version: l.version, correcciones: [{ seccion, campo: campo.clave, valor: nuevo ?? null }], motivo: motivo.trim() });
-      cerrar();
+      alGuardar();
     } catch {
       // El error queda a la vista en el formulario.
     }
@@ -726,12 +810,14 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
 /** Todos los comentarios; cada uno lleva a su fila. El campo de aquí es para lo general. */
 function Comentarios({ l }: { l: Levantamiento }) {
   const comentar = useComentar(l.id);
+  // Solo el comentario recién escrito entra animado; los demás no se animan otra vez al volver a la pestaña.
+  const esNuevo = useLoNuevo(l.comentarios.map((c) => c.id));
   const [texto, setTexto] = useState("");
   const etiqueta = (seccion?: string, campo?: string) => (seccion && campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo, true) : undefined);
 
   function irALaFila(seccion: string, campo: string) {
     const fila = document.getElementById(idDato(seccion, campo));
-    fila?.scrollIntoView({ behavior: "smooth", block: "center" });
+    fila?.scrollIntoView({ behavior: sinMovimiento() ? "auto" : "smooth", block: "center" });
     fila?.classList.remove("recien");
     void fila?.offsetWidth;
     fila?.classList.add("recien");
@@ -755,7 +841,7 @@ function Comentarios({ l }: { l: Levantamiento }) {
           <p className="ayuda">Sin comentarios. El técnico los ve en su teléfono en la siguiente sincronización.</p>
         ) : (
           l.comentarios.map((c) => (
-            <div key={c.id} className="nota-c">
+            <div key={c.id} className={`nota-c ${esNuevo(c.id) ? "nueva" : ""}`}>
               <small>
                 {c.autor.nombre} · {aFechaCorta(c.creadoEn)}
                 {c.seccion && c.campo && (

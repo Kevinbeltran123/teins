@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useCallback, useEffect, useState, type ReactNode } from "react";
+import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { MensajeDeInforme } from "@teins/documentos";
@@ -23,6 +23,8 @@ import {
   Globe,
   History,
   Insignia,
+  Mail,
+  MessageCircle,
   RefreshCw,
   SelectorDeArchivo,
   Send,
@@ -34,7 +36,7 @@ import {
 import { cliente, consultas, esSesionVencida } from "../api";
 import { useBorrador } from "../borrador";
 import { useSalidaProtegida } from "../salida";
-import { aFechaCorta } from "../formato";
+import { aFechaCorta, aHora } from "../formato";
 import { mensajeDeAdministracion } from "../administracion";
 import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
 import { consultasDeProgramacion } from "../programacion";
@@ -127,6 +129,8 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   const [subiendo, setSubiendo] = useState(false);
   const [errorPlano, setErrorPlano] = useState<unknown>(null);
   const [confirmando, setConfirmando] = useState(false);
+  // La versión publicada desde esta pantalla: su avance queda arriba del editor hasta salir (iteración 27).
+  const [publicadaAqui, setPublicadaAqui] = useState<number | null>(null);
   const [destinatarios, setDestinatarios] = useState<string[] | null>(null);
   const contactos = useQuery(consultasDeProgramacion.cliente(informe.clienteId));
   const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "informes") : []);
@@ -321,6 +325,9 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
             </>
           }
         />
+        {publicadaAqui !== null && informe.versiones.some((v) => v.numero === publicadaAqui) && (
+          <AvancePublicacion informeId={informe.id} version={informe.versiones.find((v) => v.numero === publicadaAqui)!} />
+        )}
         {error !== null && error !== undefined && (
           <Aviso tono="error">
             <ul style={{ margin: 0, paddingLeft: 18 }}>
@@ -438,9 +445,10 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           nivel="irreversible"
           mensajeDeError={(e) => mensajeDeInforme(e, nombreDe).join(" ")}
           alCerrar={() => setConfirmando(false)}
-          alTerminar={() =>
-            notificar({ texto: elegidos.length > 0 ? `Versión ${siguiente} publicada. Se envía cuando el PDF esté listo.` : `Versión ${siguiente} publicada. El PDF se está generando.` })
-          }
+          alTerminar={() => {
+            setPublicadaAqui(siguiente);
+            notificar({ texto: `Versión ${siguiente} publicada` });
+          }}
           accion={guardarYPublicar}
         >
           <Consecuencias
@@ -529,27 +537,128 @@ function LienzoInforme({
   );
 }
 
-function Versiones({ informe, recargar, envios }: { informe: Informe; recargar: () => void; envios: ReactNode }) {
+/** Descargar el PDF de una versión: un enlace firmado que descarga el archivo (Content-Disposition: attachment); la pantalla no cambia. */
+function useDescargaDePdf(informeId: string) {
   const [descargando, setDescargando] = useState<number | null>(null);
-  const [errorDescarga, setErrorDescarga] = useState(false);
-  const [retirando, setRetirando] = useState<number | null>(null);
-  useEffect(() => setErrorDescarga(false), [informe.versiones.length]);
-  const administrador = useQuery(consultas.sesion()).data?.usuario.administrador ?? false;
-  const vigente = vigenteDe(informe)?.numero;
-
+  const [fallo, setFallo] = useState(false);
   async function descargar(numero: number) {
     setDescargando(numero);
-    setErrorDescarga(false);
+    setFallo(false);
     try {
-      const { url } = await cliente.llamar("pdfDeVersion", { parametros: { id: informe.id, numero } });
-      // El enlace firmado descarga el archivo (Content-Disposition: attachment): la pantalla no cambia.
+      const { url } = await cliente.llamar("pdfDeVersion", { parametros: { id: informeId, numero } });
       window.location.assign(url);
     } catch {
-      setErrorDescarga(true);
+      setFallo(true);
     } finally {
       setDescargando(null);
     }
   }
+  return { descargando, fallo, setFallo, descargar };
+}
+
+/** La marca de un paso: hecho (el chulo se dibuja si se cumplió a la vista), trabajando o pendiente. */
+function MarcaDePaso({ hecho, trabajando, nueva }: { hecho: boolean; trabajando: boolean; nueva: boolean }) {
+  return (
+    <span className={`marca-paso ${hecho ? "hecho" : trabajando ? "trabajando" : ""} ${hecho && nueva ? "nueva" : ""}`} aria-hidden>
+      {hecho && (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+const ESTADO_DEL_ENVIO = { en_cola: "En cola", enviado: "Enviado", entregado: "Entregado", fallido: "No llegó" } as const;
+
+/**
+ * Lo que pasa después de publicar, a la vista y en su lugar (iteración 27): publicada, el PDF, en el portal y cada
+ * envío. Los envíos están hechos cuando ninguno queda en cola; un WhatsApp sigue en "Enviado" mientras Meta no
+ * confirme, y eso también se dice.
+ */
+function AvancePublicacion({ informeId, version: v }: { informeId: string; version: Informe["versiones"][number] }) {
+  const { descargando, fallo, descargar } = useDescargaDePdf(informeId);
+  const envios = v.envios;
+  const entregados = envios.filter((e) => e.estado === "entregado").length;
+  const enCola = envios.some((e) => e.estado === "en_cola");
+  const pdfListo = v.pdf === "listo";
+  const hechos = { pdf: pdfListo, portal: pdfListo, envios: pdfListo && !enCola };
+  // Lo que ya estaba hecho al aparecer no se anima; lo que se cumple a la vista, sí.
+  const alAparecer = useRef(hechos);
+  const nueva = (paso: keyof typeof hechos) => !alAparecer.current[paso];
+  const resumen = v.pdf === "fallido" ? "No se generó el PDF" : !pdfListo ? "Generando el PDF" : enCola ? "Enviando" : envios.length > 0 ? "En el portal y enviada" : "En el portal";
+
+  return (
+    <section className="avance-pub" aria-label={`Avance de la versión ${v.numero}`}>
+      <header>
+        <b>Versión {v.numero}</b>
+        <span aria-live="polite">{resumen}</span>
+      </header>
+      <ol>
+        <li>
+          <MarcaDePaso hecho trabajando={false} nueva={false} />
+          <span>
+            Publicada<small>Queda congelada · {aHora(Date.parse(v.publicadaEn))}</small>
+          </span>
+          <span />
+        </li>
+        <li>
+          {v.pdf === "fallido" ? <span className="marca-paso mal" aria-hidden /> : <MarcaDePaso hecho={pdfListo} trabajando={!pdfListo} nueva={nueva("pdf")} />}
+          <span>
+            PDF<small className={v.pdf === "fallido" ? "mal" : undefined}>{pdfListo ? "Listo" : v.pdf === "fallido" ? "No se generó. Avísele a soporte." : "Generando, tarda unos segundos"}</small>
+          </span>
+          {pdfListo ? (
+            // Su nombre no repite el de "Versiones publicadas": es el mismo archivo, recién hecho.
+            <Boton variante="fantasma" tamano="pequeno" icono={Download} aria-label="Descargar el PDF recién publicado" cargando={descargando === v.numero} onClick={() => void descargar(v.numero)}>
+              PDF
+            </Boton>
+          ) : (
+            <span />
+          )}
+        </li>
+        <li>
+          <MarcaDePaso hecho={pdfListo} trabajando={false} nueva={nueva("portal")} />
+          <span>
+            En el portal<small>{pdfListo ? "El cliente ya lo puede descargar" : "Aparece cuando el PDF esté listo"}</small>
+          </span>
+          <span />
+        </li>
+        {envios.length > 0 && (
+          <li>
+            <MarcaDePaso hecho={hechos.envios} trabajando={pdfListo && enCola} nueva={nueva("envios")} />
+            <span>
+              Envíos<small>{pdfListo ? `${entregados} de ${envios.length} ${envios.length === 1 ? "entregado" : "entregados"}` : "Salen cuando el PDF esté listo"}</small>
+              <ul>
+                {envios.map((e) => {
+                  const Icono = e.canal === "correo" ? Mail : MessageCircle;
+                  return (
+                    <li key={e.id}>
+                      <Icono aria-hidden size={14} />
+                      {e.contacto.nombre}
+                      <span className={`det ${e.estado === "entregado" ? "ok" : e.estado === "fallido" ? "mal" : ""}`}>
+                        {e.canal === "correo" ? "Correo" : "WhatsApp"} · {ESTADO_DEL_ENVIO[e.estado]}
+                        {e.estado === "enviado" && e.canal === "whatsapp" && ": Meta no ha confirmado la entrega"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </span>
+            <span />
+          </li>
+        )}
+      </ol>
+      {fallo && <Aviso tono="error">No se pudo preparar la descarga. Intente de nuevo.</Aviso>}
+    </section>
+  );
+}
+
+function Versiones({ informe, recargar, envios }: { informe: Informe; recargar: () => void; envios: ReactNode }) {
+  const { descargando, fallo: errorDescarga, setFallo: setErrorDescarga, descargar } = useDescargaDePdf(informe.id);
+  const [retirando, setRetirando] = useState<number | null>(null);
+  useEffect(() => setErrorDescarga(false), [informe.versiones.length]);
+  const administrador = useQuery(consultas.sesion()).data?.usuario.administrador ?? false;
+  const vigente = vigenteDe(informe)?.numero;
 
   return (
     <section aria-labelledby="titulo-versiones">

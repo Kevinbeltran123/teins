@@ -27,6 +27,7 @@ import {
   Upload,
   useNotificar,
   enfocarPrimerError,
+  useLoNuevo,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { mensajeDeAdministracion } from "../administracion";
@@ -60,7 +61,9 @@ export function Catalogo() {
   const [errorFila, setErrorFila] = useState<string | null>(null);
 
   const todos = consulta.data?.items ?? [];
-  const ordenados = [...recientes.map((id) => todos.find((i) => i.id === id)).filter((i): i is Item => Boolean(i)), ...todos.filter((i) => !recientes.includes(i.id))];
+  // Lo creado (o importado) después de abrir la pantalla va primero y resaltado; lo cambiado se resalta en su lugar.
+  const esNuevo = useLoNuevo(consulta.data?.items.map((i) => i.id));
+  const ordenados = [...todos.filter((i) => esNuevo(i.id)), ...todos.filter((i) => !esNuevo(i.id))];
   const b = normalizar(busqueda.trim());
   const sinPrecio = todos.filter((i) => i.activo && i.precio === null).length;
   const filtrados = (b === "" ? ordenados : ordenados.filter((i) => normalizar(`${i.codigo} ${i.descripcion}`).includes(b))).filter((i) => !soloSinPrecio || i.precio === null);
@@ -119,7 +122,7 @@ export function Catalogo() {
                 columnas={[{ titulo: "Código" }, { titulo: "Descripción" }, { titulo: "Unidad" }, { titulo: "Precio sin IVA", derecha: true }, { titulo: "Estado" }, { titulo: "Acciones", oculto: true, derecha: true }]}
               >
                 {filtrados.slice(0, VISIBLES).map((i, k) => (
-                  <FilaTabla key={i.id} indice={k} resaltada={recientes.includes(i.id)}>
+                  <FilaTabla key={i.id} clave={i.id} resaltada={esNuevo(i.id) || recientes.includes(i.id)}>
                     <CeldaTabla principal>{i.codigo}</CeldaTabla>
                     <CeldaTabla>
                       <span className={i.activo ? "" : "sec"}>{i.descripcion}</span>

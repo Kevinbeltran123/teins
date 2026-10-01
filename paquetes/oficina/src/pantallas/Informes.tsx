@@ -57,7 +57,7 @@ export function Informes() {
       ) : (
         <Tabla etiqueta="Informes por visita" columnas={[{ titulo: "Cliente y sitio" }, { titulo: "Visita" }, { titulo: "Estado" }]}>
           {lista.map((i, k) => (
-            <FilaTabla key={i.id} abrir indice={k}>
+            <FilaTabla key={i.id} abrir clave={i.id}>
               <CeldaTabla>
                 <Link to="/informes/$id" params={{ id: i.id }} className="enlace">
                   <Marcado texto={i.visita.cliente} busqueda={busqueda} />

@@ -38,6 +38,7 @@ import {
   Bell,
   LogOut,
   History,
+  useNotificar,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { consultasDeAdministracion, mensajeDeAdministracion, qrComoImagen, useAccion } from "../administracion";
@@ -323,6 +324,13 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
   const [nuevos, setNuevos] = useState<string[]>([]);
   const [pendiente, setPendiente] = useState<Pendiente | null>(null);
   const [credencial, setCredencial] = useState<{ nombre: string; usuario: string; contrasena: string; entrega: EntregaDeUsuario } | null>(null);
+  const notificar = useNotificar();
+  // Lo cambiado queda resaltado en su lugar, sin saltar arriba, y la notificación dice qué pasó (iteración 27).
+  const [cambiados, setCambiados] = useState<string[]>([]);
+  const cambiado = (u: Usuario, texto: string) => {
+    setCambiados((c) => [u.id, ...c]);
+    notificar({ texto });
+  };
 
   const restablecer = useAccion((u: Usuario) => cliente.llamar("restablecerContrasenaAdministrada", { parametros: { id: u.id } }));
   const desactivar = useAccion((u: Usuario) => cliente.llamar("desactivarUsuarioAdministrado", { parametros: { id: u.id } }));
@@ -341,7 +349,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
             const propio = u.id === propioId;
             const activo = !u.desactivadoEn;
             return (
-              <FilaTabla key={u.id} resaltada={nuevos.includes(u.id)} indice={k}>
+              <FilaTabla key={u.id} resaltada={nuevos.includes(u.id) || cambiados.includes(u.id)} clave={u.id}>
                 <CeldaTabla>
                   <span className="fila-flex" style={{ flexWrap: "nowrap" }}>
                     <span className="avatar" aria-hidden>
@@ -443,6 +451,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
           mensajeDeError={mensajeDeAdministracion}
           alCerrar={() => setPendiente(null)}
           accion={() => marcar.mutateAsync({ u: pendiente.u, administrador: !pendiente.u.administrador })}
+          alTerminar={() => cambiado(pendiente.u, pendiente.u.administrador ? `Administración quitada: ${pendiente.u.nombre}` : `Administración dada: ${pendiente.u.nombre}`)}
         >
           <p>
             {pendiente.u.administrador
@@ -459,6 +468,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
           mensajeDeError={mensajeDeAdministracion}
           alCerrar={() => setPendiente(null)}
           accion={() => desactivar.mutateAsync(pendiente.u)}
+          alTerminar={() => cambiado(pendiente.u, `Usuario desactivado: ${pendiente.u.nombre}`)}
         >
           <p>
             {pendiente.u.rol === "tecnico"
@@ -477,7 +487,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
           alCerrar={() => setPendiente(null)}
           accion={async () => {
             const { contrasena } = await reactivar.mutateAsync(pendiente.u);
-            setNuevos((n) => [pendiente.u.id, ...n.filter((id) => id !== pendiente.u.id)]);
+            setCambiados((c) => [pendiente.u.id, ...c]);
             setCredencial({ nombre: pendiente.u.nombre, usuario: pendiente.u.usuario, contrasena, entrega: "reactivado" });
           }}
           consecuencias={[

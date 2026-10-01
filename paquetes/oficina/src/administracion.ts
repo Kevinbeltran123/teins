@@ -1,5 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
+import { conTransicion } from "@teins/ui";
 import { cliente } from "./api";
 import { textoDelServidor } from "./mensajes";
 
@@ -9,10 +10,10 @@ export const consultasDeAdministracion = {
   accesos: () => queryOptions({ queryKey: ["administracion", "accesos"], queryFn: () => cliente.llamar("listarAccesosDeClientes") }),
 };
 
-/** Toda acción de administración vuelve a leer las listas: el servidor es la fuente de verdad. */
+/** Toda acción de administración vuelve a leer las listas (el servidor es la fuente de verdad), en una transición. */
 export function useAccion<E, R>(accion: (entrada: E) => Promise<R>) {
   const consultas = useQueryClient();
-  return useMutation({ mutationFn: accion, onSettled: () => consultas.invalidateQueries({ queryKey: ["administracion"] }) });
+  return useMutation({ mutationFn: accion, onSettled: () => conTransicion(() => consultas.invalidateQueries({ queryKey: ["administracion"] })) });
 }
 
 /** QR como imagen SVG (la biblioteca se carga solo cuando se necesita). */

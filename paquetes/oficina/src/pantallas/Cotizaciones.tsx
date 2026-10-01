@@ -1,9 +1,9 @@
 import { useId, useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, coincide, Dialogo, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, Insignia, Marcado, PieLista, Plus, Receipt, RefreshCw, SinResultados, Tabla } from "@teins/ui";
 import { cliente } from "../api";
-import { consultasDeCotizaciones, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
+import { consultasDeCotizaciones, mensajeDeCotizacion } from "../cotizaciones";
 import { aDiaCorto, pesos } from "../formato";
 
 const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
@@ -48,7 +48,7 @@ export function Cotizaciones() {
         <div>
           <Tabla etiqueta="Cotizaciones" columnas={[{ titulo: "Número" }, { titulo: "Cliente y visita" }, { titulo: "Estado" }, { titulo: "Total", derecha: true }]}>
             {lista.map((c, k) => (
-              <FilaTabla key={c.id} abrir indice={k}>
+              <FilaTabla key={c.id} abrir clave={c.id}>
                 <CeldaTabla>
                   <Link to="/cotizaciones/$id" params={{ id: c.id }} className="enlace" style={{ whiteSpace: "nowrap" }}>
                     <Marcado texto={c.numero} busqueda={busqueda} />
@@ -87,15 +87,21 @@ function NuevaCotizacion({ alCerrar }: { alCerrar: () => void }) {
   const visitas = useQuery(consultasDeCotizaciones.visitas());
   const [elegida, setElegida] = useState<string | null>(null);
   const [falta, setFalta] = useState(false);
-  const crear = useAccionDeCotizacion((visitaId: string) => cliente.llamar("crearCotizacion", { cuerpo: { visitaId } }));
+  const consultas = useQueryClient();
+  const crear = useMutation({ mutationFn: (visitaId: string) => cliente.llamar("crearCotizacion", { cuerpo: { visitaId } }) });
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     if (!elegida) return setFalta(true);
     try {
       const { id } = await crear.mutateAsync(elegida);
+      // Un solo movimiento (iteración 27): la cotización abre ya leída y la lista se vuelve a leer después, sin que
+      // la fila nueva salte detrás de la hoja antes de irse.
+      await consultas.prefetchQuery(consultasDeCotizaciones.detalle(id));
       alCerrar();
       await navegar({ to: "/cotizaciones/$id", params: { id } });
+      void consultas.invalidateQueries({ queryKey: consultasDeCotizaciones.lista().queryKey, exact: true });
+      void consultas.invalidateQueries({ queryKey: consultasDeCotizaciones.visitas().queryKey });
     } catch {
       // El error queda a la vista, en la hoja.
     }

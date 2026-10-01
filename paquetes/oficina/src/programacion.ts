@@ -1,5 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
+import { conTransicion } from "@teins/ui";
 import { cliente } from "./api";
 import { textoDelServidor } from "./mensajes";
 
@@ -16,10 +17,13 @@ export const consultasDeProgramacion = {
     queryOptions({ queryKey: ["programacion", "visitas", vista, hoy], queryFn: () => cliente.llamar("listarVisitas", { consulta: { vista, hoy } }), refetchInterval: 60_000 }),
 };
 
-/** Toda acción vuelve a leer clientes y visitas: el servidor es la fuente de verdad. */
+/**
+ * Toda acción vuelve a leer clientes y visitas: el servidor es la fuente de verdad. Dentro de una transición: la
+ * fila nueva entra, la que se va sale y las demás se corren (iteración 27).
+ */
 export function useAccionDeProgramacion<E, R>(accion: (entrada: E) => Promise<R>) {
   const consultas = useQueryClient();
-  return useMutation({ mutationFn: accion, onSettled: () => consultas.invalidateQueries({ queryKey: ["programacion"] }) });
+  return useMutation({ mutationFn: accion, onSettled: () => conTransicion(() => consultas.invalidateQueries({ queryKey: ["programacion"] })) });
 }
 
 export function mensajeDeProgramacion(error: unknown): string {

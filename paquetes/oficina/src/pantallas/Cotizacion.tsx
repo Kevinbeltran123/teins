@@ -25,6 +25,7 @@ import {
   Plus,
   RefreshCw,
   Send,
+  sinMovimiento,
   Tabla,
   Trash,
   useNotificar,
@@ -269,7 +270,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const reciben = quienesReciben.map((x) => x.nombre);
   const irALinea = (id: string) => {
     const fila = document.getElementById(`linea-${id}`);
-    fila?.scrollIntoView({ behavior: "smooth", block: "center" });
+    fila?.scrollIntoView({ behavior: sinMovimiento() ? "auto" : "smooth", block: "center" });
     fila?.querySelector<HTMLInputElement>("[data-precio]")?.focus({ preventScroll: true });
   };
 
@@ -378,7 +379,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
                   const falta = l.precio.trim() === "";
                   const difiere = l.precioCatalogo !== null && precio !== undefined && precio !== null && precio !== l.precioCatalogo;
                   return (
-                    <FilaTabla key={l.id} id={`linea-${l.id}`} indice={k} clase={falta ? "sin-precio" : ""}>
+                    <FilaTabla key={l.id} id={`linea-${l.id}`} clase={falta ? "sin-precio" : ""}>
                       <CeldaTabla>
                         {l.origen === "oficina" ? (
                           <>
