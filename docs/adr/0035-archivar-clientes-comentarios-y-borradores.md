@@ -1,6 +1,6 @@
 # ADR-0035 · Editar y archivar clientes, sitios y comentarios, y descartar borradores en campo
 
-- **Estado:** Propuesta
+- **Estado:** Aceptada (Kevin, 2026-10-01)
 - **Fecha:** 2026-10-01
 - **Impulsores:** QA-1, QA-8, QA-13, I-3, I-20
 - **Depende de:** ADR-0004 (almacenamiento local), ADR-0003 (sincronización); modelo de dominio, reglas 4, 14 y 18

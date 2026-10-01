@@ -1,6 +1,6 @@
 # ADR-0034 · Cancelar un envío en cola y retirar una versión de cotización
 
-- **Estado:** Propuesta
+- **Estado:** Aceptada (Kevin, 2026-10-01)
 - **Fecha:** 2026-10-01
 - **Impulsores:** QA-9, QA-12, I-8, I-10
 - **Depende de:** ADR-0028 (envío al cliente), ADR-0029 (cotizaciones); reemplaza a ADR-0029 en un punto (abajo)

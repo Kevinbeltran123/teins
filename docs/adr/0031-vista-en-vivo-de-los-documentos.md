@@ -1,6 +1,6 @@
 # ADR-0031 · Vista en vivo de los documentos desde las mismas plantillas del PDF
 
-- **Estado:** Propuesta
+- **Estado:** Aceptada (Kevin, 2026-10-01)
 - **Fecha:** 2026-10-01
 - **Impulsores:** QA-17, QA-9, QA-12, I-28
 - **Depende de:** ADR-0013, ADR-0029, ADR-0028

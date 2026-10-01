@@ -1,6 +1,6 @@
 # ADR-0032 · Soltar, reabrir y devolver una revisión
 
-- **Estado:** Propuesta
+- **Estado:** Propuesta, aplazada (Kevin, 2026-10-01: no es prioridad). Hoy cada caso tiene una salida, aunque torpe: otra persona se quita la toma, oficina corrige un revisado con la toma y lo que solo se captura en sitio se pide con un comentario. Se retoma si en el piloto aparece una toma abandonada o un dato que solo el técnico puede traer
 - **Fecha:** 2026-10-01
 - **Impulsores:** QA-8, QA-25, QA-3, I-1
 - **Depende de:** ADR-0005 (concurrencia optimista); modelo de dominio, ciclo de vida del levantamiento y reglas 2, 4 y 14

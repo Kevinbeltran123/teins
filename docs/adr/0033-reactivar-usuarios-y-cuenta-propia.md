@@ -1,6 +1,6 @@
 # ADR-0033 · Reactivar usuarios y administrar la cuenta propia
 
-- **Estado:** Propuesta
+- **Estado:** Propuesta, aplazada (Kevin, 2026-10-01: no es prioridad). Condición antes de transferir producción a TEINS (ADR-0021): el cambio obligatorio de la contraseña temporal y el cambio de la propia contraseña (puntos 2 y 4), porque hoy una temporal se queda para siempre. Reactivar y quitar el propio segundo factor esperan a que el piloto los pida
 - **Fecha:** 2026-10-01
 - **Impulsores:** QA-5, QA-6, I-14, I-18 a I-22
 - **Depende de:** ADR-0009 (identidad y acceso), ADR-0022 (cifrado local)
