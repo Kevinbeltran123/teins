@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
 import type { Config } from "../../config";
 import { leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
@@ -12,7 +13,6 @@ import { avisar } from "../avisos";
 import { contactosDelCliente } from "../clientes";
 import { envios, type CanalDeEnvio, type FilaEnvio, type MensajeDeEnvio } from "./esquema";
 import { eventoDeResend, eventosDeWhatsapp, firmaMetaValida, firmaSvixValida, type EventoDeEnvio } from "./eventos";
-import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "./mensajes";
 import { NoAceptado, RechazoDefinitivo, type Proveedores } from "./proveedores";
 
 export type { MensajeDeCotizacion, MensajeDeEnvio, MensajeDeInforme } from "./esquema";

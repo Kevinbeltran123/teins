@@ -1,5 +1,6 @@
 import { bigint, index, integer, jsonb, pgSchema, primaryKey, text, unique, uuid } from "drizzle-orm/pg-core";
-import type { CondicionesCotizacion, Impuestos, LineaDeCotizacion, Totales } from "@teins/dominio";
+import type { ContenidoCotizacion } from "@teins/documentos";
+import type { CondicionesCotizacion, Impuestos, LineaDeCotizacion } from "@teins/dominio";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 export const esquemaCotizaciones = pgSchema("cotizaciones");
@@ -37,18 +38,7 @@ export const cotizaciones = esquemaCotizaciones.table(
 ).enableRLS();
 
 /** Copia congelada de lo que se publicó: el PDF y el envío leen solo esto. */
-export interface ContenidoCotizacion {
-  numero: string;
-  version: number;
-  publicadaEn: string;
-  publicadaPor: string;
-  organizacion: { nombre: string };
-  visita: { cliente: string; sitio: string; direccion: string; programadaPara: string };
-  lineas: LineaDeCotizacion[];
-  impuestos: Impuestos;
-  condiciones: CondicionesCotizacion;
-  totales: Totales;
-}
+export type { ContenidoCotizacion } from "@teins/documentos";
 
 /** Versión publicada: la base solo deja cambiar el estado de su PDF (permisos por columna). */
 export const versionesCotizacion = esquemaCotizaciones.table(

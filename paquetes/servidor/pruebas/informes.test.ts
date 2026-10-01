@@ -7,9 +7,7 @@ import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { clientesYSitios } from "../src/modulos/clientes";
 import { crearGeneradorPdf } from "../src/modulos/informes";
 import { crearVisitas } from "../src/modulos/visitas";
-import { escapar } from "../src/plataforma/html";
-import { LOGO_TEINS } from "../src/plataforma/logo";
-import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
+import { escapar, LOGO_TEINS, plantillaInforme } from "@teins/documentos";
 import { cabecerasSync, jpegDePrueba, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
@@ -95,6 +93,25 @@ describe("bandeja (iteración 14)", () => {
     const visita = { id: visitaId, cliente: "Cliente <ficticio>", sitio: "Sede" };
     expect((await deLaPestana("enviado", enviado)).visita).toEqual(visita);
     expect((await deLaPestana("revisado", revisado)).visita).toEqual(visita);
+  });
+});
+
+describe("estado de un plano (iteración 26, ADR-0031)", () => {
+  it("al verificarlo se cuentan las páginas que se anexan; uno que pdf-lib no puede anexar queda ilegible", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const tres = await subir(org.oficina.cookie, await planoDePrueba(3), "application/pdf");
+    const danado = await subir(org.oficina.cookie, Buffer.from(`%PDF-1.7 ${randomUUID()} sin estructura`), "application/pdf");
+    const estado = (cookie: string, huella: string) => get(cookie, `/api/archivos/${huella}/plano`);
+    expect((await estado(org.oficina.cookie, tres)).json()).toEqual({ estado: "verificando", paginas: null });
+    await s.procesarCola();
+    expect((await estado(org.oficina.cookie, tres)).json()).toEqual({ estado: "listo", paginas: 3 });
+    // Empieza como un PDF y pasa la verificación de siempre, pero el informe no podría anexarlo: se avisa antes de publicar.
+    expect((await estado(org.oficina.cookie, danado)).json()).toEqual({ estado: "ilegible", paginas: null });
+
+    expect((await estado(org.tecnico.cookie, tres)).statusCode).toBe(403);
+    expect((await estado(org.oficina.cookie, "0".repeat(64))).statusCode).toBe(404);
+    const otra = await s.nuevaOrganizacionConUsuarios();
+    expect((await estado(otra.oficina.cookie, tres)).statusCode).toBe(404);
   });
 });
 
@@ -289,7 +306,7 @@ describe("plantilla del informe", () => {
         ],
         planos: [],
       },
-      { fuente: "", fotos: new Map() },
+      { salida: { tipo: "pdf", fuente: "" }, fotos: new Map() },
     );
     expect(html).toContain("Cliente &lt;b&gt;");
     expect(html).toContain("<p>Segundo &lt;párrafo&gt;.</p>");

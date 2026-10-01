@@ -97,6 +97,8 @@ describe("contrato y políticas (ADR-0009, ADR-0014)", () => {
     const { tecnico, oficina } = await s.nuevaOrganizacionConUsuarios();
     expect((await app.inject({ method: "GET", url: "/api/sesion", headers: { cookie: tecnico.cookie } })).json()).toMatchObject({
       usuario: { rol: "tecnico", nombre: "Técnico de prueba" },
+      // Con qué nombre firman los documentos que oficina ve en vivo (iteración 26).
+      organizacion: { nombre: "Organización de prueba", portal: s.config.PORTAL_URL ?? null },
     });
     expect((await app.inject({ method: "GET", url: "/api/levantamientos", headers: { cookie: tecnico.cookie } })).json()).toMatchObject({
       codigo: "sin_permiso",

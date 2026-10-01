@@ -504,6 +504,7 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
           return {
             usuario: { id: actor.usuarioId, nombre, rol: actor.rol, administrador: actor.administrador, segundoFactor: actor.segundoFactor, debeCambiarContrasena: actor.debeCambiarContrasena },
             permisoLocalHasta: permisoLocalHasta(),
+            organizacion: { nombre: await this.nombreDeOrganizacion(actor.organizacionId), portal: config.PORTAL_URL ?? null },
           };
         },
       });

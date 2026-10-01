@@ -1,11 +1,13 @@
 import { aDecimalColombiano, bloques, describirValor, esBoceto, esCantidades, esFirma, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
-import { escapar } from "../../../plataforma/html";
-import { LOGO_TEINS } from "../../../plataforma/logo";
+import { escapar } from "./escapar";
+import { LOGO_TEINS } from "./logo";
+import { estilosDe, type Salida } from "./salida";
 
 /**
- * Plantilla del informe (ADR-0013): HTML y CSS con la dirección de DESIGN.md. Se arma solo desde la
- * copia congelada de la versión, con la fuente y las fotos incrustadas: no pide nada a la red, así
- * que el mismo contenido produce el mismo documento.
+ * Plantilla del informe (ADR-0013): HTML y CSS con la dirección de DESIGN.md. El PDF se arma solo desde la
+ * copia congelada de la versión, con la fuente y las fotos incrustadas: no pide nada a la red, así que el
+ * mismo contenido produce el mismo documento. La vista en vivo de oficina dibuja el borrador con esta misma
+ * plantilla (ADR-0031).
  *
  * Supuestos mientras TEINS responde P22 y P23 (plan de entrega, corte 4): portada, introducción,
  * un capítulo por levantamiento, conclusiones, firma y planos anexos. Lo que falta va como marcador.
@@ -36,9 +38,9 @@ export interface HojaDelInforme {
 }
 
 export interface RecursosPlantilla {
-  /** Fuente Geist en woff2, en base64. */
-  fuente: string;
-  /** Foto por huella, como data URI. Una que falte se muestra como marcador, nunca se inventa. */
+  /** PDF (estilos y fuente incrustados) o vista en vivo de oficina (ADR-0031). */
+  salida: Salida;
+  /** Foto por huella: data URI en el PDF, URL firmada en la vista. Una que falte se muestra como marcador, nunca se inventa. */
   fotos: ReadonlyMap<string, string>;
   /** Hojas de cada boceto por huella, ya en SVG. Uno que falte se muestra como marcador. */
   bocetos?: ReadonlyMap<string, readonly HojaDelInforme[]>;
@@ -46,7 +48,14 @@ export interface RecursosPlantilla {
   firmas?: ReadonlyMap<string, string>;
 }
 
-export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos = new Map(), firmas = new Map() }: RecursosPlantilla): string {
+/**
+ * Nombre con que se guarda el PDF al descargarlo y se adjunta: quien lo recibe lo encuentra después en su carpeta
+ * de descargas por el cliente, el sitio y la versión. Sin los caracteres que un sistema de archivos no admite.
+ */
+export const nombreDelPdfDeInforme = (visita: { cliente: string; sitio: string }, numero: number) =>
+  `Informe ${visita.cliente} - ${visita.sitio} - versión ${numero}.pdf`.replace(/[/\\:*?"<>|]/g, "-");
+
+export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos = new Map(), firmas = new Map() }: RecursosPlantilla): string {
   const capitulos = c.levantamientos
     .map((l, i) => {
       // Cada sección, y cada repetición de las repetibles con su nombre, en orden (iteración 9).
@@ -63,7 +72,8 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
             .map((campo) => {
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
               const vacio = valor === undefined || esNoObtenido(valor);
-              return `<tr><th>${escapar(campo.etiqueta)}</th><td${vacio ? ' class="tenue"' : ""}>${escapar(describirValor(campo, valor))}</td></tr>`;
+              // data-dato: la revisión resalta en la vista el dato corregido; el PDF lo ignora.
+              return `<tr data-dato="${escapar(`${clave}/${campo.clave}`)}"><th>${escapar(campo.etiqueta)}</th><td${vacio ? ' class="tenue"' : ""}>${escapar(describirValor(campo, valor))}</td></tr>`;
             })
             .join("");
           const galerias = s.campos
@@ -120,7 +130,7 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
           return `<section class="seccion"><h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${cantidades}${galerias}${croquis}${constancias}</section>`;
         })
         .join("");
-      return `<article class="capitulo">
+      return `<article class="capitulo" id="capitulo-${escapar(l.id)}">
         <p class="numero">Levantamiento ${i + 1} de ${c.levantamientos.length}</p>
         <h2>${escapar(l.formato.nombre ?? l.formato.formato)}</h2>
         <p class="meta">Capturado por ${escapar(l.tecnico)} · revisado por ${escapar(l.revisor)} · recibido en oficina el ${fechaHora.format(new Date(l.recibidoEn))}</p>
@@ -130,7 +140,7 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
     .join("");
 
   const planos = c.planos.length
-    ? `<section class="bloque"><h2>Planos anexos</h2><p>Los planos se incluyen al final de este documento, en este orden:</p><ol>${c.planos.map((p) => `<li>${escapar(p.nombre)}</li>`).join("")}</ol></section>`
+    ? `<section class="bloque" id="planos"><h2>Planos anexos</h2><p>Los planos se incluyen al final de este documento, en este orden:</p><ol>${c.planos.map((p) => `<li>${escapar(p.nombre)}</li>`).join("")}</ol></section>`
     : "";
 
   return `<!doctype html>
@@ -138,9 +148,36 @@ export function plantillaInforme(c: ContenidoVersion, { fuente, fotos, bocetos =
 <head>
 <meta charset="utf-8">
 <title>Informe técnico · ${escapar(c.visita.cliente)} · versión ${c.numero}</title>
-<style>
-@font-face { font-family: "Geist"; src: url(data:font/woff2;base64,${fuente}) format("woff2"); font-weight: 100 900; }
-@page { size: Letter; margin: 22mm 18mm 20mm; }
+${estilosDe("informe", ESTILOS_INFORME, salida)}
+</head>
+<body>
+<section class="portada">
+  <img class="logo" src="${LOGO_TEINS}" alt="TEINS">
+  <h1>Informe técnico</h1>
+  <p class="cliente">${escapar(c.visita.cliente)}</p>
+  <dl>
+    <dt>Sitio</dt><dd>${escapar(c.visita.sitio)}</dd>
+    <dt>Dirección</dt><dd>${escapar(c.visita.direccion)}</dd>
+    <dt>Motivo</dt><dd>${escapar(c.visita.motivo)}</dd>
+    <dt>Visita</dt><dd>${dia(c.visita.programadaPara)}</dd>
+    <dt>Publicado</dt><dd>${fecha.format(new Date(c.publicadaEn))}</dd>
+  </dl>
+  <span class="marquilla">Versión ${c.numero}</span>
+  <p>${escapar(c.organizacion.nombre)}</p>
+</section>
+${c.introduccion.trim() ? `<section class="bloque" id="introduccion"><h2>Introducción</h2>${parrafos(c.introduccion)}</section>` : ""}
+${capitulos}
+<section class="bloque cierre" id="conclusiones">
+  ${c.conclusiones.trim() ? `<h2>Conclusiones</h2>${parrafos(c.conclusiones)}` : ""}
+  <div class="firma"><div>[FIRMA]<br>Responsable del informe</div><div>[DATOS LEGALES]</div></div>
+</section>
+${planos}
+</body>
+</html>`;
+}
+
+/** Los estilos del informe: los mismos en el PDF y en la vista. */
+export const ESTILOS_INFORME = `@page { size: Letter; margin: 22mm 18mm 20mm; }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: "Geist", sans-serif; font-size: 10.5pt; line-height: 1.45; color: ${MARCA.texto}; }
 h1, h2, h3, h4 { margin: 0; line-height: 1.2; }
@@ -158,6 +195,7 @@ p { margin: 0 0 8pt; }
 .marquilla { display: inline-block; background: ${MARCA.acento}; color: ${MARCA.texto}; font-weight: 600; padding: 4pt 16pt 4pt 10pt; clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%); align-self: flex-start; }
 .bloque { margin-bottom: 18pt; }
 .capitulo { break-before: page; }
+.cierre { break-before: page; }
 .numero { color: ${MARCA.secundario}; font-weight: 600; margin-bottom: 2pt; }
 .meta { color: ${MARCA.secundario}; }
 .seccion { break-inside: auto; }
@@ -189,33 +227,7 @@ figure.falta div { height: 62mm; border: 1.5px dashed ${MARCA.division}; border-
 figcaption { font-size: 9pt; color: ${MARCA.secundario}; margin-top: 3pt; }
 .firma { break-inside: avoid; margin-top: 24pt; display: grid; grid-template-columns: 1fr 1fr; gap: 24pt; }
 .firma div { border-top: 1.5px solid ${MARCA.texto}; padding-top: 6pt; color: ${MARCA.secundario}; }
-</style>
-</head>
-<body>
-<section class="portada">
-  <img class="logo" src="${LOGO_TEINS}" alt="TEINS">
-  <h1>Informe técnico</h1>
-  <p class="cliente">${escapar(c.visita.cliente)}</p>
-  <dl>
-    <dt>Sitio</dt><dd>${escapar(c.visita.sitio)}</dd>
-    <dt>Dirección</dt><dd>${escapar(c.visita.direccion)}</dd>
-    <dt>Motivo</dt><dd>${escapar(c.visita.motivo)}</dd>
-    <dt>Visita</dt><dd>${dia(c.visita.programadaPara)}</dd>
-    <dt>Publicado</dt><dd>${fecha.format(new Date(c.publicadaEn))}</dd>
-  </dl>
-  <span class="marquilla">Versión ${c.numero}</span>
-  <p>${escapar(c.organizacion.nombre)}</p>
-</section>
-${c.introduccion.trim() ? `<section class="bloque"><h2>Introducción</h2>${parrafos(c.introduccion)}</section>` : ""}
-${capitulos}
-<section class="bloque" style="break-before: page">
-  ${c.conclusiones.trim() ? `<h2>Conclusiones</h2>${parrafos(c.conclusiones)}` : ""}
-  <div class="firma"><div>[FIRMA]<br>Responsable del informe</div><div>[DATOS LEGALES]</div></div>
-</section>
-${planos}
-</body>
-</html>`;
-}
+`;
 
 /** Pie de página con numeración (lo imprime Chromium fuera del flujo del documento). */
 export function piePagina(c: ContenidoVersion): string {

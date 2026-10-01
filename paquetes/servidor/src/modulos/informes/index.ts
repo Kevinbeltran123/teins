@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+import { nombreDelPdfDeInforme, piePagina, plantillaInforme, type HojaDelInforme } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
 import { bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
@@ -18,7 +19,6 @@ import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
 import type { Visitas } from "../visitas";
 import { fuenteIncrustada, imprimirPdf, PlanoIlegible } from "../../plataforma/pdf";
-import { piePagina, plantillaInforme, type HojaDelInforme } from "./pdf/plantilla";
 import { informes, versionesPublicadas, type EstadoPdf } from "./esquema";
 
 interface Dependencias {
@@ -41,13 +41,6 @@ export interface VersionVigente {
 
 /** La visita tal como quedó congelada en la versión: de la misma fila, sin otra consulta. */
 const visitaDeLaVersion = sql<ContenidoVersion["visita"]>`${versionesPublicadas.contenido} -> 'visita'`;
-
-/**
- * Nombre con que se guarda el PDF al descargarlo: quien lo recibe lo encuentra después en su carpeta de
- * descargas por el cliente, el sitio y la versión. Sin los caracteres que un sistema de archivos no admite.
- */
-const nombreDelPdf = (visita: { cliente: string; sitio: string }, numero: number) =>
-  `Informe ${visita.cliente} - ${visita.sitio} - versión ${numero}.pdf`.replace(/[/\\:*?"<>|]/g, "-");
 
 /**
  * Lo que el portal lee, siempre con la transacción del portal: la seguridad por fila ya restringe a
@@ -74,7 +67,7 @@ export const informesParaElPortal = {
       .where(eq(versionesPublicadas.informeId, informeId))
       .orderBy(desc(versionesPublicadas.numero))
       .limit(1);
-    return fila?.huella ? { numero: fila.numero, huella: fila.huella, nombre: nombreDelPdf(fila.visita, fila.numero) } : undefined;
+    return fila?.huella ? { numero: fila.numero, huella: fila.huella, nombre: nombreDelPdfDeInforme(fila.visita, fila.numero) } : undefined;
   },
 };
 
@@ -119,7 +112,7 @@ const mensajeDe = (c: ContenidoVersion): MensajeDeInforme => ({
   motivo: c.visita.motivo,
   programadaPara: c.visita.programadaPara,
   numero: c.numero,
-  nombreArchivo: nombreDelPdf(c.visita, c.numero),
+  nombreArchivo: nombreDelPdfDeInforme(c.visita, c.numero),
 });
 
 const invalido = (errores: ErrorInforme[]) => problema("informe_invalido", "El informe no cumple sus reglas", { erroresInforme: errores.map((e) => ({ ...e })) });
@@ -153,7 +146,7 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         for (const p of c.planos) planos.push(await leerTodo(almacenamiento, claveDeObjeto(organizacionId, p.huella)));
 
         const pdf = await imprimirPdf({
-          html: plantillaInforme(c, { fuente: fuenteIncrustada(), fotos, bocetos, firmas }),
+          html: plantillaInforme(c, { salida: { tipo: "pdf", fuente: fuenteIncrustada() }, fotos, bocetos, firmas }),
           pie: piePagina(c),
           planos,
           metadatos: { titulo: `Informe técnico · ${c.visita.cliente} · versión ${c.numero}`, autor: c.organizacion.nombre, fecha: new Date(c.publicadaEn) },
@@ -525,7 +518,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
           if (!version) throw problema("no_encontrado");
           if (version.estado !== "listo" || !version.huella) throw problema("estado_invalido", "El PDF de esta versión todavía no está listo");
           // Se descarga, no se abre: la aplicación de oficina no pierde la pantalla.
-          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(actor.organizacionId, version.huella), { descargarComo: nombreDelPdf(version.visita, numero) });
+          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(actor.organizacionId, version.huella), { descargarComo: nombreDelPdfDeInforme(version.visita, numero) });
           return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
         },
       });

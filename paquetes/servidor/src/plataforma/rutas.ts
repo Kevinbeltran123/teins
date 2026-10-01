@@ -209,33 +209,6 @@ function registrar<N extends NombreOperacion, A>(
   });
 }
 
-/**
- * Un documento HTML para un marco de la propia superficie (la vista previa de una cotización), fuera del contrato
- * JSON. Lleva su propia CSP: solo sus estilos y fuentes incrustadas, sin scripts, conexiones ni formularios, y solo
- * dentro de la superficie. La autorización va antes de validar, como en las operaciones.
- */
-export function registrarDocumento<P extends z.ZodType>(
-  app: FastifyInstance,
-  opciones: { ruta: string; politica: Extract<Politica, { tipo: "roles" }>; parametros: P; manejar: (entrada: { parametros: z.output<P>; actor: Actor }) => Promise<string> },
-): void {
-  app.route({
-    method: "GET",
-    url: rutaFastify(opciones.ruta),
-    config: { politica: opciones.politica },
-    handler: async (solicitud, respuesta) => {
-      const actor = await app.resolverActor(solicitud, respuesta);
-      const decision = evaluar(opciones.politica, actor);
-      if (decision !== "permitido") throw problema(decision);
-      const html = await opciones.manejar({ parametros: validar(opciones.parametros, solicitud.params, "parametros") as z.output<P>, actor: actor! });
-      return respuesta
-        .header("content-type", "text/html; charset=utf-8")
-        .header("cache-control", "no-store")
-        .header("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox")
-        .send(html);
-    },
-  });
-}
-
 /** Rutas fuera del contrato (salud, especificación, autenticación). Deben declarar por qué son públicas. */
 export function registrarRutaPublica(app: FastifyInstance, opciones: Omit<RouteOptions, "config"> & { motivo: string }): void {
   const { motivo, ...ruta } = opciones;

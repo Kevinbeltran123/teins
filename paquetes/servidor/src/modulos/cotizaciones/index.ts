@@ -1,8 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
-import { rutaVistaPreviaCotizacion, Uuid } from "@teins/protocolo";
+import { nombreDelPdfDeCotizacion, piePaginaCotizacion, plantillaCotizacion } from "@teins/documentos";
 import { calcularTotales, lineasDesdeCantidades, numeroDeCotizacion, validarCotizacion, type BorradorCotizacion, type LineaDeCotizacion } from "@teins/dominio";
 import type { Config } from "../../config";
 import { claveDeObjeto, type Almacenamiento } from "../../plataforma/almacenamiento";
@@ -11,7 +10,7 @@ import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
 import { fuenteIncrustada, imprimirPdf } from "../../plataforma/pdf";
 import { politicas } from "../../plataforma/politicas";
-import { registrarDocumento, registrarOperacion } from "../../plataforma/rutas";
+import { registrarOperacion } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
 import type { Catalogo } from "../catalogo";
 import { enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeCotizacion } from "../envios";
@@ -19,7 +18,6 @@ import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
 import type { Visitas } from "../visitas";
 import { consecutivos, cotizaciones, versionesCotizacion, type ContenidoCotizacion, type EstadoPdfCotizacion } from "./esquema";
-import { piePaginaCotizacion, plantillaCotizacion } from "./pdf/plantilla";
 
 interface Dependencias {
   bd: BaseDeDatos;
@@ -41,10 +39,6 @@ export interface Cotizaciones {
 }
 
 const SIN_NOMBRE = "[Usuario no disponible]";
-/** Con qué nombre se descarga: se encuentra después por el número y el cliente. */
-const nombreDelPdf = (c: Pick<ContenidoCotizacion, "numero" | "version" | "visita">) =>
-  `Cotización ${c.numero} - ${c.visita.cliente} - versión ${c.version}.pdf`.replace(/[/\\:*?"<>|]/g, "-");
-
 /** Id de línea: 8 caracteres, como los de las cantidades. */
 const idDeLinea = () => BigInt(`0x${randomBytes(8).toString("hex")}`).toString(36).padStart(8, "0").slice(-8);
 
@@ -64,7 +58,7 @@ export function crearGeneradorPdfDeCotizaciones({ bd, almacenamiento, config }: 
       const c = version.contenido;
       try {
         const pdf = await imprimirPdf({
-          html: plantillaCotizacion(c, { fuente: fuenteIncrustada() }),
+          html: plantillaCotizacion(c, { salida: { tipo: "pdf", fuente: fuenteIncrustada() } }),
           pie: piePaginaCotizacion(c),
           planos: [],
           metadatos: { titulo: `Cotización ${c.numero} · ${c.visita.cliente} · versión ${c.version}`, autor: c.organizacion.nombre, fecha: new Date(c.publicadaEn) },
@@ -111,8 +105,8 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
   }
 
   /**
-   * La copia de la siguiente versión desde el borrador: la que se congela al publicar y la que muestra la vista
-   * previa. Salen de aquí las dos, para que la vista previa no se aparte del PDF.
+   * La copia de la siguiente versión desde el borrador: la que se congela al publicar. Oficina arma la misma copia
+   * para su vista en vivo y la dibuja con la plantilla del PDF (ADR-0031).
    */
   async function siguienteVersion(tx: TxOrganizacion, c: typeof cotizaciones.$inferSelect, { organizacion, publicadaPor, publicadaEn }: { organizacion: string; publicadaPor: string; publicadaEn: Date }): Promise<ContenidoCotizacion> {
     const visita = (await visitas.resumenes(tx, [c.visitaId])).get(c.visitaId);
@@ -187,7 +181,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
     sitio: c.visita.sitio,
     cotizacion: c.numero,
     numero: c.version,
-    nombreArchivo: nombreDelPdf(c),
+    nombreArchivo: nombreDelPdfDeCotizacion(c),
   });
 
   async function versionConEnvios(tx: TxOrganizacion, organizacionId: string, v: FilaVersion) {
@@ -380,23 +374,6 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
         },
       });
 
-      // Lo que se va a publicar, con la plantilla del PDF, para un marco de oficina (iteración 24). Aproximado: el PDF
-      // pagina y pone el pie; lo que vale es la versión congelada.
-      registrarDocumento(app, {
-        ruta: rutaVistaPreviaCotizacion("{id}"),
-        politica: politicas.oficina,
-        parametros: z.object({ id: Uuid }),
-        manejar: async ({ parametros: { id }, actor }) => {
-          const organizacion = await identidad.nombreDeOrganizacion(actor.organizacionId);
-          const nombres = await identidad.nombres(actor.organizacionId, [actor.usuarioId]);
-          const contenido = await enOrganizacion(bd, actor.organizacionId, async (tx) =>
-            siguienteVersion(tx, await leer(tx, id), { organizacion, publicadaPor: nombres.get(actor.usuarioId) ?? SIN_NOMBRE, publicadaEn: new Date() }),
-          );
-          // En el PDF, los márgenes los pone la página (@page); en pantalla no hay página: se ponen al cuerpo.
-          return plantillaCotizacion(contenido, { fuente: fuenteIncrustada() }).replace("</head>", "<style>body { padding: 20mm 18mm; }</style></head>");
-        },
-      });
-
       registrarOperacion(app, "pdfDeCotizacion", {
         politica: politicas.oficina,
         manejar: async ({ parametros: { id, numero }, actor }) => {
@@ -408,7 +385,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
           );
           if (!version) throw problema("no_encontrado");
           if (version.pdfEstado !== "listo" || !version.pdfHuella) throw problema("estado_invalido", "El PDF de esta versión todavía no está listo");
-          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(actor.organizacionId, version.pdfHuella), { descargarComo: nombreDelPdf(version.contenido) });
+          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(actor.organizacionId, version.pdfHuella), { descargarComo: nombreDelPdfDeCotizacion(version.contenido) });
           return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
         },
       });

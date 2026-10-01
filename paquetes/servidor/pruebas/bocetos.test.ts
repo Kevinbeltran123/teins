@@ -4,7 +4,7 @@ import { llaveDeEnvio } from "@teins/protocolo";
 import { bocetoNuevo, bocetoVacio, hojaNueva, serializarBoceto, TIPO_ARCHIVO_BOCETO, type DocumentoBoceto, type VersionFormato } from "@teins/dominio";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { crearFormatos } from "../src/modulos/formatos";
-import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
+import { plantillaInforme } from "@teins/documentos";
 import { cabecerasSync, jpegDePrueba, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
@@ -148,19 +148,19 @@ describe("bocetos en el servidor (iteración 10)", () => {
       levantamientos: [{ id: randomUUID(), formato: conBoceto, tecnico: "T", revisor: "O", recibidoEn: "2026-09-25T11:00:00.000Z", respuestas: { cuarto: { croquis: { boceto: huella } } } }],
     };
     const apaisada = [{ nombre: "", vertical: false, svg: '<svg id="croquis"></svg>' }];
-    expect(plantillaInforme(contenido, { fuente: "", fotos: new Map(), bocetos: new Map([[huella, apaisada]]) })).toContain('<figure class="boceto apaisada"><svg id="croquis"></svg></figure>');
+    expect(plantillaInforme(contenido, { salida: { tipo: "pdf", fuente: "" }, fotos: new Map(), bocetos: new Map([[huella, apaisada]]) })).toContain('<figure class="boceto apaisada"><svg id="croquis"></svg></figure>');
     // Con varias hojas, cada una lleva su nombre.
     const pisos = [
       { nombre: "Primer piso", vertical: true, svg: "<svg id=\"p1\"></svg>" },
       { nombre: "Segundo <piso>", vertical: true, svg: "<svg id=\"p2\"></svg>" },
     ];
-    const html = plantillaInforme(contenido, { fuente: "", fotos: new Map(), bocetos: new Map([[huella, pisos]]) });
+    const html = plantillaInforme(contenido, { salida: { tipo: "pdf", fuente: "" }, fotos: new Map(), bocetos: new Map([[huella, pisos]]) });
     expect(html).toContain('<div class="hojas"><figure class="boceto"><svg id="p1"></svg><figcaption>Primer piso</figcaption></figure>');
     expect(html).toContain("<figcaption>Segundo &lt;piso&gt;</figcaption>");
-    expect(plantillaInforme(contenido, { fuente: "", fotos: new Map() })).toContain("[BOCETO]");
+    expect(plantillaInforme(contenido, { salida: { tipo: "pdf", fuente: "" }, fotos: new Map() })).toContain("[BOCETO]");
 
     // "No se pudo obtener" sale con su motivo, como en campo y oficina.
     const sinBoceto = { ...contenido, levantamientos: [{ ...contenido.levantamientos[0]!, respuestas: { cuarto: { croquis: { noObtenido: true as const, motivo: "Sin acceso al cuarto" } } } }] };
-    expect(plantillaInforme(sinBoceto, { fuente: "", fotos: new Map() })).toContain("No se pudo obtener: Sin acceso al cuarto");
+    expect(plantillaInforme(sinBoceto, { salida: { tipo: "pdf", fuente: "" }, fotos: new Map() })).toContain("No se pudo obtener: Sin acceso al cuarto");
   });
 });

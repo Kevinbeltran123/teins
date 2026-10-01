@@ -7,6 +7,7 @@ import type { Config } from "../../config";
 import { claveDeObjeto, leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { encolar } from "../../plataforma/cola";
+import { paginasDePlano } from "../../plataforma/pdf";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
@@ -52,15 +53,17 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
     let bytes = 0;
     const partes: Buffer[] = [];
     let cabecera = 0;
-    // Un boceto no tiene firma de tipo: se lee completo (es pequeño) para validar su estructura.
+    // Un boceto no tiene firma de tipo: se lee completo (es pequeño) para validar su estructura. Un plano también,
+    // para contar las páginas que anexa al informe (iteración 26).
     const esBoceto = fila.tipo === TIPO_ARCHIVO_BOCETO;
+    const esPlano = fila.tipo === "application/pdf";
     for await (const trozo of await almacenamiento.leer(claveDeObjeto(organizacionId, huella))) {
       const b = trozo as Buffer;
       bytes += b.length;
       // Se corta la lectura apenas supera el límite: un objeto enorme no consume memoria.
       if (bytes > config.BYTES_MAXIMOS_ARCHIVO) break;
       hash.update(b);
-      if (esBoceto || cabecera < BYTES_PARA_DETECTAR_TIPO) {
+      if (esBoceto || esPlano || cabecera < BYTES_PARA_DETECTAR_TIPO) {
         partes.push(b);
         cabecera += b.length;
       }
@@ -82,7 +85,7 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
               : null;
 
     if (motivo === null) {
-      await marcar(organizacionId, huella, "subido", { estado: "verificado", verificadoEn: new Date() });
+      await marcar(organizacionId, huella, "subido", { estado: "verificado", verificadoEn: new Date(), ...(esPlano ? { paginas: await paginasDePlano(contenido) } : {}) });
       return;
     }
     // Un contenido que no pasa la verificación nunca fue aceptado por ningún envío: se elimina. Primero el
@@ -205,6 +208,18 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
           const documento = leerBoceto((await leerTodo(almacenamiento, claveDeObjeto(actor.organizacionId, huella))).toString("utf8"));
           if (!documento) throw problema("error_interno", "El boceto guardado no es válido");
           return documento;
+        },
+      });
+
+      // Lo que oficina dice de un plano antes de publicar: cuántas páginas anexa o que no se puede anexar (iteración 26).
+      registrarOperacion(app, "estadoDePlano", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { huella }, actor }) => {
+          const fila = await leerFila(actor.organizacionId, huella);
+          if (!fila || fila.tipo !== "application/pdf") throw problema("no_encontrado");
+          if (fila.estado === "rechazado") return { estado: "rechazado" as const, paginas: null };
+          if (fila.estado !== "verificado") return { estado: "verificando" as const, paginas: null };
+          return fila.paginas === 0 ? { estado: "ilegible" as const, paginas: null } : { estado: "listo" as const, paginas: fila.paginas };
         },
       });
 

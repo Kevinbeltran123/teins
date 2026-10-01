@@ -7,7 +7,7 @@ import { clientesYSitios } from "../src/modulos/clientes";
 import { crearVisitas } from "../src/modulos/visitas";
 import { crearEnvios, proveedoresSegunConfig, RechazoDefinitivo, type ProveedorDeCorreo, type ProveedorDeWhatsapp } from "../src/modulos/envios";
 import { firmaMetaValida, firmaSvixValida } from "../src/modulos/envios/eventos";
-import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "../src/modulos/envios/mensajes";
+import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "@teins/documentos";
 import type { CorreoSaliente, WhatsappSaliente } from "../src/modulos/envios/proveedores";
 import { cabecerasSync, configDePrueba, servidorDePrueba } from "./ayudas";
 

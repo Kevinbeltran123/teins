@@ -5,7 +5,7 @@ import type { ContenidoVersion, LineaCantidad, VersionFormato } from "@teins/dom
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { clientesYSitios } from "../src/modulos/clientes";
 import { crearFormatos } from "../src/modulos/formatos";
-import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
+import { plantillaInforme } from "@teins/documentos";
 import { crearVisitas } from "../src/modulos/visitas";
 import { cabecerasSync, ORIGEN, servidorDePrueba } from "./ayudas";
 
@@ -181,7 +181,7 @@ describe("cantidades con catálogo en el servidor (iteración 11)", () => {
       planos: [],
       levantamientos: [{ id: randomUUID(), formato: conMateriales, tecnico: "T", revisor: "O", recibidoEn: "2026-09-25T11:00:00.000Z", respuestas: { obra: { materiales: [linea("a0000001", "Cable <12>", "12.5")] } } }],
     };
-    const html = plantillaInforme(contenido, { fuente: "", fotos: new Map() });
+    const html = plantillaInforme(contenido, { salida: { tipo: "pdf", fuente: "" }, fotos: new Map() });
     expect(html).toContain('<table class="cantidades">');
     expect(html).toContain("<td>Cable &lt;12&gt;</td><td class=\"numero\">12,5</td><td>m</td>");
   });

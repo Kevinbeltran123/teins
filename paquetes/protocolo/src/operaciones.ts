@@ -40,6 +40,11 @@ export const Sesion = z
     }),
     /** Hasta cuándo el dispositivo puede trabajar sin contacto (ADR-0009, parte 2). Cada bajada lo renueva. */
     permisoLocalHasta: Fecha,
+    /**
+     * Con qué nombre firma los documentos y a qué portal lleva el correo del informe (iteración 26): oficina los pone en la
+     * vista en vivo. `portal` es nulo si el entorno no lo configura, y entonces el correo no lleva el botón.
+     */
+    organizacion: z.object({ nombre: z.string(), portal: z.url().nullable() }),
   })
   .meta({ id: "Sesion" });
 
@@ -315,6 +320,15 @@ export const Historial = z
   .meta({ id: "Historial" });
 
 export const UrlDeArchivo = z.object({ url: z.url(), expiraEn: Fecha }).meta({ id: "UrlDeArchivo" });
+
+/**
+ * Un plano de oficina antes de publicar (iteración 26): `verificando` mientras el worker lo revisa; `listo` con las páginas
+ * que anexa (nulas si se verificó antes de contarlas); `ilegible` si el PDF del informe no podría anexarlo; `rechazado`
+ * si no pasó la verificación.
+ */
+export const EstadoDePlano = z
+  .object({ estado: z.enum(["verificando", "listo", "ilegible", "rechazado"]), paginas: z.int().positive().nullable() })
+  .meta({ id: "EstadoDePlano" });
 
 // Informes (corte 4)
 
@@ -671,12 +685,6 @@ export const SuscripcionAvisos = z
   .meta({ id: "SuscripcionAvisos" });
 
 export const ConfiguracionAvisos = z.object({ clavePublica: z.string().nullable() }).meta({ id: "ConfiguracionAvisos" });
-
-/**
- * Vista previa de una cotización (iteración 24): el borrador guardado con la plantilla del PDF. No es una operación
- * del contrato porque no responde JSON: es un documento HTML para un marco de oficina, con su propia CSP estricta.
- */
-export const rutaVistaPreviaCotizacion = (id: string) => `/api/cotizaciones/${id}/vista-previa`;
 
 export const operaciones = {
   obtenerSesion: {
@@ -1343,6 +1351,15 @@ export const operaciones = {
     parametros: z.object({ huella: Huella }),
     estadoExito: 200,
     respuesta: DocumentoBoceto,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  estadoDePlano: {
+    metodo: "GET",
+    ruta: "/api/archivos/{huella}/plano",
+    resumen: "Si un plano ya se verificó y cuántas páginas anexa al informe, o que no se puede anexar (iteración 26)",
+    parametros: z.object({ huella: Huella }),
+    estadoExito: 200,
+    respuesta: EstadoDePlano,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
   },
   urlDeArchivo: {

@@ -1,5 +1,32 @@
-import { escapar } from "../../plataforma/html";
-import type { MensajeDeEnvio } from "./esquema";
+import { escapar } from "./escapar";
+
+/** Lo que dice el mensaje, copiado de la versión al programarlo: el envío no lee el documento. */
+export interface MensajeDeInforme {
+  /** Los envíos de la iteración 20 no lo llevan: son informes. */
+  documento?: "informe";
+  organizacion: string;
+  cliente: string;
+  sitio: string;
+  motivo: string;
+  programadaPara: string;
+  numero: number;
+  nombreArchivo: string;
+}
+
+/** Una cotización publicada (ADR-0029): sin enlace al portal, que solo muestra informes. */
+export interface MensajeDeCotizacion {
+  documento: "cotizacion";
+  organizacion: string;
+  cliente: string;
+  sitio: string;
+  /** "COT-2026-0007". */
+  cotizacion: string;
+  /** Versión de la cotización. */
+  numero: number;
+  nombreArchivo: string;
+}
+
+export type MensajeDeEnvio = MensajeDeInforme | MensajeDeCotizacion;
 
 const fechaCorta = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const fechaLarga = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
@@ -84,3 +111,13 @@ ${
  */
 export const variablesDeWhatsapp = (m: MensajeDeEnvio, nombre: string) =>
   (m.documento === "cotizacion" ? [primerNombre(nombre), m.cotizacion, m.sitio, String(m.numero)] : [primerNombre(nombre), diaCorto(m.programadaPara), m.sitio, String(m.numero)]).map(unaLinea);
+
+/**
+ * El texto de la plantilla de WhatsApp que se registra en Meta, con sus variables como {{1}} a {{4}} en el orden
+ * de `variablesDeWhatsapp`, y su botón. Meta fija el texto; la vista en vivo lo muestra con las variables puestas.
+ */
+export function plantillaDeWhatsapp(m: MensajeDeEnvio): { texto: string; boton: string | null } {
+  return m.documento === "cotizacion"
+    ? { texto: `Hola, {{1}}. ${m.organizacion} le envía la cotización {{2}} para {{3}}, versión {{4}}. Va adjunta en PDF.`, boton: null }
+    : { texto: `Hola, {{1}}. ${m.organizacion} le envía el informe de la visita del {{2}} a {{3}}, versión {{4}}. Va adjunto en PDF.`, boton: "Ver en el portal" };
+}

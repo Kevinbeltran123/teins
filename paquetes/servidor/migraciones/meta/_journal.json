@@ -218,6 +218,13 @@
       "when": 1790822951558,
       "tag": "0030_contrasena_temporal",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790879694157,
+      "tag": "0031_paginas_de_planos",
+      "breakpoints": true
     }
   ]
 }

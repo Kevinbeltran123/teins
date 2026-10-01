@@ -4,7 +4,7 @@ import { llaveDeEnvio } from "@teins/protocolo";
 import { bocetoVacio, serializarBoceto, TIPO_ARCHIVO_BOCETO, type DocumentoBoceto, type ValorFirma, type VersionFormato } from "@teins/dominio";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { crearFormatos } from "../src/modulos/formatos";
-import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
+import { plantillaInforme } from "@teins/documentos";
 import { cabecerasSync, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
@@ -122,7 +122,7 @@ describe("firma del cliente en el servidor (iteración 16, ADR-0024)", () => {
         { id: randomUUID(), formato: conFirma, tecnico: "T", revisor: "O", recibidoEn: "2026-09-26T21:00:00.000Z", respuestas: valor === undefined ? {} : { cierre: { firma_cliente: valor } } },
       ] as never,
     });
-    const html = plantillaInforme(contenido(firma(huella)), { fuente: "", fotos: new Map(), firmas: new Map([[huella, '<svg id="firma"></svg>']]) });
+    const html = plantillaInforme(contenido(firma(huella)), { salida: { tipo: "pdf", fuente: "" }, fotos: new Map(), firmas: new Map([[huella, '<svg id="firma"></svg>']]) });
     expect(html).toContain("<h4>Constancia de visita</h4>");
     expect(html).toContain("Confirmo que Técnico de prueba visitó Cliente de prueba");
     expect(html).toContain('<div class="trazo"><svg id="firma"></svg><p><strong>Martha Gómez</strong>');
@@ -130,8 +130,8 @@ describe("firma del cliente en el servidor (iteración 16, ADR-0024)", () => {
     expect(html).toContain("Firmado en el sitio el 26 de septiembre de 2026 a las 3:40");
     // Firmada, no se repite en la tabla de datos.
     expect(html).not.toContain("Firmada por Martha Gómez");
-    expect(plantillaInforme(contenido(firma(huella)), { fuente: "", fotos: new Map() })).toContain("[FIRMA]");
-    const sinFirma = plantillaInforme(contenido({ noObtenido: true, motivo: "Nadie del cliente estaba" }), { fuente: "", fotos: new Map() });
+    expect(plantillaInforme(contenido(firma(huella)), { salida: { tipo: "pdf", fuente: "" }, fotos: new Map() })).toContain("[FIRMA]");
+    const sinFirma = plantillaInforme(contenido({ noObtenido: true, motivo: "Nadie del cliente estaba" }), { salida: { tipo: "pdf", fuente: "" }, fotos: new Map() });
     expect(sinFirma).toContain("No se pudo obtener: Nadie del cliente estaba");
     expect(sinFirma).not.toContain("Constancia de visita");
   });

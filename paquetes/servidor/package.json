@@ -33,6 +33,7 @@
     "@fastify/helmet": "^13.1.1",
     "@fastify/static": "^10.1.4",
     "@fontsource-variable/geist": "^5.3.0",
+    "@teins/documentos": "workspace:*",
     "@teins/dominio": "workspace:*",
     "@teins/protocolo": "workspace:*",
     "better-auth": "^1.7.6",

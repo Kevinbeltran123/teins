@@ -4,7 +4,7 @@ import { llaveDeEnvio } from "@teins/protocolo";
 import type { ContenidoVersion, VersionFormato } from "@teins/dominio";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { crearFormatos } from "../src/modulos/formatos";
-import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
+import { plantillaInforme } from "@teins/documentos";
 import { cabecerasSync, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
@@ -122,7 +122,7 @@ describe("secciones repetibles en el servidor (iteración 9)", () => {
         },
       ],
     } satisfies ContenidoVersion;
-    const html = plantillaInforme(contenido, { fuente: "", fotos: new Map() });
+    const html = plantillaInforme(contenido, { salida: { tipo: "pdf", fuente: "" }, fotos: new Map() });
     const primero = html.indexOf("Tableros · Tablero del sótano");
     const segundo = html.indexOf("Tableros · Tablero 2");
     expect(primero).toBeGreaterThan(0);

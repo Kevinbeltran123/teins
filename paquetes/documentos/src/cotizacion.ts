@@ -1,11 +1,26 @@
-import { TARIFA_IVA } from "@teins/dominio";
-import { escapar } from "../../../plataforma/html";
-import { LOGO_TEINS } from "../../../plataforma/logo";
-import type { ContenidoCotizacion } from "../esquema";
+import { TARIFA_IVA, type CondicionesCotizacion, type Impuestos, type LineaDeCotizacion, type Totales } from "@teins/dominio";
+import { escapar } from "./escapar";
+import { LOGO_TEINS } from "./logo";
+import { estilosDe, type Salida } from "./salida";
+
+/** Copia congelada de lo que se publicó: el PDF y el envío leen solo esto. La vista arma la de la siguiente versión. */
+export interface ContenidoCotizacion {
+  numero: string;
+  version: number;
+  publicadaEn: string;
+  publicadaPor: string;
+  organizacion: { nombre: string };
+  visita: { cliente: string; sitio: string; direccion: string; programadaPara: string };
+  lineas: LineaDeCotizacion[];
+  impuestos: Impuestos;
+  condiciones: CondicionesCotizacion;
+  totales: Totales;
+}
 
 /**
  * Plantilla de la cotización (ADR-0029), con la dirección de DESIGN.md y la maqueta aprobada (lienzo,
- * "v1.1 · Cotizaciones"). Se arma solo desde la copia congelada de la versión, con la fuente incrustada.
+ * "v1.1 · Cotizaciones"). El PDF se arma solo desde la copia congelada de la versión, con la fuente incrustada;
+ * la vista en vivo de oficina, desde el borrador (ADR-0031).
  * Lo que TEINS no ha entregado (NIT, dirección, forma de pago) va como marcador, nunca inventado.
  */
 const MARCA = { superficie: "#002B81", texto: "#15171A", secundario: "#525152", division: "#E1E4EA", suave: "#F3F6FC" };
@@ -20,15 +35,20 @@ const cantidad = (decimal: string) => decimal.replace(".", ",");
 /** "10" → "10 %"; "2.5" → "2,5 %". */
 const pct = (p: string) => `${p.replace(".", ",")} %`;
 
-export function plantillaCotizacion(c: ContenidoCotizacion, { fuente }: { fuente: string }): string {
+/** Con qué nombre se descarga y se adjunta: se encuentra después por el número y el cliente. */
+export const nombreDelPdfDeCotizacion = (c: Pick<ContenidoCotizacion, "numero" | "version" | "visita">) =>
+  `Cotización ${c.numero} - ${c.visita.cliente} - versión ${c.version}.pdf`.replace(/[/\\:*?"<>|]/g, "-");
+
+export function plantillaCotizacion(c: ContenidoCotizacion, { salida }: { salida: Salida }): string {
   const publicada = new Date(c.publicadaEn);
   const validaHasta = new Date(publicada.getTime() + c.condiciones.validezDias * 86_400_000);
   const t = c.totales;
   const filas = c.lineas
-    .map(
-      (l, i) =>
-        `<tr><td>${escapar(l.codigo ?? "")}</td><td>${escapar(l.descripcion)}</td><td class="numero">${cantidad(l.cantidad)}</td><td>${escapar(l.unidad)}</td><td class="numero">${pesos(l.precio ?? 0)}</td><td class="numero fuerte">${pesos(t.lineas[i] ?? 0)}</td></tr>`,
-    )
+    .map((l, i) => {
+      // Una línea sin precio solo existe en el borrador (publicar lo exige): en la vista va como marcador.
+      const total = t.lineas[i] ?? null;
+      return `<tr><td>${escapar(l.codigo ?? "")}</td><td>${escapar(l.descripcion)}</td><td class="numero">${cantidad(l.cantidad)}</td><td>${escapar(l.unidad)}</td><td class="numero">${l.precio === null ? '<span class="secundario">[Precio]</span>' : pesos(l.precio)}</td><td class="numero fuerte">${total === null ? "" : pesos(total)}</td></tr>`;
+    })
     .join("");
   const totales = [
     ["Subtotal", t.subtotal],
@@ -47,31 +67,7 @@ export function plantillaCotizacion(c: ContenidoCotizacion, { fuente }: { fuente
 <head>
 <meta charset="utf-8">
 <title>Cotización ${escapar(c.numero)} · versión ${c.version}</title>
-<style>
-@font-face { font-family: "Geist"; src: url(data:font/woff2;base64,${fuente}) format("woff2"); font-weight: 100 900; }
-@page { size: Letter; margin: 20mm 18mm 20mm; }
-* { box-sizing: border-box; }
-body { margin: 0; font-family: "Geist", sans-serif; font-size: 9.5pt; line-height: 1.45; color: ${MARCA.texto}; font-variant-numeric: tabular-nums; }
-.encabezado { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5pt solid ${MARCA.superficie}; padding-bottom: 10pt; }
-.logo { display: block; height: 26pt; width: auto; margin-bottom: 4pt; }
-.secundario { color: ${MARCA.secundario}; }
-.documento { text-align: right; }
-.documento h1 { margin: 0; font-size: 14pt; font-weight: 600; }
-.partes { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; margin: 14pt 0; }
-.partes strong { font-size: 11pt; }
-table { width: 100%; border-collapse: collapse; }
-table.lineas th { background: ${MARCA.suave}; text-align: left; padding: 5pt 6pt; font-weight: 600; }
-table.lineas td { padding: 5pt 6pt; border-bottom: 0.75pt solid ${MARCA.division}; vertical-align: top; }
-table.lineas tr { break-inside: avoid; }
-.numero { text-align: right; white-space: nowrap; }
-.fuerte { font-weight: 600; }
-.totales { display: flex; justify-content: flex-end; margin-top: 10pt; break-inside: avoid; }
-.totales table { width: 250pt; }
-.totales td { padding: 3pt 6pt; }
-.totales tr.total td { font-size: 11pt; font-weight: 600; border-top: 1.5pt solid ${MARCA.superficie}; padding-top: 5pt; }
-.condiciones { margin-top: 16pt; break-inside: avoid; }
-.condiciones p { margin: 0 0 3pt; }
-</style>
+${estilosDe("cotizacion", ESTILOS_COTIZACION, salida)}
 </head>
 <body>
 <header class="encabezado">
@@ -103,6 +99,31 @@ table.lineas tr { break-inside: avoid; }
 </body>
 </html>`;
 }
+
+/** Los estilos de la cotización: los mismos en el PDF y en la vista. */
+export const ESTILOS_COTIZACION = `@page { size: Letter; margin: 20mm 18mm 20mm; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Geist", sans-serif; font-size: 9.5pt; line-height: 1.45; color: ${MARCA.texto}; font-variant-numeric: tabular-nums; }
+.encabezado { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5pt solid ${MARCA.superficie}; padding-bottom: 10pt; }
+.logo { display: block; height: 26pt; width: auto; margin-bottom: 4pt; }
+.secundario { color: ${MARCA.secundario}; }
+.documento { text-align: right; }
+.documento h1 { margin: 0; font-size: 14pt; font-weight: 600; }
+.partes { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; margin: 14pt 0; }
+.partes strong { font-size: 11pt; }
+table { width: 100%; border-collapse: collapse; }
+table.lineas th { background: ${MARCA.suave}; text-align: left; padding: 5pt 6pt; font-weight: 600; }
+table.lineas td { padding: 5pt 6pt; border-bottom: 0.75pt solid ${MARCA.division}; vertical-align: top; }
+table.lineas tr { break-inside: avoid; }
+.numero { text-align: right; white-space: nowrap; }
+.fuerte { font-weight: 600; }
+.totales { display: flex; justify-content: flex-end; margin-top: 10pt; break-inside: avoid; }
+.totales table { width: 250pt; }
+.totales td { padding: 3pt 6pt; }
+.totales tr.total td { font-size: 11pt; font-weight: 600; border-top: 1.5pt solid ${MARCA.superficie}; padding-top: 5pt; }
+.condiciones { margin-top: 16pt; break-inside: avoid; }
+.condiciones p { margin: 0 0 3pt; }
+`;
 
 export function piePaginaCotizacion(c: ContenidoCotizacion): string {
   return `<div style="font-family: sans-serif; font-size: 8pt; color: ${MARCA.secundario}; width: 100%; padding: 0 18mm; display: flex; justify-content: space-between;">

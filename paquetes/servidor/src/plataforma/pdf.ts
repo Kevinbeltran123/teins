@@ -24,6 +24,19 @@ export interface Impresion {
   chromiumRuta?: string | undefined;
 }
 
+/**
+ * Cuántas páginas anexaría un plano al informe, con los mismos dos pasos de `imprimirPdf` (cargar y copiar); 0 si
+ * pdf-lib no puede, porque entonces el PDF del informe fallaría con `PlanoIlegible` (iteración 26).
+ */
+export async function paginasDePlano(plano: Uint8Array): Promise<number> {
+  try {
+    const origen = await PDFDocument.load(plano);
+    return (await (await PDFDocument.create()).copyPages(origen, origen.getPageIndices())).length;
+  } catch {
+    return 0;
+  }
+}
+
 export class PlanoIlegible extends Error {
   constructor(readonly posicion: number) {
     super(`El plano ${posicion} no es un PDF que se pueda anexar`);

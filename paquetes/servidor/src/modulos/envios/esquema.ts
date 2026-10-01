@@ -1,4 +1,5 @@
 import { index, jsonb, pgSchema, text, uuid } from "drizzle-orm/pg-core";
+import type { MensajeDeEnvio } from "@teins/documentos";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 export const esquemaEnvios = pgSchema("envios");
@@ -7,32 +8,7 @@ export type CanalDeEnvio = "correo" | "whatsapp";
 export type EstadoDeEnvio = "en_cola" | "enviado" | "entregado" | "fallido";
 
 /** Lo que dice el mensaje, copiado de la versión al programarlo: el envío no lee el documento. */
-export interface MensajeDeInforme {
-  /** Los envíos de la iteración 20 no lo llevan: son informes. */
-  documento?: "informe";
-  organizacion: string;
-  cliente: string;
-  sitio: string;
-  motivo: string;
-  programadaPara: string;
-  numero: number;
-  nombreArchivo: string;
-}
-
-/** Una cotización publicada (ADR-0029): sin enlace al portal, que solo muestra informes. */
-export interface MensajeDeCotizacion {
-  documento: "cotizacion";
-  organizacion: string;
-  cliente: string;
-  sitio: string;
-  /** "COT-2026-0007". */
-  cotizacion: string;
-  /** Versión de la cotización. */
-  numero: number;
-  nombreArchivo: string;
-}
-
-export type MensajeDeEnvio = MensajeDeInforme | MensajeDeCotizacion;
+export type { MensajeDeCotizacion, MensajeDeEnvio, MensajeDeInforme } from "@teins/documentos";
 
 /**
  * Una copia del informe a un contacto por un canal (ADR-0028). El nombre y el destino se copian: el
