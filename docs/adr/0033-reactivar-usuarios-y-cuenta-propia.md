@@ -1,6 +1,6 @@
 # ADR-0033 · Reactivar usuarios y administrar la cuenta propia
 
-- **Estado:** Propuesta, aplazada (Kevin, 2026-10-01: no es prioridad). Condición antes de transferir producción a TEINS (ADR-0021): el cambio obligatorio de la contraseña temporal y el cambio de la propia contraseña (puntos 2 y 4), porque hoy una temporal se queda para siempre. Reactivar y quitar el propio segundo factor esperan a que el piloto los pida
+- **Estado:** Aceptada (Kevin, 2026-10-01: "es primordial"; primero en el orden)
 - **Fecha:** 2026-10-01
 - **Impulsores:** QA-5, QA-6, I-14, I-18 a I-22
 - **Depende de:** ADR-0009 (identidad y acceso), ADR-0022 (cifrado local)
@@ -60,3 +60,9 @@ A y B resuelven la reactivación; C, la cuenta propia. Se evalúan A y B, y C po
 
 - Si TEINS pide recuperación por correo: contradice ADR-0009 y va en otro ADR.
 - Si un usuario reactivado necesita conservar lo que tenía en el teléfono: no es posible por diseño (ADR-0022), y la respuesta es enviar antes de desactivar.
+
+## Notas para construirla
+
+- La API de autenticación solo deja pasar una lista cerrada de rutas (`RUTAS_DE_AUTENTICACION`, `modulos/identidad/index.ts`). Cambiar la contraseña (`/change-password`) y quitar el segundo factor (`/two-factor/disable`) se agregan a esa lista, con el mismo límite de intentos del ingreso (QA-7). A quien administra, el servidor le rechaza quitar el segundo factor.
+- El cambio obligatorio de la temporal necesita una marca en el usuario (migración nueva), que se pone al crearlo, al restablecerle la contraseña y al reactivarlo, y se quita al cambiarla. Mientras la tenga, las políticas del servidor solo le dejan cambiar la contraseña y cerrar sesión (denegar por defecto, regla 9 de AGENTS.md).
+- Reactivar es una operación nueva del módulo de identidad: borra la fecha de desactivación, genera la temporal y lo registra. Las órdenes de borrado de sus teléfonos ya cumplidas no se deshacen.

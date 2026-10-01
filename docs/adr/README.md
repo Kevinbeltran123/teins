@@ -56,7 +56,7 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0030](0030-presupuesto-de-campo-para-el-rediseno.md) | El presupuesto de JavaScript inicial de campo sube a 135 KB para el rediseño Recorrido | Aceptada |
 | [0031](0031-vista-en-vivo-de-los-documentos.md) | Vista en vivo de los documentos desde las mismas plantillas del PDF, en un paquete compartido | Aceptada |
 | [0032](0032-soltar-reabrir-y-devolver-una-revision.md) | Soltar, reabrir y devolver una revisión (estado "Devuelto") | Propuesta, aplazada |
-| [0033](0033-reactivar-usuarios-y-cuenta-propia.md) | Reactivar usuarios y administrar la cuenta propia | Propuesta, aplazada (dos puntos, antes de transferir producción) |
+| [0033](0033-reactivar-usuarios-y-cuenta-propia.md) | Reactivar usuarios y administrar la cuenta propia | Aceptada |
 | [0034](0034-cancelar-envios-y-retirar-cotizaciones.md) | Cancelar un envío en cola y retirar una versión de cotización (reemplaza a 0029 en un punto) | Aceptada |
 | [0035](0035-archivar-clientes-comentarios-y-borradores.md) | Editar y archivar clientes, sitios y comentarios, y descartar borradores en campo | Aceptada |
 
