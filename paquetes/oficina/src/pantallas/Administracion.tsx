@@ -37,6 +37,7 @@ import {
   enfocarPrimerError,
   Bell,
   LogOut,
+  History,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { consultasDeAdministracion, mensajeDeAdministracion, qrComoImagen, useAccion } from "../administracion";
@@ -313,16 +314,19 @@ function EntregaUnaVez({ titulo, subtitulo, icono, amplio, children, alCerrar }:
 type Rol = "tecnico" | "oficina";
 const ROL: Record<Rol, string> = { tecnico: "Técnico", oficina: "Oficina" };
 
-type Pendiente = { accion: "restablecer" | "administracion" | "desactivar"; u: Usuario };
+type Pendiente = { accion: "restablecer" | "administracion" | "desactivar" | "reactivar"; u: Usuario };
+type EntregaDeUsuario = "creado" | "restablecida" | "reactivado";
+const TITULO_DE_ENTREGA: Record<EntregaDeUsuario, string> = { creado: "Usuario creado", restablecida: "Contraseña restablecida", reactivado: "Usuario reactivado" };
 
 function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: string; creando: boolean; setCreando: (v: boolean) => void; busqueda: string }) {
   const consulta = useQuery(consultasDeAdministracion.usuarios());
   const [nuevos, setNuevos] = useState<string[]>([]);
   const [pendiente, setPendiente] = useState<Pendiente | null>(null);
-  const [credencial, setCredencial] = useState<{ nombre: string; usuario: string; contrasena: string; nuevo: boolean } | null>(null);
+  const [credencial, setCredencial] = useState<{ nombre: string; usuario: string; contrasena: string; entrega: EntregaDeUsuario } | null>(null);
 
   const restablecer = useAccion((u: Usuario) => cliente.llamar("restablecerContrasenaAdministrada", { parametros: { id: u.id } }));
   const desactivar = useAccion((u: Usuario) => cliente.llamar("desactivarUsuarioAdministrado", { parametros: { id: u.id } }));
+  const reactivar = useAccion((u: Usuario) => cliente.llamar("reactivarUsuarioAdministrado", { parametros: { id: u.id } }));
   const marcar = useAccion((e: { u: Usuario; administrador: boolean }) => cliente.llamar("marcarAdministrador", { parametros: { id: e.u.id }, cuerpo: { administrador: e.administrador } }));
 
   return (
@@ -364,7 +368,11 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
                 </CeldaTabla>
                 <CeldaTabla>
                   {activo ? (
-                    <Insignia tono="exito">Activo</Insignia>
+                    <>
+                      <Insignia tono="exito">Activo</Insignia>
+                      {/* Todavía no entra con una propia: si no la cambió, quizá no recibió la temporal. */}
+                      {u.debeCambiarContrasena && <span className="sub">Debe cambiar su contraseña</span>}
+                    </>
                   ) : (
                     <>
                       <Insignia tono="neutro">Desactivado</Insignia>
@@ -373,6 +381,11 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
                   )}
                 </CeldaTabla>
                 <CeldaTabla derecha>
+                  {!activo && (
+                    <Boton tamano="pequeno" onClick={() => setPendiente({ accion: "reactivar", u })}>
+                      Reactivar usuario
+                    </Boton>
+                  )}
                   {activo && !propio && (
                     <MenuAcciones
                       etiqueta={`Más acciones para ${u.nombre}`}
@@ -398,7 +411,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
           alCrear={(r) => {
             setCreando(false);
             setNuevos((n) => [r.id, ...n]);
-            setCredencial({ nombre: r.nombre, usuario: r.usuario, contrasena: r.contrasena, nuevo: true });
+            setCredencial({ nombre: r.nombre, usuario: r.usuario, contrasena: r.contrasena, entrega: "creado" });
           }}
         />
       )}
@@ -412,10 +425,10 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
           alCerrar={() => setPendiente(null)}
           accion={async () => {
             const { contrasena } = await restablecer.mutateAsync(pendiente.u);
-            setCredencial({ nombre: pendiente.u.nombre, usuario: pendiente.u.usuario, contrasena, nuevo: false });
+            setCredencial({ nombre: pendiente.u.nombre, usuario: pendiente.u.usuario, contrasena, entrega: "restablecida" });
           }}
           consecuencias={[
-            { icono: KeyRound, texto: "Le entrega una contraseña temporal", detalle: "Se muestra una sola vez; entréguela en persona" },
+            { icono: KeyRound, texto: "Le entrega una contraseña temporal", detalle: "La cambia al entrar; se muestra una sola vez" },
             { icono: LogOut, texto: "Se cierran sus sesiones en todos los equipos" },
             { icono: ShieldCheck, texto: "Se quitan su segundo factor y sus llaves de acceso", detalle: pendiente.u.administrador ? "Para administrar tendrá que activar el segundo factor otra vez" : "Si perdió un teléfono o un computador, ya no sirven para entrar" },
             { icono: Bell, texto: "Deja de recibir avisos hasta que los vuelva a activar" },
@@ -455,8 +468,31 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
         </Confirmacion>
       )}
 
+      {pendiente?.accion === "reactivar" && (
+        <Confirmacion
+          nivel="consecuencia"
+          titulo={`¿Reactivar a ${pendiente.u.nombre}?`}
+          confirmar="Reactivar usuario"
+          mensajeDeError={mensajeDeAdministracion}
+          alCerrar={() => setPendiente(null)}
+          accion={async () => {
+            const { contrasena } = await reactivar.mutateAsync(pendiente.u);
+            setNuevos((n) => [pendiente.u.id, ...n.filter((id) => id !== pendiente.u.id)]);
+            setCredencial({ nombre: pendiente.u.nombre, usuario: pendiente.u.usuario, contrasena, entrega: "reactivado" });
+          }}
+          consecuencias={[
+            { icono: KeyRound, texto: "Le entrega una contraseña temporal", detalle: "La cambia al entrar; se muestra una sola vez" },
+            ...(pendiente.u.rol === "tecnico"
+              ? [{ icono: Smartphone, texto: "Su teléfono empieza de cero", detalle: "Lo que tenía se borró al desactivarlo; lo suyo vuelve a bajar del servidor" }]
+              : []),
+            { icono: History, texto: "Conserva su historia", detalle: "Lo que hizo y su autoría siguen en esta cuenta" },
+            { icono: ShieldCheck, texto: "No recupera sesiones, llaves ni segundo factor" },
+          ]}
+        />
+      )}
+
       {credencial && (
-        <EntregaUnaVez titulo={credencial.nuevo ? "Usuario creado" : "Contraseña restablecida"} subtitulo={credencial.nombre} icono={UserRound} alCerrar={() => setCredencial(null)}>
+        <EntregaUnaVez titulo={TITULO_DE_ENTREGA[credencial.entrega]} subtitulo={credencial.nombre} icono={UserRound} alCerrar={() => setCredencial(null)}>
           <dl className="flex flex-col gap-1">
             <dt className="text-ayuda text-texto-secundario">Usuario</dt>
             <dd className="pb-3">
@@ -468,7 +504,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
               <BotonCopiar texto={credencial.contrasena} etiqueta="Copiar la contraseña temporal" />
             </dd>
           </dl>
-          <p className="text-cuerpo text-texto-secundario">Entréguela en persona o por un medio distinto al del usuario.</p>
+          <p className="text-cuerpo text-texto-secundario">Entréguela en persona o por un medio distinto al del usuario. Al entrar, la cambia.</p>
         </EntregaUnaVez>
       )}
     </div>

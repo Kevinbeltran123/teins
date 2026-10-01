@@ -40,3 +40,13 @@ export const consultas = {
 
 /** Frescura de la bandeja (ADR-0014): consulta periódica y al volver a la pestaña. */
 export const REFRESCO_BANDEJA_MS = 60_000;
+
+/**
+ * La contraseña con la que se acaba de entrar, solo en memoria y solo hasta leer la sesión: si es temporal, la
+ * pantalla obligatoria la manda como la actual y la persona escribe solo la nueva (ADR-0033). Si la página se
+ * recarga antes, se pierde y esa pantalla la pide.
+ */
+let contrasenaDeIngreso: string | null = null;
+export const recordarContrasenaDeIngreso = (contrasena: string) => void (contrasenaDeIngreso = contrasena);
+export const leerContrasenaDeIngreso = () => contrasenaDeIngreso;
+export const olvidarContrasenaDeIngreso = () => void (contrasenaDeIngreso = null);

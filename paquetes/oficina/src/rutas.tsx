@@ -1,12 +1,14 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
 import { Aviso, Boton, claseBoton, EncabezadoPagina, FallaAlDibujar, RefreshCw, useModal } from "@teins/ui";
-import { consultas, esSesionVencida } from "./api";
+import { consultas, esSesionVencida, olvidarContrasenaDeIngreso } from "./api";
 import { Administracion } from "./pantallas/Administracion";
 import { Bandeja } from "./pantallas/Bandeja";
 import { Catalogo } from "./pantallas/Catalogo";
 import { DetalleCliente } from "./pantallas/Cliente";
 import { Clientes } from "./pantallas/Clientes";
+import { ContrasenaObligatoria } from "./pantallas/ContrasenaObligatoria";
 import { DetalleCotizacion } from "./pantallas/Cotizacion";
 import { Cotizaciones } from "./pantallas/Cotizaciones";
 import { Detalle } from "./pantallas/Detalle";
@@ -33,6 +35,11 @@ function SesionVencida() {
 /** Toda pantalla de oficina exige una sesión de oficina; la autorización real la aplica el servidor. */
 function Raiz() {
   const sesion = useQuery(consultas.sesion());
+  // La contraseña con la que entró solo se guarda para cambiar una temporal: con otra, se olvida al leer la sesión.
+  const conPermanente = sesion.data?.usuario.debeCambiarContrasena === false;
+  useEffect(() => {
+    if (conPermanente) olvidarContrasenaDeIngreso();
+  }, [conPermanente]);
   if (sesion.isPending) {
     return (
       <div aria-busy="true" aria-label="Abriendo TEINS" className="grid min-h-dvh place-items-center bg-fondo">
@@ -58,6 +65,7 @@ function Raiz() {
   if (sesion.data.usuario.rol !== "oficina") {
     return <IniciarSesion aviso="Este usuario es de técnico: la bandeja es solo para oficina. Inicie sesión con un usuario de oficina." />;
   }
+  if (sesion.data.usuario.debeCambiarContrasena) return <ContrasenaObligatoria />;
   return (
     <>
       {/* Si ingresa otra persona, todo empieza de nuevo: lo escrito por la anterior no queda a la vista. */}

@@ -2,7 +2,7 @@ import { useId, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed, esLlaveCancelada } from "@teins/protocolo";
 import { Aviso, CampoDeIngreso, claseBotonIngreso, KeyRound, LoaderCircle, MarcoDeIngreso, SeparadorIngreso } from "@teins/ui";
-import { cliente, consultas } from "../api";
+import { cliente, consultas, recordarContrasenaDeIngreso } from "../api";
 
 /** En el computador también sirve la llave del celular (con un código QR): basta con que el navegador sepa de llaves. */
 const conLlaves = typeof window !== "undefined" && "PublicKeyCredential" in window;
@@ -75,6 +75,7 @@ export function IniciarSesion({ aviso }: { aviso?: string }) {
     setEstado({ tipo: "enviando" });
     try {
       const { pideCodigo } = await cliente.iniciarSesion(usuario, contrasena);
+      recordarContrasenaDeIngreso(contrasena);
       if (pideCodigo) {
         setPideCodigo(true);
         setEstado({ tipo: "listo" });

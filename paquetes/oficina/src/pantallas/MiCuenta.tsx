@@ -1,9 +1,37 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Bell, Boton, BotonIcono, Confirmacion, EncabezadoPagina, GrupoDeOpciones, Insignia, KeyRound, LogOut, OPCIONES_DE_TEMA, Plus, RefreshCw, ShieldCheck, Trash, useNotificar, useTema } from "@teins/ui";
+import {
+  Aviso,
+  Bell,
+  Boton,
+  BotonIcono,
+  CampoTexto,
+  Confirmacion,
+  Consecuencias,
+  Dialogo,
+  EncabezadoPagina,
+  enfocarPrimerError,
+  GrupoDeOpciones,
+  Insignia,
+  KeyRound,
+  LockKeyhole,
+  LogOut,
+  OPCIONES_DE_TEMA,
+  Plus,
+  RefreshCw,
+  RequisitosDeContrasena,
+  ShieldCheck,
+  ShieldOff,
+  Trash,
+  useNotificar,
+  useTema,
+  validarContrasenaNueva,
+  type ErroresDeContrasena,
+} from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { activarAvisos, desactivarAvisos, estadoAvisos, type EstadoAvisos } from "../avisos";
+import { errorDeCuenta } from "../cuenta";
 import { aFechaHora } from "../formato";
 import { mensajeDeError } from "../mensajes";
 
@@ -28,6 +56,7 @@ export function MiCuenta({ nombre }: { nombre: string }) {
     <>
       <EncabezadoPagina titulo="Mi cuenta" descripcion={<span>{nombre}</span>} />
       <div className="doc estrecho">
+      <Acceso nombre={nombre} />
       <section aria-labelledby="titulo-llaves">
         <div className="cab-sec">
             <h2 id="titulo-llaves">Llaves de acceso</h2>
@@ -156,10 +185,9 @@ function AvisosDelNavegador() {
   );
 }
 
-/** La sesión en este navegador: el segundo factor y cerrar sesión (prototipos/oficina, "Sesión"). */
+/** La sesión en este navegador: cerrar sesión (prototipos/oficina, "Sesión"). */
 function SesionActual() {
   const consultasCliente = useQueryClient();
-  const sesion = useQuery(consultas.sesion());
   const [saliendo, setSaliendo] = useState(false);
 
   async function cerrarSesion() {
@@ -174,13 +202,6 @@ function SesionActual() {
     <section aria-labelledby="titulo-sesion">
       <h2 id="titulo-sesion">Sesión</h2>
       <div className="filas">
-        <div className="fila">
-          <ShieldCheck aria-hidden size={18} />
-          <div className="txt">
-            <b>Segundo factor</b>
-            <small>{sesion.data?.usuario.segundoFactor ? "Activo: el ingreso le pide el código de su app autenticadora" : "Sin activar"}</small>
-          </div>
-        </div>
         <div className="fila">
           <LogOut aria-hidden size={18} />
           <div className="txt">
@@ -204,5 +225,207 @@ function SelectorDeTema() {
       <GrupoDeOpciones etiqueta="Tema" opciones={OPCIONES_DE_TEMA} valor={tema} onCambio={setTema} />
       <p className="ayuda">Se recuerda en este equipo.</p>
     </section>
+  );
+}
+
+/**
+ * Cómo entra la persona (ADR-0033, prototipos/cuenta): cambiar su contraseña y, si no administra, quitar su segundo
+ * factor. Quien administra lo necesita siempre (ADR-0009): se dice, sin botón.
+ */
+function Acceso({ nombre }: { nombre: string }) {
+  const notificar = useNotificar();
+  const consultasCliente = useQueryClient();
+  const sesion = useQuery(consultas.sesion());
+  const [abierta, setAbierta] = useState<"contrasena" | "factor" | null>(null);
+  const [cambiada, setCambiada] = useState(false);
+  const usuario = sesion.data?.usuario;
+
+  return (
+    <section aria-labelledby="titulo-acceso">
+      <h2 id="titulo-acceso">Acceso</h2>
+      <div className="filas">
+        <div className="fila">
+          <LockKeyhole aria-hidden size={18} />
+          <div className="txt">
+            <b>Contraseña</b>
+            <small>{cambiada ? "Cambiada hace un momento" : "Si la olvida, administración la restablece"}</small>
+          </div>
+          <Boton tamano="pequeno" onClick={() => setAbierta("contrasena")}>
+            Cambiar contraseña
+          </Boton>
+        </div>
+        <div className="fila">
+          <ShieldCheck aria-hidden size={18} />
+          <div className="txt">
+            <b>Segundo factor</b>
+            <small>
+              {!usuario?.segundoFactor
+                ? "Sin activar"
+                : usuario.administrador
+                  ? "Activo · obligatorio para administrar, no se puede quitar"
+                  : "Activo: el ingreso le pide el código de su app autenticadora"}
+            </small>
+          </div>
+          {usuario?.segundoFactor && !usuario.administrador && (
+            <Boton tamano="pequeno" onClick={() => setAbierta("factor")}>
+              Quitar segundo factor
+            </Boton>
+          )}
+        </div>
+      </div>
+
+      {abierta === "contrasena" && (
+        <CambiarContrasena
+          nombre={nombre}
+          alCerrar={() => setAbierta(null)}
+          alCambiar={() => {
+            setAbierta(null);
+            setCambiada(true);
+            notificar({ texto: "Contraseña cambiada · se cerraron las demás sesiones" });
+          }}
+        />
+      )}
+      {abierta === "factor" && (
+        <QuitarSegundoFactor
+          alCerrar={() => setAbierta(null)}
+          alQuitar={() => {
+            setAbierta(null);
+            notificar({ texto: "Segundo factor quitado" });
+            void consultasCliente.invalidateQueries({ queryKey: consultas.sesion().queryKey });
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+/** Con la actual, en una hoja lateral: una sesión abierta en un computador ajeno no basta para cambiarla. */
+function CambiarContrasena({ nombre, alCerrar, alCambiar }: { nombre: string; alCerrar: () => void; alCambiar: () => void }) {
+  const formulario = useId();
+  const [actual, setActual] = useState("");
+  const [nueva, setNueva] = useState("");
+  const [repetir, setRepetir] = useState("");
+  const [errores, setErrores] = useState<ErroresDeContrasena>({});
+  const [general, setGeneral] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  async function guardar(evento: FormEvent) {
+    evento.preventDefault();
+    const encontrados = validarContrasenaNueva({ actual, nueva, repetir, pideActual: true, tu: false });
+    setErrores(encontrados);
+    setGeneral(null);
+    if (Object.keys(encontrados).length > 0) return enfocarPrimerError(formulario);
+    setOcupado(true);
+    try {
+      await cliente.llamar("cambiarContrasena", { cuerpo: { actual, nueva } });
+      alCambiar();
+    } catch (error) {
+      setOcupado(false);
+      const { campo, general } = errorDeCuenta(error);
+      if (campo) {
+        setErrores({ [campo.ruta === "actual" ? "actual" : "nueva"]: campo.mensaje });
+        enfocarPrimerError(formulario);
+      } else setGeneral(general ?? null);
+    }
+  }
+
+  return (
+    <Dialogo
+      forma="lateral"
+      titulo="Cambiar contraseña"
+      subtitulo={nombre}
+      cerrable={!ocupado}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={ocupado}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={ocupado}>
+            Cambiar contraseña
+          </Boton>
+        </>
+      }
+    >
+      <form id={formulario} onSubmit={guardar} noValidate className="flex flex-col gap-5">
+        <CampoTexto etiqueta="Contraseña actual" nombre="actual" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setActual} error={errores.actual} />
+        <CampoTexto etiqueta="Contraseña nueva" nombre="nueva" tipo="password" autoComplete="new-password" valorInicial="" onCambio={setNueva} error={errores.nueva} />
+        <CampoTexto etiqueta="Repita la contraseña nueva" nombre="repetir" tipo="password" autoComplete="new-password" valorInicial="" onCambio={setRepetir} error={errores.repetir} />
+        <RequisitosDeContrasena actual={actual} nueva={nueva} repetir={repetir} />
+        <Consecuencias
+          lista={[
+            { icono: LogOut, texto: "Se cierran sus sesiones en los demás equipos. Esta sigue abierta." },
+            { icono: KeyRound, texto: "Su segundo factor y sus llaves de acceso no cambian." },
+          ]}
+        />
+        {general && <Aviso tono="error">{general}</Aviso>}
+      </form>
+    </Dialogo>
+  );
+}
+
+/** Baja la protección de la cuenta: pide la contraseña y un código vigente, y dice qué cambia. */
+function QuitarSegundoFactor({ alCerrar, alQuitar }: { alCerrar: () => void; alQuitar: () => void }) {
+  const formulario = useId();
+  const [contrasena, setContrasena] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [errores, setErrores] = useState<{ contrasena?: string; codigo?: string }>({});
+  const [general, setGeneral] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  async function quitar(evento: FormEvent) {
+    evento.preventDefault();
+    const limpio = codigo.replace(/\s/g, "");
+    const encontrados = {
+      ...(contrasena === "" ? { contrasena: "Escriba su contraseña." } : {}),
+      ...(!/^\d{6}$/.test(limpio) ? { codigo: "Escriba los 6 dígitos que muestra su app." } : {}),
+    };
+    setErrores(encontrados);
+    setGeneral(null);
+    if (Object.keys(encontrados).length > 0) return enfocarPrimerError(formulario);
+    setOcupado(true);
+    try {
+      await cliente.llamar("quitarSegundoFactor", { cuerpo: { contrasena, codigo: limpio } });
+      alQuitar();
+    } catch (error) {
+      setOcupado(false);
+      const { campo, general } = errorDeCuenta(error);
+      if (campo) {
+        setErrores({ [campo.ruta === "codigo" ? "codigo" : "contrasena"]: campo.mensaje });
+        enfocarPrimerError(formulario);
+      } else setGeneral(general ?? null);
+    }
+  }
+
+  return (
+    <Dialogo
+      titulo="¿Quitar el segundo factor de su cuenta?"
+      icono={ShieldOff}
+      cerrable={!ocupado}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={ocupado}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={ocupado}>
+            Quitar segundo factor
+          </Boton>
+        </>
+      }
+    >
+      <form id={formulario} onSubmit={quitar} noValidate className="flex flex-col gap-5">
+        <Consecuencias
+          lista={[
+            { icono: ShieldCheck, texto: "El ingreso ya no le pedirá el código", detalle: "Con su contraseña basta para entrar" },
+            { icono: KeyRound, texto: "Sus códigos de respaldo dejan de servir" },
+            { icono: LogOut, texto: "Se cierran sus sesiones en los demás equipos" },
+          ]}
+        />
+        <CampoTexto etiqueta="Su contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setContrasena} error={errores.contrasena} />
+        <CampoTexto etiqueta="Código de su app autenticadora" nombre="codigo" autoComplete="one-time-code" modoEntrada="numeric" valorInicial="" onCambio={setCodigo} error={errores.codigo} />
+        {general && <Aviso tono="error">{general}</Aviso>}
+      </form>
+    </Dialogo>
   );
 }
