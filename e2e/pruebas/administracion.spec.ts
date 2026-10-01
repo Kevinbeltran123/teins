@@ -104,6 +104,11 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   const t = await telefono.newPage();
   await t.goto(`${CAMPO}/`);
   await iniciarSesion(t, tecnico);
+  // Es temporal: crea la suya antes de ver sus visitas (iteración 25).
+  await t.getByLabel("Contraseña nueva", { exact: true }).fill("propia-del-tecnico");
+  await t.getByLabel("Repite la contraseña nueva").fill("propia-del-tecnico");
+  await t.getByRole("button", { name: "Guardar y entrar" }).click();
+  await t.getByRole("button", { name: "Ir a mis visitas" }).click();
   await expect(t.getByRole("region", { name: "Siguiente visita" }).getByText(cliente)).toBeVisible();
   await telefono.close();
   await page.getByRole("tab", { name: "Teléfonos de campo" }).click();

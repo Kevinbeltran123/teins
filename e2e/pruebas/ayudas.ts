@@ -174,3 +174,16 @@ export async function verLoEnviado(page: Page) {
   await expect(resumen).toBeVisible();
   if (!(await page.locator("details[open]").count())) await resumen.click();
 }
+
+/** Desde Administración: crea un usuario y devuelve la contraseña temporal que se entrega una vez. */
+export async function crearUsuarioDesdeAdministracion(page: Page, u: { usuario: string; nombre: string }, rol: "Técnico (campo)" | "Oficina"): Promise<string> {
+  await page.getByRole("button", { name: "Nuevo usuario" }).click();
+  await page.getByLabel("Nombre completo").fill(u.nombre);
+  await page.getByLabel("Usuario para iniciar sesión").fill(u.usuario);
+  await page.getByRole("radio", { name: rol }).check();
+  await page.getByRole("button", { name: "Crear usuario" }).click();
+  const entrega = page.getByRole("dialog", { name: "Usuario creado" });
+  const temporal = (await entrega.locator("dt:has-text('Contraseña temporal') + dd code").textContent())!;
+  await entrega.getByRole("button", { name: "Ya la entregué" }).click();
+  return temporal;
+}
