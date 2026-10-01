@@ -38,6 +38,7 @@ import {
   Trash,
   Type,
   Undo2,
+  useCapaQueSale,
 } from "@teins/ui";
 import { ajustarAngulo, enderezar, pegarA, type Forma } from "../dibujo/enderezar";
 import { cajaDe, centroDe, duplicar, elementoEn, escalar, girar, mover } from "../dibujo/transformar";
@@ -130,6 +131,8 @@ export default function EditorBoceto({
   /** Como paso del recorrido (rediseño): "Listo" abajo al centro sigue al paso siguiente. */
   listo?: (() => void) | undefined;
 }) {
+  // Sube al abrirse y baja al cerrarse (iteración 27).
+  const [saliendo, salir] = useCapaQueSale(cerrar);
   // Un boceto nuevo espera a medir la pantalla: su primera hoja tiene el alto del espacio libre.
   const [hojas, setHojas] = useState<readonly HojaBoceto[] | null>(() => (inicial ? aVersion2(inicial).hojas : null));
   const [actual, setActual] = useState(() => Math.max(0, Math.min(hojaInicial, (inicial ? aVersion2(inicial).hojas.length : 1) - 1)));
@@ -570,11 +573,11 @@ export default function EditorBoceto({
       aria-modal="true"
       aria-label={`Boceto: ${etiqueta}`}
       data-tema="claro"
-      className="fixed inset-0 z-50 flex flex-col bg-fondo pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] select-none [-webkit-touch-callout:none]"
+      className={`fixed inset-0 z-50 flex flex-col bg-fondo pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] select-none [-webkit-touch-callout:none] ${saliendo ? "animate-hoja-baja" : "motion-safe:animate-hoja-sube"}`}
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2 py-1.5 max-[383px]:gap-0.5 max-[383px]:px-1.5 max-[383px]:[&_button]:size-10">
         <Pastilla>
-          <BotonHerramienta icono={ChevronLeft} etiqueta="Volver a la captura" onClick={cerrar} />
+          <BotonHerramienta icono={ChevronLeft} etiqueta="Volver a la captura" onClick={salir} />
         </Pastilla>
         <Pastilla role="group" aria-label="Deshacer y rehacer">
           <BotonHerramienta icono={Undo2} etiqueta="Deshacer" disabled={historial.deshacer.length === 0} onClick={deshacerUno} />
@@ -645,7 +648,7 @@ export default function EditorBoceto({
                         pathLength={100}
                         strokeDasharray="100"
                         transform={`rotate(-90 ${anillo[0]} ${anillo[1]})`}
-                        className="animate-llenar-anillo fill-none stroke-superficie"
+                        className="fill-none stroke-superficie motion-safe:animate-llenar-anillo"
                         strokeWidth={unidades(4)}
                         strokeLinecap="round"
                       />

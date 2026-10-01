@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as EventoPuntero } from "react";
 import { bocetoVacio, LIENZO, LIMITES_BOCETO, type DocumentoBoceto, type ElementoBoceto, type Punto, type PuntoConPresion } from "@teins/dominio";
-import { Aviso, BotonIcono, CampoTexto, ElementoDeBoceto, Firma, MensajeError, Smartphone, useSinRepetir, X } from "@teins/ui";
+import { Aviso, BotonIcono, CampoTexto, ElementoDeBoceto, Firma, MensajeError, Smartphone, useCapaQueSale, useSinRepetir, X } from "@teins/ui";
 import { contornoDe } from "../dibujo/trazo";
 
 const GROSOR = 9;
@@ -19,6 +19,8 @@ export default function HojaDeFirma({
   guardar: (documento: DocumentoBoceto, datos: { nombre: string; cargo: string }) => Promise<void>;
   cerrar: () => void;
 }) {
+  // Sube al abrirse y baja al cerrarse (iteración 27).
+  const [saliendo, salir] = useCapaQueSale(cerrar);
   const [nombre, setNombre] = useState("");
   const [cargo, setCargo] = useState("");
   const [trazos, setTrazos] = useState<readonly ElementoBoceto[]>([]);
@@ -64,7 +66,7 @@ export default function HojaDeFirma({
     setEstado("guardando");
     try {
       await guardar({ ...bocetoVacio(), elementos: trazos }, { nombre, cargo });
-      cerrar();
+      salir();
     } catch {
       setEstado("error");
     }
@@ -76,18 +78,18 @@ export default function HojaDeFirma({
   // Esc cierra como la equis, salvo mientras guarda (iteración 24c; con teclado, en una tableta).
   useEffect(() => {
     const alTeclado = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && estado !== "guardando") cerrar();
+      if (e.key === "Escape" && estado !== "guardando") salir();
     };
     window.addEventListener("keydown", alTeclado);
     return () => window.removeEventListener("keydown", alTeclado);
-  }, [estado, cerrar]);
+  }, [estado, salir]);
 
   const enProceso: ElementoBoceto | null = enCurso ? { tipo: "trazo", grosor: GROSOR, puntos: enCurso.puntos, contorno: contornoDe(enCurso.puntos, enCurso.lapiz, GROSOR) } : null;
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="titulo-constancia" data-tema="claro" className="fixed inset-0 z-50 flex flex-col bg-panel pt-[env(safe-area-inset-top)]">
+    <div role="dialog" aria-modal="true" aria-labelledby="titulo-constancia" data-tema="claro" className={`fixed inset-0 z-50 flex flex-col bg-panel pt-[env(safe-area-inset-top)] ${saliendo ? "animate-hoja-baja" : "motion-safe:animate-hoja-sube"}`}>
       <div className="flex items-center gap-1 py-1.5 pr-3 pl-1">
-        <BotonIcono icono={X} etiqueta="Cancelar y volver al levantamiento" onClick={cerrar} />
+        <BotonIcono icono={X} etiqueta="Cancelar y volver al levantamiento" onClick={salir} />
         <h2 id="titulo-constancia" className="text-subtitulo font-extrabold">
           Constancia de visita
         </h2>
@@ -147,7 +149,7 @@ export default function HojaDeFirma({
           >
             Ya lo tiene
           </button>
-          <button type="button" onClick={cerrar} className="text-ayuda font-bold underline underline-offset-3 opacity-85">
+          <button type="button" onClick={salir} className="text-ayuda font-bold underline underline-offset-3 opacity-85">
             Todavía no
           </button>
         </div>

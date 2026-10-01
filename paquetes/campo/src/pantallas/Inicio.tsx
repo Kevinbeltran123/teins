@@ -1,11 +1,11 @@
 import { lazy, Suspense, useRef, useState } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LockKeyhole, LogOut, MapPin, OPCIONES_DE_TEMA, Smartphone, useSinRepetir, useTema } from "@teins/ui";
+import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LockKeyhole, LogOut, MapPin, OPCIONES_DE_TEMA, Smartphone, nombreDeTransicion, useNombreEnPantalla, useSinRepetir, useTema } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
+import { useLecturaRecordada } from "../datos/lecturaRecordada";
 import { estadosDe, visitasDe } from "../datos/lecturas";
 import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal, UsuarioLocal, VisitaLocal } from "../datos/modelo";
 import { estaInstalada } from "../dispositivo/almacenamiento";
@@ -26,6 +26,8 @@ const GuiaDeInstalacion = lazy(() => import("./InstalarApp").then((m) => ({ defa
 interface Props {
   usuario: UsuarioLocal;
   abrir: (id: string) => void;
+  /** El levantamiento que se acaba de cerrar: se resalta en su lista (lo enviado, en "Enviados"). */
+  recien?: string | undefined;
   pedirSesion: () => void;
   actualizacion: { disponible: boolean; aplicar: () => void };
 }
@@ -51,16 +53,18 @@ interface Contexto {
   bloqueado: boolean;
   abrir: (id: string) => void;
   iniciar: (visitaId: string, formato: VersionFormato) => void;
+  recien: string | undefined;
 }
 
-export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
-  const lista = useLiveQuery(() => repositorio.listar(usuario.id), [usuario.id]);
-  const envios = useLiveQuery(async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
-  const servidor = useLiveQuery(async () => new Map((await estadosDe(db, usuario.id)).map((e) => [e.id, e])), [usuario.id]);
-  const visitas = useLiveQuery(() => visitasDe(db, usuario.id), [usuario.id]);
-  const bajada = useLiveQuery(async () => (await db.bajadas.get(usuario.id)) ?? null, [usuario.id]);
+export function Inicio({ usuario, abrir, recien, pedirSesion, actualizacion }: Props) {
+  // Al volver de una captura, el inicio empieza con lo que ya había leído: sin esqueleto (iteración 27).
+  const lista = useLecturaRecordada(`lista:${usuario.id}`, () => repositorio.listar(usuario.id), [usuario.id]);
+  const envios = useLecturaRecordada(`envios:${usuario.id}`, async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
+  const servidor = useLecturaRecordada(`servidor:${usuario.id}`, async () => new Map((await estadosDe(db, usuario.id)).map((e) => [e.id, e])), [usuario.id]);
+  const visitas = useLecturaRecordada(`visitas:${usuario.id}`, () => visitasDe(db, usuario.id), [usuario.id]);
+  const bajada = useLecturaRecordada(`bajada:${usuario.id}`, async () => (await db.bajadas.get(usuario.id)) ?? null, [usuario.id]);
   const formatos = useFormatos();
-  const deOtros = useLiveQuery(() => repositorio.contarDeOtros(usuario.id), [usuario.id]);
+  const deOtros = useLecturaRecordada(`deOtros:${usuario.id}`, () => repositorio.contarDeOtros(usuario.id), [usuario.id]);
   const enLinea = useConexionDelNavegador();
   const alcanzable = useServidorAlcanzable();
   const [confirmandoSalida, setConfirmandoSalida] = useState(false);
@@ -87,7 +91,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   });
 
   const cargando = lista === undefined || envios === undefined || servidor === undefined || visitas === undefined || bajada === undefined || formatos === undefined;
-  const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar };
+  const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar, recien };
 
   // Visitas con sus levantamientos; una reasignada solo se muestra si el técnico ya empezó algo en ella (regla 17).
   const porVisita = Map.groupBy(lista ?? [], (l) => l.visitaId ?? "");
@@ -324,7 +328,8 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
   const formato = borrador ? formatoDe(contexto.formatos, borrador) : undefined;
   const resumen = borrador && formato ? resumenDeRecorrido(formato, borrador) : undefined;
   return (
-    <section aria-label="Siguiente visita" className="flex flex-col gap-3 rounded-2xl border border-division bg-panel p-4">
+    // Al abrirla, esta tarjeta se convierte en la cabecera de la captura (iteración 27).
+    <section aria-label="Siguiente visita" className="flex flex-col gap-3 rounded-2xl border border-division bg-panel p-4" style={{ viewTransitionName: nombreDeTransicion("visita", visita.id) }}>
       <div className="flex justify-between gap-3 text-[12px] font-medium text-texto-secundario">
         <span aria-hidden>Siguiente visita</span>
         <span className="text-superficie first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
@@ -360,7 +365,7 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
 function FilaVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal; levantamientos: LevantamientoLocal[]; contexto: Contexto }) {
   const [abierta, setAbierta] = useState(false);
   return (
-    <article className="flex flex-col gap-3 border-t border-division py-3">
+    <article className="flex flex-col gap-3 border-t border-division py-3" style={{ viewTransitionName: nombreDeTransicion("visita", visita.id) }}>
       <button type="button" onClick={() => setAbierta((a) => !a)} aria-expanded={abierta} className="flex min-h-11 items-center gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco">
         <span className="w-16 shrink-0 text-[12px] leading-tight text-texto-secundario first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
         <span className="flex min-w-0 flex-col">
@@ -458,11 +463,14 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
   // El estado de negocio según el servidor manda sobre el de envío del teléfono.
   const estado = servidor ? estadoSegunServidor(servidor) : envio ? estadoDeEnvio(envio, contexto.enLinea) : null;
   const comentarios = servidor?.comentarios?.length ?? 0;
+  const enPantalla = useNombreEnPantalla<HTMLButtonElement>(nombreDeTransicion("lev", l.id));
   return (
     <button
       type="button"
       onClick={() => contexto.abrir(l.id)}
-      className="flex min-h-tactil w-full items-center gap-3.5 rounded-panel bg-panel p-4 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+      // La lista de enviados crece: la fila lleva su nombre de transición solo mientras se ve.
+      ref={enPantalla}
+      className={`flex min-h-tactil w-full items-center gap-3.5 rounded-panel bg-panel p-4 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco ${contexto.recien === l.id ? "animate-resaltar" : ""}`}
     >
       <span className="w-16 shrink-0 text-ayuda font-extrabold text-texto-secundario">{diaCorto(l.creadoEn)}</span>
       <span className="flex min-w-0 grow flex-col">

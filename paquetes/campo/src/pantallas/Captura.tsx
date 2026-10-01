@@ -1,5 +1,4 @@
-import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { flushSync } from "react-dom";
+import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { pasosDe, type Paso } from "../recorrido";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -39,7 +38,6 @@ import {
   BotonRedondo,
   BotonSiguiente,
   Check,
-  ChuloDeExito,
   EncabezadoDePaso,
   FilaDeRepaso,
   FranjaSincronizacion,
@@ -47,6 +45,10 @@ import {
   PasoDelRecorrido,
   Repaso,
   TarjetaResumen,
+  conTransicion,
+  nombreDeTransicion,
+  sinMovimiento,
+  useLoNuevo,
   type EstadoDePaso,
   BotonIcono,
   CampoFotos,
@@ -113,8 +115,13 @@ const VigilarGuardado = createContext<(escritura: Promise<unknown>) => void>(() 
 /** Ancla de un dato en la pantalla: el resumen de errores lleva hasta él. */
 const anclaDeDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`;
 const anclaDeSeccion = (seccion: string) => `seccion-${seccion}`;
+/**
+ * Nombre de transición de la cabecera de la captura (iteración 27): el mismo que la tarjeta de su visita en el inicio,
+ * para que la tarjeta se convierta en la cabecera. Entre pasos se queda; solo se desliza el cuerpo.
+ */
+const CabeceraDeLaVisita = createContext<string | undefined>(undefined);
 
-export function Captura({ id, volver }: { id: string; volver: () => void }) {
+export function Captura({ id, volver, alMostrar }: { id: string; volver: () => void; /** Ya se ve lo del levantamiento (no el esqueleto): la tarjeta del inicio puede convertirse en la cabecera. */ alMostrar?: () => void }) {
   // `null` distingue "no existe" de `undefined` (cargando).
   const levantamiento = useLiveQuery(async () => (await repositorio.obtener(id)) ?? null, [id]);
   const envio = useLiveQuery(async () => (await db.envios.get(id)) ?? null, [id]);
@@ -140,10 +147,30 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   }, [levantamiento, inicial]);
 
   const formato = levantamiento && formatos ? formatoDe(formatos, levantamiento) : undefined;
-  const borrador = levantamiento?.estado === "borrador";
+  // Al enviar, el borrador se queda a la vista mientras baja la hoja de confirmar; después la pantalla avanza a
+  // "Enviado" en una transición, desde arriba (iteración 27).
+  const [retenido, setRetenido] = useState(false);
+  const borrador = levantamiento?.estado === "borrador" || (retenido && levantamiento?.estado === "enviado");
+  const pantallaEnviado = Boolean(levantamiento && formato && levantamiento.estado === "enviado" && !retenido && envio !== undefined);
+  const cargando = levantamiento === undefined || envio === undefined || formatos === undefined || bloqueado === undefined || visita === undefined || (levantamiento !== null && !inicial);
+  const mostrado = pantallaEnviado || !cargando;
+  useLayoutEffect(() => {
+    if (mostrado) alMostrar?.();
+  }, [mostrado]);
+  const cabecera = levantamiento?.visitaId ? nombreDeTransicion("visita", levantamiento.visitaId) : nombreDeTransicion("lev", id);
+  const soltar = () =>
+    setTimeout(
+      () =>
+        void conTransicion(() => {
+          setRetenido(false);
+          window.scrollTo(0, 0);
+        }, "adelante"),
+      // Lo que tarda en bajar la hoja de confirmar.
+      sinMovimiento() ? 0 : 220,
+    );
 
   // Enviado: la pantalla de éxito del prototipo, con lo enviado debajo.
-  if (levantamiento && formato && levantamiento.estado === "enviado" && envio !== undefined) {
+  if (pantallaEnviado && levantamiento && formato && envio !== undefined) {
     return (
       <div className="min-h-dvh bg-fondo">
         <div className="mx-auto flex max-w-xl items-center px-4 pt-[max(0.625rem,env(safe-area-inset-top))] pb-1">
@@ -159,18 +186,22 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   // Un borrador que se puede editar ocupa toda la pantalla con su recorrido (DESIGN.md, campo).
   if (levantamiento && inicial && formato && borrador && bloqueado === false && envio !== undefined) {
     return (
-      <div className="min-h-dvh bg-fondo">
-        <Borrador
-          id={id}
+      <CabeceraDeLaVisita.Provider value={cabecera}>
+        <div className="min-h-dvh bg-fondo">
+          <Borrador
+            id={id}
           formato={formato}
           inicial={inicial}
           actual={levantamiento}
           nombre={formatos ? nombreDeFormato(formatos, levantamiento.formato) : "Levantamiento"}
           contexto={visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : "Levantamiento suelto"}
-          volver={volver}
-          atras={atrasDelBorrador}
-        />
-      </div>
+            volver={volver}
+            atras={atrasDelBorrador}
+            retener={() => setRetenido(true)}
+            soltar={soltar}
+          />
+        </div>
+      </CabeceraDeLaVisita.Provider>
     );
   }
 
@@ -272,17 +303,14 @@ type Vista = { tipo: "recorrido" } | { tipo: "paso"; paso: string } | { tipo: "r
 
 /**
  * Cambiar de pantalla dentro del borrador: la transición la dibuja el navegador (View Transitions) y el
- * movimiento es CSS (regla 10). Sin soporte, o con movimiento reducido, el cambio es inmediato.
+ * movimiento es CSS (regla 10). Solo se desliza el cuerpo; la cabecera y la barra se quedan (iteración 27). Sin
+ * soporte, o con movimiento reducido, el cambio es inmediato.
  */
 function navegar(direccion: "adelante" | "atras", cambiar: () => void) {
-  const aplicar = () => {
-    flushSync(cambiar);
+  void conTransicion(() => {
+    cambiar();
     window.scrollTo(0, 0);
-  };
-  document.documentElement.dataset.direccion = direccion;
-  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
-  if (doc.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) doc.startViewTransition(aplicar);
-  else aplicar();
+  }, direccion);
 }
 
 /** Los datos que resumen una repetición en su tarjeta: los tres primeros que tienen valor y se leen en una línea. */
@@ -306,6 +334,8 @@ function Borrador({
   contexto,
   volver,
   atras,
+  retener,
+  soltar,
 }: {
   id: string;
   formato: VersionFormato;
@@ -315,8 +345,13 @@ function Borrador({
   contexto: string;
   volver: () => void;
   atras: RefObject<(() => void) | null>;
+  /** Mantener el borrador a la vista mientras se envía y baja la hoja de confirmar. */
+  retener: () => void;
+  /** Ya bajó la hoja: avanzar a "Enviado". */
+  soltar: () => void;
 }) {
   const pasos = pasosDe(formato);
+  const cabecera = useContext(CabeceraDeLaVisita);
   const enLinea = useServidorAlcanzable();
   const porSubir = useLiveQuery(() => db.envios.filter((e) => e.estado !== "recibido").count(), []);
   const [errores, setErrores] = useState<readonly ErrorValidacion[] | null>(null);
@@ -444,9 +479,11 @@ function Borrador({
   }
 
   async function enviar() {
+    retener();
     const resultado = await repositorio.enviar(id, formato, new Date());
     if (resultado.ok) {
       sincronizarEnSegundoPlano();
+      soltar();
       return;
     }
     if (resultado.motivo === "respuestas_invalidas") {
@@ -478,7 +515,7 @@ function Borrador({
   if (vista.tipo === "recorrido") {
     pantalla = (
       <>
-        <EncabezadoDePaso contexto={contexto} avance={avance} volver={volver} etiquetaVolver="Volver a mis visitas" />
+        <EncabezadoDePaso transicion={cabecera} contexto={contexto} avance={avance} volver={volver} etiquetaVolver="Volver a mis visitas" />
         <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 pt-3 pb-40">
           {/* Cada dato se guarda al escribirlo: la hora confirma que nada se pierde si la app se cierra. */}
           <FranjaSincronizacion enLinea={enLinea} porSubir={porSubir ?? 0} guardado={`Guardado en este teléfono a las ${soloHora.format(new Date(actual.actualizadoEn))}`} />
@@ -528,7 +565,7 @@ function Borrador({
       />
     ) : (
       <>
-        <EncabezadoDePaso contexto={`Paso ${i + 1} de ${total} · ${paso.seccion.titulo}`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
+        <EncabezadoDePaso transicion={cabecera} contexto={`Paso ${i + 1} de ${total} · ${paso.seccion.titulo}`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
         <main className="mx-auto flex max-w-xl flex-col gap-8 px-4 pt-3 pb-40">
           <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{paso.titulo}</h1>
           {paso.seccion.repetible ? (
@@ -565,7 +602,7 @@ function Borrador({
     ) : (
       // Se quitó (o no existe): de vuelta a la lista de su sección.
       <>
-        <EncabezadoDePaso contexto={seccion.titulo} avance={avance} volver={alPaso} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
+        <EncabezadoDePaso transicion={cabecera} contexto={seccion.titulo} avance={avance} volver={alPaso} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
         <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 pt-3">
           <Boton onClick={alPaso}>{`Volver a ${seccion.titulo.toLowerCase()}`}</Boton>
         </main>
@@ -574,7 +611,7 @@ function Borrador({
   } else {
     pantalla = (
       <>
-        <EncabezadoDePaso contexto={`Paso ${total} de ${total} · Revisar`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
+        <EncabezadoDePaso transicion={cabecera} contexto={`Paso ${total} de ${total} · Revisar`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
         <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 pt-3 pb-40">
           <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Antes de enviar</h1>
           {errores && errores.length > 0 && (
@@ -700,6 +737,8 @@ function Repeticiones({
   abrir: (repeticion: string) => void;
 }) {
   const lista = actual.repeticiones?.[seccion.clave] ?? [];
+  // Solo la tarjeta recién agregada entra animada: las demás no se animan otra vez al volver (iteración 27).
+  const esNueva = useLoNuevo(lista.map((r) => r.id));
   const etiqueta = seccion.repetible!.etiqueta;
   const maximo = seccion.repetible!.max ?? LIMITES.repeticiones;
 
@@ -725,7 +764,7 @@ function Repeticiones({
       {lista.map((r) => {
         const clave = claveDeRepeticion(seccion.clave, r.id);
         const n = faltanEn.get(clave) ?? 0;
-        return <TarjetaResumen key={r.id} titulo={r.nombre} etiqueta={r.nombre} estado={n > 0 ? faltan(n) : "Completo"} completo={n === 0} datos={datosDeResumen(seccion, actual.respuestas[clave])} onClick={() => abrir(r.id)} />;
+        return <TarjetaResumen key={r.id} titulo={r.nombre} etiqueta={r.nombre} estado={n > 0 ? faltan(n) : "Completo"} completo={n === 0} datos={datosDeResumen(seccion, actual.respuestas[clave])} onClick={() => abrir(r.id)} nueva={esNueva(r.id)} />;
       })}
       <BotonAgregar icono={Plus} disabled={lista.length >= maximo} onClick={() => void agregar()}>
         {`Agregar ${etiqueta.toLowerCase()}`}
@@ -755,6 +794,7 @@ function Repeticion({
 }) {
   const vigilar = useContext(VigilarGuardado);
   const notificar = useNotificar();
+  const cabecera = useContext(CabeceraDeLaVisita);
   const etiqueta = seccion.repetible!.etiqueta;
 
   /**
@@ -777,7 +817,7 @@ function Repeticion({
   }
   return (
     <>
-      <EncabezadoDePaso contexto={`${seccion.titulo} · ${repeticion.nombre}`} avance={avance} volver={volver} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
+      <EncabezadoDePaso transicion={cabecera} contexto={`${seccion.titulo} · ${repeticion.nombre}`} avance={avance} volver={volver} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
       <main className="mx-auto flex max-w-xl flex-col gap-8 px-4 pt-3 pb-40">
         <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{repeticion.nombre}</h1>
         <article aria-label={repeticion.nombre} className="flex flex-col gap-8">
@@ -1354,12 +1394,13 @@ function Enviado({
                     : "Puedes salir de esta pantalla: el envío sigue solo."
             }
             etapas={[
-              { texto: "Guardado en el teléfono", estado: "hecho" },
+              { clave: "guardado", texto: "Guardado en el teléfono", estado: "hecho" },
               {
+                clave: "archivos",
                 texto: totalArchivos > 0 ? `Fotos y dibujos · ${recibido ? totalArchivos : (subidos ?? 0)} de ${totalArchivos}` : "Datos del levantamiento",
                 estado: recibido || (totalArchivos > 0 && subidos === totalArchivos) ? "hecho" : proceso === "error" ? "error" : proceso === "enviando" ? "en_curso" : "espera",
               },
-              { texto: recibido ? "Recibido en oficina" : "Llega a oficina", estado: recibido ? "hecho" : proceso === "enviando" && (totalArchivos === 0 || subidos === totalArchivos) ? "en_curso" : "espera" },
+              { clave: "recibido", texto: recibido ? "Recibido en oficina" : "Llega a oficina", estado: recibido ? "hecho" : proceso === "enviando" && (totalArchivos === 0 || subidos === totalArchivos) ? "en_curso" : "espera" },
             ]}
           />
           {envio?.estado === "error" ? (
@@ -1375,7 +1416,7 @@ function Enviado({
           <BotonSiguiente onClick={volver}>
             {siguienteVisita ? (
               <span className="flex min-w-0 flex-col items-start leading-tight">
-                <span>Siguiente visita</span>
+                <span>Ver la siguiente visita</span>
                 <span className="max-w-full truncate text-ayuda font-bold opacity-75">{`${siguienteVisita.cliente.nombre} · ${siguienteVisita.sitio.nombre}`}</span>
               </span>
             ) : (
@@ -1413,7 +1454,7 @@ function Enviado({
       <details open={levantamiento.estado !== "enviado" || undefined} className="group flex flex-col rounded-panel border border-division bg-panel [&[open]>summary]:mb-1">
         <summary className="flex min-h-tactil cursor-pointer items-center justify-between gap-3 rounded-panel px-4 text-cuerpo font-bold focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&::-webkit-details-marker]:hidden">
           Ver lo que enviaste
-          <ChevronDown aria-hidden className="size-5 shrink-0 text-texto-secundario transition-transform duration-200 group-open:rotate-180" />
+          <ChevronDown aria-hidden className="size-5 shrink-0 text-texto-secundario transition-transform duration-200 motion-reduce:transition-none group-open:rotate-180" />
         </summary>
         <div className="flex flex-col gap-4 px-2 pb-2 motion-safe:animate-aparecer">
       {bloques(formato, levantamiento.repeticiones ?? {}).map(({ seccion, clave, titulo }, _i, todos) =>

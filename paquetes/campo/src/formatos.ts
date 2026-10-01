@@ -1,11 +1,12 @@
-import { useLiveQuery } from "dexie-react-hooks";
 import { versionesVigentes, type Levantamiento, type VersionFormato } from "@teins/dominio";
 import { db } from "./datos/instancia";
+import { useLecturaRecordada } from "./datos/lecturaRecordada";
 import { VERSION_APP } from "./version";
 
 /** Versiones de formato en el teléfono, recibidas en la bajada (ADR-0006). `undefined` mientras carga. */
 export function useFormatos(): VersionFormato[] | undefined {
-  return useLiveQuery(() => db.formatos.toArray());
+  // Recordados: el inicio no vuelve a mostrar su esqueleto al volver de una captura (iteración 27).
+  return useLecturaRecordada("formatos", () => db.formatos.toArray(), []);
 }
 
 /** La versión exacta con que se creó el levantamiento: un borrador termina con la suya (regla 3). */
