@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Building, CalendarDays, ClipboardCheck, DestinoBarraSuperior, FileText, Logo, LogOut, Package, Receipt, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
+import { Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, FileText, Logo, LogOut, Package, Receipt, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useConexion } from "../conexion";
@@ -35,6 +35,7 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
   const consultasCliente = useQueryClient();
   const enLinea = useConexion();
   const [barra, setBarra] = useState<HTMLElement | null>(null);
+  const [accionesBarra, setAccionesBarra] = useState<HTMLElement | null>(null);
   // Lo que espera revisión es el trabajo pendiente de oficina: por eso su cuenta va en el menú.
   const esperando = useBandeja("enviado").data?.pages[0]?.total ?? 0;
   // En Levantamientos la cifra ya está en el encabezado: repetirla en el menú no agrega nada.
@@ -99,7 +100,10 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
         </div>
       </aside>
       <div className="contenido">
-        <nav ref={setBarra} className="barra-sup" aria-label="Ubicación" />
+        <div className="barra-sup">
+          <nav ref={setBarra} aria-label="Ubicación" />
+          <div ref={setAccionesBarra} className="barra-acciones" />
+        </div>
         <main className="contenido-interior">
           {!enLinea && (
             <div className="sin-conexion" role="status">
@@ -107,7 +111,9 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
               Sin conexión. Lo que ve puede no estar al día; se actualiza al recuperar la conexión.
             </div>
           )}
-          <DestinoBarraSuperior.Provider value={barra}>{children}</DestinoBarraSuperior.Provider>
+          <DestinoBarraSuperior.Provider value={barra}>
+            <DestinoAccionesBarra.Provider value={accionesBarra}>{children}</DestinoAccionesBarra.Provider>
+          </DestinoBarraSuperior.Provider>
         </main>
       </div>
     </div>

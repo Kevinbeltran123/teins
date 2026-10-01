@@ -1,9 +1,12 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import type { MensajeDeEnvio } from "@teins/documentos";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
-import { Aviso, Boton, Confirmacion, Insignia, Mail, MessageCircle, RefreshCw, Send, useNotificar } from "@teins/ui";
+import { Aviso, Boton, Dialogo, Insignia, Mail, MessageCircle, RefreshCw, Send, useNotificar } from "@teins/ui";
+import type { Plantillas } from "../documentos";
 import { aFechaCorta } from "../formato";
 import { textoDelServidor } from "../mensajes";
+import { Lienzo, VistaDeCorreo, VistaDeWhatsapp } from "./Lienzo";
 
 type Contacto = Respuesta<"obtenerCliente">["contactos"][number];
 type Envio = Respuesta<"obtenerInforme">["versiones"][number]["envios"][number];
@@ -121,6 +124,8 @@ interface PropsEnvios {
   cliente: { id: string; nombre: string };
   version: { numero: number; pdf: "generando" | "listo" | "fallido"; envios: readonly Envio[] };
   contactos: readonly Contacto[] | undefined;
+  /** Lo que dice el correo o el WhatsApp de esta versión, para ver lo que recibe cada contacto antes de enviar. */
+  mensaje: (p: Plantillas) => MensajeDeEnvio;
   /** `llave`: la decisión de enviar (regla 4). El mismo pedido repetido con su llave sale una sola vez. */
   enviar: (destinos: Destino[], llave: string) => Promise<unknown>;
   recargar: () => void;
@@ -132,7 +137,7 @@ interface PropsEnvios {
  * Envíos de una versión (ADR-0028; la cotización, ADR-0029), dentro de su versión en el carril (prototipos/oficina):
  * el estado de cada copia y, junto a lo que no llegó, cómo resolverlo.
  */
-export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, acciones }: PropsEnvios) {
+export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, recargar, acciones }: PropsEnvios) {
   const notificar = useNotificar();
   const [eligiendo, setEligiendo] = useState(false);
   const [reenviando, setReenviando] = useState<string | null>(null);
@@ -223,15 +228,23 @@ export function PanelEnvios({ cliente: c, version, contactos, enviar, recargar, 
         )}
         {acciones}
       </div>
-      {eligiendo && contactos && <EnviarAContactos cliente={c} numero={version.numero} contactos={contactos} enviar={enviar} alCerrar={() => setEligiendo(false)} alEnviar={recargar} />}
+      {eligiendo && contactos && <EnviarAContactos cliente={c} numero={version.numero} contactos={contactos} mensaje={mensaje} enviar={enviar} alCerrar={() => setEligiendo(false)} alEnviar={recargar} />}
     </section>
   );
 }
 
+type DestinoVisto = { contacto: Contacto; canal: "correo" | "whatsapp" };
+
+/**
+ * Enviar una versión a otros contactos, en una hoja lateral ancha (iteración 26): a quién y, debajo, lo que recibe
+ * cada uno por cada canal, tal como sale. La hoja ya es el paso deliberado: dice antes del botón que lo enviado no
+ * se recupera (DESIGN.md), sin un segundo diálogo.
+ */
 function EnviarAContactos({
   cliente: c,
   numero,
   contactos,
+  mensaje,
   enviar,
   alCerrar,
   alEnviar,
@@ -239,31 +252,94 @@ function EnviarAContactos({
   cliente: { id: string; nombre: string };
   numero: number;
   contactos: readonly Contacto[];
+  mensaje: (p: Plantillas) => MensajeDeEnvio;
   enviar: (destinos: Destino[], llave: string) => Promise<unknown>;
   alCerrar: () => void;
   alEnviar: () => void;
 }) {
   const notificar = useNotificar();
   const [elegidos, setElegidos] = useState<string[]>([]);
+  const [viendo, setViendo] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // Reintentar a los mismos es el mismo pedido; cambiar a quién es otra decisión.
   const llave = useMemo(() => crypto.randomUUID(), [elegidos.join()]);
-  const nombres = contactos.filter((c) => elegidos.includes(c.id)).map((c) => c.nombre);
+  const nombres = contactos.filter((x) => elegidos.includes(x.id)).map((x) => x.nombre);
+  const destinos: DestinoVisto[] = contactos
+    .filter((x) => elegidos.includes(x.id))
+    .flatMap((x) => [...(x.recibeCorreo && x.correo ? [{ contacto: x, canal: "correo" as const }] : []), ...(x.recibeWhatsapp && x.celular ? [{ contacto: x, canal: "whatsapp" as const }] : [])]);
+  const clave = (d: DestinoVisto) => `${d.contacto.id}:${d.canal}`;
+  const actual = destinos.find((d) => clave(d) === viendo) ?? destinos[0];
+
+  async function enviarYa() {
+    if (elegidos.length === 0) return setError("Marque a quién enviarla.");
+    setOcupado(true);
+    setError(null);
+    try {
+      await enviar(elegidos.map((contactoId) => ({ contactoId })), llave);
+      alEnviar();
+      alCerrar();
+      notificar({ texto: nombres.length === 1 ? `Envío a ${nombres[0]} en cola` : `${nombres.length} envíos en cola` });
+    } catch (e) {
+      setError(e instanceof ErrorApi && e.codigo === "estado_invalido" ? e.message : e instanceof ErrorApi && e.codigo === "entrada_invalida" ? textoDelServidor(e, "Revise los datos.") : "No se pudo enviar. Intente de nuevo.");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
   return (
-    <Confirmacion
-      nivel="consecuencia"
+    <Dialogo
+      forma="lateral"
+      amplio
       titulo={`Enviar la versión ${numero} a otro contacto`}
-      confirmar={nombres.length === 1 ? `Enviar a ${nombres[0]}` : nombres.length > 1 ? `Enviar a ${nombres.length}` : "Enviar"}
-      validar={() => (elegidos.length === 0 ? "Marque a quién enviarla." : null)}
-      mensajeDeError={(e) => (e instanceof ErrorApi && e.codigo === "estado_invalido" ? e.message : e instanceof ErrorApi && e.codigo === "entrada_invalida" ? textoDelServidor(e, "Revise los datos.") : "No se pudo enviar. Intente de nuevo.")}
+      subtitulo={c.nombre}
+      cerrable={!ocupado}
       alCerrar={alCerrar}
-      alTerminar={() => notificar({ texto: nombres.length === 1 ? `Envío a ${nombres[0]} en cola` : `${nombres.length} envíos en cola` })}
-      accion={async () => {
-        await enviar(elegidos.map((contactoId) => ({ contactoId })), llave);
-        alEnviar();
-      }}
+      pie={
+        <>
+          <Boton disabled={ocupado} onClick={alCerrar}>
+            Cancelar
+          </Boton>
+          <Boton variante="principal" icono={Send} cargando={ocupado} onClick={() => void enviarYa()}>
+            {nombres.length === 1 ? `Enviar a ${nombres[0]}` : nombres.length > 1 ? `Enviar a ${nombres.length}` : "Enviar"}
+          </Boton>
+        </>
+      }
     >
-      <p>{`Con el PDF adjunto, por los canales de cada contacto. Solo aparecen los contactos de ${c.nombre}; para uno nuevo, créelo primero en Clientes.`}</p>
       <Destinatarios contactos={contactos} elegidos={elegidos} alCambiar={setElegidos} cliente={c} titulo="A quién" />
-    </Confirmacion>
+      <Lienzo
+        nota="Lo que recibe, tal como sale"
+        cabecera={
+          destinos.length > 0 && (
+            <div className="pestanas" role="tablist" aria-label="Lo que recibe">
+              {destinos.map((d) => {
+                const Icono = d.canal === "correo" ? Mail : MessageCircle;
+                return (
+                  <button key={clave(d)} type="button" role="tab" aria-selected={actual !== undefined && clave(d) === clave(actual)} onClick={() => setViendo(clave(d))}>
+                    <Icono aria-hidden size={14} strokeWidth={1.6} />
+                    {`${d.contacto.nombre} · ${d.canal === "correo" ? "Correo" : "WhatsApp"}`}
+                  </button>
+                );
+              })}
+            </div>
+          )
+        }
+      >
+        {actual ? (
+          actual.canal === "correo" ? (
+            <VistaDeCorreo key={clave(actual)} mensaje={mensaje} contacto={actual.contacto} />
+          ) : (
+            <VistaDeWhatsapp mensaje={mensaje} contacto={actual.contacto} />
+          )
+        ) : (
+          <div className="lienzo-vacio">
+            <b>Elija a quién enviar</b>
+            <p>Aquí aparece lo que recibe cada uno, con el adjunto.</p>
+          </div>
+        )}
+      </Lienzo>
+      {error && <Aviso tono="error">{error}</Aviso>}
+      <p className="ayuda">{`Va con el PDF adjunto, por los canales de cada contacto. Lo enviado no se puede recuperar: retirar la versión no borra el correo ni el WhatsApp.`}</p>
+    </Dialogo>
   );
 }

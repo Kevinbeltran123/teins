@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { aDecimalColombiano, calcularTotales, normalizarDecimal, PORCENTAJE, type Impuestos, type LineaDeCotizacion } from "@teins/dominio";
-import { ErrorApi, rutaVistaPreviaCotizacion, type Respuesta } from "@teins/protocolo";
+import type { ContenidoCotizacion, MensajeDeCotizacion } from "@teins/documentos";
+import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
   Boton,
@@ -10,25 +11,34 @@ import {
   CeldaTabla,
   ChevronLeft,
   Confirmacion,
+  Consecuencias,
+  Dialogo,
   Download,
   EncabezadoPagina,
   EsqueletoLista,
+  Eye,
+  FileText,
+  History,
   FilaTabla,
   Insignia,
+  LockKeyhole,
   Plus,
   RefreshCw,
   Send,
   Tabla,
   Trash,
   useNotificar,
+  type AnclaDeHoja,
 } from "@teins/ui";
-import { cliente, esSesionVencida } from "../api";
+import { cliente, consultas, esSesionVencida } from "../api";
+import { useHojaAlLado, type Plantillas } from "../documentos";
 import { useBorrador } from "../borrador";
 import { useSalidaProtegida } from "../salida";
 import { consultasDeCotizaciones, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
 import { aFechaCorta, leerPesos, pesos } from "../formato";
 import { consultasDeProgramacion } from "../programacion";
 import { Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
+import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type QueSeVe } from "./Lienzo";
 
 type Cotizacion = Respuesta<"obtenerCotizacion">;
 
@@ -172,6 +182,45 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const siguiente = (c.versiones[0]?.numero ?? 0) + 1;
   const vigente = c.versiones[0];
 
+  // La vista en vivo (ADR-0031): la siguiente versión tal como la congelaría el servidor al publicar, desde el borrador.
+  const sesion = useQuery(consultas.sesion());
+  const organizacion = sesion.data?.organizacion.nombre ?? "[ORGANIZACIÓN]";
+  const alLado = useHojaAlLado();
+  const [vista, setVista] = useState<QueSeVe>("documento");
+  const [vistaLateral, setVistaLateral] = useState(false);
+  const [ancla, setAncla] = useState<AnclaDeHoja | null>(null);
+  const irAParte = (selector: string | undefined) => selector && setAncla((a) => (a?.selector === selector ? a : { selector, vez: (a?.vez ?? 0) + 1 }));
+  // Mientras se escribe un porcentaje a medias, la hoja se queda con el último que sirve.
+  const impuestosValidos = useRef(borrador.impuestos);
+  if (porcentajesValidos) impuestosValidos.current = borrador.impuestos;
+  const lineasVista: LineaDeCotizacion[] = borrador.lineas.map((l) => {
+    const cantidad = cantidadDe(l.cantidad);
+    const precio = leerPesos(l.precio);
+    // Una cantidad a medio escribir se ve como está y no suma hasta que sirva.
+    return { ...l, descripcion: l.descripcion.trim() || "[Descripción]", unidad: l.unidad.trim() || "[Unidad]", cantidad: cantidad ?? (l.cantidad.trim() || "0"), precio: cantidad && typeof precio === "number" ? precio : null };
+  });
+  const documentoVista: ContenidoCotizacion = {
+    numero: c.numero,
+    version: siguiente,
+    publicadaEn: new Date().toISOString(),
+    publicadaPor: sesion.data?.usuario.nombre ?? "",
+    organizacion: { nombre: organizacion },
+    visita: c.visita,
+    lineas: lineasVista,
+    impuestos: impuestosValidos.current,
+    condiciones: { validezDias: validezValida ? validez : c.condiciones.validezDias, formaPago: borrador.formaPago.trim(), notas: borrador.notas.trim() },
+    totales: calcularTotales(lineasVista, impuestosValidos.current),
+  };
+  const mensajeDeVersion = (p: Plantillas, numero: number): MensajeDeCotizacion => ({
+    documento: "cotizacion",
+    organizacion,
+    cliente: c.visita.cliente,
+    sitio: c.visita.sitio,
+    cotizacion: c.numero,
+    numero,
+    nombreArchivo: p.nombreDelPdfDeCotizacion({ numero: c.numero, version: numero, visita: c.visita }),
+  });
+
   async function guardarBorrador() {
     const enviado = borrador;
     const r = await guardar.mutateAsync(version);
@@ -216,7 +265,8 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   }
 
   const primeraSinPrecio = borrador.lineas.find((l) => l.precio.trim() === "");
-  const reciben = contactos.data ? contactos.data.contactos.filter((x) => receptores(contactos.data.contactos, "cotizaciones").includes(x.id)).map((x) => x.nombre) : [];
+  const quienesReciben = contactos.data ? contactos.data.contactos.filter((x) => receptores(contactos.data.contactos, "cotizaciones").includes(x.id)) : [];
+  const reciben = quienesReciben.map((x) => x.nombre);
   const irALinea = (id: string) => {
     const fila = document.getElementById(`linea-${id}`);
     fila?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -248,269 +298,273 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   );
 
   return (
-    <>
-      <EncabezadoPagina
-        migas={migas}
-        titulo={`Cotización ${c.numero}`}
-        estado={vigente ? <Insignia tono="publicado">{`Versión ${vigente.numero} vigente`}</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}
-        descripcion={
-          <>
-            <span>
-              {c.visita.cliente} · {c.visita.sitio}
-            </span>
-            <span>Visita del {dia(c.visita.programadaPara)}</span>
-            {contactos.data && (
+    <div className={`vivo ${alLado ? "" : "sin-lienzo"}`}>
+      <div className="editor-doc">
+        <EncabezadoPagina
+          migas={migas}
+          accionesEnBarra
+          titulo={`Cotización ${c.numero}`}
+          estado={vigente ? <Insignia tono="publicado">{`Versión ${vigente.numero} vigente`}</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}
+          descripcion={
+            <>
               <span>
-                Recibe el PDF: <b>{reciben.length > 0 ? enLista(reciben) : "nadie"}</b>
+                {c.visita.cliente} · {c.visita.sitio}
               </span>
-            )}
-          </>
-        }
-        acciones={
-          <>
-            {estado}
-            {cambiado && (
-              <Boton disabled={!guardable} cargando={guardar.isPending} onClick={() => void guardarBorrador().catch(() => undefined)}>
-                Guardar borrador
-              </Boton>
-            )}
-            <Boton
-              variante="principal"
-              icono={Send}
-              disabled={!guardable || sinPrecio > 0 || borrador.lineas.length === 0}
-              cargando={guardar.isPending}
-              onClick={() => void abrirPublicar()}
-            >
-              {`Publicar versión ${siguiente}`}
-            </Boton>
-          </>
-        }
-      />
-      {error && (
-        <Aviso tono="error">
-          <b>{mensajeDeCotizacion(error)}</b>
-          {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
-            <div>
-              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargarDescartando}>
-                Recargar
-              </Boton>
-            </div>
-          )}
-        </Aviso>
-      )}
-      <div className="con-carril">
-        <div className="principal">
-          <div className="doc">
-            <section aria-labelledby="titulo-lineas">
-              <div className="cab-sec">
-                <h2 id="titulo-lineas">Líneas</h2>
-              </div>
-              <p className="ayuda">De las cantidades revisadas, sumadas por ítem del catálogo. El precio sale de la lista de precios; se puede cambiar solo para esta cotización.</p>
-              {borrador.lineas.length === 0 ? (
-                <p className="sec">Sin líneas. Agregue al menos una para publicar.</p>
-              ) : (
-                <Tabla
-                  etiqueta={`Líneas de la cotización ${c.numero}`}
-                  clase="lineas-doc"
-                  columnas={[{ titulo: "Descripción" }, { titulo: "Cantidad" }, { titulo: "Unidad" }, { titulo: "Precio unitario" }, { titulo: "Total", derecha: true }, { titulo: "Quitar", oculto: true }]}
-                >
-                  {borrador.lineas.map((l, k) => {
-                    const e = errorDeLinea(l);
-                    const nombre = l.descripcion.trim() || "la línea nueva";
-                    const precio = leerPesos(l.precio);
-                    const total = totalPorId.get(l.id);
-                    const falta = l.precio.trim() === "";
-                    const difiere = l.precioCatalogo !== null && precio !== undefined && precio !== null && precio !== l.precioCatalogo;
-                    return (
-                      <FilaTabla key={l.id} id={`linea-${l.id}`} indice={k} clase={falta ? "sin-precio" : ""}>
-                        <CeldaTabla>
-                          {l.origen === "oficina" ? (
-                            <>
-                              <input
-                                className={`control chico desc-input ${e.descripcion ? "error" : ""}`}
-                                aria-label={`Descripción de ${nombre}`}
-                                placeholder="Qué se cobra"
-                                style={{ minWidth: 180, width: "100%" }}
-                                value={l.descripcion}
-                                onChange={(ev) => cambiarLinea(l.id, { descripcion: ev.target.value })}
-                              />
-                              <span className="origen">Agregada en oficina</span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="fuerte">{l.descripcion}</span>
-                              <span className={`origen ${difiere ? "difiere" : ""}`}>
-                                {l.codigo ? `${l.codigo} · ` : ""}
-                                {difiere ? `Catálogo: ${pesos(l.precioCatalogo!)}` : l.itemId ? "Del catálogo" : "Sin vincular"}
-                              </span>
-                            </>
-                          )}
-                        </CeldaTabla>
-                        <CeldaTabla>
-                          <input
-                            className={`control chico num ${e.cantidad ? "error" : ""}`}
-                            aria-label={`Cantidad de ${nombre}`}
-                            inputMode="decimal"
-                            style={{ width: 74 }}
-                            value={l.cantidad}
-                            onChange={(ev) => cambiarLinea(l.id, { cantidad: ev.target.value })}
-                          />
-                          {e.cantidad && <span className="msj-error">{e.cantidad}</span>}
-                        </CeldaTabla>
-                        <CeldaTabla>
-                          {l.origen === "oficina" ? (
-                            <input className={`control chico ${e.unidad ? "error" : ""}`} aria-label={`Unidad de ${nombre}`} style={{ width: 58 }} value={l.unidad} onChange={(ev) => cambiarLinea(l.id, { unidad: ev.target.value })} />
-                          ) : (
-                            <span className="sec">{l.unidad}</span>
-                          )}
-                        </CeldaTabla>
-                        <CeldaTabla>
-                          <input
-                            data-precio
-                            className={`control chico num ${e.precio ? "error" : ""}`}
-                            aria-label={`Precio de ${nombre}`}
-                            aria-invalid={e.precio ? true : undefined}
-                            inputMode="numeric"
-                            placeholder="Falta"
-                            style={{ width: 118 }}
-                            value={l.precio}
-                            onChange={(ev) => cambiarLinea(l.id, { precio: ev.target.value })}
-                          />
-                          {e.precio && !falta && <span className="msj-error">{e.precio}</span>}
-                        </CeldaTabla>
-                        <CeldaTabla derecha clase="total-linea">
-                          {falta ? <span className="msj-error" style={{ justifyContent: "flex-end" }}>Sin precio</span> : total === null || total === undefined ? null : pesos(total)}
-                        </CeldaTabla>
-                        <CeldaTabla>
-                          <BotonIcono icono={Trash} tamano="pequeno" etiqueta={`Quitar ${nombre}`} onClick={() => quitar(l)} />
-                        </CeldaTabla>
-                      </FilaTabla>
-                    );
-                  })}
-                </Tabla>
+              <span>Visita del {dia(c.visita.programadaPara)}</span>
+              {contactos.data && (
+                <span>
+                  Recibe el PDF: <b>{reciben.length > 0 ? enLista(reciben) : "nadie"}</b>
+                </span>
               )}
-              <button
-                type="button"
-                className="agregar-fila"
-                onClick={() => actualizar({ lineas: [...borrador.lineas, { id: idNuevo(), itemId: null, codigo: null, descripcion: "", cantidad: "1", unidad: "gl", precio: "", precioCatalogo: null, origen: "oficina" }] })}
+            </>
+          }
+          acciones={
+            <>
+              {estado}
+              {!alLado && (
+                <Boton icono={Eye} onClick={() => setVistaLateral(true)}>
+                  Vista previa
+                </Boton>
+              )}
+              {cambiado && (
+                <Boton disabled={!guardable} cargando={guardar.isPending} onClick={() => void guardarBorrador().catch(() => undefined)}>
+                  Guardar borrador
+                </Boton>
+              )}
+              <Boton
+                variante="principal"
+                icono={Send}
+                disabled={!guardable || sinPrecio > 0 || borrador.lineas.length === 0}
+                cargando={guardar.isPending}
+                onClick={() => void abrirPublicar()}
               >
-                <Plus aria-hidden size={18} />
-                Agregar línea
-              </button>
-              <div className="pie-doc">
-                <fieldset className="impuesto" style={{ border: 0, padding: 0, margin: 0 }}>
-                  <legend className="etq" style={{ marginBottom: 4 }}>
-                    Impuestos
-                  </legend>
-                  <label className="imp-op">
-                    <input type="radio" name={`impuestos-${c.id}`} checked={borrador.impuestos.tipo === "iva"} onChange={() => actualizar({ impuestos: { tipo: "iva" } })} />
-                    <span style={{ color: "var(--texto)" }}>
-                      <b>IVA 19 %</b> sobre el subtotal
-                    </span>
-                  </label>
-                  <label className="imp-op">
-                    <input type="radio" name={`impuestos-${c.id}`} checked={borrador.impuestos.tipo === "aiu"} onChange={() => actualizar({ impuestos: AIU_INICIAL })} />
-                    <span style={{ color: "var(--texto)" }}>
-                      <b>AIU</b>, con IVA sobre la utilidad
-                    </span>
-                  </label>
-                  {borrador.impuestos.tipo === "aiu" && (
-                    <div className="aiu" style={{ margin: "0 0 10px 32px", maxWidth: 340 }}>
-                      {(["administracion", "imprevistos", "utilidad"] as const).map((campo) => {
-                        const valor = borrador.impuestos.tipo === "aiu" ? borrador.impuestos[campo] : "";
-                        const texto = { administracion: "Administración", imprevistos: "Imprevistos", utilidad: "Utilidad" }[campo];
-                        const malo = !(PORCENTAJE.test(valor) && Number(valor) <= 100);
-                        return (
-                          <div key={campo} className="campo">
-                            <label htmlFor={`aiu-${campo}`}>{`${texto} %`}</label>
+                {`Publicar versión ${siguiente}`}
+              </Boton>
+            </>
+          }
+        />
+        {error && (
+          <Aviso tono="error">
+            <b>{mensajeDeCotizacion(error)}</b>
+            {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
+              <div>
+                <Boton tamano="pequeno" icono={RefreshCw} onClick={recargarDescartando}>
+                  Recargar
+                </Boton>
+              </div>
+            )}
+          </Aviso>
+        )}
+        {/* Al pasar a una sección, la hoja va hasta esa parte del documento. */}
+        <div className="doc" onFocus={(e) => irAParte((e.target as HTMLElement).closest<HTMLElement>("[data-ancla]")?.dataset.ancla)}>
+          <section aria-labelledby="titulo-lineas" data-ancla="table.lineas">
+            <div className="cab-sec">
+              <h2 id="titulo-lineas">Líneas</h2>
+            </div>
+            <p className="ayuda">De las cantidades revisadas, sumadas por ítem del catálogo. El precio sale de la lista de precios; se puede cambiar solo para esta cotización.</p>
+            {borrador.lineas.length === 0 ? (
+              <p className="sec">Sin líneas. Agregue al menos una para publicar.</p>
+            ) : (
+              <Tabla
+                etiqueta={`Líneas de la cotización ${c.numero}`}
+                clase="lineas-doc"
+                columnas={[{ titulo: "Descripción" }, { titulo: "Cantidad" }, { titulo: "Unidad" }, { titulo: "Precio unitario" }, { titulo: "Total", derecha: true }, { titulo: "Quitar", oculto: true }]}
+              >
+                {borrador.lineas.map((l, k) => {
+                  const e = errorDeLinea(l);
+                  const nombre = l.descripcion.trim() || "la línea nueva";
+                  const precio = leerPesos(l.precio);
+                  const total = totalPorId.get(l.id);
+                  const falta = l.precio.trim() === "";
+                  const difiere = l.precioCatalogo !== null && precio !== undefined && precio !== null && precio !== l.precioCatalogo;
+                  return (
+                    <FilaTabla key={l.id} id={`linea-${l.id}`} indice={k} clase={falta ? "sin-precio" : ""}>
+                      <CeldaTabla>
+                        {l.origen === "oficina" ? (
+                          <>
                             <input
-                              id={`aiu-${campo}`}
-                              className={`control chico num ${malo ? "error" : ""}`}
-                              aria-label={`Porcentaje de ${texto.toLowerCase()}`}
-                              inputMode="decimal"
-                              value={valor.replace(".", ",")}
-                              onChange={(ev) => borrador.impuestos.tipo === "aiu" && actualizar({ impuestos: { ...borrador.impuestos, [campo]: ev.target.value.trim().replace(",", ".") } })}
+                              className={`control chico desc-input ${e.descripcion ? "error" : ""}`}
+                              aria-label={`Descripción de ${nombre}`}
+                              placeholder="Qué se cobra"
+                              style={{ minWidth: 180, width: "100%" }}
+                              value={l.descripcion}
+                              onChange={(ev) => cambiarLinea(l.id, { descripcion: ev.target.value })}
                             />
-                            {malo && <span className="msj-error">De 0 a 100</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <p className="ayuda" style={{ maxWidth: "48ch", marginTop: 8 }}>
-                    El contador de TEINS decide cuál aplica. La DIAN no admite AIU en instalación ni mantenimiento de redes eléctricas.
-                  </p>
-                </fieldset>
-                <section className="suma" aria-label="Totales">
-                  <div className="f">
-                    <span>Subtotal</span>
-                    <b>{pesos(totales.subtotal)}</b>
+                            <span className="origen">Agregada en oficina</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="fuerte">{l.descripcion}</span>
+                            <span className={`origen ${difiere ? "difiere" : ""}`}>
+                              {l.codigo ? `${l.codigo} · ` : ""}
+                              {difiere ? `Catálogo: ${pesos(l.precioCatalogo!)}` : l.itemId ? "Del catálogo" : "Sin vincular"}
+                            </span>
+                          </>
+                        )}
+                      </CeldaTabla>
+                      <CeldaTabla>
+                        <input
+                          className={`control chico num ${e.cantidad ? "error" : ""}`}
+                          aria-label={`Cantidad de ${nombre}`}
+                          inputMode="decimal"
+                          style={{ width: 74 }}
+                          value={l.cantidad}
+                          onChange={(ev) => cambiarLinea(l.id, { cantidad: ev.target.value })}
+                        />
+                        {e.cantidad && <span className="msj-error">{e.cantidad}</span>}
+                      </CeldaTabla>
+                      <CeldaTabla>
+                        {l.origen === "oficina" ? (
+                          <input className={`control chico ${e.unidad ? "error" : ""}`} aria-label={`Unidad de ${nombre}`} style={{ width: 58 }} value={l.unidad} onChange={(ev) => cambiarLinea(l.id, { unidad: ev.target.value })} />
+                        ) : (
+                          <span className="sec">{l.unidad}</span>
+                        )}
+                      </CeldaTabla>
+                      <CeldaTabla>
+                        <input
+                          data-precio
+                          className={`control chico num ${e.precio ? "error" : ""}`}
+                          aria-label={`Precio de ${nombre}`}
+                          aria-invalid={e.precio ? true : undefined}
+                          inputMode="numeric"
+                          placeholder="Falta"
+                          style={{ width: 118 }}
+                          value={l.precio}
+                          onChange={(ev) => cambiarLinea(l.id, { precio: ev.target.value })}
+                        />
+                        {e.precio && !falta && <span className="msj-error">{e.precio}</span>}
+                      </CeldaTabla>
+                      <CeldaTabla derecha clase="total-linea">
+                        {falta ? <span className="msj-error" style={{ justifyContent: "flex-end" }}>Sin precio</span> : total === null || total === undefined ? null : pesos(total)}
+                      </CeldaTabla>
+                      <CeldaTabla>
+                        <BotonIcono icono={Trash} tamano="pequeno" etiqueta={`Quitar ${nombre}`} onClick={() => quitar(l)} />
+                      </CeldaTabla>
+                    </FilaTabla>
+                  );
+                })}
+              </Tabla>
+            )}
+            <button
+              type="button"
+              className="agregar-fila"
+              onClick={() => actualizar({ lineas: [...borrador.lineas, { id: idNuevo(), itemId: null, codigo: null, descripcion: "", cantidad: "1", unidad: "gl", precio: "", precioCatalogo: null, origen: "oficina" }] })}
+            >
+              <Plus aria-hidden size={18} />
+              Agregar línea
+            </button>
+            <div className="pie-doc">
+              <fieldset className="impuesto" style={{ border: 0, padding: 0, margin: 0 }}>
+                <legend className="etq" style={{ marginBottom: 4 }}>
+                  Impuestos
+                </legend>
+                <label className="imp-op">
+                  <input type="radio" name={`impuestos-${c.id}`} checked={borrador.impuestos.tipo === "iva"} onChange={() => actualizar({ impuestos: { tipo: "iva" } })} />
+                  <span style={{ color: "var(--texto)" }}>
+                    <b>IVA 19 %</b> sobre el subtotal
+                  </span>
+                </label>
+                <label className="imp-op">
+                  <input type="radio" name={`impuestos-${c.id}`} checked={borrador.impuestos.tipo === "aiu"} onChange={() => actualizar({ impuestos: AIU_INICIAL })} />
+                  <span style={{ color: "var(--texto)" }}>
+                    <b>AIU</b>, con IVA sobre la utilidad
+                  </span>
+                </label>
+                {borrador.impuestos.tipo === "aiu" && (
+                  <div className="aiu" style={{ margin: "0 0 10px 32px", maxWidth: 340 }}>
+                    {(["administracion", "imprevistos", "utilidad"] as const).map((campo) => {
+                      const valor = borrador.impuestos.tipo === "aiu" ? borrador.impuestos[campo] : "";
+                      const texto = { administracion: "Administración", imprevistos: "Imprevistos", utilidad: "Utilidad" }[campo];
+                      const malo = !(PORCENTAJE.test(valor) && Number(valor) <= 100);
+                      return (
+                        <div key={campo} className="campo">
+                          <label htmlFor={`aiu-${campo}`}>{`${texto} %`}</label>
+                          <input
+                            id={`aiu-${campo}`}
+                            className={`control chico num ${malo ? "error" : ""}`}
+                            aria-label={`Porcentaje de ${texto.toLowerCase()}`}
+                            inputMode="decimal"
+                            value={valor.replace(".", ",")}
+                            onChange={(ev) => borrador.impuestos.tipo === "aiu" && actualizar({ impuestos: { ...borrador.impuestos, [campo]: ev.target.value.trim().replace(",", ".") } })}
+                          />
+                          {malo && <span className="msj-error">De 0 a 100</span>}
+                        </div>
+                      );
+                    })}
                   </div>
-                  {sinPrecio > 0 && (
-                    <div className="f nota">
-                      <span>{`Sin contar ${sinPrecio === 1 ? "la línea" : `las ${sinPrecio} líneas`} sin precio`}</span>
-                    </div>
-                  )}
-                  {borrador.impuestos.tipo === "iva" ? (
-                    <div className="f">
-                      <span>IVA 19 %</span>
-                      <span>{pesos(totales.iva)}</span>
-                    </div>
-                  ) : (
-                    porcentajesValidos &&
-                    totales.aiu && (
-                      <>
-                        <div className="f">
-                          <span>{`Administración ${borrador.impuestos.administracion.replace(".", ",")} %`}</span>
-                          <span>{pesos(totales.aiu.administracion)}</span>
-                        </div>
-                        <div className="f">
-                          <span>{`Imprevistos ${borrador.impuestos.imprevistos.replace(".", ",")} %`}</span>
-                          <span>{pesos(totales.aiu.imprevistos)}</span>
-                        </div>
-                        <div className="f">
-                          <span>{`Utilidad ${borrador.impuestos.utilidad.replace(".", ",")} %`}</span>
-                          <span>{pesos(totales.aiu.utilidad)}</span>
-                        </div>
-                        <div className="f">
-                          <span>IVA 19 % sobre la utilidad</span>
-                          <span>{pesos(totales.aiu.ivaUtilidad)}</span>
-                        </div>
-                      </>
-                    )
-                  )}
-                  {porcentajesValidos && (
-                    <div className="gran">
-                      <span className="fuerte">Total</span>
-                      <b key={totales.total} className="cifra-cambia">
-                        {pesos(totales.total)}
-                      </b>
-                    </div>
-                  )}
-                </section>
-              </div>
-            </section>
-            <section aria-labelledby="titulo-condiciones">
-              <h2 id="titulo-condiciones">Condiciones</h2>
-              <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 12, marginTop: 10 }}>
-                <div className="campo">
-                  <label htmlFor={`validez-${c.id}`}>Validez (días)</label>
-                  <input id={`validez-${c.id}`} className={`control ${validezValida ? "" : "error"}`} inputMode="numeric" value={borrador.validez} onChange={(ev) => actualizar({ validez: ev.target.value })} />
-                  {!validezValida && <span className="msj-error">De 1 a 365 días</span>}
+                )}
+                <p className="ayuda" style={{ maxWidth: "48ch", marginTop: 8 }}>
+                  El contador de TEINS decide cuál aplica. La DIAN no admite AIU en instalación ni mantenimiento de redes eléctricas.
+                </p>
+              </fieldset>
+              <section className="suma" aria-label="Totales">
+                <div className="f">
+                  <span>Subtotal</span>
+                  <b>{pesos(totales.subtotal)}</b>
                 </div>
-                <div className="campo">
-                  <label htmlFor={`pago-${c.id}`}>Forma de pago</label>
-                  <input id={`pago-${c.id}`} className="control" value={borrador.formaPago} onChange={(ev) => actualizar({ formaPago: ev.target.value })} />
-                </div>
+                {sinPrecio > 0 && (
+                  <div className="f nota">
+                    <span>{`Sin contar ${sinPrecio === 1 ? "la línea" : `las ${sinPrecio} líneas`} sin precio`}</span>
+                  </div>
+                )}
+                {borrador.impuestos.tipo === "iva" ? (
+                  <div className="f">
+                    <span>IVA 19 %</span>
+                    <span>{pesos(totales.iva)}</span>
+                  </div>
+                ) : (
+                  porcentajesValidos &&
+                  totales.aiu && (
+                    <>
+                      <div className="f">
+                        <span>{`Administración ${borrador.impuestos.administracion.replace(".", ",")} %`}</span>
+                        <span>{pesos(totales.aiu.administracion)}</span>
+                      </div>
+                      <div className="f">
+                        <span>{`Imprevistos ${borrador.impuestos.imprevistos.replace(".", ",")} %`}</span>
+                        <span>{pesos(totales.aiu.imprevistos)}</span>
+                      </div>
+                      <div className="f">
+                        <span>{`Utilidad ${borrador.impuestos.utilidad.replace(".", ",")} %`}</span>
+                        <span>{pesos(totales.aiu.utilidad)}</span>
+                      </div>
+                      <div className="f">
+                        <span>IVA 19 % sobre la utilidad</span>
+                        <span>{pesos(totales.aiu.ivaUtilidad)}</span>
+                      </div>
+                    </>
+                  )
+                )}
+                {porcentajesValidos && (
+                  <div className="gran">
+                    <span className="fuerte">Total</span>
+                    <b key={totales.total} className="cifra-cambia">
+                      {pesos(totales.total)}
+                    </b>
+                  </div>
+                )}
+              </section>
+            </div>
+          </section>
+          <section aria-labelledby="titulo-condiciones" data-ancla=".condiciones">
+            <h2 id="titulo-condiciones">Condiciones</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 12, marginTop: 10 }}>
+              <div className="campo">
+                <label htmlFor={`validez-${c.id}`}>Validez (días)</label>
+                <input id={`validez-${c.id}`} className={`control ${validezValida ? "" : "error"}`} inputMode="numeric" value={borrador.validez} onChange={(ev) => actualizar({ validez: ev.target.value })} />
+                {!validezValida && <span className="msj-error">De 1 a 365 días</span>}
               </div>
-              <div className="campo" style={{ marginTop: 12 }}>
-                <label htmlFor={`notas-${c.id}`}>Notas para el cliente</label>
-                <textarea id={`notas-${c.id}`} className="control" maxLength={2000} value={borrador.notas} onChange={(ev) => actualizar({ notas: ev.target.value })} />
+              <div className="campo">
+                <label htmlFor={`pago-${c.id}`}>Forma de pago</label>
+                <input id={`pago-${c.id}`} className="control" value={borrador.formaPago} onChange={(ev) => actualizar({ formaPago: ev.target.value })} />
               </div>
-            </section>
-          </div>
-        </div>
-        <aside className="carril" aria-label="Versiones publicadas">
+            </div>
+            <div className="campo" style={{ marginTop: 12 }}>
+              <label htmlFor={`notas-${c.id}`}>Notas para el cliente</label>
+              <textarea id={`notas-${c.id}`} className="control" maxLength={2000} value={borrador.notas} onChange={(ev) => actualizar({ notas: ev.target.value })} />
+            </div>
+          </section>
+          {/* El costado es la hoja: las versiones y sus envíos van al final del editor (prototipos/vista-en-vivo). */}
           <Versiones
             c={c}
             envios={
@@ -519,14 +573,21 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
                   cliente={{ id: c.clienteId, nombre: c.visita.cliente }}
                   version={vigente}
                   contactos={contactos.data?.contactos}
+                  mensaje={(p) => mensajeDeVersion(p, vigente.numero)}
                   enviar={(destinos, llave) => cliente.llamar("enviarCotizacion", { parametros: { id: c.id, numero: vigente.numero }, cuerpo: { destinos, llave } })}
                   recargar={recargar}
                 />
               )
             }
           />
-        </aside>
+        </div>
       </div>
+      {alLado && <LienzoCotizacion vista={vista} alCambiar={setVista} documento={documentoVista} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} ancla={ancla} />}
+      {vistaLateral && !alLado && (
+        <Dialogo forma="lateral" amplio titulo="Vista previa" subtitulo={`Cotización ${c.numero}, versión ${siguiente}`} alCerrar={() => setVistaLateral(false)}>
+          <LienzoCotizacion vista={vista} alCambiar={setVista} documento={documentoVista} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} ancla={null} />
+        </Dialogo>
+      )}
 
       {confirmando && (
         <Confirmacion
@@ -538,14 +599,13 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           alTerminar={() => notificar({ texto: elegidos.length > 0 ? `Versión ${siguiente} publicada. Se envía cuando el PDF esté listo.` : `Versión ${siguiente} publicada. El PDF se está generando.` })}
           accion={guardarYPublicar}
         >
-          <p>
-            El total queda en <b style={{ color: "var(--texto)" }}>{pesos(totales.total)}</b>. Queda congelada con sus precios e impuestos: cambiar la lista de precios después no la afecta. Para corregir algo se publica una versión nueva, y la anterior se conserva.
-          </p>
-          {/* La plantilla del PDF con lo guardado (iteración 24). Aproximada: el PDF pagina y pone el pie. */}
-          <figure className="vista-previa">
-            <iframe src={rutaVistaPreviaCotizacion(c.id)} sandbox="" title={`Vista previa de la versión ${siguiente}`} />
-            <figcaption className="ayuda">Vista previa aproximada: en el PDF pueden cambiar los saltos de página.</figcaption>
-          </figure>
+          <Consecuencias
+            lista={[
+              { icono: LockKeyhole, texto: `Queda congelada con sus precios e impuestos, por ${pesos(totales.total)}`, detalle: "Cambiar la lista de precios después no la afecta" },
+              { icono: FileText, texto: "Es el documento de la vista previa", detalle: "El PDF puede partir las páginas distinto" },
+              { icono: History, texto: `Para corregir algo se publica la versión ${siguiente + 1}`, detalle: siguiente > 1 ? `La versión ${siguiente - 1} se conserva` : "Esta se conserva" },
+            ]}
+          />
           {contactos.isPending ? (
             <p className="ayuda">Cargando los contactos del cliente…</p>
           ) : contactos.isError ? (
@@ -557,7 +617,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
         </Confirmacion>
       )}
       {salida}
-    </>
+    </div>
   );
 }
 
@@ -580,7 +640,7 @@ function Versiones({ c, envios }: { c: Cotizacion; envios: ReactNode }) {
   }
 
   return (
-    <section className="grupo-c" aria-labelledby="titulo-versiones">
+    <section aria-labelledby="titulo-versiones">
       <h2 id="titulo-versiones">Versiones publicadas</h2>
       {c.versiones.length === 0 ? (
         <p className="ayuda">Todavía no se ha publicado ninguna versión.</p>
@@ -611,5 +671,36 @@ function Versiones({ c, envios }: { c: Cotizacion; envios: ReactNode }) {
       )}
       {errorDescarga && <Aviso tono="error">No se pudo preparar la descarga. Intente de nuevo.</Aviso>}
     </section>
+  );
+}
+
+type Contacto = Respuesta<"obtenerCliente">["contactos"][number];
+
+/** El lienzo de la cotización: la hoja o el correo que recibe cada contacto (prototipos/vista-en-vivo). */
+function LienzoCotizacion({
+  vista,
+  alCambiar,
+  documento,
+  mensaje,
+  contactos,
+  cliente: cl,
+  ancla,
+}: {
+  vista: QueSeVe;
+  alCambiar: (v: QueSeVe) => void;
+  documento: ContenidoCotizacion;
+  mensaje: (p: Plantillas) => MensajeDeCotizacion;
+  contactos: readonly Contacto[];
+  cliente: { id: string; nombre: string };
+  ancla: AnclaDeHoja | null;
+}) {
+  return (
+    <Lienzo cabecera={<PestanasDeVista documento="Cotización" vista={vista} alCambiar={alCambiar} />}>
+      {vista === "documento" ? (
+        <VistaDeDocumento titulo={`Vista previa de la cotización ${documento.numero}`} generar={(p) => p.plantillaCotizacion(documento, { salida: { tipo: "vista" } })} ancla={ancla} />
+      ) : (
+        <CorreoDeContactos contactos={contactos} mensaje={mensaje} cliente={cl} documento="la cotización" />
+      )}
+    </Lienzo>
   );
 }

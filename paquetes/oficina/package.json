@@ -3,15 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "vite --configLoader runner",
+    "build": "vite build --configLoader runner",
+    "preview": "vite preview --configLoader runner",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --configLoader runner"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.2",
     "@tanstack/react-router": "^1.170.39",
+    "@teins/documentos": "workspace:*",
     "@teins/dominio": "workspace:*",
     "@teins/protocolo": "workspace:*",
     "@teins/ui": "workspace:*",
@@ -20,6 +21,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.2",
     "@types/qrcode": "^1.5.6",

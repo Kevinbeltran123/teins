@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -14,6 +14,7 @@ import {
   nombreDeDato,
   normalizarDecimal,
   rutaLegible,
+  type ContenidoVersion,
   type DefinicionCampo,
   type DocumentoBoceto,
   type LineaCantidad,
@@ -48,6 +49,7 @@ import {
   TriangleAlert,
   UserRound,
   VisorFotos,
+  type AnclaDeHoja,
   type LineaEditable,
   type LucideIcon,
 } from "@teins/ui";
@@ -57,6 +59,8 @@ import { aFechaCorta } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
 import { useComentar, useCorregir, useMarcarRevisado, useTomar } from "../revision";
+import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
+import { Lienzo, VistaDeDocumento } from "./Lienzo";
 
 type Levantamiento = Respuesta<"obtenerLevantamiento">;
 type Historial = Respuesta<"historialLevantamiento">;
@@ -77,6 +81,10 @@ const migas = (
 
 const claveDato = (seccion: string, campo: string) => `${seccion}|${campo}`;
 const idDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`.replace(/[^a-zA-Z0-9_-]/g, "");
+
+/** La corrección que se está escribiendo: el capítulo del informe la muestra antes de guardarla (iteración 26). */
+type EnCurso = { seccion: string; campo: string; valor: Valor | undefined };
+const CorreccionEnCurso = createContext<{ avisar: (c: EnCurso | null) => void; verCapitulo: (() => void) | null } | null>(null);
 
 /** La última corrección de cada dato y su valor original, para mostrar antes y después en la fila. */
 function correccionesDe(historial: Historial | undefined) {
@@ -100,7 +108,8 @@ export function Detalle({ id }: { id: string }) {
   const sesion = useQuery(consultas.sesion());
   const historial = useQuery(consultas.historial(id));
   const [comentandoEn, setComentandoEn] = useState<string | null>(null);
-  const [pestana, setPestana] = useState<"comentarios" | "historial">("comentarios");
+  const [pestana, setPestana] = useState<"comentarios" | "historial" | "informe">("comentarios");
+  const [enCurso, setEnCurso] = useState<EnCurso | null>(null);
 
   if (consulta.isPending) {
     return (
@@ -163,64 +172,75 @@ export function Detalle({ id }: { id: string }) {
           </>
         }
       />
-      <div className="con-carril">
-        <div className="principal">
-          <nav className="nav-secciones" aria-label="Secciones del levantamiento">
-            {secciones.map(({ seccion, bloques: bs }) => (
-              <button key={seccion.clave} type="button" onClick={() => irA(seccion.clave)}>
-                {conCambios(seccion.clave) ? <i className="m-cambio" aria-label="con correcciones" /> : conFaltantes(bs) ? <i className="m-falta" aria-label="con datos no obtenidos" /> : null}
-                {seccion.titulo}
-              </button>
-            ))}
-          </nav>
-          <div className="doc">
-            {secciones.map(({ seccion, bloques: bs }, k) => (
-              <section key={seccion.clave} id={`sec-${seccion.clave}`} aria-labelledby={`titulo-${seccion.clave}`}>
-                <h2 id={`titulo-${seccion.clave}`}>
-                  <span className="n">{k + 1}</span>
+      <CorreccionEnCurso.Provider value={{ avisar: setEnCurso, verCapitulo: pestana === "informe" ? null : () => setPestana("informe") }}>
+        <div className={`con-carril ${pestana === "informe" ? "ancho" : ""}`}>
+          <div className="principal">
+            <nav className="nav-secciones" aria-label="Secciones del levantamiento">
+              {secciones.map(({ seccion, bloques: bs }) => (
+                <button key={seccion.clave} type="button" onClick={() => irA(seccion.clave)}>
+                  {conCambios(seccion.clave) ? <i className="m-cambio" aria-label="con correcciones" /> : conFaltantes(bs) ? <i className="m-falta" aria-label="con datos no obtenidos" /> : null}
                   {seccion.titulo}
-                </h2>
-                {seccion.repetible && bs.length === 0 && <p className="ayuda">El técnico no agregó ninguno.</p>}
-                {bs.map((b) => (
-                  <div key={b.clave} role={b.repeticion ? "region" : undefined} aria-label={b.repeticion ? b.titulo : undefined}>
-                    {b.repeticion && <div className="rep-titulo">{b.repeticion.nombre}</div>}
-                    <div className="datos">
-                      {b.seccion.campos.map((campo) => (
-                        <FilaCampo
-                          key={campo.clave}
-                          l={l}
-                          seccion={b.clave}
-                          campo={campo}
-                          mia={mia}
-                          correccion={correcciones.get(claveDato(b.clave, campo.clave))}
-                          recargar={recargar}
-                          comentando={comentandoEn === claveDato(b.clave, campo.clave)}
-                          comentar={() => setComentandoEn(claveDato(b.clave, campo.clave))}
-                          dejarDeComentar={() => setComentandoEn(null)}
-                        />
-                      ))}
+                </button>
+              ))}
+            </nav>
+            <div className="doc">
+              {secciones.map(({ seccion, bloques: bs }, k) => (
+                <section key={seccion.clave} id={`sec-${seccion.clave}`} aria-labelledby={`titulo-${seccion.clave}`}>
+                  <h2 id={`titulo-${seccion.clave}`}>
+                    <span className="n">{k + 1}</span>
+                    {seccion.titulo}
+                  </h2>
+                  {seccion.repetible && bs.length === 0 && <p className="ayuda">El técnico no agregó ninguno.</p>}
+                  {bs.map((b) => (
+                    <div key={b.clave} role={b.repeticion ? "region" : undefined} aria-label={b.repeticion ? b.titulo : undefined}>
+                      {b.repeticion && <div className="rep-titulo">{b.repeticion.nombre}</div>}
+                      <div className="datos">
+                        {b.seccion.campos.map((campo) => (
+                          <FilaCampo
+                            key={campo.clave}
+                            l={l}
+                            seccion={b.clave}
+                            campo={campo}
+                            mia={mia}
+                            correccion={correcciones.get(claveDato(b.clave, campo.clave))}
+                            recargar={recargar}
+                            comentando={comentandoEn === claveDato(b.clave, campo.clave)}
+                            comentar={() => setComentandoEn(claveDato(b.clave, campo.clave))}
+                            dejarDeComentar={() => setComentandoEn(null)}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </section>
-            ))}
-          </div>
-        </div>
-        <aside className="carril" aria-label="Revisión y comentarios">
-          <PanelRevision l={l} mia={mia} correcciones={correcciones.size} recargar={recargar} />
-          <div className="grupo-c">
-            <div className="mini-tabs" role="tablist" aria-label="Comentarios e historial">
-              <button type="button" role="tab" aria-selected={pestana === "comentarios"} onClick={() => setPestana("comentarios")}>
-                Comentarios{l.comentarios.length > 0 ? ` · ${l.comentarios.length}` : ""}
-              </button>
-              <button type="button" role="tab" aria-selected={pestana === "historial"} onClick={() => setPestana("historial")}>
-                Historial
-              </button>
+                  ))}
+                </section>
+              ))}
             </div>
-            {pestana === "comentarios" ? <Comentarios l={l} /> : <HistorialDeCambios l={l} historial={historial} />}
           </div>
-        </aside>
-      </div>
+          <aside className="carril" aria-label="Revisión y comentarios">
+            <PanelRevision l={l} mia={mia} correcciones={correcciones.size} recargar={recargar} />
+            <div className="grupo-c">
+              <div className="mini-tabs" role="tablist" aria-label="Comentarios, historial y el informe">
+                <button type="button" role="tab" aria-selected={pestana === "comentarios"} onClick={() => setPestana("comentarios")}>
+                  Comentarios{l.comentarios.length > 0 ? ` · ${l.comentarios.length}` : ""}
+                </button>
+                <button type="button" role="tab" aria-selected={pestana === "historial"} onClick={() => setPestana("historial")}>
+                  Historial
+                </button>
+                <button type="button" role="tab" aria-selected={pestana === "informe"} onClick={() => setPestana("informe")}>
+                  En el informe
+                </button>
+              </div>
+              {pestana === "comentarios" ? (
+                <Comentarios l={l} />
+              ) : pestana === "historial" ? (
+                <HistorialDeCambios l={l} historial={historial} />
+              ) : (
+                <CapituloEnVivo l={l} correcciones={correcciones} enCurso={enCurso} organizacion={sesion.data?.organizacion.nombre ?? "[ORGANIZACIÓN]"} />
+              )}
+            </div>
+          </aside>
+        </div>
+      </CorreccionEnCurso.Provider>
     </>
   );
 }
@@ -521,6 +541,9 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
   const errorDelCampo = corregir.error instanceof ErrorApi ? corregir.error.problema.errores?.find((e) => e.seccion === seccion && e.campo === campo.clave) : undefined;
   const mensajeCampo = errorDelCampo ? mensajeDeValidacion[errorDelCampo.codigo as keyof typeof mensajeDeValidacion] : undefined;
   const marcado = esNoObtenido(nuevo);
+  const enCurso = useContext(CorreccionEnCurso);
+  useEffect(() => enCurso?.avisar({ seccion, campo: campo.clave, valor: nuevo }), [nuevo]);
+  useEffect(() => () => enCurso?.avisar(null), []);
 
   async function guardar(evento: FormEvent) {
     evento.preventDefault();
@@ -628,6 +651,14 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
           )}
         </Aviso>
       )}
+      {enCurso &&
+        (enCurso.verCapitulo ? (
+          <Boton variante="fantasma" tamano="pequeno" icono={FileText} className="ir-capitulo" onClick={enCurso.verCapitulo}>
+            Ver cómo queda en el informe
+          </Boton>
+        ) : (
+          <p className="ayuda">El capítulo de la derecha ya muestra el valor nuevo, resaltado.</p>
+        ))}
       <div className="fila-botones">
         <Boton onClick={cerrar} disabled={corregir.isPending}>
           Cancelar
@@ -1082,4 +1113,69 @@ function Fotos({ etiqueta, huellas, puestos }: { etiqueta: string; huellas: read
       {viendo !== null && <VisorFotos etiqueta={etiqueta} fotos={fotos} inicial={viendo} alCerrar={() => setViendo(null)} />}
     </>
   );
+}
+
+/**
+ * El capítulo del levantamiento como saldrá en el informe (ADR-0031), con la plantilla del PDF: lo corregido
+ * resaltado con el valor anterior debajo y, mientras se escribe una corrección, el valor nuevo enmarcado. Lo azul es
+ * de la pantalla: el PDF muestra el valor y nada más; el valor anterior queda en el historial.
+ */
+function CapituloEnVivo({ l, correcciones, enCurso, organizacion }: { l: Levantamiento; correcciones: ReturnType<typeof correccionesDe>; enCurso: EnCurso | null; organizacion: string }) {
+  const editado: Levantamiento = enCurso ? { ...l, respuestas: { ...l.respuestas, [enCurso.seccion]: conValor(l.respuestas[enCurso.seccion] ?? {}, enCurso.campo, enCurso.valor) } } : l;
+  const recursos = useRecursosDelInforme([editado]);
+  const contenido: ContenidoVersion = {
+    formatoContenido: 1,
+    numero: 1,
+    publicadaEn: new Date().toISOString(),
+    publicadaPor: "",
+    organizacion: { nombre: organizacion },
+    visita: l.visita ?? { cliente: "[Cliente]", sitio: "[Sitio]", direccion: "", motivo: "", programadaPara: l.recibidoEn.slice(0, 10) },
+    introduccion: "",
+    conclusiones: "",
+    levantamientos: [capituloDe(editado)],
+    planos: [],
+  };
+  const definiciones = bloques(l.formatoDefinicion, l.repeticiones);
+  const describir = (seccion: string, campo: string, valor: unknown) => {
+    const definicion = definiciones.find((b) => b.clave === seccion)?.seccion.campos.find((c) => c.clave === campo);
+    return definicion ? describirValor(definicion, valor as Valor | undefined) : "";
+  };
+  const claveEnCurso = enCurso ? `${enCurso.seccion}/${enCurso.campo}` : null;
+  const huellaMarcas = `${[...correcciones.keys()].join()}|${claveEnCurso ?? ""}`;
+  const marcar = useCallback(
+    (doc: Document) => {
+      doc.documentElement.classList.add("vista-capitulo");
+      const poner = (clave: string, antes: string, clase: string) => {
+        const fila = doc.querySelector(`tr[data-dato="${CSS.escape(clave)}"]`);
+        const celda = fila?.querySelector<HTMLElement>("td");
+        if (!fila || !celda) return;
+        fila.classList.add(clase);
+        celda.dataset.antes = antes;
+      };
+      for (const [k, c] of correcciones) {
+        const [seccion = "", campo = ""] = k.split("|");
+        poner(`${seccion}/${campo}`, `Antes: ${describir(seccion, campo, c.original)}`, "vista-corregido");
+      }
+      if (enCurso) poner(`${enCurso.seccion}/${enCurso.campo}`, `Antes: ${describir(enCurso.seccion, enCurso.campo, l.respuestas[enCurso.seccion]?.[enCurso.campo])} · sin guardar`, "vista-editando");
+    },
+    [huellaMarcas, l.version],
+  );
+  // Al empezar a corregir un dato, la hoja va hasta su fila.
+  const [ancla, setAncla] = useState<AnclaDeHoja | null>(null);
+  useEffect(() => {
+    if (claveEnCurso) setAncla((a) => ({ selector: `tr[data-dato="${CSS.escape(claveEnCurso)}"]`, vez: (a?.vez ?? 0) + 1 }));
+  }, [claveEnCurso]);
+  return (
+    <Lienzo clase="en-carril" cabecera={<span className="nota-l">El capítulo, como saldrá en el informe</span>} nota="Lo azul no sale en el PDF">
+      <VistaDeDocumento ancho={740} titulo="Capítulo del informe" generar={(p) => p.plantillaInforme(contenido, { salida: { tipo: "vista" }, ...recursos })} alPintar={marcar} ancla={ancla} />
+    </Lienzo>
+  );
+}
+
+/** Las respuestas de una sección con un dato cambiado; sin valor, el dato sale. */
+function conValor(seccion: Record<string, Valor>, campo: string, valor: Valor | undefined): Record<string, Valor> {
+  const copia = { ...seccion };
+  if (valor === undefined) delete copia[campo];
+  else copia[campo] = valor;
+  return copia;
 }

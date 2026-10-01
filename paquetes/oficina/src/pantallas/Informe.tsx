@@ -1,6 +1,8 @@
-import { cloneElement, isValidElement, useEffect, useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { cloneElement, isValidElement, useCallback, useEffect, useState, type ReactNode } from "react";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import type { MensajeDeInforme } from "@teins/documentos";
+import type { ContenidoVersion } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   ArrowDown,
@@ -11,15 +13,23 @@ import {
   CampoTextoLargo,
   ChevronLeft,
   Confirmacion,
+  Consecuencias,
+  Dialogo,
   Download,
   EncabezadoPagina,
   EsqueletoLista,
+  Eye,
+  FileText,
+  Globe,
+  History,
   Insignia,
   RefreshCw,
   SelectorDeArchivo,
   Send,
   Trash,
+  TriangleAlert,
   useNotificar,
+  type AnclaDeHoja,
 } from "@teins/ui";
 import { cliente, consultas, esSesionVencida } from "../api";
 import { useBorrador } from "../borrador";
@@ -28,7 +38,10 @@ import { aFechaCorta } from "../formato";
 import { mensajeDeAdministracion } from "../administracion";
 import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
 import { consultasDeProgramacion } from "../programacion";
+import { useHojaAlLado, type Plantillas } from "../documentos";
+import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
+import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type QueSeVe } from "./Lienzo";
 
 type Informe = Respuesta<"obtenerInforme">;
 type Envio = Informe["versiones"][number]["envios"][number];
@@ -129,7 +142,64 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
   const salida = useSalidaProtegida(cambiado, { que: "el informe", guardar: guardarBorrador });
   const vigente = vigenteDe(informe);
-  const reciben = contactos.data ? contactos.data.contactos.filter((c) => receptores(contactos.data.contactos, "informes").includes(c.id)).map((c) => c.nombre) : [];
+  const quienesReciben = contactos.data ? contactos.data.contactos.filter((c) => receptores(contactos.data.contactos, "informes").includes(c.id)) : [];
+  const reciben = quienesReciben.map((c) => c.nombre);
+
+  // La vista en vivo (ADR-0031): la siguiente versión tal como la congelaría el servidor al publicar, desde el borrador.
+  const sesion = useQuery(consultas.sesion());
+  const organizacion = sesion.data?.organizacion.nombre ?? "[ORGANIZACIÓN]";
+  const alLado = useHojaAlLado();
+  const [vista, setVista] = useState<QueSeVe>("documento");
+  const [vistaLateral, setVistaLateral] = useState(false);
+  const [ancla, setAncla] = useState<AnclaDeHoja | null>(null);
+  const irAParte = (selector: string | undefined) => selector && setAncla((a) => (a?.selector === selector ? a : { selector, vez: (a?.vez ?? 0) + 1 }));
+  const detalles = useQueries({ queries: borrador.levantamientos.map((lid) => consultas.levantamiento(lid)) }).flatMap((q) => (q.data ? [q.data] : []));
+  const recursos = useRecursosDelInforme(detalles);
+  const documentoVista: ContenidoVersion = {
+    formatoContenido: 1,
+    numero: siguiente,
+    publicadaEn: new Date().toISOString(),
+    publicadaPor: sesion.data?.usuario.nombre ?? "",
+    organizacion: { nombre: organizacion },
+    visita: informe.visita,
+    introduccion: borrador.introduccion,
+    conclusiones: borrador.conclusiones,
+    levantamientos: detalles.map(capituloDe),
+    planos: borrador.planos,
+  };
+  const mensajeDeVersion = (p: Plantillas, numero: number): MensajeDeInforme => ({
+    organizacion,
+    cliente: informe.visita.cliente,
+    sitio: informe.visita.sitio,
+    motivo: informe.visita.motivo,
+    programadaPara: informe.visita.programadaPara,
+    numero,
+    nombreArchivo: p.nombreDelPdfDeInforme(informe.visita, numero),
+  });
+  // Los planos no se dibujan (ADR-0031): una ficha por plano, al final, donde el PDF los anexa, con sus páginas o con
+  // el aviso de que no se puede anexar (lo cuenta el servidor al verificarlo).
+  const estadosDePlanos = new Map(useQueries({ queries: borrador.planos.map((p) => consultas.plano(p.huella)) }).map((q, i) => [borrador.planos[i]!.huella, q.data]));
+  const clavePlanos = borrador.planos.map((p) => `${p.nombre}|${estadosDePlanos.get(p.huella)?.estado}|${estadosDePlanos.get(p.huella)?.paginas}`).join("\n");
+  const fichasDePlanos = useCallback(
+    (doc: Document) => {
+      const lista = doc.getElementById("planos");
+      for (const plano of borrador.planos) {
+        const estado = estadosDePlanos.get(plano.huella);
+        const ficha = doc.createElement("div");
+        ficha.className = estado?.estado === "ilegible" || estado?.estado === "rechazado" ? "vista-anexo ilegible" : "vista-anexo";
+        const marca = doc.createElement("i");
+        marca.textContent = "PDF";
+        const nombre = doc.createElement("b");
+        nombre.textContent = plano.nombre;
+        const texto = doc.createElement("span");
+        texto.append(nombre, ` · ${fichaDePlano(estado)}`);
+        ficha.append(marca, texto);
+        lista?.append(ficha);
+      }
+    },
+    [clavePlanos],
+  );
+  const ilegibles = borrador.planos.filter((p) => ["ilegible", "rechazado"].includes(estadosDePlanos.get(p.huella)?.estado ?? ""));
 
   async function agregarPlanos(archivos: File[]) {
     setSubiendo(true);
@@ -201,131 +271,139 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   }
 
   return (
-    <>
-      <EncabezadoPagina
-        migas={migas}
-        titulo={`Informe de ${informe.visita.cliente}`}
-        estado={vigente ? <Insignia tono="publicado">{`Versión ${vigente.numero} vigente`}</Insignia> : <Insignia tono={informe.versiones.length > 0 ? "anulado" : "borrador"}>{informe.versiones.length > 0 ? "Retirado del portal" : "Sin publicar"}</Insignia>}
-        descripcion={
-          <>
-            <span>{informe.visita.sitio}</span>
-            <span>Visita del {dia(informe.visita.programadaPara)}</span>
-            <span>{informe.visita.motivo}</span>
-            {contactos.data && (
-              <span>
-                Recibe el PDF: <b>{reciben.length > 0 ? enLista(reciben) : "nadie"}</b>
-              </span>
-            )}
-          </>
-        }
-        acciones={
-          <>
-            <span className={`guardado ${cambiado ? "cambios" : ""}`} aria-live="polite">
-              <i />
-              {cambiado ? "Cambios sin guardar" : "Todo guardado"}
-            </span>
-            {cambiado && (
-              <Boton cargando={guardar.isPending} disabled={subiendo} onClick={() => void guardarBorrador().catch(() => undefined)}>
-                Guardar borrador
-              </Boton>
-            )}
-            <Boton
-              variante="principal"
-              icono={Send}
-              disabled={subiendo}
-              onClick={() => {
-                // Todos los que reciben el informe, marcados por omisión (ADR-0028, parte 3).
-                setDestinatarios(null);
-                setConfirmando(true);
-              }}
-            >
-              Publicar versión {siguiente}
-            </Boton>
-          </>
-        }
-      />
-      {error !== null && error !== undefined && (
-        <Aviso tono="error">
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {mensajeDeInforme(error, nombreDe).map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-          {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
-            <div>
-              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargarDescartando}>
-                Recargar
-              </Boton>
-            </div>
-          )}
-        </Aviso>
-      )}
-      <div className="con-carril">
-        <div className="principal">
-          {/* En el orden del PDF: introducción, un capítulo por levantamiento, conclusiones y planos anexos. */}
-          <div className="doc">
-            <section aria-labelledby="titulo-intro">
-              <h2 id="titulo-intro">
-                <span className="n">1</span>Introducción
-              </h2>
-              <textarea className="texto-doc" aria-labelledby="titulo-intro" maxLength={20_000} value={borrador.introduccion} onChange={(e) => actualizar({ introduccion: e.target.value })} placeholder="Qué se visitó y para qué" />
-            </section>
-            <section aria-labelledby="titulo-incluidos">
-              <h2 id="titulo-incluidos">
-                <span className="n">2</span>Levantamientos
-              </h2>
-              <p className="ayuda">Cada uno es un capítulo del PDF, en este orden. Solo entran los revisados.</p>
-              {informe.candidatos.length === 0 ? (
-                <p className="sec">Esta visita todavía no tiene levantamientos enviados.</p>
-              ) : (
-                <>
-                  <div>{incluidos.map((c, k) => capitulo(c, k))}</div>
-                  {fuera.length > 0 && (
-                    <>
-                      <h3>No entran</h3>
-                      <div>{fuera.map((c) => capitulo(c, -1))}</div>
-                    </>
-                  )}
-                </>
+    <div className={`vivo ${alLado ? "" : "sin-lienzo"}`}>
+      <div className="editor-doc">
+        <EncabezadoPagina
+          migas={migas}
+          accionesEnBarra
+          titulo={`Informe de ${informe.visita.cliente}`}
+          estado={vigente ? <Insignia tono="publicado">{`Versión ${vigente.numero} vigente`}</Insignia> : <Insignia tono={informe.versiones.length > 0 ? "anulado" : "borrador"}>{informe.versiones.length > 0 ? "Retirado del portal" : "Sin publicar"}</Insignia>}
+          descripcion={
+            <>
+              <span>{informe.visita.sitio}</span>
+              <span>Visita del {dia(informe.visita.programadaPara)}</span>
+              <span>{informe.visita.motivo}</span>
+              {contactos.data && (
+                <span>
+                  Recibe el PDF: <b>{reciben.length > 0 ? enLista(reciben) : "nadie"}</b>
+                </span>
               )}
-            </section>
-            <section aria-labelledby="titulo-concl">
-              <h2 id="titulo-concl">
-                <span className="n">3</span>Conclusiones
-              </h2>
-              <textarea className="texto-doc" aria-labelledby="titulo-concl" maxLength={20_000} value={borrador.conclusiones} onChange={(e) => actualizar({ conclusiones: e.target.value })} placeholder="Qué se recomienda" />
-            </section>
-            <section aria-labelledby="titulo-planos">
-              <h2 id="titulo-planos">
-                <span className="n">4</span>Planos anexos
-              </h2>
-              <p className="ayuda">Los planos que elabora oficina, en PDF. Van al final del informe, en este orden.</p>
-              {borrador.planos.map((p, i) => (
-                <div key={p.huella} className="plano-fila">
-                  <span className="pdf" aria-hidden>
-                    PDF
-                  </span>
-                  <label className="sr-only" htmlFor={`plano-${p.huella}`}>
-                    {`Nombre del plano ${i + 1}`}
-                  </label>
+            </>
+          }
+          acciones={
+            <>
+              <span className={`guardado ${cambiado ? "cambios" : ""}`} aria-live="polite">
+                <i />
+                {cambiado ? "Cambios sin guardar" : "Todo guardado"}
+              </span>
+              {!alLado && (
+                <Boton icono={Eye} onClick={() => setVistaLateral(true)}>
+                  Vista previa
+                </Boton>
+              )}
+              {cambiado && (
+                <Boton cargando={guardar.isPending} disabled={subiendo} onClick={() => void guardarBorrador().catch(() => undefined)}>
+                  Guardar borrador
+                </Boton>
+              )}
+              <Boton
+                variante="principal"
+                icono={Send}
+                disabled={subiendo}
+                onClick={() => {
+                  // Todos los que reciben el informe, marcados por omisión (ADR-0028, parte 3).
+                  setDestinatarios(null);
+                  setConfirmando(true);
+                }}
+              >
+                Publicar versión {siguiente}
+              </Boton>
+            </>
+          }
+        />
+        {error !== null && error !== undefined && (
+          <Aviso tono="error">
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {mensajeDeInforme(error, nombreDe).map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+            {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
+              <div>
+                <Boton tamano="pequeno" icono={RefreshCw} onClick={recargarDescartando}>
+                  Recargar
+                </Boton>
+              </div>
+            )}
+          </Aviso>
+        )}
+        {/* En el orden del PDF: introducción, un capítulo por levantamiento, conclusiones y planos anexos. Al pasar a
+            una sección, la hoja va hasta esa parte del documento. */}
+        <div className="doc" onFocus={(e) => irAParte((e.target as HTMLElement).closest<HTMLElement>("[data-ancla]")?.dataset.ancla)}>
+          <section aria-labelledby="titulo-intro" data-ancla="#introduccion">
+            <h2 id="titulo-intro">
+              <span className="n">1</span>Introducción
+            </h2>
+            <textarea className="texto-doc" aria-labelledby="titulo-intro" maxLength={20_000} value={borrador.introduccion} onChange={(e) => actualizar({ introduccion: e.target.value })} placeholder="Qué se visitó y para qué" />
+          </section>
+          <section aria-labelledby="titulo-incluidos" data-ancla=".capitulo">
+            <h2 id="titulo-incluidos">
+              <span className="n">2</span>Levantamientos
+            </h2>
+            <p className="ayuda">Cada uno es un capítulo del PDF, en este orden. Solo entran los revisados.</p>
+            {informe.candidatos.length === 0 ? (
+              <p className="sec">Esta visita todavía no tiene levantamientos enviados.</p>
+            ) : (
+              <>
+                <div>{incluidos.map((c, k) => capitulo(c, k))}</div>
+                {fuera.length > 0 && (
+                  <>
+                    <h3>No entran</h3>
+                    <div>{fuera.map((c) => capitulo(c, -1))}</div>
+                  </>
+                )}
+              </>
+            )}
+          </section>
+          <section aria-labelledby="titulo-concl" data-ancla="#conclusiones">
+            <h2 id="titulo-concl">
+              <span className="n">3</span>Conclusiones
+            </h2>
+            <textarea className="texto-doc" aria-labelledby="titulo-concl" maxLength={20_000} value={borrador.conclusiones} onChange={(e) => actualizar({ conclusiones: e.target.value })} placeholder="Qué se recomienda" />
+          </section>
+          <section aria-labelledby="titulo-planos" data-ancla="#planos">
+            <h2 id="titulo-planos">
+              <span className="n">4</span>Planos anexos
+            </h2>
+            <p className="ayuda">Los planos que elabora oficina, en PDF. Van al final del informe, en este orden.</p>
+            {borrador.planos.map((p, i) => (
+              <div key={p.huella} className="plano-fila">
+                <span className="pdf" aria-hidden>
+                  PDF
+                </span>
+                <label className="sr-only" htmlFor={`plano-${p.huella}`}>
+                  {`Nombre del plano ${i + 1}`}
+                </label>
+                <div className="plano-nombre">
                   <input
                     id={`plano-${p.huella}`}
                     className="control chico"
-                    style={{ flex: 1, background: "transparent" }}
+                    style={{ background: "transparent" }}
+                    aria-describedby={`plano-estado-${p.huella}`}
                     value={p.nombre}
                     onChange={(e) => actualizar({ planos: borrador.planos.map((x) => (x.huella === p.huella ? { ...x, nombre: e.target.value } : x)) })}
                   />
-                  <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir el plano ${i + 1}`} disabled={i === 0} onClick={() => actualizar({ planos: mover(borrador.planos, i, -1) })} />
-                  <BotonIcono icono={ArrowDown} tamano="pequeno" etiqueta={`Bajar el plano ${i + 1}`} disabled={i === borrador.planos.length - 1} onClick={() => actualizar({ planos: mover(borrador.planos, i, 1) })} />
-                  {/* Quitar un plano del borrador no pierde nada: el archivo sigue subido y se vuelve a agregar igual. */}
-                  <BotonIcono icono={Trash} tamano="pequeno" etiqueta={`Quitar el plano ${i + 1}`} onClick={() => actualizar({ planos: borrador.planos.filter((x) => x.huella !== p.huella) })} />
+                  <EstadoDelPlano id={`plano-estado-${p.huella}`} estado={estadosDePlanos.get(p.huella)} />
                 </div>
-              ))}
-              <SelectorDeArchivo fila etiqueta={subiendo ? "Subiendo…" : "Agregar planos en PDF"} aceptar="application/pdf" deshabilitado={subiendo} onElegir={(a) => void agregarPlanos(a)} />
-            </section>
-          </div>
-        </div>
-        <aside className="carril" aria-label="Versiones publicadas">
+                <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir el plano ${i + 1}`} disabled={i === 0} onClick={() => actualizar({ planos: mover(borrador.planos, i, -1) })} />
+                <BotonIcono icono={ArrowDown} tamano="pequeno" etiqueta={`Bajar el plano ${i + 1}`} disabled={i === borrador.planos.length - 1} onClick={() => actualizar({ planos: mover(borrador.planos, i, 1) })} />
+                {/* Quitar un plano del borrador no pierde nada: el archivo sigue subido y se vuelve a agregar igual. */}
+                <BotonIcono icono={Trash} tamano="pequeno" etiqueta={`Quitar el plano ${i + 1}`} onClick={() => actualizar({ planos: borrador.planos.filter((x) => x.huella !== p.huella) })} />
+              </div>
+            ))}
+            <SelectorDeArchivo fila etiqueta={subiendo ? "Subiendo…" : "Agregar planos en PDF"} aceptar="application/pdf" deshabilitado={subiendo} onElegir={(a) => void agregarPlanos(a)} />
+          </section>
+          {/* El costado es la hoja: las versiones y sus envíos van al final del editor (prototipos/vista-en-vivo). */}
           <Versiones
             informe={informe}
             recargar={recargar}
@@ -335,17 +413,23 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
                   cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }}
                   version={vigente}
                   contactos={contactos.data?.contactos}
+                  mensaje={(p) => mensajeDeVersion(p, vigente.numero)}
                   enviar={(destinos, llave) => cliente.llamar("enviarVersion", { parametros: { id: informe.id, numero: vigente.numero }, cuerpo: { destinos, llave } })}
                   recargar={recargar}
                 />
               )
             }
           />
-          <div className="grupo-c">
-            <p className="ayuda">Una versión publicada queda congelada. Para corregir algo se publica otra y la anterior se conserva.</p>
-          </div>
-        </aside>
+        </div>
       </div>
+      {alLado && (
+        <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={ancla} />
+      )}
+      {vistaLateral && !alLado && (
+        <Dialogo forma="lateral" amplio titulo="Vista previa" subtitulo={`Informe de ${informe.visita.cliente}, versión ${siguiente}`} alCerrar={() => setVistaLateral(false)}>
+          <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={null} />
+        </Dialogo>
+      )}
 
       {confirmando && (
         <Confirmacion
@@ -359,7 +443,15 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           }
           accion={guardarYPublicar}
         >
-          <p>El cliente la verá en el portal. Queda congelada: no se podrá modificar. Para corregir algo después se publica una versión nueva, y la anterior se conserva.</p>
+          <Consecuencias
+            lista={[
+              { icono: Globe, texto: "El cliente la verá en el portal", detalle: "Queda congelada: no se podrá modificar" },
+              { icono: FileText, texto: "Es el documento de la vista previa", detalle: "El PDF puede partir las páginas distinto" },
+              { icono: History, texto: `Para corregir algo se publica la versión ${siguiente + 1}`, detalle: siguiente > 1 ? `La versión ${siguiente - 1} se conserva` : "Esta se conserva" },
+              // Se puede publicar igual, pero se dice antes: un plano que no se anexa hace fallar el PDF y sus envíos.
+              ...ilegibles.map((p) => ({ icono: TriangleAlert, texto: `El plano «${p.nombre}» no se puede anexar`, detalle: "El PDF del informe fallará y no se enviará: vuelva a exportar el plano y súbalo de nuevo" })),
+            ]}
+          />
           {contactos.isPending ? (
             <p className="ayuda">Cargando los contactos del cliente…</p>
           ) : contactos.isError ? (
@@ -371,7 +463,69 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
         </Confirmacion>
       )}
       {salida}
-    </>
+    </div>
+  );
+}
+
+type Contacto = Respuesta<"obtenerCliente">["contactos"][number];
+type EstadoDePlano = Respuesta<"estadoDePlano">;
+
+/** Lo que dice la ficha del plano en la hoja. */
+function fichaDePlano(estado: EstadoDePlano | undefined): string {
+  if (estado?.estado === "ilegible") return "no se puede anexar: el PDF del informe fallaría";
+  if (estado?.estado === "rechazado") return "no pasó la verificación: súbalo de nuevo";
+  if (estado?.estado === "verificando") return "se está verificando";
+  if (estado?.paginas) return `${estado.paginas === 1 ? "1 página, se anexa" : `${estado.paginas} páginas, se anexan`} al final del PDF`;
+  return "se anexa al final del PDF";
+}
+
+/** Bajo el nombre del plano: sus páginas, que se está verificando o que no se puede anexar, antes de publicar. */
+function EstadoDelPlano({ id, estado }: { id: string; estado: EstadoDePlano | undefined }) {
+  if (!estado) return null;
+  if (estado.estado === "ilegible" || estado.estado === "rechazado")
+    return (
+      <span id={id} className="msj-error">
+        {estado.estado === "ilegible" ? "No se puede anexar al informe: vuelva a exportarlo como PDF y súbalo de nuevo." : "No pasó la verificación: súbalo de nuevo."}
+      </span>
+    );
+  const texto = estado.estado === "verificando" ? "Verificando…" : estado.paginas ? (estado.paginas === 1 ? "1 página" : `${estado.paginas} páginas`) : null;
+  return texto ? (
+    <span id={id} className="ayuda" aria-live="polite">
+      {texto}
+    </span>
+  ) : null;
+}
+
+/** El lienzo del informe: el documento completo en el orden del PDF, o el correo que recibe cada contacto. */
+function LienzoInforme({
+  vista,
+  alCambiar,
+  documento,
+  recursos,
+  alPintar,
+  mensaje,
+  contactos,
+  cliente: cl,
+  ancla,
+}: {
+  vista: QueSeVe;
+  alCambiar: (v: QueSeVe) => void;
+  documento: ContenidoVersion;
+  recursos: ReturnType<typeof useRecursosDelInforme>;
+  alPintar: (doc: Document) => void;
+  mensaje: (p: Plantillas) => MensajeDeInforme;
+  contactos: readonly Contacto[];
+  cliente: { id: string; nombre: string };
+  ancla: AnclaDeHoja | null;
+}) {
+  return (
+    <Lienzo cabecera={<PestanasDeVista documento="Informe" vista={vista} alCambiar={alCambiar} />} sinConexion="Las fotos que no alcanzaron a cargar salen como [FOTO]. ">
+      {vista === "documento" ? (
+        <VistaDeDocumento titulo={`Vista previa del informe de ${documento.visita.cliente}`} generar={(p) => p.plantillaInforme(documento, { salida: { tipo: "vista" }, ...recursos })} alPintar={alPintar} ancla={ancla} />
+      ) : (
+        <CorreoDeContactos contactos={contactos} mensaje={mensaje} cliente={cl} documento="el informe" />
+      )}
+    </Lienzo>
   );
 }
 
@@ -398,7 +552,7 @@ function Versiones({ informe, recargar, envios }: { informe: Informe; recargar: 
   }
 
   return (
-    <section className="grupo-c" aria-labelledby="titulo-versiones">
+    <section aria-labelledby="titulo-versiones">
       <h2 id="titulo-versiones">Versiones publicadas</h2>
       {informe.versiones.length === 0 ? (
         <p className="ayuda">Todavía no se ha publicado ninguna versión.</p>
@@ -440,6 +594,7 @@ function Versiones({ informe, recargar, envios }: { informe: Informe; recargar: 
           ))}
         </div>
       )}
+      <p className="ayuda">Una versión publicada queda congelada. Para corregir algo se publica otra y la anterior se conserva.</p>
       {errorDescarga && <Aviso tono="error">No se pudo preparar la descarga. Intente de nuevo.</Aviso>}
       {retirando !== null && (
         <RetirarVersion informeId={informe.id} numero={retirando} envios={informe.versiones.find((v) => v.numero === retirando)?.envios ?? []} alCerrar={() => setRetirando(null)} alRetirar={recargar} />

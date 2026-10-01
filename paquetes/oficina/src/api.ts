@@ -34,6 +34,13 @@ export const consultas = {
   // La URL firmada dura 5 minutos: se renueva antes de que venza.
   // Un boceto es inmutable (su huella es su contenido): no se vuelve a pedir.
   boceto: (huella: string) => queryOptions({ queryKey: ["boceto", huella], queryFn: () => cliente.llamar("bocetoDeArchivo", { parametros: { huella } }), staleTime: Infinity }),
+  /** Un plano antes de publicar: se vuelve a leer mientras el worker lo verifica (iteración 26). */
+  plano: (huella: string) =>
+    queryOptions({
+      queryKey: ["plano", huella],
+      queryFn: () => cliente.llamar("estadoDePlano", { parametros: { huella } }),
+      refetchInterval: (q) => (q.state.data?.estado === "verificando" ? 2_000 : false),
+    }),
   urlDeArchivo: (huella: string) =>
     queryOptions({ queryKey: ["archivo", huella], queryFn: () => cliente.llamar("urlDeArchivo", { parametros: { huella } }), staleTime: 4 * 60_000 }),
 };
