@@ -134,7 +134,7 @@ Si algo falla, termina con error. Cada simulacro se anota en la tabla de abajo.
 
 Cuando TEINS tenga su espacio de trabajo en Railway (plan Hobby o Pro):
 
-0. Antes: la iteración 25 (ADR-0033), con el cambio obligatorio de la contraseña temporal y el cambio de la propia contraseña, está en producción. Sin ellos, cada contraseña temporal entregada se queda para siempre.
+0. Antes: la iteración 25 (ADR-0033), con el cambio obligatorio de la contraseña temporal y el cambio de la propia contraseña, está en producción. Sin ellos, cada contraseña temporal entregada se queda para siempre. Cumplido el 2026-10-01 (commit 101fbcf).
 1. Simulacro completo en producción, anotado arriba.
 2. Transferir `teins-produccion` y `teins-respaldos` (Settings → Transfer Project).
 3. En la cuenta de TEINS: alerta de gasto, personas con acceso, y cambiar las credenciales del almacenamiento y los secretos (`AUTH_SECRETO` cierra todas las sesiones). `RESPALDOS_CLAVE` no se cambia: se entrega a TEINS la copia de `privado/teins-produccion-respaldos.txt` y se borra del computador de Kevin.
