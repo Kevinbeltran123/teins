@@ -1,8 +1,8 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LogOut, MapPin, OPCIONES_DE_TEMA, Smartphone, useSinRepetir, useTema } from "@teins/ui";
+import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LockKeyhole, LogOut, MapPin, OPCIONES_DE_TEMA, Smartphone, useSinRepetir, useTema } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
@@ -20,6 +20,7 @@ import { Diagnostico } from "./Diagnostico";
 // Secundarias: no entran en el JavaScript inicial (ADR-0011).
 const SugerirLlave = lazy(() => import("./SugerirLlave"));
 const TarjetaAvisos = lazy(() => import("./TarjetaAvisos"));
+const HojaCambiarContrasena = lazy(() => import("./HojaCambiarContrasena"));
 const GuiaDeInstalacion = lazy(() => import("./InstalarApp").then((m) => ({ default: m.GuiaDeInstalacion })));
 
 interface Props {
@@ -65,6 +66,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   const [confirmandoSalida, setConfirmandoSalida] = useState(false);
   const [guiaAbierta, setGuiaAbierta] = useState(false);
   const [cuentaAbierta, setCuentaAbierta] = useState(false);
+  const [cambiandoContrasena, setCambiandoContrasena] = useState(false);
 
   const deEnvios = [...(envios?.values() ?? [])];
   const porEnviar = deEnvios.filter((e) => e.estado !== "recibido").length;
@@ -73,10 +75,14 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   const permisoVencido = bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
   const sinConexion = !enLinea || (!alcanzable && porEnviar > 0);
 
-  // Un doble toque crea uno solo.
+  // Un doble toque crea uno solo. Creado, no se suelta: entre abrirlo y que la captura reemplace esta pantalla,
+  // un segundo toque crearía otro.
+  const iniciado = useRef(false);
   const [iniciar] = useSinRepetir(async (visitaId: string, formato: VersionFormato) => {
+    if (iniciado.current) return;
     const levantamiento = crearLevantamiento(formato, uuidv7(), new Date(), visitaId, nuevoIdDeRepeticion);
     await repositorio.crear(levantamiento, usuario.id);
+    iniciado.current = true;
     abrir(levantamiento.id);
   });
 
@@ -235,6 +241,23 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
               </span>
             </div>
             <SelectorDeTema />
+            {/* Sin señal no se abre: el servidor es quien la cambia (ADR-0033). */}
+            <button
+              type="button"
+              aria-disabled={!alcanzable || undefined}
+              onClick={() => {
+                if (!alcanzable) return;
+                setCuentaAbierta(false);
+                setCambiandoContrasena(true);
+              }}
+              className="flex min-h-tactil items-center gap-3 rounded-panel bg-panel-hundido px-4 py-2 text-left text-cuerpo font-bold aria-disabled:opacity-60 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&_svg]:size-5"
+            >
+              <LockKeyhole aria-hidden />
+              <span className="flex flex-col">
+                Cambiar contraseña
+                {!alcanzable && <span className="text-ayuda font-normal text-texto-secundario">Necesita señal</span>}
+              </span>
+            </button>
             <Diagnostico tecnicoId={usuario.id} />
             <button
               type="button"
@@ -250,6 +273,12 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
             </button>
           </div>
         </Dialogo>
+      )}
+
+      {cambiandoContrasena && (
+        <Suspense fallback={null}>
+          <HojaCambiarContrasena alCerrar={() => setCambiandoContrasena(false)} />
+        </Suspense>
       )}
 
       {guiaAbierta && (

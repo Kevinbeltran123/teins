@@ -1,10 +1,24 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { admiteLlaves, ErrorApi, ErrorDeRed, esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Boton, CampoDeIngreso, claseBotonIngreso, KeyRound, LoaderCircle, MarcoDeIngreso, SeparadorIngreso } from "@teins/ui";
+import {
+  Aviso,
+  Boton,
+  CampoDeIngreso,
+  claseBotonIngreso,
+  enfocarPrimerError,
+  KeyRound,
+  LoaderCircle,
+  MarcoDeIngreso,
+  RequisitosDeContrasena,
+  SeparadorIngreso,
+  validarContrasenaNueva,
+  type ErroresDeContrasena,
+} from "@teins/ui";
 import { db } from "../datos/instancia";
 import { useConexionDelNavegador } from "../dispositivo/useConexion";
-import { completarCierrePendiente, iniciarSesion, iniciarSesionConLlave, RolNoPermitido } from "../sesion/sesion";
+import { errorDeCuenta } from "../sesion/cuenta";
+import { cambiarContrasenaTemporal, completarCierrePendiente, ContrasenaTemporal, entrarConLaNueva, iniciarSesion, iniciarSesionConLlave, RolNoPermitido, salirSinCambiar } from "../sesion/sesion";
 
 function mensajeDeError(error: unknown, conLlave = false): string {
   if (error instanceof ErrorDeRed) return "Necesitas conexión para iniciar sesión.";
@@ -28,6 +42,8 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
   const [contrasena, setContrasena] = useState("");
   const [estado, setEstado] = useState<{ tipo: "listo" } | { tipo: "enviando" } | { tipo: "error"; mensaje: string }>({ tipo: "listo" });
   const [conLlave, setConLlave] = useState(false);
+  // La temporal con la que acaba de entrar: se manda como la actual al crear la propia (ADR-0033).
+  const [temporal, setTemporal] = useState<string | null>(null);
   useEffect(() => void admiteLlaves().then(setConLlave), []);
   // Una sesión cerrada sin señal se cierra también en el servidor en cuanto vuelve.
   useEffect(() => {
@@ -56,8 +72,24 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
       await iniciarSesion(usuario, contrasena);
       alCancelar?.();
     } catch (error) {
-      setEstado({ tipo: "error", mensaje: mensajeDeError(error) });
+      if (error instanceof ContrasenaTemporal) {
+        setTemporal(contrasena);
+        setEstado({ tipo: "listo" });
+      } else setEstado({ tipo: "error", mensaje: mensajeDeError(error) });
     }
+  }
+
+  if (temporal !== null) {
+    return (
+      <CrearContrasena
+        temporal={temporal}
+        alEntrar={() => alCancelar?.()}
+        alSalir={() => {
+          setTemporal(null);
+          setContrasena("");
+        }}
+      />
+    );
   }
 
   return (
@@ -96,6 +128,89 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
           Seguir sin enviar
         </Boton>
       )}
+    </MarcoDeIngreso>
+  );
+}
+
+const FORMULARIO = "crear-contrasena";
+
+/**
+ * La que le entregaron es temporal: la cambia antes de cualquier otra cosa (ADR-0033). Necesita señal, como el
+ * ingreso. El teléfono no guarda el usuario hasta que la cambie: si cierra la app, vuelve a entrar con la temporal.
+ */
+function CrearContrasena({ temporal, alEntrar, alSalir }: { temporal: string; alEntrar: () => void; alSalir: () => void }) {
+  const [nueva, setNueva] = useState("");
+  const [repetir, setRepetir] = useState("");
+  const [errores, setErrores] = useState<ErroresDeContrasena>({});
+  const [general, setGeneral] = useState<string | null>(null);
+  const [estado, setEstado] = useState<"listo" | "enviando" | "cambiada" | "entrando">("listo");
+
+  async function guardar(evento: FormEvent) {
+    evento.preventDefault();
+    const encontrados = validarContrasenaNueva({ actual: temporal, nueva, repetir, pideActual: false, tu: true });
+    setErrores(encontrados);
+    setGeneral(null);
+    if (Object.keys(encontrados).length > 0) return enfocarPrimerError(FORMULARIO);
+    setEstado("enviando");
+    try {
+      await cambiarContrasenaTemporal(temporal, nueva);
+      setEstado("cambiada");
+    } catch (error) {
+      setEstado("listo");
+      const { campo, mensaje } = errorDeCuenta(error);
+      if (campo === "nueva") {
+        setErrores({ nueva: mensaje });
+        enfocarPrimerError(FORMULARIO);
+      } else setGeneral(campo === "actual" ? "La contraseña temporal ya no sirve. Vuelve a ingresar." : mensaje);
+    }
+  }
+
+  async function entrar() {
+    setEstado("entrando");
+    try {
+      await entrarConLaNueva();
+      alEntrar();
+    } catch (error) {
+      setEstado("cambiada");
+      setGeneral(error instanceof ErrorDeRed ? "Necesitas señal para descargar tus visitas. Intenta de nuevo." : "No se pudo abrir tu cuenta. Intenta de nuevo.");
+    }
+  }
+
+  if (estado === "cambiada" || estado === "entrando") {
+    return (
+      <MarcoDeIngreso titulo="Listo" debajo="¿Problemas para entrar? Habla con oficina.">
+        <p className="text-center text-[14px] text-texto-secundario">Ya puedes trabajar. La próxima vez entra con tu contraseña nueva.</p>
+        {general && <Aviso tono="error">{general}</Aviso>}
+        <button type="button" className={claseBotonIngreso(true)} aria-busy={estado === "entrando" || undefined} onClick={() => void entrar()}>
+          {estado === "entrando" && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
+          Ir a mis visitas
+        </button>
+      </MarcoDeIngreso>
+    );
+  }
+
+  const enviando = estado === "enviando";
+  return (
+    <MarcoDeIngreso titulo="Crea tu contraseña" debajo="¿Problemas para entrar? Habla con oficina.">
+      <form id={FORMULARIO} onSubmit={guardar} noValidate className="flex flex-col gap-4">
+        <p className="text-center text-[14px] text-texto-secundario">La que te entregaron es temporal. Escoge una que solo tú sepas.</p>
+        {general && <Aviso tono="error">{general}</Aviso>}
+        <CampoDeIngreso etiqueta="Contraseña nueva" nombre="nueva" tipo="password" autoComplete="new-password" valor={nueva} onCambio={setNueva} mensajeError={errores.nueva} />
+        <CampoDeIngreso etiqueta="Repite la contraseña nueva" nombre="repetir" tipo="password" autoComplete="new-password" valor={repetir} onCambio={setRepetir} mensajeError={errores.repetir} />
+        <RequisitosDeContrasena actual={temporal} nueva={nueva} repetir={repetir} />
+        <button type="submit" aria-busy={enviando || undefined} className={claseBotonIngreso(true)}>
+          {enviando && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
+          Guardar y entrar
+        </button>
+        <button
+          type="button"
+          disabled={enviando}
+          onClick={() => void salirSinCambiar().then(alSalir)}
+          className="min-h-tactil self-center rounded px-2 text-[14px] text-texto-secundario focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco"
+        >
+          Cerrar sesión
+        </button>
+      </form>
     </MarcoDeIngreso>
   );
 }
