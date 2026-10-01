@@ -170,21 +170,40 @@ Todo lo demás en la pantalla es visiblemente secundario.
 
 ## Movimiento
 
-Cada animación tiene un propósito escrito. En `campo` **todo el movimiento es CSS** (cero JavaScript de animación); Motion solo se usa en `oficina`.
+Cada animación tiene un propósito escrito. Desde la iteración 27 (`prototipos/flujos/`), cuatro reglas:
+
+1. **Lo que cambia se queda en su sitio y se transforma.** Un estado que pasa de "Enviado" a "En revisión" cambia ahí; la tarjeta de la visita se convierte en la cabecera de la captura; el título de la fila, en el del detalle.
+2. **Lo que entra o sale se ve entrar o salir.** Un diálogo, una hoja o una notificación también salen (200 ms); una fila nueva entra arriba y las demás se corren; la que se cancela se cierra.
+3. **Solo lo nuevo se anima.** Lo que ya estaba no vuelve a entrar al volver a una pantalla o a una pestaña (`useLoNuevo`).
+4. **Cada acción termina diciendo qué pasó y qué sigue:** la notificación lleva el siguiente paso ("Agregar contactos", "Ver en Canceladas") y los flujos en serie ofrecen el siguiente ("Siguiente: …", "Ver la siguiente visita").
+
+**Cómo:** View Transitions en las dos superficies (`conTransicion` en `paquetes/ui`; el enrutador de oficina con `defaultViewTransition`). El navegador toma una foto antes y otra después y anima solo lo que tiene `view-transition-name`; la página no se mueve. Sin soporte, el cambio es instantáneo. **Sin Motion:** el movimiento es CSS en `campo` y en `oficina`; el JavaScript solo dice cuándo empieza una transición.
 
 | Momento | Movimiento | Propósito |
 |---|---|---|
-| Diálogo o menú que se abre | Aparece con un leve desplazamiento | Mostrar de dónde viene la capa |
-| Hoja lateral | Entra desde la derecha | Mostrar que la lista sigue detrás |
-| Lo recién creado | Resaltado azul que se desvanece | Encontrarlo sin buscarlo |
+| Cambiar de sección (oficina) | El contenido se desvanece y el nuevo sube 8 px; el menú y la barra no se mueven | Que la ubicación cambie sin perder el marco |
+| Abrir un detalle desde la lista | El título de la fila se convierte en el del detalle | Saber qué se abrió |
+| Siguiente levantamiento de la serie | El cuerpo se desliza; el carril de la revisión se queda | Revisar en serie sin volver a la lista |
+| Pasar de paso (campo) | Solo se desliza el cuerpo; la cabecera y la barra se quedan y la barra de avance crece | Mostrar hacia dónde se fue sin mover lo que no cambia |
+| Abrir una visita (campo) | La tarjeta de la visita se convierte en la cabecera de la captura | Que la captura salga de la visita |
+| Estado que cambia en su lugar | La pastilla pasa de un estado al otro; el dato corregido destella | Ver qué cambió sin buscarlo |
+| Diálogo o menú | Aparece con un leve desplazamiento; al cerrarse sale igual (200 ms) | Mostrar de dónde viene y a dónde se va la capa |
+| Hoja lateral | Entra desde la derecha y sale hacia ella | Mostrar que la lista sigue detrás |
+| Croquis y firma | Suben al abrirse y bajan al cerrarse | Que se lean como capas encima de la captura |
+| Notificación | Sube al llegar y baja al irse | Que no desaparezca de golpe |
+| Lo recién creado | Entra arriba resaltado; el resaltado se desvanece | Encontrarlo sin buscarlo |
 | Lo que cambia en la hoja en vivo | Destello azul que se desvanece | Ver dónde cayó lo que se escribió |
+| Pestañas | El subrayado se desliza a la elegida | Ver de dónde a dónde se cambió |
+| Avance de un proceso (publicar, enviar) | Cada paso se marca con un chulo que se dibuja cuando se cumple a la vista | Decir el estado real, paso a paso |
 | Cargando | Esqueleto con la forma real | Evitar saltos |
 | Error de validación | Sacudida corta del campo | Señalar dónde está |
 | Trabajando | Giro del icono en el botón | Mostrar que la acción corre |
 | Pasar de hoja (boceto) | La hoja entra desde su lado | Mostrar hacia dónde se fue |
 | Dedo quieto al dibujar | Un anillo que se llena en medio segundo | Avisar que el trazo se va a enderezar |
 
-**Duraciones:** 120 ms (pulsación), 200 ms (capas), 280 ms (hojas), 2,4 s (resaltado). **Curva:** `cubic-bezier(0.2, 0, 0, 1)`. Con `prefers-reduced-motion`, todo se desactiva.
+**Qué se mueve:** con dirección (`adelante`, `atras`, `seccion`, `fundido`) se mueve lo que se ve en la ventana, menos lo que tiene nombre propio; la foto es del tamaño de la ventana, nunca del documento entero, para que una lista larga o un levantamiento con fotos no congelen la transición (en el iPhone sí lo harían). Se quedan quietos por su nombre: `menu` y `barra-oficina` (oficina), `barra-paso` y `progreso` (campo) y `carril` (la revisión). Van de su lugar al nuevo, por elemento: `visita-<id>`, `lev-<id>`, `estado-<id>`, `nombre-<id>`, `fila-<id>` e `indicador-<id>` (`nombreDeTransicion`). Las filas de una lista larga llevan su nombre solo mientras se ven (`useNombreEnPantalla`). Un nombre se repite en una pantalla solo si es el mismo elemento.
+
+**Duraciones:** 120 ms (pulsación), 200 ms (capas y salidas), 280 ms (pantallas y hojas), 2,4 s (resaltado). **Curva:** `cubic-bezier(0.2, 0, 0, 1)`. **Con `prefers-reduced-motion`, nada se mueve:** los cambios son instantáneos, las capas se quitan sin salir y lo resaltado queda fijo.
 
 ## Iconos
 
