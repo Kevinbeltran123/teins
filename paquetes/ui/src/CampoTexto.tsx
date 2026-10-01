@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
+import { Eye, EyeOff } from "./iconos";
 
 interface Props {
   etiqueta: string;
@@ -35,6 +36,8 @@ export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, erro
   const campo = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   // Solo para marcar el valor común elegido; el campo sigue sin controlarse (el cursor no salta).
   const [actual, setActual] = useState(valorInicial);
+  // La contraseña empieza oculta; el ojo la muestra para revisar lo escrito (como en el ingreso).
+  const [visible, setVisible] = useState(false);
   const cambiar = (valor: string) => {
     setActual(valor);
     onCambio(valor);
@@ -78,23 +81,36 @@ export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, erro
           onChange={(e) => cambiar(e.target.value)}
         />
       ) : (
-        <input
-          ref={campo}
-          id={id}
-          name={nombre}
-          type={tipo}
-          min={minimo}
-          autoComplete={autoComplete}
-          inputMode={modoEntrada}
-          className={`${claseControl} ${error ? claseConError : ""}`}
-          defaultValue={valorInicial}
-          disabled={deshabilitado}
-          placeholder={comunes ? "Otro: escríbelo aquí" : undefined}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${id}-error` : undefined}
-          onChange={(e) => cambiar(e.target.value)}
-          onFocus={seleccionarAlEnfocar ? (e) => e.target.select() : undefined}
-        />
+        <div className="relative">
+          <input
+            ref={campo}
+            id={id}
+            name={nombre}
+            type={tipo === "password" && visible ? "text" : tipo}
+            min={minimo}
+            autoComplete={autoComplete}
+            inputMode={modoEntrada}
+            className={`${claseControl} ${tipo === "password" ? "pr-12" : ""} ${error ? claseConError : ""}`}
+            defaultValue={valorInicial}
+            disabled={deshabilitado}
+            placeholder={comunes ? "Otro: escríbelo aquí" : undefined}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? `${id}-error` : undefined}
+            onChange={(e) => cambiar(e.target.value)}
+            onFocus={seleccionarAlEnfocar ? (e) => e.target.select() : undefined}
+          />
+          {tipo === "password" && (
+            <button
+              type="button"
+              onClick={() => setVisible((v) => !v)}
+              aria-label={visible ? "Ocultar lo escrito" : "Mostrar lo escrito"}
+              aria-pressed={visible}
+              className="absolute top-1/2 right-1.5 grid size-[34px] -translate-y-1/2 place-items-center rounded-lg text-texto-terciario hover:bg-panel-hundido hover:text-texto focus-visible:outline-2 focus-visible:outline-foco [&_svg]:size-[18px]"
+            >
+              {visible ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+            </button>
+          )}
+        </div>
       )}
       {error && <MensajeError id={`${id}-error`}>{error}</MensajeError>}
     </div>

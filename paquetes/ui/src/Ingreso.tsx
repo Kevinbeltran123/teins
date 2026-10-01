@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from "react";
+import { MensajeError } from "./Etiqueta";
 import { Eye, EyeOff } from "./iconos";
 import { Logo } from "./Logo";
 
@@ -22,7 +23,8 @@ export function MarcoDeIngreso({ titulo, debajo, children }: { titulo: string; d
 
 /**
  * Campo de la tarjeta de ingreso: etiqueta encima, 46 px de alto; la contraseña empieza oculta y el ojo la muestra.
- * `olvido` pone junto a la etiqueta un "¿La olvidó?" que al tocarlo dice qué hacer.
+ * `olvido` pone junto a la etiqueta un "¿La olvidó?" que al tocarlo dice qué hacer. `mensajeError` lo dice debajo
+ * del campo y lo marca, para formularios con un error por campo (cambiar la contraseña).
  */
 export function CampoDeIngreso({
   etiqueta,
@@ -32,6 +34,7 @@ export function CampoDeIngreso({
   valor,
   onCambio,
   error,
+  mensajeError,
   olvido,
 }: {
   etiqueta: string;
@@ -41,10 +44,12 @@ export function CampoDeIngreso({
   valor: string;
   onCambio: (v: string) => void;
   error?: boolean;
+  mensajeError?: string | undefined;
   olvido?: { pregunta: string; respuesta: string };
 }) {
   const id = useId();
   const idRespuesta = useId();
+  const idError = useId();
   const [visible, setVisible] = useState(false);
   const [explicando, setExplicando] = useState(false);
   return (
@@ -70,7 +75,8 @@ export function CampoDeIngreso({
           spellCheck={false}
           value={valor}
           onChange={(e) => onCambio(e.target.value)}
-          aria-invalid={error || undefined}
+          aria-invalid={error || Boolean(mensajeError) || undefined}
+          aria-describedby={mensajeError ? idError : undefined}
           className={`h-[46px] w-full rounded-[10px] bg-panel px-3.5 text-[16px] text-texto shadow-[inset_0_0_0_1px_var(--t-borde-suave)] outline-none focus:shadow-[inset_0_0_0_1.5px_var(--t-superficie),0_0_0_4px_var(--t-superficie-suave)] aria-invalid:shadow-[inset_0_0_0_1.5px_var(--t-error)] ${tipo === "password" ? "pr-12" : ""}`}
         />
         {tipo === "password" && (
@@ -85,6 +91,7 @@ export function CampoDeIngreso({
           </button>
         )}
       </div>
+      {mensajeError && <MensajeError id={idError}>{mensajeError}</MensajeError>}
       {olvido && explicando && (
         <p id={idRespuesta} className="text-[13px] text-texto-secundario">
           {olvido.respuesta}

@@ -4,6 +4,25 @@ import { Boton } from "./Boton";
 import { Dialogo } from "./Dialogo";
 import type { LucideIcon } from "./iconos";
 
+type Consecuencia = { icono: LucideIcon; texto: string; detalle?: string };
+
+/** Las consecuencias de una acción, una por línea con su icono: se leen antes de decidir (DESIGN.md). */
+export function Consecuencias({ lista }: { lista: readonly Consecuencia[] }) {
+  return (
+    <ul className="consecuencias m-0 flex list-none flex-col rounded-panel border border-division p-0">
+      {lista.map(({ icono: Icono, texto, detalle }) => (
+        <li key={texto} className="grid grid-cols-[16px_minmax(0,1fr)] gap-2.5 border-division px-3 py-2.5 text-ayuda leading-snug not-first:border-t">
+          <Icono aria-hidden className="mt-0.5 size-4 text-texto-secundario" strokeWidth={1.6} />
+          <span>
+            {texto}
+            {detalle && <small className="block text-[12px] text-texto-secundario">{detalle}</small>}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const enOficina = () => typeof document !== "undefined" && document.documentElement.dataset.superficie === "oficina";
 
 interface Props {
@@ -13,7 +32,7 @@ interface Props {
    * Las consecuencias concretas, una por línea con su icono y un detalle opcional: se leen antes de decidir
    * (DESIGN.md, "Confirmaciones sin icono").
    */
-  consecuencias?: readonly { icono: LucideIcon; texto: string; detalle?: string }[];
+  consecuencias?: readonly Consecuencia[];
   /** La consecuencia en una o dos frases, si no va en `consecuencias`, y lo que haga falta para decidir (un motivo). */
   children?: ReactNode;
   /** El mismo verbo del título, en el botón: "Desactivar usuario". Nunca "Aceptar" ni "Sí". */
@@ -98,19 +117,7 @@ export function Confirmacion({ titulo, consecuencias, children, confirmar, desca
         </>
       }
     >
-      {consecuencias && consecuencias.length > 0 && (
-        <ul className="consecuencias m-0 flex list-none flex-col rounded-panel border border-division p-0">
-          {consecuencias.map(({ icono: Icono, texto, detalle }) => (
-            <li key={texto} className="grid grid-cols-[16px_minmax(0,1fr)] gap-2.5 border-division px-3 py-2.5 text-ayuda leading-snug not-first:border-t">
-              <Icono aria-hidden className="mt-0.5 size-4 text-texto-secundario" strokeWidth={1.6} />
-              <span>
-                {texto}
-                {detalle && <small className="block text-[12px] text-texto-secundario">{detalle}</small>}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {consecuencias && consecuencias.length > 0 && <Consecuencias lista={consecuencias} />}
       {children && <div className="flex flex-col gap-3 text-cuerpo">{children}</div>}
       {error && <Aviso tono="error">{error}</Aviso>}
     </Dialogo>
