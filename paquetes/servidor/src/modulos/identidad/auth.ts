@@ -53,6 +53,7 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
         rol: { type: "string", required: true, input: false },
         desactivadoEn: { type: "date", required: false, input: false },
         administrador: { type: "boolean", required: false, defaultValue: false, input: false },
+        debeCambiarContrasena: { type: "boolean", required: false, defaultValue: false, input: false },
       },
     },
     session: {
@@ -69,6 +70,8 @@ export function crearAuth(bd: BaseDeDatos, config: Config, rpID: string, { alCre
         // El código del segundo factor tiene el mismo límite por origen; además, 10 fallos bloquean la cuenta 15 minutos.
         "/two-factor/*": { window: 60, max: config.INICIOS_DE_SESION_POR_MINUTO },
         "/passkey/verify-authentication": { window: 60, max: config.INICIOS_DE_SESION_POR_MINUTO },
+        // Cambiar la contraseña verifica la actual: el mismo límite que adivinarla al ingresar (ADR-0033, QA-7).
+        "/change-password": { window: 60, max: config.INICIOS_DE_SESION_POR_MINUTO },
       },
     },
     advanced: {

@@ -15,6 +15,8 @@ const TITULOS: Record<CodigoProblema, string> = {
   informe_invalido: "El informe no cumple sus reglas",
   cotizacion_invalida: "A la cotización le falta algo para publicarse",
   segundo_factor_requerido: "Active el segundo factor para administrar",
+  cambio_de_contrasena_requerido: "Cambie su contraseña temporal para seguir",
+  credencial_incorrecta: "El dato no es correcto",
   archivos_faltantes: "Faltan archivos por subir",
   archivos_en_verificacion: "Hay archivos en verificación",
   archivo_demasiado_grande: "El archivo supera el tamaño permitido",

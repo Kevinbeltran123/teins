@@ -137,7 +137,7 @@ describe("usuarios (iteración 6)", () => {
     expect(ingreso.json()).not.toHaveProperty("twoFactorRedirect");
     expect((await pedir(cookiesDe(ingreso), "GET", "/api/sesion")).json().usuario).toMatchObject({ segundoFactor: false });
     const { rows } = await s.propietario.pool.query("select valor_nuevo from auditoria.registros where agregado_id = $1 and tipo_evento = 'contrasena_restablecida'", [otro.id]);
-    expect(rows).toEqual([{ valor_nuevo: { llavesQuitadas: 0, segundoFactorQuitado: true } }]);
+    expect(rows).toEqual([{ valor_nuevo: { llavesQuitadas: 0, segundoFactorQuitado: true, temporal: true } }]);
   });
 
   it("restablecer da una contraseña nueva y cierra las sesiones; desactivar revoca y no se aplica a sí mismo", async () => {

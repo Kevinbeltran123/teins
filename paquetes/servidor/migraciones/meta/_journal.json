@@ -211,6 +211,13 @@
       "when": 1790725958743,
       "tag": "0029_llave_de_envios",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790822951558,
+      "tag": "0030_contrasena_temporal",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "identidad"."usuarios" ADD COLUMN "debe_cambiar_contrasena" boolean DEFAULT false NOT NULL;

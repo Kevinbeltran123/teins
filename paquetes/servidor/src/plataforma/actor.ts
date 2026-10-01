@@ -7,6 +7,8 @@ export interface Actor {
   administrador: boolean;
   /** Segundo factor activo (ADR-0009): sin él, la marca de administrador no habilita nada. */
   segundoFactor: boolean;
+  /** Tiene la contraseña temporal que se le entregó: solo puede cambiarla o salir (ADR-0033). */
+  debeCambiarContrasena: boolean;
 }
 
 export type Rol = "tecnico" | "oficina";

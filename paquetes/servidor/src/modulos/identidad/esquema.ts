@@ -38,6 +38,11 @@ export const usuarios = identidad.table(
     administrador: boolean("administrador").notNull().default(false),
     /** Segundo factor activo y verificado (Better Auth, ADR-0009). */
     twoFactorEnabled: boolean("segundo_factor").notNull().default(false),
+    /**
+     * Tiene una contraseña temporal que se le entregó (al crearlo, restablecerla o reactivarlo desde oficina): el
+     * servidor solo le deja cambiarla o salir (ADR-0033). La que fija un comando del servidor no la marca.
+     */
+    debeCambiarContrasena: boolean("debe_cambiar_contrasena").notNull().default(false),
   },
   (t) => [check("usuarios_rol_valido", sql`${t.rol} in ('tecnico', 'oficina')`), index("usuarios_organizacion_idx").on(t.organizacionId)],
 );

@@ -34,7 +34,24 @@ export interface Entrada<N extends NombreOperacion> {
   correlacion: string;
   /** Cabecera Origin del navegador. En las que modifican, el servidor ya rechazó los orígenes ajenos. */
   origen: string | undefined;
+  /**
+   * Lo mínimo de HTTP que necesita una operación que llama a la autenticación por dentro (ADR-0033): la IP que
+   * resolvió Fastify, las cabeceras de la solicitud y cómo devolver las cookies de una sesión nueva.
+   */
+  http: ContextoHttp;
 }
+
+export interface ContextoHttp {
+  ip: string;
+  cabeceras: FastifyRequest["headers"];
+  ponerCookies(cookies: readonly string[]): void;
+}
+
+const contextoHttp = (solicitud: FastifyRequest, respuesta: FastifyReply): ContextoHttp => ({
+  ip: solicitud.ip,
+  cabeceras: solicitud.headers,
+  ponerCookies: (cookies) => void (cookies.length > 0 && respuesta.header("set-cookie", [...cookies])),
+});
 
 export type Manejador<N extends NombreOperacion> = (entrada: Entrada<N>) => Promise<RespuestaServidor<N>>;
 
@@ -151,6 +168,7 @@ export function registrarOperacionDelPortal<N extends NombreOperacion, S>(app: F
         consulta: validar(op.consulta, solicitud.query, "consulta") as Consulta<N>,
         correlacion: solicitud.id,
         origen: solicitud.headers.origin,
+        http: contextoHttp(solicitud, respuesta),
         sesion: sesion as S,
         portal,
       });
@@ -183,6 +201,7 @@ function registrar<N extends NombreOperacion, A>(
         actor,
         correlacion: solicitud.id,
         origen: solicitud.headers.origin,
+        http: contextoHttp(solicitud, respuesta),
       });
       respuesta.status(op.estadoExito);
       return op.respuesta.parse(resultado);
