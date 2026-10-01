@@ -30,7 +30,8 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 21 | Cotizaciones desde las cantidades | De la visita a la cotización sin volver a digitar (P27, QA-12) | Terminada y desplegada en el entorno de pruebas (precios de prueba; faltan los de TEINS) |
 | Iteración 22 | Campo rehecho con la dirección Recorrido (`DESIGN.md`) | Una app que los técnicos quieran usar: la captura sigue la visita paso a paso en vez de una lista interminable | Terminada, desplegada en el entorno de pruebas y aprobada por Kevin en su iPhone |
 | Iteración 23 | Oficina con la identidad Recorrido (`DESIGN.md`) | Oficina clara y sin recuadros: cada pantalla ordenada por lo que hace la persona, con búsqueda en las listas | Construida y desplegada en el entorno de pruebas (con la ronda de revisión, 2026-09-29); falta que Kevin la apruebe |
-| Iteración 24 | Robustez y protección: nada se pierde ni se hace sin querer | Borradores que se borran solos, dobles envíos, errores invisibles y acciones con consecuencias sin confirmar | 24a, 24b y 24c desplegadas en pruebas; falta 24d |
+| Iteración 24 | Robustez y protección: nada se pierde ni se hace sin querer | Borradores que se borran solos, dobles envíos, errores invisibles y acciones con consecuencias sin confirmar | 24a, 24b y 24c desplegadas en pruebas; 24d pasó a ADR (0031 a 0035) y a las iteraciones 25 a 28 |
+| Iteración 25 | Usuarios y cuenta propia (ADR-0033): contraseña temporal obligatoria, cambiar la propia, quitar el propio segundo factor, reactivar | Una contraseña temporal que se usa para siempre y nadie que pueda cambiar la suya | Construida y verificada en local; falta desplegarla en el entorno de pruebas |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -69,7 +70,7 @@ El paso 2, en este orden y comparando cada pantalla con el prototipo en capturas
   - **Aceptados:** 0031 (vista en vivo de los documentos), 0034 (cancelar envíos en cola y retirar cotizaciones; reemplaza a 0029 en ese punto) y 0035 (editar y archivar clientes, sitios y comentarios; descartar borradores en campo). Falta darles iteración y orden frente a los flujos.
   - **0033 (usuarios y cuenta propia), aceptado después:** Kevin lo pasó de aplazado a primordial el mismo día. Hoy una contraseña temporal se queda para siempre y nadie cambia la suya.
   - **Aplazado:** 0032 (soltar, reabrir y devolver una revisión), porque hoy cada caso tiene una salida, aunque torpe.
-  - **Iteración 25, prototipo hecho el 2026-10-01** (`prototipos/cuenta/prototipo.html`, https://claude.ai/artifact/97Z8ofejry715dkhVd64Ww), esperando el visto bueno de Kevin. Kevin pidió no bajar la seguridad: el prototipo empieza por una tabla de cada regla con lo que ve la persona y lo que exige el servidor aunque se llame a la API sin pasar por la pantalla.
+  - **Iteración 25, prototipo aprobado por Kevin el 2026-10-01** (`prototipos/cuenta/prototipo.html`, https://claude.ai/artifact/97Z8ofejry715dkhVd64Ww). Kevin pidió no bajar la seguridad: el prototipo empieza por una tabla de cada regla con lo que ve la persona y lo que exige el servidor aunque se llame a la API sin pasar por la pantalla. **Construida y verificada en local el 2026-10-01** (sección "Iteración 25"); sigue desplegarla en el entorno de pruebas y después la iteración 26.
   - **Orden acordado:** iteración 25, usuarios y cuenta propia (0033); 26, vista en vivo de los documentos (0031), empezando por la cotización; 27, flujos (Motion en oficina, View Transitions en campo); 28, datos que se corrigen (0034 y 0035). Cada una con su prototipo en Precisión antes del código.
 - **Producción actualizada el 2026-10-01** a la base Precisión y la iteración 24 (24a, 24b y 24c), desde el commit 2bee250. Kevin corrió las escrituras: `railway config plan` sin diferencias (no hizo falta `apply`), un respaldo antes de la migración (`ahora.sh`, `20261001T021546Z`, listo), `campo` (aplicó la 0029) y después `oficina`, `portal` y `worker`. Verificado: salud y las 7 cabeceras en las tres superficies, cada una con el código nuevo (título "TEINS"; "Guardar y salir" en oficina y el botón atrás en campo), `verificar-exposicion.sh` y el worker sin errores. En producción no se corre el extremo a extremo (ADR-0021).
 - **Iteración 24c construida y desplegada en el entorno de pruebas el 2026-09-30** (sección "Iteración 24", decisiones "En 24c"; commits 6d93824..60bac54). Verificada en local con el extremo a extremo completo (93 pasan, 3 se saltan) y en el entorno con sus archivos en Chromium, uno por minuto: pasaron todos; cuatro que chocaron con el límite de ingresos o con un `railway ssh` lento pasaron solos. Sigue: 24d (la propuesta de funciones que faltan, con ADR nuevos) o los flujos (Motion en oficina, View Transitions en campo), cuando Kevin decida.
@@ -1022,6 +1023,49 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 **Arquitectura propuesta (va al ADR):** las plantillas del informe y la cotización salen del servidor a un paquete nuevo, `paquetes/documentos`, que solo depende de `dominio` (hoy ya solo dependen de él y de una función de escape). El servidor las sigue usando para imprimir el PDF; oficina las usa para dibujar la vista en vivo sin ir al servidor en cada tecla. Así la vista previa y el PDF salen del mismo código y no se pueden separar. Los estilos de la plantilla pasan a un archivo servido por la misma superficie, para que la CSP de oficina (`style-src 'self'`) los admita en un marco `srcdoc`. Queda por decidir cómo paginar en pantalla (hojas carta fijas o continuo con marcas de salto).
 
 **Lo que ya existe y se reemplaza:** la vista previa de la cotización de la iteración 24 (documento del servidor con la versión guardada), que pasaría a ser en vivo y sin guardar.
+
+## Iteración 25 · Usuarios y cuenta propia
+
+**Estado:** prototipo aprobado por Kevin el 2026-10-01 (`prototipos/cuenta/prototipo.html`) y construida ese día. Verificada en local; falta el despliegue en el entorno de pruebas.
+
+**Para qué (ADR-0033):** que la contraseña que entrega administración deje de servir al primer ingreso, que cada persona cambie la suya, que quien no administra pueda quitar su segundo factor y que un usuario desactivado por error vuelva con su misma cuenta. Kevin pidió que la seguridad no baje: cada regla la exige el servidor, aunque se llame a la API sin pasar por la pantalla.
+
+### Alcance
+
+- **Contraseña temporal:** la que se entrega al crear, restablecer o reactivar desde Administración queda marcada (`debe_cambiar_contrasena`, migración 0030). Con la marca, el servidor responde `cambio_de_contrasena_requerido` (403) a toda operación salvo leer la sesión y cambiar la contraseña, y el puente de Better Auth niega registrar llaves y activar el segundo factor. Oficina muestra "Cree su contraseña" sin menú; campo, "Crea tu contraseña" dentro del ingreso, sin guardar el usuario en el teléfono hasta cambiarla.
+- **Cambiar la propia contraseña** (`POST /api/cuenta/contrasena`): con la actual; la nueva de 10 a 128 caracteres y distinta de la actual. Cierra las demás sesiones (siempre: lo decide el servidor) y deja abierta la que la cambió, con el segundo factor y las llaves intactos. En oficina, hoja lateral en "Mi cuenta › Acceso"; en campo, "Tu cuenta › Cambiar contraseña", que sin señal no se abre.
+- **Quitar el propio segundo factor** (`POST /api/cuenta/segundo-factor/quitar`): con la contraseña y un código vigente de la app; nunca para quien administra (403 aunque se llame directo). Cierra las demás sesiones.
+- **Reactivar** (`POST /api/administracion/usuarios/{id}/reactivar`): en la fila del desactivado, con consecuencias; entrega una temporal una sola vez. No devuelve sesiones, llaves, segundo factor ni avisos, y las órdenes de borrado pendientes de sus teléfonos siguen.
+- Restablecer la propia contraseña desde Administración se niega también en el servidor (antes solo la pantalla no lo ofrecía).
+
+### Fuera de la iteración 25
+
+- Activar el segundo factor quien no administra: el prototipo dibuja "Activar" en "Mi cuenta", pero el ADR no lo pide y hoy solo se activa al entrar a Administración. Queda "Sin activar" sin botón; se decide cuando haga falta.
+- "Llaves de acceso" como una fila con "Administrar" (prototipo): se conserva la lista completa de 13 que ya tenía "Mi cuenta", debajo de "Acceso".
+- Recuperar la contraseña sin administración (correo o SMS): ADR-0009 deja la recuperación en manos de quien administra.
+
+### Terminado cuando
+
+| Criterio | Evidencia |
+|---|---|
+| 1. El servidor exige cada regla sin la pantalla | `servidor/pruebas/cuenta.test.ts` (9 pruebas): la temporal solo lee la sesión y la cambia (sincronizar y registrar una llave dan 403); igual a la temporal no sirve; restablecer desde Administración la marca y el comando del servidor no; Better Auth no expone `/change-password` ni `/two-factor/disable`; la actual equivocada da 422 en su campo; otras sesiones se cierran; mismo límite de intentos que el ingreso (429); quitar el segundo factor pide código y contraseña y se niega a quien administra; reactivar exige administración con segundo factor, marca la temporal, no deshace la orden de borrado y no se repite; quien administra no restablece la suya |
+| 2. Oficina y campo como el prototipo | Capturas en claro y oscuro de las ocho pantallas comparadas con el prototipo |
+| 3. Recorrido de punta a punta | `e2e/pruebas/cuenta.spec.ts` (temporal en oficina, cambio desde "Mi cuenta", quien administra sin botón para quitar el factor; reactivar y crear la propia en campo, y cambiarla desde "Tu cuenta") y `administracion.spec.ts` actualizado |
+| 4. Verificación completa en local | Typecheck, arquitectura, licencias, auditoría, pruebas de paquetes (servidor 197, campo 84, protocolo 25, oficina 11, dominio 111), presupuesto (126,7 de 135 KB) y el extremo a extremo completo: 97 pasan y 3 se saltan, en Chromium y WebKit |
+| 5. Desplegada en el entorno de pruebas | Pendiente |
+
+### Decisiones tomadas al construirlo
+
+- **Operaciones propias sobre Better Auth.** Cambiar la contraseña y quitar el segundo factor llaman a Better Auth por su manejador HTTP, con las cookies, el origen y la IP que resolvió Fastify. Así aplican su límite de intentos (`/change-password` se agregó a las reglas, con el mismo máximo que el ingreso) y la verificación de origen, y el servidor arma el cuerpo: el cliente no elige si se cierran las demás sesiones. El puente sigue cerrado para `/change-password` y `/two-factor/disable`.
+- **Una contraseña equivocada es 422 `credencial_incorrecta` con su campo**, nunca 401: oficina trata un 401 como sesión vencida y pediría ingresar de nuevo.
+- **Quitar el segundo factor verifica primero el código** (`/two-factor/verify-totp`, que con la sesión ya verificada solo valida) y después la contraseña (`/two-factor/disable`). Better Auth deja una sesión nueva en lugar de la actual; el servidor cierra las demás sin tocar esa.
+- **Los comandos del servidor no marcan la temporal:** quien corre `crear-usuario` o restablece por comando elige la contraseña al aprovisionar. Solo la que genera Administración es temporal.
+- **La temporal en memoria, no en el teléfono ni en el navegador:** oficina recuerda la contraseña con la que se acaba de entrar hasta leer la sesión, para pedir solo la nueva; si la página se recarga, "Cree su contraseña" pide también la temporal. Campo la tiene en el estado del ingreso.
+- **Campo no guarda el usuario hasta cambiarla:** si cierra la app a mitad, vuelve a entrar con la temporal. "Listo" espera a "Ir a mis visitas" para bajar visitas y formatos.
+- **Reactivar es atómico:** quita la fecha de desactivación solo si sigue desactivado, así dos personas a la vez no entregan dos contraseñas.
+- **Piezas nuevas en `paquetes/ui`:** `RequisitosDeContrasena` y `validarContrasenaNueva` (los mismos límites que el contrato), `Consecuencias` (sacada de `Confirmacion` para usarla en formularios), el ojo para mostrar lo escrito en `CampoTexto` de tipo contraseña y el mensaje de error por campo en `CampoDeIngreso`.
+- **Arreglado de paso (iteración 24):** un doble toque en "Iniciar levantamiento" podía crear dos en WebKit. `useSinRepetir` suelta el bloqueo al terminar, y entre `abrir()` y que la captura reemplace la pantalla un segundo toque creaba otro. Ahora, creado uno, esa pantalla no inicia otro. Lo destapó `proteccion-campo.spec.ts` (2 de 3 en WebKit) con los cambios de esta iteración en `Inicio.tsx`; con el arreglo, 6 de 6.
+- "Mi cuenta" de oficina se ordena como el prototipo: "Acceso" (contraseña y segundo factor) primero; "Sesión" queda solo con cerrar sesión.
 
 ## Iteración 24 · Robustez y protección
 
