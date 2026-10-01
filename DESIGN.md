@@ -27,7 +27,7 @@ Herramienta de trabajo para técnicos de Transporte de Datos y Transporte de Ene
 Precisión cambia la piel, no el orden de las pantallas. Se conserva lo que se decidió con Recorrido:
 
 - **Campo, la visita como recorrido.** Cada sección del formato es un paso (regla 6): arriba, "Paso N de M" con la barra de avance; abajo, fija, "Siguiente: …". Lo repetido son tarjetas con su estado; se revisa antes de enviar; el enviado muestra la cola de subida real. Componentes en `paquetes/ui/src/Recorrido.tsx`.
-- **Oficina, la página es la superficie.** Se agrupa con espacio, títulos y líneas finas; solo flota lo que es una capa (hojas, confirmaciones, menús, notificaciones) o un objeto (una foto, un croquis, una firma). El encabezado resume en una línea de datos cortos. Las listas: pestañas subrayadas con su contador y el buscador en la misma barra. Los documentos: el contenido a la izquierda y un carril a la derecha.
+- **Oficina, la página es la superficie.** Se agrupa con espacio, títulos y líneas finas; solo flota lo que es una capa (hojas, confirmaciones, menús, notificaciones) o un objeto (una foto, un croquis, una firma). El encabezado resume en una línea de datos cortos. Las listas: pestañas subrayadas con su contador y el buscador en la misma barra. Los documentos: el contenido a la izquierda y un carril a la derecha. Los que recibe el cliente (cotización, informe) cambian el carril por la hoja en vivo (iteración 26, `prototipos/vista-en-vivo`): el editor a la izquierda y el documento a la derecha, a todo el alto y cada uno con su desplazamiento; las acciones van en la barra superior y las versiones publicadas al final del editor. Bajo 1280 px la hoja no cabe al lado: "Vista previa" la abre en una hoja lateral ancha.
 - **Movimiento.** En campo todo es CSS (regla 10): pasos con View Transitions, hojas que suben, el chulo que se dibuja. Con movimiento reducido, nada se mueve.
 
 ## Color
@@ -111,6 +111,7 @@ Todos viven en `paquetes/ui`; ninguna pantalla define colores ni estilos propios
 | `Pastilla` y `BotonHerramienta` | La barra del editor de bocetos, como GoodNotes: iconos sin texto, la herramienta elegida con la superficie de marca |
 | `HojasDeBoceto` | Leer un boceto (captura, revisión): las hojas de a dos, cada una con su nombre si hay varias |
 | `BotonCopiar` | Claves y códigos que se entregan o se guardan |
+| `HojaEnVivo` | El documento que recibe el cliente, mientras se escribe (ADR-0031): siempre en papel claro, con la advertencia "Vista previa: el PDF puede partir las páginas distinto". En la revisión, lo corregido va resaltado con el valor anterior; ese azul no sale en el PDF |
 
 ## Qué se confirma y qué se deshace
 
@@ -176,6 +177,7 @@ Cada animación tiene un propósito escrito. En `campo` **todo el movimiento es 
 | Diálogo o menú que se abre | Aparece con un leve desplazamiento | Mostrar de dónde viene la capa |
 | Hoja lateral | Entra desde la derecha | Mostrar que la lista sigue detrás |
 | Lo recién creado | Resaltado azul que se desvanece | Encontrarlo sin buscarlo |
+| Lo que cambia en la hoja en vivo | Destello azul que se desvanece | Ver dónde cayó lo que se escribió |
 | Cargando | Esqueleto con la forma real | Evitar saltos |
 | Error de validación | Sacudida corta del campo | Señalar dónde está |
 | Trabajando | Giro del icono en el botón | Mostrar que la acción corre |
