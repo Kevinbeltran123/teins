@@ -124,6 +124,8 @@ const ComentarioParaTecnico = z.object({
   campo: z.string().optional(),
   autor: z.string(),
   creadoEn: Fecha,
+  /** Su autor lo corrigió (ADR-0035): el teléfono muestra "Editado". Ausente en la versión anterior del contrato. */
+  editadoEn: Fecha.optional(),
 });
 
 // Bajada (ADR-0003): cambios del alcance del usuario desde un punto de control.
@@ -259,7 +261,18 @@ const ResumenLevantamiento = z.object({
 });
 
 export const Comentario = z
-  .object({ id: Uuid, texto: z.string(), seccion: z.string().optional(), campo: z.string().optional(), autor: Persona, creadoEn: Fecha })
+  .object({
+    id: Uuid,
+    texto: z.string(),
+    seccion: z.string().optional(),
+    campo: z.string().optional(),
+    autor: Persona,
+    creadoEn: Fecha,
+    /** Su autor lo corrigió (ADR-0035). */
+    editadoEn: Fecha.nullable().default(null),
+    /** Retirado (anulado) por su autor: el técnico deja de verlo; se restaura con "Deshacer". */
+    retirado: z.object({ en: Fecha, por: Persona }).nullable().default(null),
+  })
   .meta({ id: "Comentario" });
 
 export const PaginaLevantamientos = z
@@ -345,8 +358,11 @@ const EstadoPdf = z.enum(["generando", "listo", "fallido"]);
 const LlaveDeEnvioAlCliente = Uuid.optional();
 
 export const CanalDeEnvio = z.enum(["correo", "whatsapp"]);
-/** Estado de un envío (ADR-0028, parte 4): solo avanza, salvo un rebote después de entregado. */
-export const EstadoDeEnvio = z.enum(["en_cola", "enviado", "entregado", "fallido"]);
+/**
+ * Estado de un envío (ADR-0028, parte 4): solo avanza, salvo un rebote después de entregado. "cancelado": oficina lo
+ * detuvo mientras esperaba en cola y nunca sale; mientras no salga nada, se puede reanudar (ADR-0034).
+ */
+export const EstadoDeEnvio = z.enum(["en_cola", "enviado", "entregado", "fallido", "cancelado"]);
 
 /** Una copia del informe enviada a un contacto por un canal. Nombre y destino copiados: el contacto puede cambiar o quitarse. */
 export const EnvioDeVersion = z
@@ -360,6 +376,8 @@ export const EnvioDeVersion = z
     error: z.string().nullable(),
     creadoEn: Fecha,
     enviadoEn: Fecha.nullable(),
+    /** Quién lo canceló y cuándo (ADR-0034); null si no está cancelado. */
+    cancelado: z.object({ en: Fecha, por: Persona }).nullable().default(null),
   })
   .meta({ id: "EnvioDeVersion" });
 
@@ -477,13 +495,19 @@ export const CredencialesDeAcceso = z.object({ identificador: z.string(), clave:
 
 const Texto = (maximo: number) => z.string().trim().min(1).max(maximo);
 
+/** Quién y cuándo (archivar, editar): ADR-0035. */
+const Marca = z.object({ en: Fecha, por: Persona });
+
 export const ClienteConSitios = z
   .object({
     id: Uuid,
     nombre: z.string(),
+    /** Sus sitios activos: a los archivados ya no se les programa (ADR-0035). */
     sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string() })),
     /** Contactos que reciben el informe por algún canal: con cero, el informe solo queda en el portal. */
     reciben: z.int().nonnegative(),
+    /** Archivado (ADR-0035): sale de las listas y de programar, y no recibe envíos; se recupera. */
+    archivado: Marca.nullable().default(null),
   })
   .meta({ id: "ClienteConSitios" });
 
@@ -514,8 +538,14 @@ export const DetalleCliente = z
   .object({
     id: Uuid,
     nombre: z.string(),
-    sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string() })),
+    /** Todos sus sitios, los archivados con su marca: se recuperan desde aquí. */
+    sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string(), archivado: Marca.nullable().default(null) })),
     contactos: z.array(Contacto),
+    /** La última corrección del nombre (ADR-0035); el registro completo queda en la auditoría. */
+    editado: Marca.nullable().default(null),
+    archivado: Marca.nullable().default(null),
+    /** Visitas sin cancelar desde hoy: mientras haya, el cliente (o ese sitio) no se archiva. */
+    visitasPorHacer: z.array(z.object({ id: Uuid, programadaPara: z.iso.date(), sitioId: Uuid, sitio: z.string(), tecnicos: z.array(z.string()) })).default([]),
   })
   .meta({ id: "DetalleCliente" });
 
@@ -607,7 +637,16 @@ export const CondicionesCotizacion = z
   .meta({ id: "CondicionesCotizacion" });
 
 export const VersionCotizacion = z
-  .object({ numero: z.int().positive(), publicadaEn: Fecha, publicadaPor: Persona, pdf: EstadoPdf, total: z.int().min(0), envios: z.array(EnvioDeVersion) })
+  .object({
+    numero: z.int().positive(),
+    publicadaEn: Fecha,
+    publicadaPor: Persona,
+    pdf: EstadoPdf,
+    total: z.int().min(0),
+    envios: z.array(EnvioDeVersion),
+    /** Retirada por una persona administradora (ADR-0034): deja de ser la vigente y no se envía más; se conserva. */
+    retirada: z.object({ en: Fecha, por: Persona, motivo: z.string() }).nullable().default(null),
+  })
   .meta({ id: "VersionCotizacion" });
 
 const VisitaDeCotizacion = z.object({ cliente: z.string(), sitio: z.string(), direccion: z.string(), programadaPara: z.iso.date() });
@@ -632,10 +671,12 @@ export const ResumenCotizacion = z
     id: Uuid,
     numero: z.string(),
     visita: VisitaDeCotizacion,
-    /** Número de la versión vigente (la más reciente); null mientras es borrador. */
+    /** Número de la versión vigente (la más reciente sin retirar); null mientras es borrador o si todas se retiraron. */
     vigente: z.int().positive().nullable(),
     total: z.int().min(0).nullable(),
     envioSinEntregar: z.boolean(),
+    /** Tuvo versiones publicadas y todas se retiraron (ADR-0034): no es un borrador. */
+    todasRetiradas: z.boolean().default(false),
   })
   .meta({ id: "ResumenCotizacion" });
 
@@ -840,6 +881,34 @@ export const operaciones = {
     respuesta: Comentario,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
   },
+  editarComentario: {
+    metodo: "POST",
+    ruta: "/api/levantamientos/{id}/comentarios/{comentarioId}",
+    resumen: "Su autor corrige un comentario mientras el levantamiento no esté revisado (ADR-0035)",
+    parametros: z.object({ id: Uuid, comentarioId: Uuid }),
+    cuerpo: z.object({ texto: z.string().trim().min(1).max(2000) }),
+    estadoExito: 200,
+    respuesta: Comentario,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
+  },
+  retirarComentario: {
+    metodo: "POST",
+    ruta: "/api/levantamientos/{id}/comentarios/{comentarioId}/retirar",
+    resumen: "Su autor retira (anula) un comentario: el técnico deja de verlo (ADR-0035)",
+    parametros: z.object({ id: Uuid, comentarioId: Uuid }),
+    estadoExito: 200,
+    respuesta: Comentario,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  restaurarComentario: {
+    metodo: "POST",
+    ruta: "/api/levantamientos/{id}/comentarios/{comentarioId}/restaurar",
+    resumen: "Deshace el retiro de un comentario (ADR-0035)",
+    parametros: z.object({ id: Uuid, comentarioId: Uuid }),
+    estadoExito: 200,
+    respuesta: Comentario,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
   historialLevantamiento: {
     metodo: "GET",
     ruta: "/api/levantamientos/{id}/historial",
@@ -910,6 +979,24 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: VersionPublicada,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
+  },
+  cancelarEnvio: {
+    metodo: "POST",
+    ruta: "/api/informes/{id}/versiones/{numero}/envios/{envio}/cancelar",
+    resumen: "Cancela un envío que todavía espera en cola: nunca sale (ADR-0034)",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive(), envio: Uuid }),
+    estadoExito: 200,
+    respuesta: VersionPublicada,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  reanudarEnvio: {
+    metodo: "POST",
+    ruta: "/api/informes/{id}/versiones/{numero}/envios/{envio}/reanudar",
+    resumen: "Deshace la cancelación de un envío: vuelve a la cola (ADR-0034)",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive(), envio: Uuid }),
+    estadoExito: 200,
+    respuesta: VersionPublicada,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
   },
   pdfDeVersion: {
     metodo: "GET",
@@ -1181,7 +1268,35 @@ export const operaciones = {
     cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50), llave: LlaveDeEnvioAlCliente }),
     estadoExito: 200,
     respuesta: VersionCotizacion,
-    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
+  },
+  cancelarEnvioDeCotizacion: {
+    metodo: "POST",
+    ruta: "/api/cotizaciones/{id}/versiones/{numero}/envios/{envio}/cancelar",
+    resumen: "Cancela un envío de la cotización que todavía espera en cola (ADR-0034)",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive(), envio: Uuid }),
+    estadoExito: 200,
+    respuesta: VersionCotizacion,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  reanudarEnvioDeCotizacion: {
+    metodo: "POST",
+    ruta: "/api/cotizaciones/{id}/versiones/{numero}/envios/{envio}/reanudar",
+    resumen: "Deshace la cancelación de un envío de la cotización (ADR-0034)",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive(), envio: Uuid }),
+    estadoExito: 200,
+    respuesta: VersionCotizacion,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  retirarVersionDeCotizacion: {
+    metodo: "POST",
+    ruta: "/api/cotizaciones/{id}/versiones/{numero}/retirar",
+    resumen: "Retira una versión de la cotización: deja de ser la vigente y no se envía más; se conserva (ADR-0034)",
+    parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
+    cuerpo: z.object({ motivo: z.string().trim().min(1).max(500) }),
+    estadoExito: 200,
+    respuesta: VersionCotizacion,
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "estado_invalido"],
   },
   vincularLinea: {
     metodo: "POST",
@@ -1208,7 +1323,8 @@ export const operaciones = {
   listarClientes: {
     metodo: "GET",
     ruta: "/api/clientes",
-    resumen: "Clientes de la organización con sus sitios",
+    resumen: "Clientes de la organización con sus sitios: los activos o los archivados (ADR-0035)",
+    consulta: z.object({ vista: z.enum(["activos", "archivados"]).default("activos") }),
     estadoExito: 200,
     respuesta: z.object({ clientes: z.array(ClienteConSitios) }),
     errores: ["no_autenticado", "sin_permiso"],
@@ -1221,6 +1337,62 @@ export const operaciones = {
     estadoExito: 201,
     respuesta: ClienteConSitios,
     errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
+  },
+  editarCliente: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}",
+    resumen: "Corrige el nombre del cliente; lo ya publicado conserva el suyo (ADR-0035)",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ nombre: Texto(200) }),
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
+  },
+  archivarCliente: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/archivar",
+    resumen: "Archiva el cliente: sale de las listas y de programar, y no recibe envíos. No se archiva con visitas por hacer (ADR-0035)",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  recuperarCliente: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/recuperar",
+    resumen: "Recupera un cliente archivado (ADR-0035)",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  editarSitio: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/sitios/{sitioId}",
+    resumen: "Corrige el nombre o la dirección de un sitio (ADR-0035)",
+    parametros: z.object({ id: Uuid, sitioId: Uuid }),
+    cuerpo: z.object({ nombre: Texto(200), direccion: Texto(300) }),
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
+  },
+  archivarSitio: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/sitios/{sitioId}/archivar",
+    resumen: "Archiva un sitio: ya no se le programan visitas. No se archiva con visitas por hacer ni el último sitio activo (ADR-0035)",
+    parametros: z.object({ id: Uuid, sitioId: Uuid }),
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
+  },
+  recuperarSitio: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/sitios/{sitioId}/recuperar",
+    resumen: "Recupera un sitio archivado (ADR-0035)",
+    parametros: z.object({ id: Uuid, sitioId: Uuid }),
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
   },
   obtenerCliente: {
     metodo: "GET",
