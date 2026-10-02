@@ -33,6 +33,9 @@ test("oficina corrige un cliente: lo renombra, archiva un sitio, no archiva con 
   await o.getByLabel("Nombre del cliente").fill(`${nombre} (antes)`);
   await o.getByLabel("Nombre del sitio").fill("Sede norte");
   await o.getByLabel("Dirección del sitio").fill("Calle [N] # [N]-[N]");
+  // El cliente llega con su contacto principal (iteración 29).
+  await o.getByLabel("Nombre", { exact: true }).fill("Contacto E2E");
+  await o.getByRole("textbox", { name: "Correo" }).fill("contacto@example.com");
   await o.getByRole("button", { name: "Crear cliente" }).click();
   await o.getByRole("link", { name: `${nombre} (antes)` }).click();
 

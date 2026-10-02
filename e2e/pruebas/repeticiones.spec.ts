@@ -69,7 +69,7 @@ test("secciones repetibles: el técnico agrega tableros y quita uno; oficina los
   // El informe se publica con los dos tableros.
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
+  await o.getByRole("button", { name: "Abrir el informe de la visita" }).click();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 1" }).click();

@@ -46,7 +46,7 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   const a = await oficina(browser, ana);
   await abrirLevantamientoDe(a, tecnico, "Esperando revisión");
   await a.getByRole("button", { name: "Tomar para revisar" }).click();
-  await expect(a.getByText("Usted tiene la revisión.", { exact: false })).toBeVisible();
+  await expect(a.getByRole("region", { name: "Revisión" }).getByText("La tomó usted")).toBeVisible();
   await a.getByRole("button", { name: "Corregir potencia nominal" }).click();
   await a.getByRole("textbox", { name: "Nuevo valor de potencia nominal" }).fill("12,5");
   // Antes de guardar, el capítulo del informe ya muestra el valor nuevo y el anterior (ADR-0031).
@@ -97,23 +97,22 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await abrirLevantamientoDe(b, tecnico, "En revisión");
   await b.getByRole("button", { name: `Tomar la revisión de ${ana.nombre}` }).click();
   await b.getByRole("dialog").getByRole("button", { name: "Tomar la revisión" }).click();
-  await expect(b.getByText("Usted tiene la revisión.", { exact: false })).toBeVisible();
+  await expect(b.getByRole("region", { name: "Revisión" }).getByText("La tomó usted")).toBeVisible();
 
   await a.getByRole("textbox", { name: "Nuevo valor de descripción del sitio" }).fill("Cambio que no debe quedar");
   await a.getByRole("textbox", { name: "Motivo de la corrección" }).fill("Prueba de conflicto E2E");
   await a.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(a.getByText("recargue para ver la versión actual", { exact: false }).or(a.getByText("Ya no tiene la revisión", { exact: false }))).toBeVisible();
   await a.getByRole("button", { name: "Recargar" }).click();
-  await expect(a.getByText(`La revisión la tiene ${luis.nombre}.`)).toBeVisible();
+  await expect(a.getByRole("region", { name: "Revisión" }).getByText(`La tiene ${luis.nombre}`)).toBeVisible();
   await expect(a.getByText("Cambio que no debe quedar")).toHaveCount(0);
 
   // Luis la marca revisada.
   await b.getByRole("button", { name: "Marcar revisado" }).click();
   await b.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  // El estado cambia en su lugar: el chulo de "Revisado", quién lo revisó y una notificación (iteración 27).
+  // El estado cambia en su lugar: una línea con el chulo y quién lo revisó, y una notificación (iteraciones 27 y 29).
   const revision = b.getByRole("region", { name: "Revisión" });
-  await expect(revision.getByRole("heading", { name: "Revisado" })).toBeVisible();
-  await expect(revision.getByText(`Por ${luis.nombre}.`, { exact: false })).toBeVisible();
+  await expect(revision.getByText(`por ${luis.nombre}`, { exact: false })).toBeVisible();
   await expect(b.getByRole("status").getByText("Marcado revisado")).toBeVisible();
   await b.getByRole("tab", { name: "Historial" }).click();
   await expect(b.getByRole("region", { name: "Historial de cambios" }).getByText(`que tenía ${ana.nombre}`, { exact: false })).toBeVisible();

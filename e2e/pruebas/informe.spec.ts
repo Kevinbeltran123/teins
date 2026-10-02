@@ -41,7 +41,7 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
+  await o.getByRole("button", { name: "Abrir el informe de la visita" }).click();
   await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
 
   // Composición: el levantamiento revisado, una introducción y un plano.

@@ -56,7 +56,7 @@ test("quien entra con una temporal la cambia antes de cualquier otra cosa, y des
 
   // Quien administra no puede quitarse el segundo factor: se dice, sin botón.
   await a.getByRole("link", { name: /^Mi cuenta/ }).click();
-  await expect(a.getByText("Activo · obligatorio para administrar, no se puede quitar")).toBeVisible();
+  await expect(a.getByText("Obligatorio para administrar")).toBeVisible();
   await expect(a.getByRole("button", { name: "Quitar segundo factor" })).toHaveCount(0);
   await contexto.close();
   await contextoAdmin.close();

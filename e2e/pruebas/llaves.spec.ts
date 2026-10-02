@@ -41,8 +41,8 @@ test("llaves de acceso: el técnico y oficina crean una y entran sin contraseña
   await o.goto(`${OFICINA}/`);
   await iniciarSesion(o, revisora);
   await o.getByRole("link", { name: /^Mi cuenta/ }).click();
-  await expect(o.getByText("Todavía no tiene llaves de acceso.")).toBeVisible();
-  await o.getByRole("button", { name: "Crear llave de acceso" }).click();
+  await expect(o.getByText("Todavía no tiene.", { exact: false })).toBeVisible();
+  await o.getByRole("button", { name: "Crear llave", exact: true }).click();
   await expect(o.getByRole("list", { name: "Sus llaves de acceso" }).getByRole("listitem")).toHaveCount(1);
 
   await o.getByRole("region", { name: "Sesión" }).getByRole("button", { name: "Cerrar sesión" }).click();
@@ -52,6 +52,6 @@ test("llaves de acceso: el técnico y oficina crean una y entran sin contraseña
   await o.getByRole("link", { name: /^Mi cuenta/ }).click();
   await o.getByRole("button", { name: "Quitar la llave 1" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Quitar llave" }).click();
-  await expect(o.getByText("Todavía no tiene llaves de acceso.")).toBeVisible();
+  await expect(o.getByText("Todavía no tiene.", { exact: false })).toBeVisible();
   await escritorio.close();
 });

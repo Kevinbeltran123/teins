@@ -33,7 +33,7 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   const fila = o.getByRole("row").filter({ hasText: codigo });
   await expect(fila.getByText("Sin precio")).toBeVisible();
   await fila.getByRole("button", { name: `Cambiar el precio de ${codigo}` }).click();
-  const hojaPrecio = o.getByRole("dialog", { name: `Precio de ${codigo}` });
+  const hojaPrecio = o.getByRole("dialog", { name: `Cambiar precio de ${codigo}` });
   await expect(hojaPrecio.getByText("Todavía no tiene precio.")).toBeVisible();
   await hojaPrecio.getByRole("textbox", { name: "Precio unitario sin IVA" }).fill("4.800");
   await hojaPrecio.getByRole("button", { name: "Guardar precio" }).click();
@@ -121,9 +121,12 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   // "Correo": lo que le llega a quien recibe cotizaciones, con el asunto y el adjunto.
   await o.getByRole("tab", { name: "Correo" }).click();
   const vistaCorreo = o.getByRole("region", { name: "Vista previa" });
-  await expect(vistaCorreo.getByText(/^Cotización COT-\d{4}-\d{4,} · /)).toBeVisible();
+  await expect(vistaCorreo.getByLabel("Asunto del correo")).toHaveValue(/^Cotización COT-\d{4}-\d{4,} · /);
   await expect(vistaCorreo.getByText(/^Cotización COT-.* - versión 1\.pdf$/)).toBeVisible();
   await expect(o.frameLocator('iframe[title="Correo a Marta Gil"]').getByText("Hola, Marta:")).toBeVisible();
+  // Se escribe sobre el correo (ADR-0036): el asunto en su lugar; sale así al publicar.
+  await o.getByLabel("Asunto del correo").fill("Su cotización de cableado");
+  await expect(o.getByRole("button", { name: "Volver al texto de TEINS" })).toBeVisible();
   await o.getByRole("tab", { name: "Cotización" }).click();
 
   // Publicar: quien recibe cotizaciones viene marcado; el PDF se genera y sale.
@@ -139,6 +142,14 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   await expect(descargar).toBeVisible({ timeout: 90_000 });
   const envios = o.getByRole("region", { name: "Envíos de la versión 1" });
   await expect(envios.getByRole("listitem").filter({ hasText: "Marta Gil" }).getByText(/^(Enviado|Entregado)$/)).toBeVisible({ timeout: 60_000 });
+  await expect(envios.getByRole("listitem").filter({ hasText: "Marta Gil" })).toContainText("con su texto");
+  // A otro contacto: quien ya la recibió no se vuelve a ofrecer (iteración 29).
+  await envios.getByRole("button", { name: "Enviar a otro contacto" }).click();
+  await expect(o.getByRole("dialog", { name: /Enviar la versión 1 a otro contacto/ }).getByText("Todos los contactos ya la recibieron")).toBeVisible();
+  await o.keyboard.press("Escape");
+  // Con las versiones y sus envíos al final del editor, la página no se alarga más que la ventana: cada columna baja
+  // sola y la rueda no deja ver el fondo vacío debajo (iteración 29).
+  expect(await o.evaluate(() => document.scrollingElement!.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
   const pdf = o.waitForEvent("download");
   await descargar.click();
   // WebKit entrega el nombre en forma descompuesta (NFD, como macOS): se compara normalizado.

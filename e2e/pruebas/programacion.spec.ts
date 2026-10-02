@@ -20,6 +20,9 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await o.getByLabel("Nombre del cliente").fill(cliente);
   await o.getByLabel("Nombre del sitio").fill("Sede norte");
   await o.getByLabel("Dirección del sitio").fill("Calle [N] # [N]-[N]");
+  // El cliente llega con su contacto principal (iteración 29).
+  await o.getByLabel("Nombre", { exact: true }).fill("Contacto E2E");
+  await o.getByRole("textbox", { name: "Correo" }).fill("contacto@example.com");
   await o.getByRole("button", { name: "Crear cliente" }).click();
   // Lo recién creado queda primero en la lista y una notificación lo confirma.
   await expect(o.getByRole("row").nth(1)).toContainText(cliente);
@@ -30,9 +33,13 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await o.getByLabel("Cliente", { exact: true }).selectOption({ label: cliente });
   // Un solo sitio: queda elegido.
   await expect(o.getByLabel("Sitio", { exact: true })).not.toHaveValue("");
+  // Por omisión, de 9:00 a 11:00 (ADR-0037); el técnico nuevo está libre y se encuentra por su nombre.
+  await expect(o.getByText("De 9:00 a. m. a 11:00 a. m.")).toBeVisible();
+  await o.getByLabel("Buscar técnico").fill(tecnico.nombre);
   await o.getByRole("checkbox", { name: tecnico.nombre }).check();
-  await o.getByRole("button", { name: "Programar la visita", exact: true }).click();
+  await o.getByRole("button", { name: /^Programar con / }).click();
   const fila = o.getByRole("row").filter({ hasText: cliente });
+  await expect(fila).toContainText("9:00 a. m. a 11:00 a. m.");
   // Las visitas van agrupadas por día: la de hoy queda bajo "Hoy · …" (rediseño de oficina, iteración 23).
   const diaDe = () => o.locator("tbody").filter({ has: fila }).getByText(/^Hoy · /);
   await expect(diaDe()).toBeVisible();
@@ -49,8 +56,12 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   // Reprogramada para mañana: al abrir la app, la fecha cambia.
   await fila.getByRole("button", { name: `Más acciones para la visita de ${cliente}` }).click();
   await o.getByRole("menuitem", { name: "Reprogramar" }).click();
+  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
   const manana = new Date(Date.now() + 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
-  await o.getByLabel("Fecha nueva").fill(manana);
+  // La fecha se elige en el calendario propio (no el del navegador).
+  await o.getByRole("button", { name: /^Fecha: / }).click();
+  if (manana.slice(0, 7) !== hoy.slice(0, 7)) await o.getByRole("button", { name: "Mes siguiente" }).click();
+  await o.getByRole("option", { name: String(Number(manana.slice(8))), exact: true }).click();
   await o.getByRole("button", { name: "Reprogramar la visita", exact: true }).click();
   await expect(diaDe()).toHaveCount(0);
   await t.reload();

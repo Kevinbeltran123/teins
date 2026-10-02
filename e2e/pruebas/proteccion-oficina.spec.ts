@@ -52,7 +52,9 @@ test("reasignar dice quién deja de ver la visita y quién la recibe, y el botó
   await fila.getByRole("button", { name: `Más acciones para la visita de ${cliente}` }).click();
   await page.getByRole("menuitem", { name: "Reasignar técnicos" }).click();
   const hoja = page.getByRole("dialog", { name: "Reasignar técnicos" });
+  // Los elegidos van primero; a los demás técnicos libres se los encuentra por el nombre (ADR-0037).
   await hoja.getByRole("checkbox", { name: tecnico.nombre }).uncheck();
+  await hoja.getByLabel("Buscar técnico").fill(otro.nombre);
   await hoja.getByRole("checkbox", { name: otro.nombre }).check();
   await expect(hoja.getByText(`${tecnico.nombre} deja de verla en su teléfono`, { exact: false })).toBeVisible();
   await expect(hoja.getByText(`${otro.nombre} la recibe en su teléfono`, { exact: false })).toBeVisible();
@@ -87,6 +89,10 @@ test("programar y reprogramar no aceptan fechas pasadas", async ({ page }) => {
   await iniciarSesion(page, programadora);
   await page.getByRole("link", { name: "Visitas" }).click();
   await page.getByRole("button", { name: "Programar visita", exact: true }).click();
+  // El calendario propio no deja elegir un día pasado ni volver a un mes anterior (ADR-0037).
   const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
-  await expect(page.getByLabel("Fecha", { exact: true })).toHaveAttribute("min", hoy);
+  await page.getByRole("button", { name: /^Fecha: / }).click();
+  await expect(page.getByRole("button", { name: "Mes anterior" })).toBeDisabled();
+  await expect(page.getByRole("option", { name: String(Number(hoy.slice(8))), exact: true })).toBeEnabled();
+  if (Number(hoy.slice(8)) > 1) await expect(page.getByRole("option", { name: String(Number(hoy.slice(8)) - 1), exact: true })).toBeDisabled();
 });
