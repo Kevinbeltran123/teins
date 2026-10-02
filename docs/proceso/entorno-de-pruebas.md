@@ -104,3 +104,7 @@ Si más adelante se conecta el repositorio de GitHub (`railway service source co
 El paso a paso completo, de la instalación en iPhone al portal y producción, está en [`verificacion-manual.md`](verificacion-manual.md). Las contraseñas de `tecnico.prueba`, `oficina.prueba` y `tecnico.revocable` están en `privado/entorno-de-pruebas.txt` (computador de Kevin).
 
 El permiso vencido no se prueba en el iPhone: exige 7 días sin señal (`DIAS_PERMISO_LOCAL`, mínimo 1 día). Lo cubre el extremo a extremo en Chromium.
+
+## Limpieza de los datos de las pruebas (2026-10-02)
+
+A pedido de Kevin, el entorno de pruebas quedó solo con `oficina.prueba` (administra) y `tecnico.prueba`, la organización, los formatos y los símbolos. Se borraron en una sola transacción los demás usuarios (442, con sus cuentas, sesiones, teléfonos, segundos factores, llaves y avisos), los clientes, sitios y contactos, las visitas, los levantamientos, los informes, las cotizaciones, los envíos, el catálogo, los accesos al portal, los registros de archivos, el registro de cambios y la auditoría de todo eso. Antes se exportaron todas las tablas a un archivo local. Los objetos del almacenamiento (fotos y PDF) quedaron sin registro que los use. El teléfono de `tecnico.prueba` debe cerrar sesión y volver a entrar para no mostrar visitas que ya no existen. Correr el extremo a extremo contra este entorno vuelve a crear datos "E2E".
