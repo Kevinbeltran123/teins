@@ -1,6 +1,6 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import {
   Aviso,
@@ -15,6 +15,7 @@ import {
   Buscador,
   Insignia,
   Marcado,
+  Pestanas,
   nombreDeTransicion,
   SinResultados,
   EstadoVacio,
@@ -27,14 +28,26 @@ import {
   enfocarPrimerError,
 } from "@teins/ui";
 import { cliente } from "../api";
-import { consultasDeProgramacion, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
+import { aFechaCorta } from "../formato";
+import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
 
 type Cliente = Respuesta<"listarClientes">["clientes"][number];
 
 const normalizar = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 export function Clientes() {
-  const consulta = useQuery(consultasDeProgramacion.clientes());
+  // Activos o archivados (ADR-0035); "Ver en Archivados" al archivar uno llega con esa pestaña.
+  const pedida = useLocation({ select: (l) => l.state.vista });
+  const [vista, setVista] = useState<"activos" | "archivados">(pedida ?? "activos");
+  // "Ver en Archivados" desde el aviso llega con la pantalla ya abierta: la pestaña pedida manda.
+  useEffect(() => {
+    if (pedida) setVista(pedida);
+  }, [pedida]);
+  const consulta = useQuery(consultasDeProgramacion.clientes(vista));
+  const otra = useQuery(consultasDeProgramacion.clientes(vista === "activos" ? "archivados" : "activos"));
+  const cantidad = (v: "activos" | "archivados") => (v === vista ? consulta.data : otra.data)?.clientes.length;
+  const recuperar = useAccionDeProgramacion((c: Cliente) => cliente.llamar("recuperarCliente", { parametros: { id: c.id } }));
+  const [errorRecuperar, setErrorRecuperar] = useState<string | null>(null);
   const notificar = useNotificar();
   const [creando, setCreando] = useState(false);
   const [agregandoA, setAgregandoA] = useState<Cliente | null>(null);
@@ -60,9 +73,9 @@ export function Clientes() {
           consulta.data && (
             <>
               <span>
-                <b>{todos.length}</b> {todos.length === 1 ? "cliente" : "clientes"}
+                <b>{cantidad("activos") ?? "…"}</b> {cantidad("activos") === 1 ? "cliente" : "clientes"}
               </span>
-              {todos.some((c) => c.reciben === 0) && (
+              {vista === "activos" && todos.some((c) => c.reciben === 0) && (
                 <span>
                   <b>{todos.filter((c) => c.reciben === 0).length}</b> sin nadie que reciba el informe
                 </span>
@@ -87,17 +100,32 @@ export function Clientes() {
             </Boton>
           </div>
         </Aviso>
-      ) : todos.length === 0 ? (
+      ) : todos.length === 0 && vista === "activos" && !cantidad("archivados") ? (
         <EstadoVacio icono={Building} titulo="Todavía no hay clientes">
           Cree el primero con "Nuevo cliente", con su sede principal. Después podrá programarle visitas.
         </EstadoVacio>
       ) : (
         <>
-          <BarraLista buscador={<Buscador etiqueta="Buscar cliente" ejemplo="Cliente, sitio o dirección" valor={busqueda} onCambio={setBusqueda} />} />
-          {visibles.length === 0 ? (
+          <BarraLista buscador={<Buscador etiqueta="Buscar cliente" ejemplo="Cliente, sitio o dirección" valor={busqueda} onCambio={setBusqueda} />}>
+            <Pestanas
+              etiqueta="Qué clientes ver"
+              activa={vista}
+              onCambio={setVista}
+              pestanas={[
+                { valor: "activos", etiqueta: "Activos", cantidad: cantidad("activos") },
+                { valor: "archivados", etiqueta: "Archivados", cantidad: cantidad("archivados") },
+              ]}
+            />
+          </BarraLista>
+          {errorRecuperar && <Aviso tono="error">{errorRecuperar}</Aviso>}
+          {todos.length === 0 ? (
+            <EstadoVacio icono={Building} titulo={vista === "archivados" ? "Nada archivado" : "No hay clientes activos"}>
+              {vista === "archivados" ? "Un cliente archivado aparece aquí y se recupera con un toque." : "Los clientes archivados están en su pestaña."}
+            </EstadoVacio>
+          ) : visibles.length === 0 ? (
             <SinResultados texto={busqueda.trim()} onQuitar={() => setBusqueda("")} />
           ) : (
-            <Tabla etiqueta="Clientes y sus sitios" columnas={[{ titulo: "Cliente" }, { titulo: "Sitios" }, { titulo: "Reciben el informe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
+            <Tabla etiqueta="Clientes y sus sitios" columnas={[{ titulo: "Cliente" }, { titulo: "Sitios" }, { titulo: vista === "archivados" ? "Archivado" : "Reciben el informe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
               {visibles.map((c) => (
                 <FilaTabla key={c.id} resaltada={esNuevo(c.id) || recientes.includes(c.id)} abrir clave={c.id}>
                   <CeldaTabla>
@@ -121,7 +149,9 @@ export function Clientes() {
                   </CeldaTabla>
                   <CeldaTabla>
                     {/* "Nadie" avisa antes de publicar: ese informe solo quedaría en el portal (ADR-0028). */}
-                    {c.reciben === 0 ? (
+                    {c.archivado ? (
+                      <span className="sec">{`${aFechaCorta(c.archivado.en)} por ${c.archivado.por.nombre}`}</span>
+                    ) : c.reciben === 0 ? (
                       <Insignia tono="alerta">Nadie</Insignia>
                     ) : c.reciben === 1 ? (
                       "1 contacto"
@@ -130,9 +160,26 @@ export function Clientes() {
                     )}
                   </CeldaTabla>
                   <CeldaTabla derecha>
-                    <Boton variante="fantasma" tamano="pequeno" icono={Plus} aria-label={`Agregar sitio a ${c.nombre}`} onClick={() => setAgregandoA(c)}>
-                      Agregar sitio
-                    </Boton>
+                    {c.archivado ? (
+                      <Boton
+                        tamano="pequeno"
+                        aria-label={`Recuperar ${c.nombre}`}
+                        cargando={recuperar.isPending && recuperar.variables?.id === c.id}
+                        onClick={() => {
+                          setErrorRecuperar(null);
+                          recuperar.mutate(c, {
+                            onSuccess: () => notificar({ texto: `${c.nombre} recuperado`, accion: { texto: "Ver en Activos", alHacer: () => setVista("activos") } }),
+                            onError: (e) => setErrorRecuperar(mensajeDeCliente(e)),
+                          });
+                        }}
+                      >
+                        Recuperar
+                      </Boton>
+                    ) : (
+                      <Boton variante="fantasma" tamano="pequeno" icono={Plus} aria-label={`Agregar sitio a ${c.nombre}`} onClick={() => setAgregandoA(c)}>
+                        Agregar sitio
+                      </Boton>
+                    )}
                   </CeldaTabla>
                 </FilaTabla>
               ))}
@@ -251,7 +298,7 @@ export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nomb
       await agregar.mutateAsync(undefined);
       alAgregar();
     } catch (e) {
-      setError(mensajeDeProgramacion(e));
+      setError(mensajeDeCliente(e));
     }
   }
 

@@ -213,5 +213,7 @@ declare module "@tanstack/react-router" {
   /** El siguiente paso que ofreció una notificación ("Agregar contactos"): la pantalla de destino lo resalta. */
   interface HistoryState {
     siguiente?: "contactos";
+    /** La pestaña con que abre Clientes ("Ver en Archivados" al archivar uno). */
+    vista?: "activos" | "archivados";
   }
 }

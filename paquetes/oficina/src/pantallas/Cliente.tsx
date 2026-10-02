@@ -1,11 +1,14 @@
 import { useId, useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { CELULAR, ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
   Boton,
+  Building,
+  CalendarDays,
   CampoTexto,
+  claseBoton,
   CeldaTabla,
   Confirmacion,
   Dialogo,
@@ -18,8 +21,10 @@ import {
   Smartphone,
   EstadoVacio,
   FilaTabla,
+  History,
   Insignia,
   MenuAcciones,
+  Pencil,
   Plus,
   RefreshCw,
   Tabla,
@@ -31,7 +36,7 @@ import {
 } from "@teins/ui";
 import { cliente } from "../api";
 import { aFechaHora } from "../formato";
-import { consultasDeProgramacion, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
+import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
 import { AgregarSitio } from "./Clientes";
 
 type Detalle = Respuesta<"obtenerCliente">;
@@ -65,6 +70,14 @@ export function DetalleCliente({ id }: { id: string }) {
   const [editando, setEditando] = useState<Contacto | "nuevo" | null>(null);
   const [quitando, setQuitando] = useState<Contacto | null>(null);
   const [agregandoSitio, setAgregandoSitio] = useState(false);
+  // Correcciones del cliente y sus sitios (ADR-0035).
+  const [editandoCliente, setEditandoCliente] = useState(false);
+  const [archivando, setArchivando] = useState(false);
+  const [editandoSitio, setEditandoSitio] = useState<Sitio | null>(null);
+  const [archivandoSitio, setArchivandoSitio] = useState<Sitio | null>(null);
+  const navegar = useNavigate();
+  const recuperar = useAccionDeProgramacion(() => cliente.llamar("recuperarCliente", { parametros: { id } }));
+  const recuperarSitio = useAccionDeProgramacion((sitioId: string) => cliente.llamar("recuperarSitio", { parametros: { id, sitioId } }));
   // Lo creado o cambiado en esta visita a la pantalla: va primero y resaltado (DESIGN.md, crear y editar).
   const [recientes, setRecientes] = useState<string[]>([]);
   // Se llegó desde "Agregar contactos" al crear el cliente: "Nuevo contacto" queda con el foco (iteración 27).
@@ -97,6 +110,7 @@ export function DetalleCliente({ id }: { id: string }) {
   }
 
   const detalle = consulta.data;
+  const sitiosActivos = detalle.sitios.filter((s) => !s.archivado);
   // Lo creado entra primero y resaltado en la misma transición; lo cambiado se resalta en su lugar (iteración 27).
   const contactos = [...detalle.contactos.filter((c) => esNuevo(c.id)), ...detalle.contactos.filter((c) => !esNuevo(c.id))];
   const guardado = (actualizado: Detalle, nombre: string, nuevo: boolean) => {
@@ -116,25 +130,49 @@ export function DetalleCliente({ id }: { id: string }) {
         descripcion={
           <>
             <span>
-              <b>{detalle.sitios.length}</b> {detalle.sitios.length === 1 ? "sitio" : "sitios"}
+              <b>{sitiosActivos.length}</b> {sitiosActivos.length === 1 ? "sitio" : "sitios"}
             </span>
             <span>
               <b>{detalle.contactos.length}</b> {detalle.contactos.length === 1 ? "contacto" : "contactos"}
             </span>
+            {/* El último cambio, a la vista; el registro completo queda en la auditoría (ADR-0035). */}
+            {detalle.editado && <span>{`Cambiado por ${detalle.editado.por.nombre} · ${aFechaHora(detalle.editado.en)}`}</span>}
           </>
         }
         acciones={
-          <Boton
-            variante="principal"
-            icono={Plus}
-            onClick={() => setEditando("nuevo")}
-            autoFocus={pedirContactos && detalle.contactos.length === 0}
-            className={pedirContactos && detalle.contactos.length === 0 ? "foco-anillo" : ""}
-          >
-            Nuevo contacto
-          </Boton>
+          detalle.archivado ? (
+            <Boton
+              variante="principal"
+              cargando={recuperar.isPending}
+              onClick={() => recuperar.mutate(undefined, { onSuccess: () => notificar({ texto: `${detalle.nombre} recuperado` }) })}
+            >
+              Recuperar cliente
+            </Boton>
+          ) : (
+            <>
+              <Boton icono={Pencil} onClick={() => setEditandoCliente(true)}>
+                Editar
+              </Boton>
+              <MenuAcciones etiqueta={`Más acciones para ${detalle.nombre}`} opciones={[{ texto: "Archivar cliente", peligro: true, alElegir: () => setArchivando(true) }]} />
+              <Boton
+                variante="principal"
+                icono={Plus}
+                onClick={() => setEditando("nuevo")}
+                autoFocus={pedirContactos && detalle.contactos.length === 0}
+                className={pedirContactos && detalle.contactos.length === 0 ? "foco-anillo" : ""}
+              >
+                Nuevo contacto
+              </Boton>
+            </>
+          )
         }
       />
+      {detalle.archivado && (
+        <Aviso tono="alerta">
+          {`Archivado ${aFechaHora(detalle.archivado.en)} por ${detalle.archivado.por.nombre}: no aparece en las listas ni en "Programar visita", y sus contactos no reciben envíos.`}
+        </Aviso>
+      )}
+      {recuperar.isError && <Aviso tono="error">{mensajeDeCliente(recuperar.error)}</Aviso>}
       <div className="doc">
         <section aria-labelledby="titulo-contactos">
           <div className="cab-sec">
@@ -198,24 +236,98 @@ export function DetalleCliente({ id }: { id: string }) {
         <section aria-labelledby="titulo-sitios">
           <div className="cab-sec">
             <h2 id="titulo-sitios">Sitios</h2>
-            <Boton variante="fantasma" tamano="pequeno" icono={Plus} aria-label={`Agregar sitio a ${detalle.nombre}`} onClick={() => setAgregandoSitio(true)}>
-              Agregar sitio
-            </Boton>
+            {!detalle.archivado && (
+              <Boton variante="fantasma" tamano="pequeno" icono={Plus} aria-label={`Agregar sitio a ${detalle.nombre}`} onClick={() => setAgregandoSitio(true)}>
+                Agregar sitio
+              </Boton>
+            )}
           </div>
           <ul className="filas estrecho" style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {detalle.sitios.map((s) => (
-              <li key={s.id} className="fila">
+              <li key={s.id} className={`fila ${s.archivado ? "archivado" : ""} ${recientes.includes(s.id) ? "resaltada" : ""}`}>
                 <MapPin aria-hidden size={18} />
                 <div className="txt">
-                  <b>{s.nombre}</b>
-                  <small>{s.direccion}</small>
+                  <b>
+                    {s.nombre} {s.archivado && <Insignia tono="anulado">Archivado</Insignia>}
+                  </b>
+                  <small>{s.archivado ? `${s.direccion} · archivado por ${s.archivado.por.nombre}` : s.direccion}</small>
                 </div>
+                {detalle.archivado ? null : s.archivado ? (
+                  <Boton
+                    tamano="pequeno"
+                    cargando={recuperarSitio.isPending && recuperarSitio.variables === s.id}
+                    onClick={() =>
+                      recuperarSitio.mutate(s.id, {
+                        onSuccess: () => {
+                          setRecientes((r) => [s.id, ...r]);
+                          notificar({ texto: `Sitio ${s.nombre} recuperado` });
+                        },
+                      })
+                    }
+                  >
+                    Recuperar
+                  </Boton>
+                ) : (
+                  <MenuAcciones
+                    etiqueta={`Más acciones para ${s.nombre}`}
+                    opciones={[
+                      { texto: "Editar sitio", alElegir: () => setEditandoSitio(s) },
+                      { texto: "Archivar sitio", peligro: true, alElegir: () => setArchivandoSitio(s) },
+                    ]}
+                  />
+                )}
               </li>
             ))}
           </ul>
+          {recuperarSitio.isError && <Aviso tono="error">{mensajeDeCliente(recuperarSitio.error)}</Aviso>}
         </section>
       </div>
 
+      {editandoCliente && (
+        <EditarCliente
+          detalle={detalle}
+          alCerrar={() => setEditandoCliente(false)}
+          alGuardar={() => {
+            setEditandoCliente(false);
+            notificar({ texto: "Cliente guardado" });
+          }}
+        />
+      )}
+      {editandoSitio && (
+        <EditarSitio
+          clienteId={detalle.id}
+          sitio={editandoSitio}
+          alCerrar={() => setEditandoSitio(null)}
+          alGuardar={() => {
+            setRecientes((r) => [editandoSitio.id, ...r]);
+            setEditandoSitio(null);
+            notificar({ texto: "Sitio guardado" });
+          }}
+        />
+      )}
+      {archivando && (
+        <ArchivarCliente
+          detalle={detalle}
+          alCerrar={() => setArchivando(false)}
+          alArchivar={() => {
+            void navegar({ to: "/clientes" });
+            notificar({ texto: `${detalle.nombre} archivado`, accion: { texto: "Ver en Archivados", alHacer: () => void navegar({ to: "/clientes", state: { vista: "archivados" } }) } });
+          }}
+        />
+      )}
+      {archivandoSitio && (
+        <ArchivarSitio
+          detalle={detalle}
+          sitio={archivandoSitio}
+          alCerrar={() => setArchivandoSitio(null)}
+          alArchivar={() =>
+            notificar({
+              texto: `Sitio ${archivandoSitio.nombre} archivado`,
+              accion: { texto: "Deshacer", alHacer: () => recuperarSitio.mutate(archivandoSitio.id) },
+            })
+          }
+        />
+      )}
       {editando && (
         <FormularioContacto
           clienteId={detalle.id}
@@ -401,5 +513,194 @@ function FormularioContacto({
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>
+  );
+}
+
+type Sitio = Detalle["sitios"][number];
+
+/** Corregir el nombre del cliente (ADR-0035): lo ya publicado conserva el suyo, porque es una copia. */
+function EditarCliente({ detalle, alCerrar, alGuardar }: { detalle: Detalle; alCerrar: () => void; alGuardar: () => void }) {
+  const formulario = useId();
+  const [nombre, setNombre] = useState(detalle.nombre);
+  const [falta, setFalta] = useState<string | undefined>();
+  const guardar = useAccionDeProgramacion(() => cliente.llamar("editarCliente", { parametros: { id: detalle.id }, cuerpo: { nombre: nombre.trim() } }));
+
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    if (!nombre.trim()) {
+      setFalta("Escriba el nombre del cliente.");
+      enfocarPrimerError(formulario);
+      return;
+    }
+    try {
+      await guardar.mutateAsync(undefined);
+      alGuardar();
+    } catch {
+      // El error queda a la vista en la hoja.
+    }
+  }
+
+  return (
+    <Dialogo
+      forma="lateral"
+      titulo="Editar cliente"
+      subtitulo="Lo ya publicado conserva el nombre con que salió"
+      cerrable={!guardar.isPending}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={guardar.isPending}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={guardar.isPending}>
+            Guardar cambios
+          </Boton>
+        </>
+      }
+    >
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        <CampoTexto etiqueta="Nombre del cliente" valorInicial={detalle.nombre} onCambio={setNombre} error={falta} />
+        <p className="ayuda">Queda registrado quién lo cambió y cuándo. Los informes y cotizaciones publicados no cambian: son copias.</p>
+        {guardar.isError && <Aviso tono="error">{mensajeDeCliente(guardar.error)}</Aviso>}
+      </form>
+    </Dialogo>
+  );
+}
+
+function EditarSitio({ clienteId, sitio, alCerrar, alGuardar }: { clienteId: string; sitio: Sitio; alCerrar: () => void; alGuardar: () => void }) {
+  const formulario = useId();
+  const [nombre, setNombre] = useState(sitio.nombre);
+  const [direccion, setDireccion] = useState(sitio.direccion);
+  const [errores, setErrores] = useState<{ nombre?: string; direccion?: string }>({});
+  const guardar = useAccionDeProgramacion(() => cliente.llamar("editarSitio", { parametros: { id: clienteId, sitioId: sitio.id }, cuerpo: { nombre: nombre.trim(), direccion: direccion.trim() } }));
+
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    const faltan = { ...(nombre.trim() ? {} : { nombre: "Escriba el nombre del sitio." }), ...(direccion.trim() ? {} : { direccion: "Escriba la dirección." }) };
+    setErrores(faltan);
+    if (Object.keys(faltan).length > 0) return enfocarPrimerError(formulario);
+    try {
+      await guardar.mutateAsync(undefined);
+      alGuardar();
+    } catch {
+      // El error queda a la vista en la hoja.
+    }
+  }
+
+  return (
+    <Dialogo
+      forma="lateral"
+      titulo="Editar sitio"
+      subtitulo={sitio.nombre}
+      cerrable={!guardar.isPending}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={guardar.isPending}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={guardar.isPending}>
+            Guardar cambios
+          </Boton>
+        </>
+      }
+    >
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        <CampoTexto etiqueta="Nombre del sitio" valorInicial={sitio.nombre} onCambio={setNombre} error={errores.nombre} />
+        <CampoTexto etiqueta="Dirección" valorInicial={sitio.direccion} onCambio={setDireccion} error={errores.direccion} />
+        {guardar.isError && <Aviso tono="error">{mensajeDeCliente(guardar.error)}</Aviso>}
+      </form>
+    </Dialogo>
+  );
+}
+
+const diaDeVisita = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+/** "Jue 9 oct · Sede Norte · Juan Pérez": lo que hay que resolver antes de archivar. */
+function visitaPorHacer(v: Detalle["visitasPorHacer"][number]): string {
+  const partes = Object.fromEntries(diaDeVisita.formatToParts(new Date(`${v.programadaPara}T00:00:00Z`)).map((p) => [p.type, p.value.replace(".", "")]));
+  const dia = `${partes.weekday!.charAt(0).toUpperCase()}${partes.weekday!.slice(1)} ${partes.day} ${partes.month}`;
+  return [dia, v.sitio, v.tecnicos.join(" y ") || "Sin técnico"].join(" · ");
+}
+
+/** Con visitas por hacer no se archiva (ADR-0035): se dice cuáles y se lleva a Visitas para resolverlas. */
+function VisitasQueBloquean({ titulo, visitas, alCerrar }: { titulo: string; visitas: Detalle["visitasPorHacer"]; alCerrar: () => void }) {
+  return (
+    <Dialogo
+      titulo={titulo}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar}>Volver</Boton>
+          <Link to="/visitas" className={claseBoton("principal")}>
+            Ver sus visitas
+          </Link>
+        </>
+      }
+    >
+      <Aviso tono="alerta">
+        <b>Para archivarlo, primero cancele o reprograme {visitas.length === 1 ? "su visita" : "sus visitas"}:</b>
+        <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+          {visitas.map((v) => (
+            <li key={v.id}>{visitaPorHacer(v)}</li>
+          ))}
+        </ul>
+      </Aviso>
+    </Dialogo>
+  );
+}
+
+function ArchivarCliente({ detalle, alCerrar, alArchivar }: { detalle: Detalle; alCerrar: () => void; alArchivar: () => void }) {
+  const consultas = useQueryClient();
+  if (detalle.visitasPorHacer.length > 0) return <VisitasQueBloquean titulo={`${detalle.nombre} todavía tiene visitas por hacer`} visitas={detalle.visitasPorHacer} alCerrar={alCerrar} />;
+  return (
+    <Confirmacion
+      nivel="consecuencia"
+      titulo={`¿Archivar ${detalle.nombre}?`}
+      confirmar="Archivar cliente"
+      mensajeDeError={mensajeDeCliente}
+      alCerrar={alCerrar}
+      alTerminar={alArchivar}
+      accion={async () => {
+        await cliente.llamar("archivarCliente", { parametros: { id: detalle.id } });
+        await consultas.invalidateQueries({ queryKey: ["programacion"] });
+      }}
+      consecuencias={[
+        { icono: Building, texto: 'Sale de Clientes, de la búsqueda y de "Programar visita"', detalle: "Se recupera desde la pestaña Archivados" },
+        { icono: Mail, texto: "Sus contactos dejan de recibir informes y cotizaciones", detalle: "Los envíos ya hechos no cambian" },
+        { icono: History, texto: "Sus informes, visitas y cotizaciones se conservan", detalle: "Con el nombre con que se publicaron" },
+      ]}
+    />
+  );
+}
+
+function ArchivarSitio({ detalle, sitio, alCerrar, alArchivar }: { detalle: Detalle; sitio: Sitio; alCerrar: () => void; alArchivar: () => void }) {
+  const consultas = useQueryClient();
+  const visitas = detalle.visitasPorHacer.filter((v) => v.sitioId === sitio.id);
+  if (visitas.length > 0) return <VisitasQueBloquean titulo={`El sitio ${sitio.nombre} todavía tiene visitas por hacer`} visitas={visitas} alCerrar={alCerrar} />;
+  // Un cliente activo conserva al menos un sitio: sin sitio no se le programa nada, y para eso está archivar el cliente.
+  if (detalle.sitios.filter((s) => !s.archivado).length <= 1)
+    return (
+      <Dialogo titulo={`${sitio.nombre} es el único sitio de ${detalle.nombre}`} alCerrar={alCerrar} pie={<Boton onClick={alCerrar}>Volver</Boton>}>
+        <Aviso tono="alerta">Un cliente activo necesita al menos un sitio. Agregue otro antes de archivar este, o archive el cliente.</Aviso>
+      </Dialogo>
+    );
+  return (
+    <Confirmacion
+      nivel="consecuencia"
+      titulo={`¿Archivar el sitio ${sitio.nombre}?`}
+      confirmar="Archivar sitio"
+      mensajeDeError={mensajeDeCliente}
+      alCerrar={alCerrar}
+      alTerminar={alArchivar}
+      accion={async () => {
+        await cliente.llamar("archivarSitio", { parametros: { id: detalle.id, sitioId: sitio.id } });
+        await consultas.invalidateQueries({ queryKey: ["programacion"] });
+      }}
+      consecuencias={[
+        { icono: CalendarDays, texto: "Ya no se le programan visitas", detalle: "Sale de \"Programar visita\"" },
+        { icono: History, texto: "Sus visitas e informes pasados se conservan" },
+      ]}
+    />
   );
 }

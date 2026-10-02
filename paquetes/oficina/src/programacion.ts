@@ -10,7 +10,9 @@ export type Vista = "proximas" | "anteriores" | "canceladas";
 export const hoyLocal = () => new Date().toLocaleDateString("en-CA");
 
 export const consultasDeProgramacion = {
-  clientes: () => queryOptions({ queryKey: ["programacion", "clientes"], queryFn: () => cliente.llamar("listarClientes") }),
+  /** Los activos (para programar y la lista) o los archivados (ADR-0035). */
+  clientes: (vista: "activos" | "archivados" = "activos") =>
+    queryOptions({ queryKey: ["programacion", "clientes", vista], queryFn: () => cliente.llamar("listarClientes", { consulta: { vista } }) }),
   cliente: (id: string) => queryOptions({ queryKey: ["programacion", "cliente", id], queryFn: () => cliente.llamar("obtenerCliente", { parametros: { id } }) }),
   tecnicos: () => queryOptions({ queryKey: ["programacion", "tecnicos"], queryFn: () => cliente.llamar("listarTecnicos"), staleTime: 5 * 60_000 }),
   visitas: (vista: Vista, hoy: string) =>
@@ -24,6 +26,12 @@ export const consultasDeProgramacion = {
 export function useAccionDeProgramacion<E, R>(accion: (entrada: E) => Promise<R>) {
   const consultas = useQueryClient();
   return useMutation({ mutationFn: accion, onSettled: () => conTransicion(() => consultas.invalidateQueries({ queryKey: ["programacion"] })) });
+}
+
+/** Corregir un cliente o un sitio (ADR-0035): el servidor dice por qué no se pudo (visitas por hacer, el único sitio, archivado). */
+export function mensajeDeCliente(error: unknown): string {
+  if (error instanceof ErrorApi && error.codigo === "estado_invalido") return textoDelServidor(error, "El cliente cambió mientras tanto. Recargue la página y vuelva a intentar.");
+  return mensajeDeProgramacion(error);
 }
 
 export function mensajeDeProgramacion(error: unknown): string {

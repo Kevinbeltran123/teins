@@ -8,6 +8,7 @@ import {
   Aviso,
   Boton,
   BotonIcono,
+  CampoTextoLargo,
   CeldaTabla,
   ChevronLeft,
   Confirmacion,
@@ -28,6 +29,7 @@ import {
   sinMovimiento,
   Tabla,
   Trash,
+  TriangleAlert,
   useNotificar,
   type AnclaDeHoja,
 } from "@teins/ui";
@@ -38,7 +40,7 @@ import { useSalidaProtegida } from "../salida";
 import { consultasDeCotizaciones, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
 import { aFechaCorta, leerPesos, pesos } from "../formato";
 import { consultasDeProgramacion } from "../programacion";
-import { Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
+import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
 import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type QueSeVe } from "./Lienzo";
 
 type Cotizacion = Respuesta<"obtenerCotizacion">;
@@ -181,7 +183,8 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
   const error = [guardar.error, publicar.error].find((e) => e && !esSesionVencida(e)) ?? null;
   const siguiente = (c.versiones[0]?.numero ?? 0) + 1;
-  const vigente = c.versiones[0];
+  // La vigente es la más reciente sin retirar (ADR-0034).
+  const vigente = c.versiones.find((v) => !v.retirada);
 
   // La vista en vivo (ADR-0031): la siguiente versión tal como la congelaría el servidor al publicar, desde el borrador.
   const sesion = useQuery(consultas.sesion());
@@ -305,7 +308,15 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           migas={migas}
           accionesEnBarra
           titulo={`Cotización ${c.numero}`}
-          estado={vigente ? <Insignia tono="publicado">{`Versión ${vigente.numero} vigente`}</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}
+          estado={
+            vigente ? (
+              <Insignia tono="publicado">{`Versión ${vigente.numero} vigente`}</Insignia>
+            ) : c.versiones.length > 0 ? (
+              <Insignia tono="anulado">Sin versión vigente</Insignia>
+            ) : (
+              <Insignia tono="borrador">Borrador</Insignia>
+            )
+          }
           descripcion={
             <>
               <span>
@@ -568,6 +579,9 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           {/* El costado es la hoja: las versiones y sus envíos van al final del editor (prototipos/vista-en-vivo). */}
           <Versiones
             c={c}
+            vigente={vigente?.numero}
+            administrador={sesion.data?.usuario.administrador ?? false}
+            recargar={recargar}
             envios={
               vigente && (
                 <PanelEnvios
@@ -576,6 +590,9 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
                   contactos={contactos.data?.contactos}
                   mensaje={(p) => mensajeDeVersion(p, vigente.numero)}
                   enviar={(destinos, llave) => cliente.llamar("enviarCotizacion", { parametros: { id: c.id, numero: vigente.numero }, cuerpo: { destinos, llave } })}
+                  corregirEnvio={(envio, accion) =>
+                    cliente.llamar(accion === "cancelar" ? "cancelarEnvioDeCotizacion" : "reanudarEnvioDeCotizacion", { parametros: { id: c.id, numero: vigente.numero, envio } })
+                  }
                   recargar={recargar}
                 />
               )
@@ -622,9 +639,10 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   );
 }
 
-function Versiones({ c, envios }: { c: Cotizacion; envios: ReactNode }) {
+function Versiones({ c, vigente, administrador, recargar, envios }: { c: Cotizacion; vigente: number | undefined; administrador: boolean; recargar: () => void; envios: ReactNode }) {
   const [descargando, setDescargando] = useState<number | null>(null);
   const [errorDescarga, setErrorDescarga] = useState(false);
+  const [retirando, setRetirando] = useState<number | null>(null);
 
   async function descargar(numero: number) {
     setDescargando(numero);
@@ -647,11 +665,12 @@ function Versiones({ c, envios }: { c: Cotizacion; envios: ReactNode }) {
         <p className="ayuda">Todavía no se ha publicado ninguna versión.</p>
       ) : (
         <div>
-          {c.versiones.map((v, i) => (
+          {c.versiones.map((v) => (
             <div key={v.numero} className="ver">
               <div className="ver-cab">
                 <b>{`Versión ${v.numero}`}</b>
-                {i === 0 && <Insignia tono="publicado">Vigente</Insignia>}
+                {v.numero === vigente && <Insignia tono="publicado">Vigente</Insignia>}
+                {v.retirada && <Insignia tono="anulado">Retirada</Insignia>}
                 {v.pdf === "listo" ? (
                   <Boton variante="fantasma" tamano="pequeno" icono={Download} aria-label={`Descargar PDF de la versión ${v.numero}`} cargando={descargando === v.numero} onClick={() => void descargar(v.numero)}>
                     PDF
@@ -665,13 +684,67 @@ function Versiones({ c, envios }: { c: Cotizacion; envios: ReactNode }) {
                 )}
               </div>
               <span className="meta">{`Publicada ${aFechaCorta(v.publicadaEn)} por ${v.publicadaPor.nombre} · ${pesos(v.total)}${v.envios.length > 0 ? ` · ${v.envios.length === 1 ? "1 envío" : `${v.envios.length} envíos`}` : ""}`}</span>
-              {i === 0 && envios}
+              {v.retirada && <span className="meta">{`Retirada ${aFechaCorta(v.retirada.en)} por ${v.retirada.por.nombre}: ${v.retirada.motivo}. No se puede volver a enviar.`}</span>}
+              {v.numero === vigente && envios}
+              {/* Solo la vigente se retira, y solo quien administra (ADR-0034); el servidor también lo exige. */}
+              {v.numero === vigente && administrador && (
+                <div>
+                  <Boton variante="fantasma" tamano="pequeno" className="texto-peligro" aria-label={`Retirar la versión ${v.numero}`} onClick={() => setRetirando(v.numero)}>
+                    Retirar versión
+                  </Boton>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
       {errorDescarga && <Aviso tono="error">No se pudo preparar la descarga. Intente de nuevo.</Aviso>}
+      {retirando !== null && (
+        <RetirarVersionDeCotizacion
+          c={c}
+          numero={retirando}
+          alCerrar={() => setRetirando(null)}
+          alRetirar={recargar}
+        />
+      )}
     </section>
+  );
+}
+
+/**
+ * Retirar una versión de la cotización (ADR-0034): deja de ser la vigente y no se envía más; se conserva con su PDF.
+ * Dice qué pasa con la anterior y con lo ya enviado, y pide el motivo.
+ */
+function RetirarVersionDeCotizacion({ c, numero, alCerrar, alRetirar }: { c: Cotizacion; numero: number; alCerrar: () => void; alRetirar: () => void }) {
+  const notificar = useNotificar();
+  const [motivo, setMotivo] = useState("");
+  const version = c.versiones.find((v) => v.numero === numero)!;
+  const anterior = c.versiones.find((v) => v.numero < numero && !v.retirada);
+  const enviadas = copiasEnviadas(version.envios);
+  return (
+    <Confirmacion
+      titulo={`¿Retirar la versión ${numero} de la cotización?`}
+      confirmar="Retirar versión"
+      descartar="Volver"
+      nivel="irreversible"
+      validar={() => (motivo.trim() === "" ? "Escriba el motivo: queda junto a la versión." : null)}
+      mensajeDeError={mensajeDeCotizacion}
+      alCerrar={alCerrar}
+      alTerminar={() => {
+        alRetirar();
+        notificar({ texto: anterior ? `Versión ${numero} retirada: la ${anterior.numero} es la vigente` : `Versión ${numero} retirada` });
+      }}
+      accion={() => cliente.llamar("retirarVersionDeCotizacion", { parametros: { id: c.id, numero }, cuerpo: { motivo: motivo.trim() } })}
+      consecuencias={[
+        anterior
+          ? { icono: History, texto: `La versión ${anterior.numero} vuelve a ser la vigente`, detalle: "Es la que se envía desde ahora" }
+          : { icono: History, texto: "La cotización queda sin versión vigente", detalle: "Para cotizar otra vez, se publica una nueva" },
+        { icono: Send, texto: "No se puede volver a enviar", detalle: "El PDF y lo publicado se conservan" },
+        ...(enviadas.length > 0 ? [{ icono: TriangleAlert, texto: `Ya se le envió a ${enLista(enviadas)}`, detalle: "Esa copia no se recupera: avísele que la versión ya no vale" }] : []),
+      ]}
+    >
+      <CampoTextoLargo etiqueta="Motivo del retiro" valor={motivo} onCambio={setMotivo} maximo={500} />
+    </Confirmacion>
   );
 }
 

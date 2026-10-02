@@ -447,6 +447,7 @@ mark { background: color-mix(in srgb, var(--senal) 35%, transparent); color: inh
 .nota-c.nueva { animation: asomar .35s var(--curva) both; }
 .nota-c:last-child { border-bottom: 0; }
 .nota-c small { color: var(--sec); font-size: 12px; font-weight: 500; }
+.nota-c.retirado { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--sec); font-style: italic; font-size: 13px; }
 
 /* Informe: capítulos en el orden del PDF */
 .capitulo { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid color-mix(in srgb, var(--borde) 55%, transparent); }
@@ -519,6 +520,8 @@ mark { background: color-mix(in srgb, var(--senal) 35%, transparent); color: inh
 .filas .fila .txt { flex: 1; min-width: 0; }
 .filas .fila small { display: block; color: var(--sec); font-size: 13px; }
 .filas .fila > svg { color: var(--sec); flex: none; }
+.filas .fila.archivado b { color: var(--sec); font-weight: 500; }
+.filas .fila.resaltada { animation: resalte-fila var(--t-duracion-resaltado) var(--curva) both; }
 .contacto-medio { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
 .contacto-medio span { display: inline-flex; gap: 6px; align-items: center; }
 .contacto-medio svg { color: var(--sec); flex: none; }
@@ -714,3 +717,6 @@ dialog.capa-lateral .capa-cuerpo > .lienzo { margin: 0 -20px; flex: 1 0 auto; mi
 /* Al navegar, el menú y la barra superior se quedan quietos: tienen nombre propio y salen de la foto que se mueve */
 .menu { view-transition-name: menu; }
 .barra-sup { view-transition-name: barra-oficina; }
+/* Cancelar un envío en cola (ADR-0034): la acción junto al estado y el cancelado tachado, con quién y cuándo */
+.accion-envio { border: 0; background: none; padding: 2px 2px; font-size: 12.5px; font-weight: 500; color: var(--marca); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.env.cancelado > span:nth-of-type(1) { color: var(--sec); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--sec) 60%, transparent); }

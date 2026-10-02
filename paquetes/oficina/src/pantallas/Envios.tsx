@@ -104,7 +104,42 @@ const ESTADO_ENVIO = {
   enviado: <Insignia tono="enviado">Enviado</Insignia>,
   entregado: <Insignia tono="exito">Entregado</Insignia>,
   fallido: <Insignia tono="peligro">No llegó</Insignia>,
+  cancelado: <Insignia tono="neutro">Cancelado</Insignia>,
 } as const;
+
+/**
+ * Cancelar un envío en cola (ADR-0034): no pide confirmar, porque mientras siga en cola "Deshacer" lo devuelve. Si ya
+ * salió, el servidor lo dice y queda a la vista: lo enviado no se recupera. Lo usan la lista de envíos y el avance de
+ * publicar.
+ */
+export function useCancelarEnvio(
+  corregirEnvio: ((envioId: string, accion: "cancelar" | "reanudar") => Promise<unknown>) | undefined,
+  recargar: () => void,
+  setError: (texto: string | null) => void,
+) {
+  const notificar = useNotificar();
+  return async (e: Pick<Envio, "id" | "contacto">) => {
+    if (!corregirEnvio) return;
+    setError(null);
+    try {
+      await corregirEnvio(e.id, "cancelar");
+      recargar();
+      notificar({
+        texto: `Envío a ${e.contacto.nombre} cancelado`,
+        accion: {
+          texto: "Deshacer",
+          alHacer: () =>
+            void corregirEnvio(e.id, "reanudar")
+              .then(recargar)
+              .catch(() => setError(`No se pudo deshacer: el envío a ${e.contacto.nombre} sigue cancelado.`)),
+        },
+      });
+    } catch (causa) {
+      recargar();
+      setError(causa instanceof ErrorApi && causa.codigo === "estado_invalido" ? `El envío a ${e.contacto.nombre} ya salió: lo enviado no se recupera.` : "No se pudo cancelar el envío. Intente de nuevo.");
+    }
+  };
+}
 
 /** El último intento por contacto y canal: uno que no llegó y se volvió a enviar ya no pide nada. */
 function ultimosIntentos(envios: readonly Envio[]): Envio[] {
@@ -131,13 +166,15 @@ interface PropsEnvios {
   recargar: () => void;
   /** Acciones de la versión que van junto a "Enviar a otro contacto" (retirar del portal). */
   acciones?: ReactNode;
+  /** Cancelar un envío que espera en cola, o deshacerlo (ADR-0034). Sin esto, no se ofrece. */
+  corregirEnvio?: ((envioId: string, accion: "cancelar" | "reanudar") => Promise<unknown>) | undefined;
 }
 
 /**
  * Envíos de una versión (ADR-0028; la cotización, ADR-0029), dentro de su versión en el carril (prototipos/oficina):
  * el estado de cada copia y, junto a lo que no llegó, cómo resolverlo.
  */
-export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, recargar, acciones }: PropsEnvios) {
+export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, recargar, acciones, corregirEnvio }: PropsEnvios) {
   const notificar = useNotificar();
   const [eligiendo, setEligiendo] = useState(false);
   const [reenviando, setReenviando] = useState<string | null>(null);
@@ -166,6 +203,8 @@ export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, r
     }
   }
 
+  const cancelar = useCancelarEnvio(corregirEnvio, recargar, setError);
+
   return (
     <section aria-label={`Envíos de la versión ${version.numero}`} className="col" style={{ gap: 6 }}>
       {esperando && (
@@ -191,13 +230,25 @@ export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, r
           {envios.map((e) => {
             const Icono = e.canal === "correo" ? Mail : MessageCircle;
             return (
-              <li key={e.id} className="env">
+              <li key={e.id} className={`env ${e.estado === "cancelado" ? "cancelado" : ""}`}>
                 <Icono aria-hidden size={15} />
                 <span>
                   {e.contacto.nombre} <span className="sr-only">por {e.canal === "correo" ? "Correo" : "WhatsApp"}</span>
                 </span>
-                {ESTADO_ENVIO[e.estado]}
-                {e.estado === "fallido" ? (
+                <span className="fila-flex" style={{ gap: 6, flexWrap: "nowrap" }}>
+                  {ESTADO_ENVIO[e.estado]}
+                  {e.estado === "en_cola" && corregirEnvio && (
+                    <button type="button" className="accion-envio" onClick={() => void cancelar(e)} aria-label={`Cancelar el envío a ${e.contacto.nombre} por ${e.canal === "correo" ? "correo" : "WhatsApp"}`}>
+                      Cancelar
+                    </button>
+                  )}
+                </span>
+                {e.estado === "cancelado" ? (
+                  <span className="det">
+                    {e.canal === "correo" ? "Correo" : "WhatsApp"}
+                    {e.cancelado ? ` · cancelado por ${e.cancelado.por.nombre} ${aFechaCorta(e.cancelado.en)}` : " · cancelado"}: no sale
+                  </span>
+                ) : e.estado === "fallido" ? (
                   <span className="det mal">
                     {e.error}
                     {sePuedeEnviar && (

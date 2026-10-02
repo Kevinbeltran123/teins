@@ -64,11 +64,11 @@ export function Cotizaciones() {
                 </CeldaTabla>
                 <CeldaTabla>
                   <span className="fila-flex" style={{ gap: 6 }}>
-                    {c.vigente ? <Insignia tono="publicado">{`Versión ${c.vigente}`}</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}
+                    {c.vigente ? <Insignia tono="publicado">{`Versión ${c.vigente}`}</Insignia> : c.todasRetiradas ? <Insignia tono="anulado">Sin versión vigente</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}
                     {c.envioSinEntregar && <Insignia tono="peligro">Envío sin entregar</Insignia>}
                   </span>
                 </CeldaTabla>
-                <CeldaTabla derecha>{c.total === null ? <span className="sec fuerte" style={{ fontWeight: 700 }}>Borrador</span> : <span className="fuerte">{pesos(c.total)}</span>}</CeldaTabla>
+                <CeldaTabla derecha>{c.total === null ? <span className="sec fuerte" style={{ fontWeight: 700 }}>{c.todasRetiradas ? "Retirada" : "Borrador"}</span> : <span className="fuerte">{pesos(c.total)}</span>}</CeldaTabla>
               </FilaTabla>
             ))}
           </Tabla>

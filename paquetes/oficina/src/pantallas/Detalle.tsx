@@ -51,6 +51,7 @@ import {
   TriangleAlert,
   UserRound,
   useLoNuevo,
+  MenuAcciones,
   useNotificar,
   VisorFotos,
   type AnclaDeHoja,
@@ -62,7 +63,7 @@ import { consultasDeCatalogo, useVincular } from "../catalogo";
 import { aFechaCorta, cuantoLleva } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
-import { useBandeja, useComentar, useCorregir, useMarcarRevisado, useTomar } from "../revision";
+import { useBandeja, useComentar, useCorregir, useCorregirComentario, useMarcarRevisado, useTomar } from "../revision";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { Lienzo, VistaDeDocumento } from "./Lienzo";
 
@@ -231,7 +232,7 @@ export function Detalle({ id }: { id: string }) {
             <div className="grupo-c">
               <div className="mini-tabs" role="tablist" aria-label="Comentarios, historial y el informe">
                 <button type="button" role="tab" aria-selected={pestana === "comentarios"} onClick={() => setPestana("comentarios")}>
-                  Comentarios{l.comentarios.length > 0 ? ` · ${l.comentarios.length}` : ""}
+                  Comentarios{vigentes(l).length > 0 ? ` · ${vigentes(l).length}` : ""}
                 </button>
                 <button type="button" role="tab" aria-selected={pestana === "historial"} onClick={() => setPestana("historial")}>
                   Historial
@@ -241,7 +242,7 @@ export function Detalle({ id }: { id: string }) {
                 </button>
               </div>
               {pestana === "comentarios" ? (
-                <Comentarios l={l} />
+                <Comentarios l={l} usuarioId={sesion.data?.usuario.id} />
               ) : pestana === "historial" ? (
                 <HistorialDeCambios l={l} historial={historial} />
               ) : (
@@ -355,7 +356,7 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
             {
               icono: Smartphone,
               texto: `${l.tecnico.nombre} lo ve como revisado en su teléfono`,
-              ...(l.comentarios.length > 0 && { detalle: l.comentarios.length === 1 ? "Con el comentario de oficina" : `Con los ${l.comentarios.length} comentarios de oficina` }),
+              ...(vigentes(l).length > 0 && { detalle: vigentes(l).length === 1 ? "Con el comentario de oficina" : `Con los ${vigentes(l).length} comentarios de oficina` }),
             },
           ]}
           mensajeDeError={mensajeDeError}
@@ -451,7 +452,7 @@ function FilaCampo({
   const [corregido, setCorregido] = useState(0);
   const notificar = useNotificar();
   const valor = l.respuestas[seccion]?.[campo.clave];
-  const hilo = l.comentarios.filter((c) => c.seccion === seccion && c.campo === campo.clave);
+  const hilo = vigentes(l).filter((c) => c.seccion === seccion && c.campo === campo.clave);
   const nombreEnFrase = campo.etiqueta.toLowerCase();
 
   if (corrigiendo) {
@@ -510,7 +511,7 @@ function FilaCampo({
           {hilo.map((c) => (
             <div key={c.id} className="burbuja">
               <small>
-                {c.autor.nombre} · {aFechaCorta(c.creadoEn)} · para el técnico
+                {c.autor.nombre} · {aFechaCorta(c.creadoEn)} · para el técnico{c.editadoEn ? " · Editado" : ""}
               </small>
               <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
             </div>
@@ -807,9 +808,37 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
   );
 }
 
-/** Todos los comentarios; cada uno lleva a su fila. El campo de aquí es para lo general. */
-function Comentarios({ l }: { l: Levantamiento }) {
+/** Lo que el técnico ve: los comentarios retirados no cuentan (ADR-0035). */
+const vigentes = (l: Levantamiento) => l.comentarios.filter((c) => !c.retirado);
+
+/**
+ * Todos los comentarios; cada uno lleva a su fila. El campo de aquí es para lo general. Su autor edita o borra el
+ * suyo hasta que el levantamiento está Revisado (ADR-0035): borrar no pide confirmar, queda "Comentario retirado"
+ * con "Deshacer".
+ */
+function Comentarios({ l, usuarioId }: { l: Levantamiento; usuarioId: string | undefined }) {
   const comentar = useComentar(l.id);
+  const corregir = useCorregirComentario(l.id);
+  const notificar = useNotificar();
+  const [editando, setEditando] = useState<{ id: string; texto: string } | null>(null);
+  const corregible = (c: Levantamiento["comentarios"][number]) => c.autor.id === usuarioId && l.estado !== "revisado";
+  const restaurar = (comentarioId: string) => corregir.mutate({ comentarioId, accion: { tipo: "restaurar" } });
+  const retirar = (comentarioId: string) =>
+    corregir.mutate(
+      { comentarioId, accion: { tipo: "retirar" } },
+      { onSuccess: () => notificar({ texto: "Comentario retirado", accion: { texto: "Deshacer", alHacer: () => restaurar(comentarioId) } }) },
+    );
+
+  async function guardarEdicion(evento: FormEvent) {
+    evento.preventDefault();
+    if (!editando?.texto.trim()) return;
+    try {
+      await corregir.mutateAsync({ comentarioId: editando.id, accion: { tipo: "editar", texto: editando.texto.trim() } });
+      setEditando(null);
+    } catch {
+      // El error queda a la vista.
+    }
+  }
   // Solo el comentario recién escrito entra animado; los demás no se animan otra vez al volver a la pestaña.
   const esNuevo = useLoNuevo(l.comentarios.map((c) => c.id));
   const [texto, setTexto] = useState("");
@@ -840,23 +869,72 @@ function Comentarios({ l }: { l: Levantamiento }) {
         {l.comentarios.length === 0 ? (
           <p className="ayuda">Sin comentarios. El técnico los ve en su teléfono en la siguiente sincronización.</p>
         ) : (
-          l.comentarios.map((c) => (
-            <div key={c.id} className={`nota-c ${esNuevo(c.id) ? "nueva" : ""}`}>
-              <small>
-                {c.autor.nombre} · {aFechaCorta(c.creadoEn)}
-                {c.seccion && c.campo && (
-                  <>
-                    {" · Sobre "}
-                    <button type="button" className="ir-dato" onClick={() => irALaFila(c.seccion!, c.campo!)}>
-                      {etiqueta(c.seccion, c.campo) ?? c.campo}
-                    </button>
-                  </>
+          l.comentarios.map((c) =>
+            c.retirado ? (
+              <div key={c.id} className="nota-c retirado">
+                <span>{`Comentario retirado por ${c.retirado.por.nombre} · ${aFechaCorta(c.retirado.en)}`}</span>
+                {corregible(c) && (
+                  <button type="button" className="accion-envio" onClick={() => restaurar(c.id)}>
+                    Deshacer
+                  </button>
                 )}
-              </small>
-              <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
-            </div>
-          ))
+              </div>
+            ) : editando?.id === c.id ? (
+              <form key={c.id} className="nota-c" onSubmit={(e) => void guardarEdicion(e)} noValidate>
+                <small>{c.autor.nombre}</small>
+                <label className="sr-only" htmlFor={`editar-${c.id}`}>
+                  Comentario
+                </label>
+                <textarea
+                  id={`editar-${c.id}`}
+                  // eslint-disable-next-line jsx-a11y/no-autofocus -- se abre con "Editar": el foco va donde se escribe
+                  autoFocus
+                  className="control"
+                  maxLength={2000}
+                  style={{ minHeight: 64 }}
+                  value={editando.texto}
+                  onChange={(e) => setEditando({ id: c.id, texto: e.target.value })}
+                />
+                <div className="fila-flex" style={{ justifyContent: "flex-end", gap: 6 }}>
+                  <Boton tamano="pequeno" onClick={() => setEditando(null)}>
+                    Cancelar
+                  </Boton>
+                  <Boton type="submit" tamano="pequeno" variante="principal" cargando={corregir.isPending} disabled={!editando.texto.trim() || editando.texto.trim() === c.texto}>
+                    Guardar
+                  </Boton>
+                </div>
+              </form>
+            ) : (
+              <div key={c.id} className={`nota-c ${esNuevo(c.id) ? "nueva" : ""}`}>
+                <small className="fila-flex entre">
+                  <span>
+                    {c.autor.nombre} · {aFechaCorta(c.creadoEn)}
+                    {c.seccion && c.campo && (
+                      <>
+                        {" · Sobre "}
+                        <button type="button" className="ir-dato" onClick={() => irALaFila(c.seccion!, c.campo!)}>
+                          {etiqueta(c.seccion, c.campo) ?? c.campo}
+                        </button>
+                      </>
+                    )}
+                  </span>
+                  {corregible(c) && (
+                    <MenuAcciones
+                      etiqueta="Más acciones para el comentario"
+                      opciones={[
+                        { texto: "Editar", alElegir: () => setEditando({ id: c.id, texto: c.texto }) },
+                        { texto: "Borrar", peligro: true, alElegir: () => retirar(c.id) },
+                      ]}
+                    />
+                  )}
+                </small>
+                <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
+                {c.editadoEn && <small>{`Editado ${aFechaCorta(c.editadoEn)}`}</small>}
+              </div>
+            ),
+          )
         )}
+        {corregir.isError && <Aviso tono="error">{mensajeDeError(corregir.error)}</Aviso>}
       </div>
       <form className="col" style={{ gap: 8 }} onSubmit={(e) => void enviar(e)} noValidate>
         <label className="sr-only" htmlFor="comentario-general">
@@ -1023,6 +1101,9 @@ const QUE_PASO: Record<string, { texto: string; icono: LucideIcon }> = {
   campo_corregido: { texto: "Corrigió", icono: Pencil },
   levantamiento_revisado: { texto: "Marcó el levantamiento revisado", icono: Check },
   comentario_agregado: { texto: "Comentó", icono: MessageSquare },
+  comentario_editado: { texto: "Editó su comentario", icono: Pencil },
+  comentario_retirado: { texto: "Retiró su comentario", icono: MessageSquare },
+  comentario_restaurado: { texto: "Restauró su comentario", icono: MessageSquare },
   linea_vinculada: { texto: "Vinculó al catálogo", icono: Link2 },
 };
 
@@ -1058,6 +1139,7 @@ function HistorialDeCambios({ l, historial }: { l: Levantamiento; historial: Ret
       const despues = e.nuevo as { linea?: string; item?: string | null } | undefined;
       return ` “${descripcionDeLinea(e.seccion, e.campo, despues?.linea)}”: ${codigoDe(antes?.item)} → ${codigoDe(despues?.item)}`;
     }
+    if (e.tipo === "comentario_editado") return `: “${(e.anterior as { texto?: string } | undefined)?.texto ?? ""}” → “${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
     if (e.tipo === "comentario_agregado") return ` ${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
     return null;
   }

@@ -42,7 +42,7 @@ import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } f
 import { consultasDeProgramacion } from "../programacion";
 import { useHojaAlLado, type Plantillas } from "../documentos";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
-import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
+import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores, useCancelarEnvio } from "./Envios";
 import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type QueSeVe } from "./Lienzo";
 
 type Informe = Respuesta<"obtenerInforme">;
@@ -326,7 +326,12 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           }
         />
         {publicadaAqui !== null && informe.versiones.some((v) => v.numero === publicadaAqui) && (
-          <AvancePublicacion informeId={informe.id} version={informe.versiones.find((v) => v.numero === publicadaAqui)!} />
+          <AvancePublicacion
+            informeId={informe.id}
+            version={informe.versiones.find((v) => v.numero === publicadaAqui)!}
+            recargar={recargar}
+            corregirEnvio={(envio, accion) => cliente.llamar(accion === "cancelar" ? "cancelarEnvio" : "reanudarEnvio", { parametros: { id: informe.id, numero: publicadaAqui, envio } })}
+          />
         )}
         {error !== null && error !== undefined && (
           <Aviso tono="error">
@@ -422,6 +427,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
                   contactos={contactos.data?.contactos}
                   mensaje={(p) => mensajeDeVersion(p, vigente.numero)}
                   enviar={(destinos, llave) => cliente.llamar("enviarVersion", { parametros: { id: informe.id, numero: vigente.numero }, cuerpo: { destinos, llave } })}
+                  corregirEnvio={(envio, accion) => cliente.llamar(accion === "cancelar" ? "cancelarEnvio" : "reanudarEnvio", { parametros: { id: informe.id, numero: vigente.numero, envio } })}
                   recargar={recargar}
                 />
               )
@@ -569,15 +575,27 @@ function MarcaDePaso({ hecho, trabajando, nueva }: { hecho: boolean; trabajando:
   );
 }
 
-const ESTADO_DEL_ENVIO = { en_cola: "En cola", enviado: "Enviado", entregado: "Entregado", fallido: "No llegó" } as const;
+const ESTADO_DEL_ENVIO = { en_cola: "En cola", enviado: "Enviado", entregado: "Entregado", fallido: "No llegó", cancelado: "Cancelado" } as const;
 
 /**
  * Lo que pasa después de publicar, a la vista y en su lugar (iteración 27): publicada, el PDF, en el portal y cada
  * envío. Los envíos están hechos cuando ninguno queda en cola; un WhatsApp sigue en "Enviado" mientras Meta no
  * confirme, y eso también se dice.
  */
-function AvancePublicacion({ informeId, version: v }: { informeId: string; version: Informe["versiones"][number] }) {
+function AvancePublicacion({
+  informeId,
+  version: v,
+  recargar,
+  corregirEnvio,
+}: {
+  informeId: string;
+  version: Informe["versiones"][number];
+  recargar: () => void;
+  corregirEnvio: (envioId: string, accion: "cancelar" | "reanudar") => Promise<unknown>;
+}) {
   const { descargando, fallo, descargar } = useDescargaDePdf(informeId);
+  const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
+  const cancelar = useCancelarEnvio(corregirEnvio, recargar, setErrorEnvio);
   const envios = v.envios;
   const entregados = envios.filter((e) => e.estado === "entregado").length;
   const enCola = envios.some((e) => e.estado === "en_cola");
@@ -638,6 +656,11 @@ function AvancePublicacion({ informeId, version: v }: { informeId: string; versi
                       <span className={`det ${e.estado === "entregado" ? "ok" : e.estado === "fallido" ? "mal" : ""}`}>
                         {e.canal === "correo" ? "Correo" : "WhatsApp"} · {ESTADO_DEL_ENVIO[e.estado]}
                         {e.estado === "enviado" && e.canal === "whatsapp" && ": Meta no ha confirmado la entrega"}
+                        {e.estado === "en_cola" && (
+                          <button type="button" className="accion-envio" onClick={() => void cancelar(e)} aria-label={`Cancelar el envío a ${e.contacto.nombre} por ${e.canal === "correo" ? "correo" : "WhatsApp"}`}>
+                            Cancelar
+                          </button>
+                        )}
                       </span>
                     </li>
                   );
@@ -649,6 +672,7 @@ function AvancePublicacion({ informeId, version: v }: { informeId: string; versi
         )}
       </ol>
       {fallo && <Aviso tono="error">No se pudo preparar la descarga. Intente de nuevo.</Aviso>}
+      {errorEnvio && <Aviso tono="error">{errorEnvio}</Aviso>}
     </section>
   );
 }

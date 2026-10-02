@@ -60,3 +60,15 @@ export function useComentar(id: string) {
     onSuccess: () => refrescar(id),
   });
 }
+
+/** Su autor corrige un comentario (ADR-0035): lo edita, lo retira o lo restaura con "Deshacer". */
+export function useCorregirComentario(id: string) {
+  const refrescar = useRefrescar();
+  return useMutation({
+    mutationFn: ({ comentarioId, accion }: { comentarioId: string; accion: { tipo: "editar"; texto: string } | { tipo: "retirar" | "restaurar" } }) =>
+      accion.tipo === "editar"
+        ? cliente.llamar("editarComentario", { parametros: { id, comentarioId }, cuerpo: { texto: accion.texto } })
+        : cliente.llamar(accion.tipo === "retirar" ? "retirarComentario" : "restaurarComentario", { parametros: { id, comentarioId } }),
+    onSuccess: () => refrescar(id),
+  });
+}
