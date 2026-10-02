@@ -70,11 +70,26 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await expect(historial.getByText("Historial íntegro")).toBeVisible();
 
   await a.getByRole("button", { name: "Comentar potencia nominal" }).click();
-  await a.getByRole("textbox", { name: "Nuevo comentario" }).fill("Revisa la placa: la potencia estaba mal");
+  await a.getByRole("textbox", { name: "Nuevo comentario" }).fill("Revisa la placa: la potencia esta mal");
   // Se escribe debajo de la fila: el primer "Enviar comentario" es el de esa fila.
   await a.getByRole("button", { name: "Enviar comentario" }).first().click();
   await a.getByRole("tab", { name: /^Comentarios/ }).click();
-  await expect(a.getByRole("region", { name: "Comentarios al técnico" }).getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();
+  const comentarios = a.getByRole("region", { name: "Comentarios al técnico" });
+  await expect(comentarios.getByText("Revisa la placa: la potencia esta mal")).toBeVisible();
+
+  // Su autora lo corrige (ADR-0035): editar deja la hora; borrar no pregunta, queda "Comentario retirado" con "Deshacer".
+  await comentarios.getByRole("button", { name: "Más acciones para el comentario" }).click();
+  await a.getByRole("menuitem", { name: "Editar" }).click();
+  await comentarios.getByRole("textbox", { name: "Comentario", exact: true }).fill("Revisa la placa: la potencia estaba mal");
+  await comentarios.getByRole("button", { name: "Guardar" }).click();
+  await expect(comentarios.getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();
+  await expect(comentarios.getByText(/^Editado /)).toBeVisible();
+  await a.getByRole("textbox", { name: "Comentario general" }).fill("Comentario equivocado (E2E)");
+  await comentarios.getByRole("button", { name: "Enviar comentario" }).click();
+  await comentarios.locator(".nota-c").filter({ hasText: "Comentario equivocado (E2E)" }).getByRole("button", { name: "Más acciones para el comentario" }).click();
+  await a.getByRole("menuitem", { name: "Borrar" }).click();
+  await expect(comentarios.getByText(`Comentario retirado por ${ana.nombre}`, { exact: false })).toBeVisible();
+  await expect(a.getByRole("tab", { name: "Comentarios · 1" })).toBeVisible();
 
   // Luis se lleva la revisión pidiéndolo; el guardado que Ana tenía en curso se rechaza y se avisa (QA-25).
   await a.getByRole("button", { name: "Corregir descripción del sitio" }).click();
