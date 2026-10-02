@@ -225,6 +225,13 @@
       "when": 1790879694157,
       "tag": "0031_paginas_de_planos",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790956549255,
+      "tag": "0032_correcciones",
+      "breakpoints": true
     }
   ]
 }

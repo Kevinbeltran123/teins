@@ -76,6 +76,9 @@ export async function comentariosDe(tx: TxOrganizacion, ids: readonly string[]) 
       seccion: comentarios.seccion,
       campo: comentarios.campo,
       creadoEn: comentarios.creadoEn,
+      editadoEn: comentarios.editadoEn,
+      retiradoEn: comentarios.retiradoEn,
+      retiradoPor: comentarios.retiradoPor,
     })
     .from(comentarios)
     .where(inArray(comentarios.levantamientoId, [...ids]))
@@ -89,7 +92,8 @@ export async function estadosDe(tx: TxOrganizacion, ids: readonly string[], tecn
     .select({ id: levantamientos.id, estado: levantamientos.estado, recibidoEn: levantamientos.recibidoEn })
     .from(levantamientos)
     .where(and(inArray(levantamientos.id, [...ids]), eq(levantamientos.tecnicoId, tecnicoId)));
-  const porLevantamiento = Map.groupBy(await comentariosDe(tx, filas.map((f) => f.id)), (c) => c.levantamientoId);
+  // Lo retirado no le llega al técnico (ADR-0035).
+  const porLevantamiento = Map.groupBy((await comentariosDe(tx, filas.map((f) => f.id))).filter((c) => !c.retiradoEn), (c) => c.levantamientoId);
   return filas.map((f) => ({ ...f, estado: f.estado as EstadoRevision, comentarios: porLevantamiento.get(f.id) ?? [] }));
 }
 

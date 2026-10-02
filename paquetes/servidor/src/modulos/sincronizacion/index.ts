@@ -88,6 +88,7 @@ export async function armarBajada(tx: TxOrganizacion, deps: Omit<Dependencias, "
           ...(c.campo ? { campo: c.campo } : {}),
           autor: nombres.get(c.autorId) ?? "Oficina",
           creadoEn: c.creadoEn.toISOString(),
+          ...(c.editadoEn ? { editadoEn: c.editadoEn.toISOString() } : {}),
         })),
       });
     }

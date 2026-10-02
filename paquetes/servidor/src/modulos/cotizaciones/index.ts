@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { nombreDelPdfDeCotizacion, piePaginaCotizacion, plantillaCotizacion } from "@teins/documentos";
 import { calcularTotales, lineasDesdeCantidades, numeroDeCotizacion, validarCotizacion, type BorradorCotizacion, type LineaDeCotizacion } from "@teins/dominio";
@@ -10,10 +10,11 @@ import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
 import { fuenteIncrustada, imprimirPdf } from "../../plataforma/pdf";
 import { politicas } from "../../plataforma/politicas";
+import type { Actor } from "../../plataforma/actor";
 import { registrarOperacion } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
 import type { Catalogo } from "../catalogo";
-import { enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeCotizacion } from "../envios";
+import { cancelarEnvio, cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, reanudarEnvio, versionesConEnvioSinEntregar, type MensajeDeCotizacion } from "../envios";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
 import type { Visitas } from "../visitas";
@@ -171,7 +172,13 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
     pdf: v.pdfEstado,
     total: v.total,
     envios: envios.get(v.id) ?? [],
+    retirada: v.retiradaEn
+      ? { en: v.retiradaEn.toISOString(), por: { id: v.retiradaPor ?? "", nombre: nombres.get(v.retiradaPor ?? "") ?? SIN_NOMBRE }, motivo: v.motivoRetiro ?? "" }
+      : null,
   });
+
+  /** Quienes aparecen en una versión: quien la publicó y quien la retiró. */
+  const personasDe = (v: FilaVersion) => [v.publicadaPor, ...(v.retiradaPor ? [v.retiradaPor] : [])];
 
   /** Lo que dice el correo o el WhatsApp, de la copia congelada: el mismo nombre que el PDF adjunto. */
   const mensajeDe = (c: ContenidoCotizacion): MensajeDeCotizacion => ({
@@ -185,8 +192,8 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
   });
 
   async function versionConEnvios(tx: TxOrganizacion, organizacionId: string, v: FilaVersion) {
-    const envios = await enviosDeVersiones(tx, [v.id]);
-    const nombres = await identidad.nombres(organizacionId, [v.publicadaPor], tx);
+    const envios = await enviosDeVersiones(tx, [v.id], (ids) => identidad.nombres(organizacionId, ids, tx));
+    const nombres = await identidad.nombres(organizacionId, personasDe(v), tx);
     return comoVersion(v, nombres, envios);
   }
 
@@ -199,7 +206,12 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const filas = await tx.select().from(cotizaciones).orderBy(desc(cotizaciones.creadaEn));
             const ultimas = new Map<string, FilaVersion>();
-            for (const v of await versionesDe(tx, filas.map((f) => f.id))) if (!ultimas.has(v.cotizacionId)) ultimas.set(v.cotizacionId, v);
+            const conVersiones = new Set<string>();
+            // La vigente es la más reciente sin retirar (ADR-0034).
+            for (const v of await versionesDe(tx, filas.map((f) => f.id))) {
+              conVersiones.add(v.cotizacionId);
+              if (!ultimas.has(v.cotizacionId) && !v.retiradaEn) ultimas.set(v.cotizacionId, v);
+            }
             const sinEntregar = await versionesConEnvioSinEntregar(tx, [...ultimas.values()].map((v) => v.id));
             const resumenes = await visitas.resumenes(tx, [...new Set(filas.map((f) => f.visitaId))]);
             return {
@@ -215,6 +227,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
                         vigente: vigente?.numero ?? null,
                         total: vigente?.total ?? null,
                         envioSinEntregar: vigente ? sinEntregar.has(vigente.id) : false,
+                        todasRetiradas: !vigente && conVersiones.has(f.id),
                       },
                     ]
                   : [];
@@ -287,10 +300,10 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
           const r = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const c = await leer(tx, id);
             const versiones = await versionesDe(tx, [id]);
-            return { c, visita: (await visitas.resumenes(tx, [c.visitaId])).get(c.visitaId), versiones, envios: await enviosDeVersiones(tx, versiones.map((v) => v.id)) };
+            return { c, visita: (await visitas.resumenes(tx, [c.visitaId])).get(c.visitaId), versiones, envios: await enviosDeVersiones(tx, versiones.map((v) => v.id), (ids) => identidad.nombres(actor.organizacionId, ids, tx)) };
           });
           if (!r.visita) throw problema("no_encontrado", "La visita de la cotización no existe");
-          const nombres = await identidad.nombres(actor.organizacionId, [...new Set(r.versiones.map((v) => v.publicadaPor))]);
+          const nombres = await identidad.nombres(actor.organizacionId, [...new Set(r.versiones.flatMap(personasDe))]);
           return {
             id: r.c.id,
             numero: r.c.numero,
@@ -402,6 +415,8 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               // Bloquea la fila: si el PDF queda listo al mismo tiempo, uno espera al otro y ningún envío queda en cola sin salir.
               .for("update");
             if (!version) throw problema("no_encontrado", "La versión no existe");
+            // Retirada, ya no vale: no se vuelve a enviar (ADR-0034).
+            if (version.retiradaEn) throw problema("estado_invalido", "La versión está retirada: no se puede enviar");
             // Sin PDF no hay qué adjuntar, y nada lo vuelve a generar: el envío quedaría en cola para siempre.
             if (version.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
             const programados = await programarEnvios(tx, {
@@ -423,6 +438,60 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
             return versionConEnvios(tx, actor.organizacionId, version);
           }),
       });
+
+      registrarOperacion(app, "retirarVersionDeCotizacion", {
+        politica: politicas.administrador,
+        manejar: async ({ parametros: { id, numero }, cuerpo, actor, correlacion }) =>
+          enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            await leer(tx, id);
+            // Retirar es definitivo: la versión se conserva con su PDF y deja de valer (ADR-0034).
+            const [retirada] = await tx
+              .update(versionesCotizacion)
+              .set({ retiradaEn: new Date(), retiradaPor: actor.usuarioId, motivoRetiro: cuerpo.motivo })
+              .where(and(eq(versionesCotizacion.cotizacionId, id), eq(versionesCotizacion.numero, numero), isNull(versionesCotizacion.retiradaEn)))
+              .returning();
+            if (!retirada) {
+              const [existe] = await tx.select({ id: versionesCotizacion.id }).from(versionesCotizacion).where(and(eq(versionesCotizacion.cotizacionId, id), eq(versionesCotizacion.numero, numero)));
+              throw existe ? problema("estado_invalido", "La versión ya estaba retirada") : problema("no_encontrado", "La versión no existe");
+            }
+            // Lo que esperaba en cola ya no sale: la versión dejó de valer.
+            await cancelarEnviosDeVersion(tx, retirada.id);
+            await registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: "version_retirada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero }, motivo: cuerpo.motivo },
+            ]);
+            return versionConEnvios(tx, actor.organizacionId, retirada);
+          }),
+      });
+
+      /** Cancelar o reanudar un envío en cola (ADR-0034), con la versión bloqueada como al enviar. */
+      const corregirEnvio = (accion: "cancelar" | "reanudar") =>
+        async ({ parametros: { id, numero, envio }, actor, correlacion }: { parametros: { id: string; numero: number; envio: string }; actor: Actor; correlacion: string }) =>
+          enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            await leer(tx, id);
+            const [version] = await tx
+              .select()
+              .from(versionesCotizacion)
+              .where(and(eq(versionesCotizacion.cotizacionId, id), eq(versionesCotizacion.numero, numero)))
+              .for("update");
+            if (!version) throw problema("no_encontrado", "La versión no existe");
+            if (accion === "cancelar") {
+              const resultado = await cancelarEnvio(tx, { versionId: version.id, envioId: envio, por: actor.usuarioId });
+              if (resultado === "no_existe") throw problema("no_encontrado", "El envío no existe");
+              if (resultado === "ya_salio") throw problema("estado_invalido", "El envío ya salió: lo enviado no se recupera");
+              if (resultado === "ya_cancelado") throw problema("estado_invalido", "El envío ya estaba cancelado");
+            } else {
+              if (version.retiradaEn) throw problema("estado_invalido", "La versión está retirada: no se puede reanudar el envío");
+              if (version.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
+              const pdfRuta = version.pdfEstado === "listo" && version.pdfHuella ? claveDeObjeto(actor.organizacionId, version.pdfHuella) : undefined;
+              if (!(await reanudarEnvio(tx, { organizacionId: actor.organizacionId, versionId: version.id, envioId: envio, pdfRuta }))) throw problema("estado_invalido", "El envío no estaba cancelado");
+            }
+            await registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: accion === "cancelar" ? "envio_cancelado" : "envio_reanudado", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, envio } },
+            ]);
+            return versionConEnvios(tx, actor.organizacionId, version);
+          });
+      registrarOperacion(app, "cancelarEnvioDeCotizacion", { politica: politicas.oficina, manejar: corregirEnvio("cancelar") });
+      registrarOperacion(app, "reanudarEnvioDeCotizacion", { politica: politicas.oficina, manejar: corregirEnvio("reanudar") });
     },
   };
 }

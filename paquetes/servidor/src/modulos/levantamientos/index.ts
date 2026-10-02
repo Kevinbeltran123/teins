@@ -6,6 +6,7 @@ import { enOrganizacion } from "../../plataforma/base-de-datos";
 import { contieneTexto } from "../../plataforma/busqueda";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
+import type { Actor } from "../../plataforma/actor";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Archivos } from "../archivos";
 import type { Catalogo } from "../catalogo";
@@ -16,7 +17,7 @@ import type { Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Visitas } from "../visitas";
 import { recibirEnvio, type DependenciasEnvio } from "./aplicacion/recibir-envio";
-import { comentar, corregirCampos, marcar, tomar, vincular, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
+import { comentar, corregirCampos, corregirComentario, marcar, tomar, vincular, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
 import { cantidadesRevisadas, comentariosDe, conteosPorVisita, detalle, deVisita, estadosDe, lineasDeVisita, paginaPorEstado, vinculosDe, type ConteoDeVisita, type LineaRevisadaDeVisita } from "./consultas";
 
 export type { LineaRevisadaDeVisita } from "./consultas";
@@ -30,6 +31,7 @@ export interface ComentarioParaElTecnico {
   seccion: string | null;
   campo: string | null;
   creadoEn: Date;
+  editadoEn: Date | null;
 }
 
 export interface EstadoParaElTecnico {
@@ -173,7 +175,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
           });
           if (!resultado) throw problema("no_encontrado");
           const { fila, definicion, visita, comentarios, vinculos } = resultado;
-          const persona = await personas(actor.organizacionId, [fila.tecnicoId, fila.revisorId, ...comentarios.map((c) => c.autorId)]);
+          const persona = await personas(actor.organizacionId, [fila.tecnicoId, fila.revisorId, ...comentarios.flatMap((c) => [c.autorId, ...(c.retiradoPor ? [c.retiradoPor] : [])])]);
           return {
             id: fila.id,
             formato: fila.formato,
@@ -200,6 +202,8 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
               ...(c.campo ? { campo: c.campo } : {}),
               autor: persona(c.autorId)!,
               creadoEn: c.creadoEn.toISOString(),
+              editadoEn: c.editadoEn?.toISOString() ?? null,
+              retirado: c.retiradoEn ? { en: c.retiradoEn.toISOString(), por: persona(c.retiradoPor)! } : null,
             })),
           };
         },
@@ -295,6 +299,25 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
           };
         },
       });
+
+      const corregir = (accion: "editar" | "retirar" | "restaurar") =>
+        async ({ parametros: { id, comentarioId }, cuerpo, actor, correlacion }: { parametros: { id: string; comentarioId: string }; cuerpo?: { texto: string } | undefined; actor: Actor; correlacion: string }) => {
+          const c = await corregirComentario(revision, actor, id, comentarioId, accion === "editar" ? { tipo: "editar", texto: cuerpo!.texto } : { tipo: accion }, correlacion);
+          const persona = await personas(actor.organizacionId, [c.autorId, ...(c.retiradoPor ? [c.retiradoPor] : [])]);
+          return {
+            id: c.id,
+            texto: c.texto,
+            ...(c.seccion ? { seccion: c.seccion } : {}),
+            ...(c.campo ? { campo: c.campo } : {}),
+            autor: persona(c.autorId)!,
+            creadoEn: c.creadoEn.toISOString(),
+            editadoEn: c.editadoEn?.toISOString() ?? null,
+            retirado: c.retiradoEn ? { en: c.retiradoEn.toISOString(), por: persona(c.retiradoPor)! } : null,
+          };
+        };
+      registrarOperacion(app, "editarComentario", { politica: politicas.oficina, manejar: corregir("editar") });
+      registrarOperacion(app, "retirarComentario", { politica: politicas.oficina, manejar: corregir("retirar") });
+      registrarOperacion(app, "restaurarComentario", { politica: politicas.oficina, manejar: corregir("restaurar") });
 
       registrarOperacion(app, "historialLevantamiento", {
         politica: politicas.oficina,

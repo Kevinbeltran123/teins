@@ -40,6 +40,13 @@ export type ConteosPorVisita = (tx: TxOrganizacion, visitaIds: readonly string[]
 
 export type Vista = "proximas" | "anteriores" | "canceladas";
 
+export interface VisitaPorHacer {
+  id: string;
+  programadaPara: string;
+  sitioId: string;
+  tecnicos: string[];
+}
+
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 /** Las vistas de historia muestran las más recientes; la agenda (próximas) va completa. */
 const LIMITE_HISTORIA = 100;
@@ -55,6 +62,8 @@ export interface Visitas {
   /** Cancela: sale de los teléfonos; lo empezado se conserva y se puede enviar (regla 17). */
   cancelar(tx: TxOrganizacion, datos: Contexto & { visitaId: string; version: number; motivo: string }): Promise<void>;
   existe(tx: TxOrganizacion, id: string): Promise<boolean>;
+  /** Visitas sin cancelar desde `hoy` de un cliente: mientras haya, ni él ni esos sitios se archivan (ADR-0035). */
+  porHacer(tx: TxOrganizacion, clienteId: string, hoy: string): Promise<VisitaPorHacer[]>;
   /** Visitas que siguen asignadas al técnico y sin cancelar; las demás no aparecen. */
   asignadas(tx: TxOrganizacion, ids: readonly string[], tecnicoId: string): Promise<Map<string, VisitaAsignada>>;
   /** Cuáles de estas visitas están canceladas: la bajada le dice al teléfono por qué salen. */
@@ -91,6 +100,8 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       if (!motivo.trim()) throw problema("entrada_invalida", "La visita necesita un motivo");
       const sitio = (await clientes.sitios(tx, [sitioId])).get(sitioId);
       if (!sitio || sitio.clienteId !== clienteId) throw problema("entrada_invalida", "El sitio no pertenece al cliente");
+      // A lo archivado ya no se le programa (ADR-0035): primero se recupera.
+      if (sitio.archivado) throw problema("estado_invalido", "El cliente o el sitio están archivados: recupérelos para programarles una visita");
       const unicos = [...new Set(tecnicos)];
       const id = randomUUID();
       await tx.insert(visitas).values({ id, organizacionId, clienteId, sitioId, motivo: motivo.trim(), programadaPara, tecnicos: unicos });
@@ -163,6 +174,14 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       await registrar(tx, [{ organizacionId, agregadoTipo: "visita", agregadoId: visitaId, tipoEvento: "visita_cancelada", autorId, correlacion, motivo: motivo.trim() }]);
       await avisarPush(tx, { tipo: "visita_cancelada", organizacionId, tecnicos: actual.tecnicos, visitaId, programadaPara: actual.programadaPara });
       await registrarCambios(tx, avisar(organizacionId, visitaId, actual.tecnicos, "fuera_de_alcance"));
+    },
+
+    async porHacer(tx, clienteId, hoy) {
+      return tx
+        .select({ id: visitas.id, programadaPara: visitas.programadaPara, sitioId: visitas.sitioId, tecnicos: visitas.tecnicos })
+        .from(visitas)
+        .where(and(eq(visitas.clienteId, clienteId), isNull(visitas.canceladaEn), gte(visitas.programadaPara, hoy)))
+        .orderBy(asc(visitas.programadaPara));
     },
 
     async existe(tx, id) {

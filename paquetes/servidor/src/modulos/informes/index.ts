@@ -10,10 +10,11 @@ import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } 
 import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
+import type { Actor } from "../../plataforma/actor";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Archivos } from "../archivos";
 import { registrar } from "../auditoria";
-import { cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeInforme } from "../envios";
+import { cancelarEnvio, cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, reanudarEnvio, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeInforme } from "../envios";
 import type { Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
@@ -287,7 +288,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               if (!nombresDeFormato.has(k)) nombresDeFormato.set(k, (await formatos.obtener(tx, l.formato, l.versionFormato))?.nombre ?? l.formato);
             }
             const versiones = await versionesDe(tx, id);
-            return { informe, visita, lista, nombresDeFormato, versiones, clienteId: await visitas.clienteDe(tx, informe.visitaId), envios: await enviosDeVersiones(tx, versiones.map((v) => v.id)) };
+            return { informe, visita, lista, nombresDeFormato, versiones, clienteId: await visitas.clienteDe(tx, informe.visitaId), envios: await enviosDeVersiones(tx, versiones.map((v) => v.id), (ids) => identidad.nombres(actor.organizacionId, ids, tx)) };
           });
           if (!r.visita) throw problema("no_encontrado", "La visita del informe no existe");
           const nombres = await identidad.nombres(actor.organizacionId, [
@@ -460,7 +461,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "version_retirada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero }, motivo: cuerpo.motivo },
             ]);
             const retirada = (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
-            return { ...retirada, envios: (await enviosDeVersiones(tx, [retirada.id])).get(retirada.id) };
+            return { ...retirada, envios: (await enviosDeVersiones(tx, [retirada.id], (ids) => identidad.nombres(actor.organizacionId, ids, tx))).get(retirada.id) };
           });
           const nombres = await identidad.nombres(actor.organizacionId, [version.publicadaPor, actor.usuarioId]);
           return comoVersion(version, nombres, version.envios);
@@ -499,12 +500,49 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               ]);
             }
             const actual = (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
-            return { ...actual, envios: (await enviosDeVersiones(tx, [actual.id])).get(actual.id) };
+            return { ...actual, envios: (await enviosDeVersiones(tx, [actual.id], (ids) => identidad.nombres(actor.organizacionId, ids, tx))).get(actual.id) };
           });
           const nombres = await identidad.nombres(actor.organizacionId, [version.publicadaPor, ...(version.retiradaPor ? [version.retiradaPor] : [])]);
           return comoVersion(version, nombres, version.envios);
         },
       });
+
+      /**
+       * Cancelar o reanudar un envío en cola (ADR-0034). La versión queda bloqueada, como al enviar: si el PDF queda
+       * listo al mismo tiempo, uno espera al otro y lo reanudado sale con él.
+       */
+      const corregirEnvio = (accion: "cancelar" | "reanudar") =>
+        async ({ parametros: { id, numero, envio }, actor, correlacion }: { parametros: { id: string; numero: number; envio: string }; actor: Actor; correlacion: string }) => {
+          const version = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const [fila] = await tx
+              .select()
+              .from(versionesPublicadas)
+              .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero)))
+              .for("update");
+            if (!fila) throw problema("no_encontrado", "La versión no existe");
+            if (accion === "cancelar") {
+              const resultado = await cancelarEnvio(tx, { versionId: fila.id, envioId: envio, por: actor.usuarioId });
+              if (resultado === "no_existe") throw problema("no_encontrado", "El envío no existe");
+              if (resultado === "ya_salio") throw problema("estado_invalido", "El envío ya salió: lo enviado no se recupera");
+              if (resultado === "ya_cancelado") throw problema("estado_invalido", "El envío ya estaba cancelado");
+            } else {
+              // Lo retirado no se vuelve a entregar (regla 10), y sin PDF no hay qué adjuntar.
+              if (fila.retiradaEn) throw problema("estado_invalido", "La versión está retirada del portal: no se puede reanudar el envío");
+              if (fila.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
+              const pdfRuta = fila.pdfEstado === "listo" && fila.pdfHuella ? claveDeObjeto(actor.organizacionId, fila.pdfHuella) : undefined;
+              if (!(await reanudarEnvio(tx, { organizacionId: actor.organizacionId, versionId: fila.id, envioId: envio, pdfRuta }))) throw problema("estado_invalido", "El envío no estaba cancelado");
+            }
+            await registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: accion === "cancelar" ? "envio_cancelado" : "envio_reanudado", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, envio } },
+            ]);
+            const actual = (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
+            return { ...actual, envios: (await enviosDeVersiones(tx, [actual.id], (ids) => identidad.nombres(actor.organizacionId, ids, tx))).get(actual.id) };
+          });
+          const nombres = await identidad.nombres(actor.organizacionId, [version.publicadaPor, ...(version.retiradaPor ? [version.retiradaPor] : [])]);
+          return comoVersion(version, nombres, version.envios);
+        };
+      registrarOperacion(app, "cancelarEnvio", { politica: politicas.oficina, manejar: corregirEnvio("cancelar") });
+      registrarOperacion(app, "reanudarEnvio", { politica: politicas.oficina, manejar: corregirEnvio("reanudar") });
 
       registrarOperacion(app, "pdfDeVersion", {
         politica: politicas.oficina,

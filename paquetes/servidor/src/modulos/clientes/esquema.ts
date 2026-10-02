@@ -3,7 +3,10 @@ import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../..
 
 export const esquemaClientes = pgSchema("clientes");
 
-/** Datos mínimos del cliente (regla 18, minimización): lo que el técnico necesita para llegar. */
+/**
+ * Datos mínimos del cliente (regla 18, minimización): lo que el técnico necesita para llegar. Se corrige el
+ * nombre (queda quién y cuándo) y se archiva en vez de borrarse (ADR-0035): lo publicado conserva el suyo.
+ */
 export const clientes = esquemaClientes.table(
   "clientes",
   {
@@ -11,6 +14,10 @@ export const clientes = esquemaClientes.table(
     organizacionId: organizacionId(),
     nombre: text("nombre").notNull(),
     creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
+    editadoPor: text("editado_por"),
+    editadoEn: marcaDeTiempo("editado_en"),
+    archivadoPor: text("archivado_por"),
+    archivadoEn: marcaDeTiempo("archivado_en"),
   },
   () => [aislamientoPorOrganizacion("clientes")],
 ).enableRLS();
@@ -26,6 +33,8 @@ export const sitios = esquemaClientes.table(
     nombre: text("nombre").notNull(),
     direccion: text("direccion").notNull(),
     creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
+    archivadoPor: text("archivado_por"),
+    archivadoEn: marcaDeTiempo("archivado_en"),
   },
   (t) => [index("sitios_cliente_idx").on(t.clienteId), aislamientoPorOrganizacion("sitios")],
 ).enableRLS();

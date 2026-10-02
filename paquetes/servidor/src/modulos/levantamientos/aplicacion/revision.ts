@@ -3,7 +3,7 @@ import { bloqueDe, corregir, marcarRevisado, puedeEditar, tomarRevision, type Es
 import type { Actor } from "../../../plataforma/actor";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../../plataforma/base-de-datos";
 import { problema } from "../../../plataforma/errores";
-import type { Avisar, LevantamientoEnRevision, PuertoCatalogo, PuertoFormatos, RegistrarAuditoria, RegistrarCambios, RepositorioRevision } from "./puertos";
+import type { Avisar, ComentarioGuardado, LevantamientoEnRevision, PuertoCatalogo, PuertoFormatos, RegistrarAuditoria, RegistrarCambios, RepositorioRevision } from "./puertos";
 
 export interface DependenciasRevision {
   bd: BaseDeDatos;
@@ -164,6 +164,53 @@ export interface ComentarioCreado {
   seccion: string | null;
   campo: string | null;
   creadoEn: Date;
+}
+
+/**
+ * Corregir un comentario (ADR-0035): solo su autor y mientras el levantamiento no esté Revisado, porque revisado es lo
+ * que el técnico recibió con la revisión. Retirar es anular: la fila queda y el técnico deja de verlo; restaurar lo
+ * devuelve ("Deshacer"). El técnico ve la última versión en la siguiente bajada.
+ */
+export function corregirComentario(
+  deps: DependenciasRevision,
+  actor: Actor,
+  id: string,
+  comentarioId: string,
+  accion: { tipo: "editar"; texto: string } | { tipo: "retirar" } | { tipo: "restaurar" },
+  correlacion: string,
+): Promise<ComentarioGuardado> {
+  return enOrganizacion(deps.bd, actor.organizacionId, async (tx) => {
+    const actual = await deps.repositorio.obtener(tx, id);
+    if (!actual) throw problema("no_encontrado");
+    const comentario = await deps.repositorio.comentario(tx, id, comentarioId);
+    if (!comentario) throw problema("no_encontrado", "El comentario no existe");
+    if (comentario.autorId !== actor.usuarioId) throw problema("sin_permiso", "Solo quien escribió el comentario lo corrige");
+    if (actual.estado === "revisado") throw problema("estado_invalido", "El levantamiento ya está revisado: sus comentarios ya no se corrigen");
+    const en = ahora(deps);
+    let cambios: Parameters<RepositorioRevision["corregirComentario"]>[2];
+    if (accion.tipo === "editar") {
+      if (comentario.retiradoEn) throw problema("estado_invalido", "El comentario está retirado: restáurelo para editarlo");
+      if (accion.texto === comentario.texto) return comentario;
+      cambios = { texto: accion.texto, editadoEn: en };
+    } else if (accion.tipo === "retirar") {
+      if (comentario.retiradoEn) throw problema("estado_invalido", "El comentario ya estaba retirado");
+      cambios = { retiradoEn: en, retiradoPor: actor.usuarioId };
+    } else {
+      if (!comentario.retiradoEn) throw problema("estado_invalido", "El comentario no estaba retirado");
+      cambios = { retiradoEn: null, retiradoPor: null };
+    }
+    await deps.repositorio.corregirComentario(tx, comentarioId, cambios);
+    await deps.registrarAuditoria(tx, [
+      {
+        ...comun(actor, id, correlacion),
+        tipoEvento: accion.tipo === "editar" ? "comentario_editado" : accion.tipo === "retirar" ? "comentario_retirado" : "comentario_restaurado",
+        ...(comentario.seccion ? { rutaCampo: comentario.campo ? `${comentario.seccion}.${comentario.campo}` : comentario.seccion } : {}),
+        ...(accion.tipo === "editar" ? { valorAnterior: { id: comentarioId, texto: comentario.texto }, valorNuevo: { id: comentarioId, texto: accion.texto } } : { valorNuevo: { id: comentarioId } }),
+      },
+    ]);
+    await avisarAlTecnico(deps, tx, actor, actual);
+    return { ...comentario, ...cambios };
+  });
 }
 
 /** Cualquier persona de oficina comenta; el comentario no modifica datos ni la versión. */

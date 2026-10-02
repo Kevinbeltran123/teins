@@ -115,6 +115,17 @@ export const repositorioRevision: RepositorioRevision = {
   async agregarComentario(tx, comentario) {
     await tx.insert(comentarios).values(comentario);
   },
+  async comentario(tx, levantamientoId, comentarioId) {
+    const [fila] = await tx
+      .select()
+      .from(comentarios)
+      .where(and(eq(comentarios.id, comentarioId), eq(comentarios.levantamientoId, levantamientoId)))
+      .for("update");
+    return fila;
+  },
+  async corregirComentario(tx, comentarioId, cambios) {
+    await tx.update(comentarios).set(cambios).where(eq(comentarios.id, comentarioId));
+  },
   proyectarCantidades,
   async vincularLinea(tx, { levantamientoId, seccion, campo, linea, itemId, autorId, en }) {
     const donde = and(

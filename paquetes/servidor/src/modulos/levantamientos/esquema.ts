@@ -61,8 +61,9 @@ export const comandosProcesados = esquemaLevantamientos.table(
 ).enableRLS();
 
 /**
- * Comentarios de oficina al técnico (modelo de dominio: no modifican datos). La aplicación solo
- * inserta y lee; bajan al técnico con el estado de su levantamiento.
+ * Comentarios de oficina al técnico (modelo de dominio: no modifican datos). Bajan al técnico con el estado de
+ * su levantamiento. Su autor los edita o los retira mientras no esté Revisado (ADR-0035): retirar es anular,
+ * la fila se conserva; la base solo deja cambiar esas columnas.
  */
 export const comentarios = esquemaLevantamientos.table(
   "comentarios",
@@ -77,6 +78,9 @@ export const comentarios = esquemaLevantamientos.table(
     seccion: text("seccion"),
     campo: text("campo"),
     creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
+    editadoEn: marcaDeTiempo("editado_en"),
+    retiradoEn: marcaDeTiempo("retirado_en"),
+    retiradoPor: text("retirado_por"),
   },
   (t) => [index("comentarios_levantamiento_idx").on(t.levantamientoId, t.creadoEn), aislamientoPorOrganizacion("comentarios")],
 ).enableRLS();

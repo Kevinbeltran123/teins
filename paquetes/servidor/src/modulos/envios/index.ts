@@ -78,6 +78,38 @@ export async function cancelarEnviosDeVersion(tx: TxOrganizacion, versionId: str
     .where(and(eq(envios.versionId, versionId), eq(envios.estado, "en_cola")));
 }
 
+/**
+ * Cancelar un envío que espera en cola (ADR-0034). Solo si todavía no empezó a salir: el worker marca la salida
+ * (`enviadoEn`) con un UPDATE condicionado al mismo estado, así que entre cancelar y salir gana el que llega primero a
+ * la fila y un cancelado nunca sale. Devuelve qué pasó para que quien llama lo diga.
+ */
+export async function cancelarEnvio(tx: TxOrganizacion, { versionId, envioId, por }: { versionId: string; envioId: string; por: string }): Promise<"cancelado" | "ya_salio" | "ya_cancelado" | "no_existe"> {
+  const [cancelado] = await tx
+    .update(envios)
+    .set({ estado: "cancelado", canceladoPor: por, canceladoEn: new Date(), actualizadoEn: new Date() })
+    .where(and(eq(envios.id, envioId), eq(envios.versionId, versionId), eq(envios.estado, "en_cola"), isNull(envios.enviadoEn)))
+    .returning({ id: envios.id });
+  if (cancelado) return "cancelado";
+  const [fila] = await tx.select({ estado: envios.estado }).from(envios).where(and(eq(envios.id, envioId), eq(envios.versionId, versionId)));
+  if (!fila) return "no_existe";
+  return fila.estado === "cancelado" ? "ya_cancelado" : "ya_salio";
+}
+
+/**
+ * Deshacer la cancelación: vuelve a "En cola" y, si el PDF ya está listo (`pdfRuta`), sale de nuevo por el mismo
+ * trabajo, con su misma llave. Solo un cancelado se reanuda.
+ */
+export async function reanudarEnvio(tx: TxOrganizacion, { organizacionId, versionId, envioId, pdfRuta }: { organizacionId: string; versionId: string; envioId: string; pdfRuta: string | undefined }): Promise<boolean> {
+  const [reanudado] = await tx
+    .update(envios)
+    .set({ estado: "en_cola", canceladoPor: null, canceladoEn: null, actualizadoEn: new Date() })
+    .where(and(eq(envios.id, envioId), eq(envios.versionId, versionId), eq(envios.estado, "cancelado")))
+    .returning({ id: envios.id });
+  if (!reanudado) return false;
+  if (pdfRuta) await encolarEnvio(tx, { organizacionId, envioId, pdfRuta });
+  return true;
+}
+
 /** El proveedor lo aceptó o lo entregó: vale para uno en cola y para uno que el retiro alcanzó cuando ya salía. */
 const puedeSalir = or(eq(envios.estado, "en_cola"), and(eq(envios.estado, "fallido"), eq(envios.error, RETIRADA_ANTES_DE_SALIR)));
 
@@ -89,7 +121,10 @@ export async function fallarEnviosDeVersion(tx: TxOrganizacion, versionId: strin
 
 const encolarEnvio = (tx: TxOrganizacion, datos: Trabajos["envios.enviar"]) => encolar(tx, "envios.enviar", datos, { llave: `envios.enviar:${datos.envioId}`, intentosMaximos: 5 });
 
-const comoEnvio = (f: Pick<FilaEnvio, "id" | "contactoId" | "contactoNombre" | "canal" | "destino" | "estado" | "error" | "creadoEn" | "enviadoEn">): EnvioDeVersion => ({
+const comoEnvio = (
+  f: Pick<FilaEnvio, "id" | "contactoId" | "contactoNombre" | "canal" | "destino" | "estado" | "error" | "creadoEn" | "enviadoEn" | "canceladoPor" | "canceladoEn">,
+  nombres: Map<string, string>,
+): EnvioDeVersion => ({
   id: f.id,
   contacto: { id: f.contactoId, nombre: f.contactoNombre },
   canal: f.canal,
@@ -98,14 +133,20 @@ const comoEnvio = (f: Pick<FilaEnvio, "id" | "contactoId" | "contactoNombre" | "
   error: f.error,
   creadoEn: f.creadoEn.toISOString(),
   enviadoEn: f.enviadoEn?.toISOString() ?? null,
+  cancelado: f.estado === "cancelado" && f.canceladoEn ? { en: f.canceladoEn.toISOString(), por: { id: f.canceladoPor ?? "", nombre: nombres.get(f.canceladoPor ?? "") ?? "[Usuario no disponible]" } } : null,
 });
 
+/** Nombres de las personas, para decir quién canceló un envío (los da la identidad, a través de quien llama). */
+export type NombresDePersonas = (ids: string[]) => Promise<Map<string, string>>;
+
 /** Envíos por versión, del más reciente al más antiguo. */
-export async function enviosDeVersiones(tx: TxOrganizacion, versionIds: readonly string[]): Promise<Map<string, EnvioDeVersion[]>> {
+export async function enviosDeVersiones(tx: TxOrganizacion, versionIds: readonly string[], nombres: NombresDePersonas): Promise<Map<string, EnvioDeVersion[]>> {
   const mapa = new Map<string, EnvioDeVersion[]>();
   if (versionIds.length === 0) return mapa;
   const filas = await tx.select().from(envios).where(inArray(envios.versionId, [...versionIds])).orderBy(desc(envios.creadoEn), envios.contactoNombre, envios.canal);
-  for (const f of filas) mapa.set(f.versionId, [...(mapa.get(f.versionId) ?? []), comoEnvio(f)]);
+  const quienes = [...new Set(filas.flatMap((f) => (f.estado === "cancelado" && f.canceladoPor ? [f.canceladoPor] : [])))];
+  const conNombre = quienes.length > 0 ? await nombres(quienes) : new Map<string, string>();
+  for (const f of filas) mapa.set(f.versionId, [...(mapa.get(f.versionId) ?? []), comoEnvio(f, conNombre)]);
   return mapa;
 }
 

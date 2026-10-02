@@ -51,6 +51,69 @@ describe("clientes y sitios (iteración 7)", () => {
   });
 });
 
+describe("corregir clientes y sitios (ADR-0035)", () => {
+  const vista = async (v: "activos" | "archivados") => ((await pedir(org.oficina.cookie, "GET", `/api/clientes?vista=${v}`)).json().clientes as { id: string; archivado: unknown }[]).map((c) => c.id);
+
+  it("el nombre se corrige con registro; lo publicado no cambia porque es una copia", async () => {
+    const cliente = await clienteConSitio("Clinica Santafe");
+    const r = await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}`, { nombre: "Clínica Santa Fe" });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(r.json()).toMatchObject({ nombre: "Clínica Santa Fe", editado: { por: { nombre: "Oficina de prueba" } } });
+    const sitio = await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios/${cliente.sitios[0]!.id}`, { nombre: "Sede Norte", direccion: "Calle [N] # [N]-[N]" });
+    expect(sitio.json().sitios[0]).toMatchObject({ nombre: "Sede Norte", archivado: null });
+    const { rows } = await s.propietario.pool.query(
+      "select tipo_evento, valor_anterior from auditoria.registros where agregado_tipo = 'cliente' and agregado_id = $1 and tipo_evento in ('cliente_editado', 'sitio_editado') order by secuencia",
+      [cliente.id],
+    );
+    expect(rows.map((x) => [x.tipo_evento, x.valor_anterior.nombre])).toEqual([["cliente_editado", "Clinica Santafe"], ["sitio_editado", "Sede principal"]]);
+    expect((await pedir(org.tecnico.cookie, "POST", `/api/clientes/${cliente.id}`, { nombre: "X" })).statusCode).toBe(403);
+  });
+
+  it("con visitas por hacer no se archiva; archivado sale de la lista, de programar y de los envíos, y se recupera", async () => {
+    const cliente = await clienteConSitio();
+    const visita = await programar(cliente, [org.tecnico.id], "2027-01-15");
+    const detalle = (await pedir(org.oficina.cookie, "GET", `/api/clientes/${cliente.id}`)).json();
+    expect(detalle.visitasPorHacer).toEqual([expect.objectContaining({ programadaPara: "2027-01-15", sitio: "Sede principal", tecnicos: ["Técnico de prueba"] })]);
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/archivar`)).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    expect((await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/cancelar`, { version: 1, motivo: "Se aplazó" })).statusCode).toBe(200);
+    const archivado = await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/archivar`);
+    expect(archivado.statusCode, archivado.body).toBe(200);
+    expect(archivado.json()).toMatchObject({ archivado: { por: { nombre: "Oficina de prueba" } }, visitasPorHacer: [] });
+    expect(await vista("activos")).not.toContain(cliente.id);
+    expect(await vista("archivados")).toContain(cliente.id);
+    // Ya no se le programa, ni se le agregan sitios, ni se corrige hasta recuperarlo.
+    const programada = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: "2027-02-01", tecnicos: [org.tecnico.id] });
+    expect(programada.json()).toMatchObject({ codigo: "estado_invalido" });
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios`, { nombre: "Bodega", direccion: "Carrera [N]" })).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    const recuperado = await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/recuperar`);
+    expect(recuperado.json()).toMatchObject({ archivado: null });
+    expect(await vista("activos")).toContain(cliente.id);
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/recuperar`)).json()).toMatchObject({ codigo: "estado_invalido" });
+  });
+
+  it("un sitio archivado no se programa; no se archiva el único sitio activo ni uno con visitas por hacer", async () => {
+    const cliente = await clienteConSitio();
+    const principal = cliente.sitios[0]!.id;
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios/${principal}/archivar`)).json()).toMatchObject({ codigo: "estado_invalido" });
+    const conBodega = (await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios`, { nombre: "Bodega", direccion: "Carrera [N]" })).json();
+    const bodega = conBodega.sitios.find((x: { nombre: string }) => x.nombre === "Bodega").id as string;
+    await programar({ id: cliente.id, sitios: [{ id: bodega }] }, [org.tecnico.id], "2027-03-01");
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios/${bodega}/archivar`)).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    const archivado = await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios/${principal}/archivar`);
+    expect(archivado.statusCode, archivado.body).toBe(200);
+    expect(archivado.json().sitios.find((x: { id: string }) => x.id === principal)).toMatchObject({ archivado: { por: { nombre: "Oficina de prueba" } } });
+    // En la lista (y en "Programar visita") solo quedan los activos.
+    const enLista = ((await pedir(org.oficina.cookie, "GET", "/api/clientes")).json().clientes as { id: string; sitios: { id: string }[] }[]).find((c) => c.id === cliente.id)!;
+    expect(enLista.sitios.map((x) => x.id)).toEqual([bodega]);
+    const programada = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: principal, motivo: "Mantenimiento", programadaPara: "2027-02-01", tecnicos: [org.tecnico.id] });
+    expect(programada.json()).toMatchObject({ codigo: "estado_invalido" });
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios/${principal}/recuperar`)).json().sitios.find((x: { id: string }) => x.id === principal)).toMatchObject({ archivado: null });
+  });
+});
+
 describe("pool de conexiones", () => {
   it("muchas consultas de visitas a la vez no agotan el pool: los nombres se leen en la misma transacción", async () => {
     await programar(await clienteConSitio(), [org.tecnico.id], "2026-10-05");

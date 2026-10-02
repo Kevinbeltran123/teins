@@ -349,6 +349,90 @@ describe("envío del informe al cliente (ADR-0028)", () => {
   }, 90_000);
 });
 
+describe("cancelar un envío en cola (ADR-0034)", () => {
+  const url = (informeId: string, envio: string, accion: "cancelar" | "reanudar") => `/api/informes/${informeId}/versiones/1/envios/${envio}/${accion}`;
+
+  it("un envío cancelado mientras espera el PDF nunca sale; queda quién lo canceló y se puede reanudar", async () => {
+    const { oficina, tecnico, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.cancelada@cliente.example" });
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [ana!.id] })).statusCode).toBe(201);
+    const [porWhatsapp, porCorreo] = [...(await enviosDe(oficina.cookie, informeId))].sort((a, b) => b.canal.localeCompare(a.canal));
+
+    // El técnico no corrige envíos; otro id no existe en esta versión.
+    expect((await post(tecnico.cookie, url(informeId, porCorreo!.id, "cancelar"))).statusCode).toBe(403);
+    expect((await post(oficina.cookie, url(informeId, randomUUID(), "cancelar"))).json()).toMatchObject({ codigo: "no_encontrado" });
+
+    const cancelado = await post(oficina.cookie, url(informeId, porCorreo!.id, "cancelar"));
+    expect(cancelado.statusCode, cancelado.body).toBe(200);
+    expect(cancelado.json().envios.find((e: { id: string }) => e.id === porCorreo!.id)).toMatchObject({ estado: "cancelado", cancelado: { por: { nombre: "Oficina de prueba" } } });
+    expect((await post(oficina.cookie, url(informeId, porCorreo!.id, "cancelar"))).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    expect(correos.some((c) => c.para === "ana.cancelada@cliente.example")).toBe(false);
+    expect(Object.fromEntries((await enviosDe(oficina.cookie, informeId)).map((e) => [e.canal, e.estado]))).toEqual({ correo: "cancelado", whatsapp: "enviado" });
+    // Lo que ya salió no se cancela: el WhatsApp se fue.
+    expect((await post(oficina.cookie, url(informeId, porWhatsapp!.id, "cancelar"))).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    // "Deshacer" con el PDF ya listo: vuelve a la cola y sale.
+    const reanudado = await post(oficina.cookie, url(informeId, porCorreo!.id, "reanudar"));
+    expect(reanudado.statusCode, reanudado.body).toBe(200);
+    expect(reanudado.json().envios.find((e: { id: string }) => e.id === porCorreo!.id)).toMatchObject({ estado: "en_cola", cancelado: null });
+    await s.procesarCola();
+    expect(correos.filter((c) => c.para === "ana.cancelada@cliente.example")).toHaveLength(1);
+    expect((await post(oficina.cookie, url(informeId, porCorreo!.id, "reanudar"))).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    const { rows } = await s.propietario.pool.query(
+      "select tipo_evento from auditoria.registros where organizacion_id = $1 and tipo_evento in ('envio_cancelado', 'envio_reanudado') order by secuencia",
+      [organizacionId],
+    );
+    expect(rows.map((r) => r.tipo_evento)).toEqual(["envio_cancelado", "envio_reanudado"]);
+  }, 90_000);
+
+  it("cancelar mientras la copia sale no la detiene: salió, y la app lo dice", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, recibeWhatsapp: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }] });
+    const [envio] = await enviosDe(oficina.cookie, informeId);
+
+    let cancelacion: unknown;
+    alSalir = async () => {
+      alSalir = undefined;
+      cancelacion = (await post(oficina.cookie, url(informeId, envio!.id, "cancelar"))).json();
+    };
+    await s.procesarCola();
+    expect(cancelacion).toMatchObject({ codigo: "estado_invalido" });
+    expect(await enviosDe(oficina.cookie, informeId)).toEqual([expect.objectContaining({ estado: "enviado" })]);
+  }, 90_000);
+
+  it("cancelado justo antes de que el worker lo tome, no sale aunque su trabajo ya esté en la cola", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.en.cola@cliente.example", recibeWhatsapp: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    // Con el PDF listo, enviar encola el trabajo de una vez; se cancela antes de que el worker corra.
+    await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }] });
+    const [envio] = await enviosDe(oficina.cookie, informeId);
+    expect((await post(oficina.cookie, url(informeId, envio!.id, "cancelar"))).statusCode).toBe(200);
+    await s.procesarCola();
+    expect(correos.some((c) => c.para === "ana.en.cola@cliente.example")).toBe(false);
+    expect((await enviosDe(oficina.cookie, informeId))[0]).toMatchObject({ estado: "cancelado" });
+  }, 90_000);
+
+  it("una versión retirada no reanuda sus envíos", async () => {
+    const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, recibeWhatsapp: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [ana!.id] });
+    const [envio] = await enviosDe(oficina.cookie, informeId);
+    expect((await post(oficina.cookie, url(informeId, envio!.id, "cancelar"))).statusCode).toBe(200);
+    const admin = await s.nuevoAdministrador(organizacionId);
+    expect((await post(admin.cookie, `/api/informes/${informeId}/versiones/1/retirar`, { motivo: "Tenía un error" })).statusCode).toBe(200);
+    expect((await post(oficina.cookie, url(informeId, envio!.id, "reanudar"))).json()).toMatchObject({ codigo: "estado_invalido" });
+  }, 90_000);
+});
+
 async function organizacionDe(informeId: string): Promise<string> {
   const { rows } = await s.propietario.pool.query("select organizacion_id from informes.informes where id = $1", [informeId]);
   return rows[0].organizacion_id;

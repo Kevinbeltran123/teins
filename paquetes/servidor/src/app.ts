@@ -172,7 +172,7 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   levantamientos.registrarRutas(app);
   sincronizacion.registrarRutas(app);
   informes.registrarRutas(app);
-  registrarRutasDeClientes(app, bd, identidad);
+  registrarRutasDeClientes(app, bd, identidad, (tx, clienteId) => visitas.porHacer(tx, clienteId, new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" })));
   // El rol web no envía (lo hace el worker): solo recibe los eventos firmados de los proveedores.
   crearEnvios({ bd, almacenamiento, config }).registrarRutas(app);
   crearCotizaciones({ bd, almacenamiento, config, levantamientos, visitas, catalogo, identidad }).registrarRutas(app);

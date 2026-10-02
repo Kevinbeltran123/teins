@@ -40,7 +40,10 @@ export const cotizaciones = esquemaCotizaciones.table(
 /** Copia congelada de lo que se publicó: el PDF y el envío leen solo esto. */
 export type { ContenidoCotizacion } from "@teins/documentos";
 
-/** Versión publicada: la base solo deja cambiar el estado de su PDF (permisos por columna). */
+/**
+ * Versión publicada: la base solo deja cambiar el estado de su PDF y retirarla (permisos por columna). Retirada,
+ * deja de ser la vigente y no se envía más; se conserva con su PDF (ADR-0034).
+ */
 export const versionesCotizacion = esquemaCotizaciones.table(
   "versiones",
   {
@@ -58,6 +61,9 @@ export const versionesCotizacion = esquemaCotizaciones.table(
     pdfHuella: text("pdf_huella"),
     pdfGeneradoEn: marcaDeTiempo("pdf_generado_en"),
     pdfError: text("pdf_error"),
+    retiradaEn: marcaDeTiempo("retirada_en"),
+    retiradaPor: text("retirada_por"),
+    motivoRetiro: text("motivo_retiro"),
   },
   (t) => [unique("versiones_numero_por_cotizacion").on(t.cotizacionId, t.numero), aislamientoPorOrganizacion("versiones")],
 ).enableRLS();

@@ -206,6 +206,52 @@ describe("revisión (QA-8, I-1)", () => {
   });
 });
 
+describe("corregir un comentario (ADR-0035)", () => {
+  const corregir = (cookie: string, id: string, comentarioId: string, accion = "", payload: object = {}) =>
+    app.inject({ method: "POST", url: `/api/levantamientos/${id}/comentarios/${comentarioId}${accion ? `/${accion}` : ""}`, headers: { cookie }, payload });
+
+  it("su autor lo edita o lo retira mientras no esté revisado; el técnico ve la última versión y no ve lo retirado", async () => {
+    const { oficina, otra, tecnico, id } = await levantamientoEnviado();
+    const editable = (await post(oficina.cookie, id, "comentarios", { texto: "La placa dice 20 A", seccion: "cuarto_tecnico", campo: "potencia_nominal" })).json();
+    const retirable = (await post(oficina.cookie, id, "comentarios", { texto: "Falta la foto del tablero" })).json();
+
+    // Solo su autor.
+    expect((await corregir(otra.cookie, id, editable.id, "", { texto: "Otro texto" })).statusCode).toBe(403);
+    expect((await corregir(oficina.cookie, id, randomUUID(), "", { texto: "Otro texto" })).statusCode).toBe(404);
+
+    const editado = await corregir(oficina.cookie, id, editable.id, "", { texto: "La placa dice 200 A: revise la foto" });
+    expect(editado.statusCode, editado.body).toBe(200);
+    expect(editado.json()).toMatchObject({ texto: "La placa dice 200 A: revise la foto", editadoEn: expect.any(String), retirado: null });
+    const retirado = await corregir(oficina.cookie, id, retirable.id, "retirar");
+    expect(retirado.json()).toMatchObject({ retirado: { por: { nombre: "Oficina de prueba" } } });
+    expect((await corregir(oficina.cookie, id, retirable.id, "", { texto: "x" })).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    // Oficina ve los dos (el retirado, marcado); el técnico, solo el vigente, con su edición.
+    const detalle = (await get(oficina.cookie, `/api/levantamientos/${id}`)).json();
+    expect(detalle.comentarios.map((c: { texto: string; retirado: unknown }) => [c.texto, c.retirado !== null])).toEqual([["La placa dice 200 A: revise la foto", false], ["Falta la foto del tablero", true]]);
+    const enElTelefono = (await bajarSync(tecnico.cookie, 3)).find((c) => c["id"] === id)!;
+    expect(enElTelefono["comentarios"]).toEqual([expect.objectContaining({ texto: "La placa dice 200 A: revise la foto", editadoEn: expect.any(String) })]);
+
+    // "Deshacer" lo devuelve.
+    expect((await corregir(oficina.cookie, id, retirable.id, "restaurar")).json()).toMatchObject({ retirado: null });
+    expect(((await bajarSync(tecnico.cookie, 3)).find((c) => c["id"] === id)!["comentarios"] as unknown[]).length).toBe(2);
+
+    const historial = (await get(oficina.cookie, `/api/levantamientos/${id}/historial`)).json();
+    expect(historial.eventos.map((e: { tipo: string }) => e.tipo).filter((t: string) => t.startsWith("comentario"))).toEqual([
+      "comentario_agregado",
+      "comentario_agregado",
+      "comentario_editado",
+      "comentario_retirado",
+      "comentario_restaurado",
+    ]);
+
+    // Revisado, ya no se corrigen: es lo que el técnico recibió con la revisión.
+    expect((await post(oficina.cookie, id, "tomar", { version: 1 })).statusCode).toBe(200);
+    expect((await post(oficina.cookie, id, "marcar-revisado", { version: 2 })).statusCode).toBe(200);
+    expect((await corregir(oficina.cookie, id, editable.id, "retirar")).json()).toMatchObject({ codigo: "estado_invalido" });
+  });
+});
+
 async function bajarSync(cookie: string, appVersion: number) {
   const r = await getSync(cookie, `/api/sync/cambios?app=${appVersion}`);
   expect(r.statusCode, r.body).toBe(200);

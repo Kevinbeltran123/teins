@@ -90,6 +90,12 @@ export interface NuevoComentario {
   creadoEn: Date;
 }
 
+export interface ComentarioGuardado extends NuevoComentario {
+  editadoEn: Date | null;
+  retiradoEn: Date | null;
+  retiradoPor: string | null;
+}
+
 export interface RepositorioRevision extends ProyeccionDeCantidades {
   obtener(tx: TxOrganizacion, id: string): Promise<LevantamientoEnRevision | undefined>;
   /**
@@ -98,6 +104,9 @@ export interface RepositorioRevision extends ProyeccionDeCantidades {
    */
   actualizar(tx: TxOrganizacion, id: string, versionEsperada: number, cambios: CambiosDeRevision): Promise<boolean>;
   agregarComentario(tx: TxOrganizacion, comentario: NuevoComentario): Promise<void>;
+  /** El comentario de este levantamiento, con su fila bloqueada para corregirlo (ADR-0035). */
+  comentario(tx: TxOrganizacion, levantamientoId: string, comentarioId: string): Promise<ComentarioGuardado | undefined>;
+  corregirComentario(tx: TxOrganizacion, comentarioId: string, cambios: Partial<Pick<ComentarioGuardado, "texto" | "editadoEn" | "retiradoEn" | "retiradoPor">>): Promise<void>;
   /**
    * Vincula (o desvincula, con `null`) una línea vigente al catálogo. Devuelve el ítem que tenía antes,
    * o `undefined` si la línea no existe.
