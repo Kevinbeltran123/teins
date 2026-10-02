@@ -41,7 +41,7 @@ import {
   useNotificar,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
-import { consultasDeAdministracion, mensajeDeAdministracion, qrComoImagen, useAccion } from "../administracion";
+import { consultasDeAdministracion, credencialConQr, mensajeDeAdministracion, useAccion } from "../administracion";
 import { aFechaHora, haceCuanto } from "../formato";
 
 type Sesion = Respuesta<"obtenerSesion">;
@@ -147,7 +147,7 @@ function ActivarSegundoFactor({ alTerminar }: { alTerminar: () => void }) {
   const [etapa, setEtapa] = useState<Etapa>("contrasena");
   const [contrasena, setContrasena] = useState("");
   const [codigo, setCodigo] = useState("");
-  const [enrolamiento, setEnrolamiento] = useState<{ uri: string; codigosDeRespaldo: string[]; qr: string } | null>(null);
+  const [enrolamiento, setEnrolamiento] = useState<{ uri: string; codigosDeRespaldo: string[]; qr: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -158,7 +158,7 @@ function ActivarSegundoFactor({ alTerminar }: { alTerminar: () => void }) {
     setError(null);
     try {
       const r = await cliente.activarSegundoFactor(contrasena);
-      setEnrolamiento({ ...r, qr: await qrComoImagen(r.uri) });
+      setEnrolamiento({ ...r, qr: (await credencialConQr({ url: r.uri })).qr });
       setEtapa("escanear");
     } catch (e) {
       setError(e instanceof ErrorApi && e.codigo === "entrada_invalida" ? "La contraseña no es correcta." : mensajeDeAdministracion(e));
@@ -219,9 +219,9 @@ function ActivarSegundoFactor({ alTerminar }: { alTerminar: () => void }) {
             {enrolamiento && (
               <div className="flex flex-col gap-5">
                 <div className="flex flex-wrap items-start gap-6">
-                  <img src={enrolamiento.qr} alt="Código QR para la app autenticadora" className="qr" />
+                  {enrolamiento.qr && <img src={enrolamiento.qr} alt="Código QR para la app autenticadora" className="qr" />}
                   {secreto && (
-                    <details className="max-w-sm text-cuerpo">
+                    <details className="max-w-sm text-cuerpo" open={!enrolamiento.qr}>
                       <summary className="min-h-control cursor-pointer font-bold text-superficie">¿No puede escanearlo?</summary>
                       <div className="flex flex-col gap-3 pt-2">
                         <p className="text-texto-secundario">Escriba esta clave en la app, sin los espacios:</p>
@@ -552,7 +552,7 @@ function NuevoUsuario({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (r
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
       titulo="Nuevo usuario"
       cerrable={!crear.isPending}
       alCerrar={alCerrar}
@@ -639,7 +639,7 @@ function Dispositivos() {
 
 // Accesos de clientes ----------------------------------------------------------------------------
 
-type Entrega = { cliente: string; identificador: string; clave: string; url: string; qr: string; regenerado: boolean };
+type Entrega = { cliente: string; identificador: string; clave: string; url: string; qr: string | null; regenerado: boolean };
 
 function Accesos() {
   const consulta = useQuery(consultasDeAdministracion.accesos());
@@ -651,7 +651,7 @@ function Accesos() {
 
   async function entregar(c: ClienteConAcceso, regenerar: boolean) {
     const r = await generar.mutateAsync({ c, regenerar });
-    setCredencial({ cliente: c.nombre, ...r, qr: await qrComoImagen(r.url), regenerado: regenerar });
+    setCredencial({ cliente: c.nombre, ...(await credencialConQr(r)), regenerado: regenerar });
     setRecientes((n) => [c.id, ...n]);
   }
 
@@ -740,15 +740,21 @@ function Accesos() {
         >
           <div className="grid gap-6 md:grid-cols-[232px_minmax(0,1fr)]">
             <div className="flex flex-col items-center gap-3 rounded-panel border border-division p-4">
-              <img src={credencial.qr} alt={`Código QR del acceso de ${credencial.cliente}`} className="qr" />
+              {credencial.qr ? (
+                <img src={credencial.qr} alt={`Código QR del acceso de ${credencial.cliente}`} className="qr" />
+              ) : (
+                <Aviso tono="alerta">No se pudo dibujar el QR: hay una versión nueva de TEINS. El código y la clave sí sirven; recargue la página después para descargar el QR.</Aviso>
+              )}
               <p className="flex flex-col items-center text-center">
                 <span className="text-ayuda text-texto-secundario">Código de acceso (va en el QR)</span>
                 <code className="text-cuerpo font-bold tracking-wide break-all">{credencial.identificador}</code>
               </p>
-              <a href={credencial.qr} download={`acceso-${credencial.cliente}.svg`} className={claseBoton("secundaria", "pequeno")}>
-                <Download aria-hidden />
-                Descargar el QR
-              </a>
+              {credencial.qr && (
+                <a href={credencial.qr} download={`acceso-${credencial.cliente}.svg`} className={claseBoton("secundaria", "pequeno")}>
+                  <Download aria-hidden />
+                  Descargar el QR
+                </a>
+              )}
             </div>
             <ol className="flex flex-col gap-5">
               <li className="flex flex-col gap-1">

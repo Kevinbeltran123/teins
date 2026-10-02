@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, FileText, Logo, LogOut, Package, Receipt, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
+import { Boton, Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, FileText, Logo, LogOut, Package, Receipt, RefreshCw, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useConexion } from "../conexion";
 import { iniciales } from "../formato";
 import { useBandeja } from "../revision";
+import { useVersionNueva } from "../version";
 
 interface Seccion {
   a: string;
@@ -34,6 +35,7 @@ const DOCUMENTOS: Seccion[] = [
 export function Marco({ nombre, administrador, children }: { nombre: string; administrador: boolean; children: ReactNode }) {
   const consultasCliente = useQueryClient();
   const enLinea = useConexion();
+  const versionNueva = useVersionNueva();
   const [barra, setBarra] = useState<HTMLElement | null>(null);
   const [accionesBarra, setAccionesBarra] = useState<HTMLElement | null>(null);
   // Lo que espera revisión es el trabajo pendiente de oficina: por eso su cuenta va en el menú.
@@ -109,6 +111,15 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
             <div className="sin-conexion" role="status">
               <WifiOff aria-hidden size={20} />
               Sin conexión. Lo que ve puede no estar al día; se actualiza al recuperar la conexión.
+            </div>
+          )}
+          {versionNueva && (
+            <div className="sin-conexion" role="status">
+              <RefreshCw aria-hidden size={20} />
+              Hay una versión nueva de TEINS. Recargue para seguir: lo que ya guardó no se pierde.
+              <Boton tamano="pequeno" onClick={() => window.location.reload()}>
+                Recargar
+              </Boton>
             </div>
           )}
           <DestinoBarraSuperior.Provider value={barra}>
