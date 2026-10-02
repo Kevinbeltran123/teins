@@ -423,6 +423,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               mensaje: mensajeDe(contenido),
               destinos: cuerpo.destinatarios.map((contactoId) => ({ contactoId })),
               por: actor.usuarioId,
+              personal: cuerpo.mensaje,
             });
             // El PDF se genera en segundo plano, de a uno (ADR-0012); si la transacción se revierte, el trabajo no existe.
             await encolar(tx, "informes.generarPdf", { organizacionId: actor.organizacionId, versionId }, { cola: "pdf", llave: `informes.generarPdf:${versionId}` });
@@ -490,6 +491,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               mensaje: mensajeDe(fila.contenido),
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
+              personal: cuerpo.mensaje,
               pdfRuta: fila.pdfEstado === "listo" && fila.pdfHuella ? claveDeObjeto(actor.organizacionId, fila.pdfHuella) : undefined,
               llave: cuerpo.llave,
             });

@@ -7,7 +7,7 @@ import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Cuerpo, Respuesta } from "@teins/protocolo";
-import { registrar } from "../auditoria";
+import { registrar, type EntradaAuditoria } from "../auditoria";
 import type { Identidad } from "../identidad";
 import { clientes, contactos, sitios, type FilaContacto } from "./esquema";
 
@@ -397,9 +397,17 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
     manejar: async ({ cuerpo, actor, correlacion }) =>
       enOrganizacion(bd, actor.organizacionId, async (tx) => {
         const { clienteId, sitioId } = await clientesYSitios.crear(tx, { organizacionId: actor.organizacionId, nombre: cuerpo.nombre, sitio: cuerpo.sitio });
-        await registrar(tx, [
+        const eventos: EntradaAuditoria[] = [
           { organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: clienteId, tipoEvento: "cliente_creado", autorId: actor.usuarioId, correlacion, valorNuevo: { nombre: cuerpo.nombre, sitio: { id: sitioId, ...cuerpo.sitio } } },
-        ]);
+        ];
+        // El contacto principal, en la misma transacción: o queda el cliente con su contacto, o nada (iteración 29).
+        if (cuerpo.contacto) {
+          const contactoId = randomUUID();
+          const valores = valoresDeContacto(cuerpo.contacto, actor.usuarioId);
+          await tx.insert(contactos).values({ id: contactoId, organizacionId: actor.organizacionId, clienteId, ...valores });
+          eventos.push({ organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: clienteId, tipoEvento: "contacto_creado", autorId: actor.usuarioId, correlacion, valorNuevo: { id: contactoId, ...auditable(valores) } });
+        }
+        await registrar(tx, eventos);
         return (await comoClientes(tx, identidad, actor.organizacionId, await clientesYSitios.conSitios(tx, [clienteId])))[0]!;
       }),
   });

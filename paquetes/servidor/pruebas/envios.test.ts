@@ -190,6 +190,34 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     expect(await bandeja()).toMatchObject({ envioSinEntregar: false });
   }, 90_000);
 
+  it("el correo sale con el asunto y el texto que escribió oficina; el WhatsApp, con su plantilla (ADR-0036)", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.propio@cliente.example", celular: "+573005550118" });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    const mensaje = { asunto: "Informe de su UPS", texto: "Le dejamos el informe de la visita.\n\nCualquier duda <nos escribe>." };
+    const r = await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }], llave: randomUUID(), mensaje });
+    expect(r.statusCode, r.body).toBe(200);
+    await s.procesarCola();
+    const envios = (await get(oficina.cookie, `/api/informes/${informeId}`)).json().versiones[0].envios as { id: string; canal: string; personalizado: boolean }[];
+    expect(envios.map((e) => [e.canal, e.personalizado]).sort()).toEqual([
+      ["correo", true],
+      ["whatsapp", false],
+    ]);
+    const alCorreo = correos.find((c) => c.para === "ana.propio@cliente.example")!;
+    expect(alCorreo.asunto).toBe("Informe de su UPS");
+    expect(alCorreo.texto).toContain("Hola, Ana:\n\nLe dejamos el informe de la visita.");
+    expect(alCorreo.html).toContain("Cualquier duda &lt;nos escribe&gt;.");
+    // El portal y el pie los sigue poniendo la plantilla.
+    expect(alCorreo.html).toContain("https://portal.example.com");
+    const alWhatsapp = whatsapps.find((m) => m.para === "+573005550118")!;
+    expect(alWhatsapp.plantilla).toBe("informe_publicado");
+
+    // Un asunto vacío no se acepta: no saldría nada que oficina no escribió.
+    const vacio = await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }], llave: randomUUID(), mensaje: { asunto: " ", texto: "Hola" } });
+    expect(vacio.statusCode).toBe(400);
+  }, 90_000);
+
   it("el mismo pedido con su llave (doble clic, respuesta perdida) sale una sola vez; otra llave es otra decisión (regla 4)", async () => {
     const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
     const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.llave@cliente.example" });

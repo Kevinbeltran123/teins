@@ -9,13 +9,16 @@ export {
   diaCorto,
   htmlDeCorreo,
   plantillaDeWhatsapp,
+  asuntoBase,
   primerNombre,
+  textoBase,
   textoDeCorreo,
   variablesDeWhatsapp,
   type MensajeDeCotizacion,
   type MensajeDeEnvio,
   type MensajeDeInforme,
   type OpcionesDeCorreo,
+  type TextoPropio,
 } from "./mensajes";
 export { escapar } from "./escapar";
 export { LOGO_TEINS } from "./logo";

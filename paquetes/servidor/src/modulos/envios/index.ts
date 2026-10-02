@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "@teins/documentos";
+import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp, type TextoPropio } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
 import type { Config } from "../../config";
 import { leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
@@ -35,6 +35,8 @@ export interface Programacion {
   pdfRuta?: string | undefined;
   /** La decisión de enviar (regla 4): si ya se programó con esta llave, no se programa otra vez. */
   llave?: string | undefined;
+  /** El asunto y el texto que escribió oficina (ADR-0036): se copian al envío por correo; WhatsApp va con su plantilla. */
+  personal?: TextoPropio | undefined;
 }
 
 /**
@@ -52,7 +54,8 @@ export async function programarEnvios(tx: TxOrganizacion, p: Programacion): Prom
   const destinatarios = await contactosDelCliente.paraEnviar(tx, p.clienteId, p.destinos);
   for (const d of destinatarios) {
     const id = randomUUID();
-    await tx.insert(envios).values({ id, organizacionId: p.organizacionId, versionId: p.versionId, contactoId: d.contactoId, contactoNombre: d.nombre, canal: d.canal, destino: d.destino, mensaje: p.mensaje, creadoPor: p.por, llave: p.llave ?? null });
+    const mensaje = d.canal === "correo" && p.personal ? { ...p.mensaje, personal: { asunto: p.personal.asunto, texto: p.personal.texto } } : p.mensaje;
+    await tx.insert(envios).values({ id, organizacionId: p.organizacionId, versionId: p.versionId, contactoId: d.contactoId, contactoNombre: d.nombre, canal: d.canal, destino: d.destino, mensaje, creadoPor: p.por, llave: p.llave ?? null });
     if (p.pdfRuta) await encolarEnvio(tx, { organizacionId: p.organizacionId, envioId: id, pdfRuta: p.pdfRuta });
   }
   return destinatarios.length;
@@ -122,7 +125,7 @@ export async function fallarEnviosDeVersion(tx: TxOrganizacion, versionId: strin
 const encolarEnvio = (tx: TxOrganizacion, datos: Trabajos["envios.enviar"]) => encolar(tx, "envios.enviar", datos, { llave: `envios.enviar:${datos.envioId}`, intentosMaximos: 5 });
 
 const comoEnvio = (
-  f: Pick<FilaEnvio, "id" | "contactoId" | "contactoNombre" | "canal" | "destino" | "estado" | "error" | "creadoEn" | "enviadoEn" | "canceladoPor" | "canceladoEn">,
+  f: Pick<FilaEnvio, "id" | "contactoId" | "contactoNombre" | "canal" | "destino" | "estado" | "error" | "creadoEn" | "enviadoEn" | "canceladoPor" | "canceladoEn" | "mensaje">,
   nombres: Map<string, string>,
 ): EnvioDeVersion => ({
   id: f.id,
@@ -134,6 +137,7 @@ const comoEnvio = (
   creadoEn: f.creadoEn.toISOString(),
   enviadoEn: f.enviadoEn?.toISOString() ?? null,
   cancelado: f.estado === "cancelado" && f.canceladoEn ? { en: f.canceladoEn.toISOString(), por: { id: f.canceladoPor ?? "", nombre: nombres.get(f.canceladoPor ?? "") ?? "[Usuario no disponible]" } } : null,
+  personalizado: f.mensaje.personal !== undefined,
 });
 
 /** Nombres de las personas, para decir quién canceló un envío (los da la identidad, a través de quien llama). */

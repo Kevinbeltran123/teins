@@ -34,3 +34,4 @@ La hoja de la vista la arma `hojaDeLaVista(documento, ESTILOS_…)`: los estilos
 
 - `pnpm --filter @teins/documentos typecheck`
 - `pnpm --filter @teins/documentos test`
+- Iteración 30 (ADR-0036): `MensajeDeEnvio.personal` (`TextoPropio`: asunto y texto que escribió oficina) cambia el asunto y el texto entre el saludo y el pie en `htmlDeCorreo` y `textoDeCorreo`; `asuntoBase` y `textoBase` son los de TEINS, que se ofrecen para editar. El bloque editable va marcado `data-editable="texto"`. La tabla de cantidades del informe tiene columnas de ancho fijo (iteración 29).

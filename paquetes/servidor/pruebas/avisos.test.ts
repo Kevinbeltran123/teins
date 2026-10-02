@@ -240,7 +240,7 @@ describe("entrega y ciclo de vida (ADR-0023, QA-5)", () => {
     expect((await filas(org.organizacionId))[0]!.ultimoError).toMatch(/^400 el /);
 
     respuesta = 503;
-    await programar(org);
+    await programar(org, [org.tecnico.id], "2026-10-04"); // otro día: dos visitas de todo el día se cruzan (ADR-0037)
     await s.procesarCola();
     const { rows } = await s.propietario.pool.query(
       "select j.attempts, j.last_error from graphile_worker._private_jobs j join graphile_worker._private_tasks t on t.id = j.task_id where t.identifier = 'avisos.enviar' and j.payload->>'organizacionId' = $1",
@@ -250,7 +250,7 @@ describe("entrega y ciclo de vida (ADR-0023, QA-5)", () => {
     await s.propietario.pool.query("delete from graphile_worker._private_jobs where payload->>'organizacionId' = $1", [org.organizacionId]);
 
     respuesta = 410;
-    await programar(org);
+    await programar(org, [org.tecnico.id], "2026-10-05");
     await s.procesarCola();
     expect((await filas(org.organizacionId)).map((f) => f.endpoint)).not.toContain(datos.endpoint);
   });

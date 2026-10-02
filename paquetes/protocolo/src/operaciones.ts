@@ -130,6 +130,9 @@ const ComentarioParaTecnico = z.object({
 
 // Bajada (ADR-0003): cambios del alcance del usuario desde un punto de control.
 
+/** Una hora del día, "09:30" (ADR-0037). */
+export const Hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora en formato HH:MM");
+
 export const VisitaAsignada = z
   .object({
     id: Uuid,
@@ -137,6 +140,14 @@ export const VisitaAsignada = z
     sitio: z.object({ nombre: z.string(), direccion: z.string() }),
     motivo: z.string(),
     programadaPara: z.iso.date(),
+    /**
+     * Horario (ADR-0037), opcional para las apps anteriores (ADR-0015). Sin hora de inicio es todo el día; con inicio y
+     * sin fin, el técnico queda ocupado hasta que la termine.
+     */
+    horaInicio: Hora.nullable().optional(),
+    horaFin: Hora.nullable().optional(),
+    /** Cuándo la terminó un técnico desde su teléfono (ADR-0037). */
+    terminada: z.object({ en: Fecha }).nullable().optional(),
   })
   .meta({ id: "VisitaAsignada" });
 export type VisitaAsignada = z.infer<typeof VisitaAsignada>;
@@ -378,8 +389,11 @@ export const EnvioDeVersion = z
     enviadoEn: Fecha.nullable(),
     /** Quién lo canceló y cuándo (ADR-0034); null si no está cancelado. */
     cancelado: z.object({ en: Fecha, por: Persona }).nullable().default(null),
+    /** Salió con el asunto y el texto que escribió oficina, no con los de TEINS (ADR-0036). */
+    personalizado: z.boolean().default(false),
   })
   .meta({ id: "EnvioDeVersion" });
+
 
 export const VersionPublicada = z
   .object({
@@ -495,6 +509,12 @@ export const CredencialesDeAcceso = z.object({ identificador: z.string(), clave:
 
 const Texto = (maximo: number) => z.string().trim().min(1).max(maximo);
 
+/**
+ * El asunto y el texto del correo que escribió oficina (ADR-0036). El saludo, el adjunto, el botón del portal y el pie
+ * los pone la plantilla; WhatsApp no lo usa (Meta solo acepta la plantilla aprobada). Sin esto, sale el texto de TEINS.
+ */
+export const TextoDeCorreoPropio = z.object({ asunto: Texto(200), texto: Texto(5000) }).meta({ id: "TextoDeCorreoPropio" });
+
 /** Quién y cuándo (archivar, editar): ADR-0035. */
 const Marca = z.object({ en: Fecha, por: Persona });
 
@@ -580,6 +600,11 @@ export const VisitaProgramada = z
     sitio: z.object({ id: Uuid, nombre: z.string(), direccion: z.string() }),
     motivo: z.string(),
     programadaPara: z.iso.date(),
+    /** Horario (ADR-0037): sin inicio, todo el día; con inicio y sin fin, hasta que la terminen. */
+    horaInicio: Hora.nullable().default(null),
+    horaFin: Hora.nullable().default(null),
+    /** Quién la terminó desde su teléfono y cuándo (ADR-0037). */
+    terminada: z.object({ en: Fecha, por: Persona }).nullable().default(null),
     tecnicos: z.array(Persona),
     /** Avance deducido de sus levantamientos (modelo de dominio, sección 5). */
     levantamientos: z.object({ enviados: z.int().min(0), enRevision: z.int().min(0), revisados: z.int().min(0) }),
@@ -709,7 +734,32 @@ export const LineaDeVisita = z
   })
   .meta({ id: "LineaDeVisita" });
 
-const erroresDeVisita = ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "estado_invalido", "entrada_invalida"] as const;
+const erroresDeVisita = ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "estado_invalido", "entrada_invalida", "tecnico_ocupado"] as const;
+
+/** El horario de una visita (ADR-0037): el fin exige el inicio y va después de él. */
+const Horario = {
+  horaInicio: Hora.nullable().default(null),
+  horaFin: Hora.nullable().default(null),
+};
+const horarioValido = (d: { horaInicio: string | null; horaFin: string | null }, ctx: z.RefinementCtx) => {
+  if (d.horaFin !== null && d.horaInicio === null) ctx.addIssue({ code: "custom", path: ["horaFin"], message: "La hora de fin necesita la de inicio" });
+  if (d.horaFin !== null && d.horaInicio !== null && d.horaFin <= d.horaInicio) ctx.addIssue({ code: "custom", path: ["horaFin"], message: "La hora de fin va después de la de inicio" });
+};
+
+/** Lo que ocupa a un técnico un día (ADR-0037): con qué visita y de qué hora a qué hora. */
+export const OcupacionDeTecnico = z
+  .object({
+    tecnicoId: z.string(),
+    visitaId: Uuid,
+    cliente: z.string(),
+    sitio: z.string(),
+    motivo: z.string(),
+    horaInicio: Hora.nullable(),
+    horaFin: Hora.nullable(),
+    /** Sin fin y ya terminada: deja de ocupar desde que la terminaron. */
+    terminadaEn: Fecha.nullable(),
+  })
+  .meta({ id: "OcupacionDeTecnico" });
 
 const NombreDeUsuario = z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,30}$/);
 
@@ -965,7 +1015,7 @@ export const operaciones = {
     ruta: "/api/informes/{id}/publicar",
     resumen: "Publica una versión inmutable y encola su PDF (QA-9, QA-17); los destinatarios reciben el PDF cuando esté listo (ADR-0028)",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object({ ...ConVersion, destinatarios: z.array(Uuid).max(50).default([]) }),
+    cuerpo: z.object({ ...ConVersion, destinatarios: z.array(Uuid).max(50).default([]), mensaje: TextoDeCorreoPropio.optional() }),
     estadoExito: 201,
     respuesta: VersionPublicada,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "informe_invalido", "archivos_faltantes", "archivos_en_verificacion"],
@@ -975,7 +1025,7 @@ export const operaciones = {
     ruta: "/api/informes/{id}/versiones/{numero}/enviar",
     resumen: "Envía una versión publicada a contactos del cliente: volver a enviar o enviar a otro contacto (ADR-0028)",
     parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
-    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50), llave: LlaveDeEnvioAlCliente }),
+    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50), llave: LlaveDeEnvioAlCliente, mensaje: TextoDeCorreoPropio.optional() }),
     estadoExito: 200,
     respuesta: VersionPublicada,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
@@ -1246,7 +1296,7 @@ export const operaciones = {
     ruta: "/api/cotizaciones/{id}/publicar",
     resumen: "Publica una versión inmutable con sus precios y totales, encola su PDF y la envía cuando esté listo",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object({ ...ConVersion, destinatarios: z.array(Uuid).max(50).default([]) }),
+    cuerpo: z.object({ ...ConVersion, destinatarios: z.array(Uuid).max(50).default([]), mensaje: TextoDeCorreoPropio.optional() }),
     estadoExito: 201,
     respuesta: VersionCotizacion,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "conflicto_de_version", "cotizacion_invalida", "entrada_invalida"],
@@ -1265,7 +1315,7 @@ export const operaciones = {
     ruta: "/api/cotizaciones/{id}/versiones/{numero}/enviar",
     resumen: "Envía una versión publicada a contactos del cliente",
     parametros: z.object({ id: Uuid, numero: z.coerce.number().int().positive() }),
-    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50), llave: LlaveDeEnvioAlCliente }),
+    cuerpo: z.object({ destinos: z.array(z.object({ contactoId: Uuid, canal: CanalDeEnvio.optional() })).min(1).max(50), llave: LlaveDeEnvioAlCliente, mensaje: TextoDeCorreoPropio.optional() }),
     estadoExito: 200,
     respuesta: VersionCotizacion,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
@@ -1332,8 +1382,13 @@ export const operaciones = {
   crearCliente: {
     metodo: "POST",
     ruta: "/api/clientes",
-    resumen: "Crea un cliente con su primer sitio",
-    cuerpo: z.object({ nombre: Texto(200), sitio: z.object({ nombre: Texto(200), direccion: Texto(300) }) }),
+    resumen: "Crea un cliente con su primer sitio y, si llega, su contacto principal (iteración 29)",
+    cuerpo: z.object({
+      nombre: Texto(200),
+      sitio: z.object({ nombre: Texto(200), direccion: Texto(300) }),
+      /** Opcional para el comando y la API (expansión); oficina lo pide siempre: sin él, los documentos no le llegan a nadie. */
+      contacto: DatosContacto.refine((d) => d.correo !== null || d.celular !== null, { path: ["correo"], message: "Escriba el correo, el celular o los dos" }).optional(),
+    }),
     estadoExito: 201,
     respuesta: ClienteConSitios,
     errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
@@ -1481,10 +1536,29 @@ export const operaciones = {
     metodo: "POST",
     ruta: "/api/visitas",
     resumen: "Programa una visita; llega a los teléfonos de sus técnicos en la siguiente bajada",
-    cuerpo: z.object({ clienteId: Uuid, sitioId: Uuid, motivo: Texto(120), programadaPara: z.iso.date(), tecnicos: z.array(z.string()).min(1).max(20) }),
+    cuerpo: z.object({ clienteId: Uuid, sitioId: Uuid, motivo: Texto(120), programadaPara: z.iso.date(), ...Horario, tecnicos: z.array(z.string()).min(1).max(20) }).superRefine(horarioValido),
     estadoExito: 201,
     respuesta: VisitaProgramada,
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida", "tecnico_ocupado"],
+  },
+  ocupacionDeTecnicos: {
+    metodo: "GET",
+    ruta: "/api/visitas/ocupacion",
+    resumen: "Lo que ocupa a cada técnico un día, para programar solo con los libres (ADR-0037)",
+    consulta: z.object({ fecha: z.iso.date() }),
+    estadoExito: 200,
+    respuesta: z.object({ ocupaciones: z.array(OcupacionDeTecnico) }),
     errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
+  },
+  terminarVisita: {
+    metodo: "POST",
+    ruta: "/api/visitas/{id}/terminar",
+    resumen: "El técnico termina la visita desde su teléfono, también sin señal y después (ADR-0037); repetirlo no cambia nada",
+    parametros: z.object({ id: Uuid }),
+    cuerpo: z.object({ llave: Uuid, en: Fecha }),
+    estadoExito: 200,
+    respuesta: z.object({ terminada: z.object({ en: Fecha }) }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
   },
   reasignarVisita: {
     metodo: "POST",
@@ -1499,9 +1573,9 @@ export const operaciones = {
   reprogramarVisita: {
     metodo: "POST",
     ruta: "/api/visitas/{id}/reprogramar",
-    resumen: "Cambia la fecha y el motivo; los teléfonos lo reciben en la siguiente bajada",
+    resumen: "Cambia la fecha, el horario y el motivo; los teléfonos lo reciben en la siguiente bajada",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object({ version: z.int().positive(), programadaPara: z.iso.date(), motivo: Texto(120) }),
+    cuerpo: z.object({ version: z.int().positive(), programadaPara: z.iso.date(), ...Horario, motivo: Texto(120) }).superRefine(horarioValido),
     estadoExito: 200,
     respuesta: VisitaProgramada,
     errores: [...erroresDeVisita],

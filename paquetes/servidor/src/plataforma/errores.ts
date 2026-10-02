@@ -11,6 +11,7 @@ const TITULOS: Record<CodigoProblema, string> = {
   conflicto_de_version: "Otra persona guardó antes",
   tomado_por_otro: "Otra persona tiene la revisión",
   estado_invalido: "La acción no aplica en el estado actual",
+  tecnico_ocupado: "Técnico ocupado",
   no_tomado: "Solo quien tomó la revisión puede hacerlo",
   informe_invalido: "El informe no cumple sus reglas",
   cotizacion_invalida: "A la cotización le falta algo para publicarse",

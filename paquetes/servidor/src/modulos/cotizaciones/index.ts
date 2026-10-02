@@ -381,6 +381,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               mensaje: mensajeDe(contenido),
               destinos: cuerpo.destinatarios.map((contactoId) => ({ contactoId })),
               por: actor.usuarioId,
+              personal: cuerpo.mensaje,
             });
             return versionConEnvios(tx, actor.organizacionId, fila!);
           });
@@ -426,6 +427,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               mensaje: mensajeDe(version.contenido),
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
+              personal: cuerpo.mensaje,
               pdfRuta: version.pdfEstado === "listo" && version.pdfHuella ? claveDeObjeto(actor.organizacionId, version.pdfHuella) : undefined,
               llave: cuerpo.llave,
             });

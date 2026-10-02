@@ -110,6 +110,10 @@ describe("visitas asignadas", () => {
         sitio: { nombre: "Sede de prueba", direccion: "Calle [N] # [N]-[N]" },
         motivo: "Mantenimiento",
         programadaPara: "2026-09-30",
+        // Sin horario: todo el día (ADR-0037).
+        horaInicio: null,
+        horaFin: null,
+        terminada: null,
       },
     });
     expect((await bajar(otro.cookie, puntoOtro)).json().cambios).toEqual([]);

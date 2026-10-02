@@ -1,4 +1,5 @@
-import { date, index, integer, pgSchema, text, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, date, index, integer, pgSchema, text, time, uuid } from "drizzle-orm/pg-core";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 export const esquemaVisitas = pgSchema("visitas");
@@ -16,6 +17,15 @@ export const visitas = esquemaVisitas.table(
     sitioId: uuid("sitio_id").notNull(),
     motivo: text("motivo").notNull(),
     programadaPara: date("programada_para").notNull(),
+    /**
+     * Horario (ADR-0037): sin inicio, la visita ocupa todo el día; con inicio y fin, ese rango; con inicio y sin fin,
+     * desde el inicio hasta que un técnico la termine (o hasta el final del día).
+     */
+    horaInicio: time("hora_inicio"),
+    horaFin: time("hora_fin"),
+    /** Un técnico la terminó desde su teléfono (ADR-0037): con la hora que declaró el teléfono, nunca futura. */
+    terminadaEn: marcaDeTiempo("terminada_en"),
+    terminadaPor: text("terminada_por"),
     tecnicos: text("tecnicos").array().notNull(),
     creadaEn: marcaDeTiempo("creada_en").notNull().defaultNow(),
     version: integer("version").notNull().default(1),
@@ -24,5 +34,9 @@ export const visitas = esquemaVisitas.table(
     canceladaPor: text("cancelada_por"),
     motivoCancelacion: text("motivo_cancelacion"),
   },
-  (t) => [index("visitas_programada_idx").on(t.organizacionId, t.programadaPara), aislamientoPorOrganizacion("visitas")],
+  (t) => [
+    index("visitas_programada_idx").on(t.organizacionId, t.programadaPara),
+    aislamientoPorOrganizacion("visitas"),
+    check("visitas_horario_valido", sql`${t.horaFin} IS NULL OR (${t.horaInicio} IS NOT NULL AND ${t.horaFin} > ${t.horaInicio})`),
+  ],
 ).enableRLS();

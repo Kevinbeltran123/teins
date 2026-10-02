@@ -14,6 +14,8 @@ export const ESTADO_POR_CODIGO = {
   tomado_por_otro: 409,
   /** La acción no aplica en el estado actual del levantamiento. */
   estado_invalido: 409,
+  /** Un técnico ya tiene otra visita a esa hora (ADR-0037): `ocupados` dice quién y con qué. */
+  tecnico_ocupado: 409,
   /** Solo quien tomó la revisión edita (regla 4). */
   no_tomado: 403,
   /** El borrador del informe no cumple sus reglas (regla 9). */
@@ -49,6 +51,7 @@ export const REINTENTABLE: Readonly<Record<CodigoProblema, boolean>> = {
   conflicto_de_version: false,
   tomado_por_otro: false,
   estado_invalido: false,
+  tecnico_ocupado: false,
   no_tomado: false,
   informe_invalido: false,
   cotizacion_invalida: false,
@@ -90,6 +93,8 @@ export const Problema = z
     erroresCotizacion: z.array(z.object({ codigo: z.string(), lineas: z.array(z.string()).optional(), campo: z.string().optional() })).optional(),
     reintentarEnSegundos: z.int().optional(),
     campos: z.array(z.object({ ruta: z.string(), mensaje: z.string() })).optional(),
+    /** Técnicos que ya tienen otra visita a esa hora (ADR-0037). */
+    ocupados: z.array(z.object({ tecnico: z.object({ id: z.string(), nombre: z.string() }), visitaId: z.string(), cliente: z.string() })).optional(),
   })
   .meta({ id: "Problema" });
 export type Problema = z.infer<typeof Problema>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calcularTotales, type ContenidoVersion, type LineaDeCotizacion, type VersionFormato } from "@teins/dominio";
-import { ESTILOS_COTIZACION, ESTILOS_INFORME, hojaDeLaVista, plantillaCotizacion, plantillaDeWhatsapp, plantillaInforme, variablesDeWhatsapp, type ContenidoCotizacion, type MensajeDeEnvio, type Salida } from "./index";
+import { asunto, ESTILOS_COTIZACION, ESTILOS_INFORME, hojaDeLaVista, htmlDeCorreo, plantillaCotizacion, textoBase, textoDeCorreo, plantillaDeWhatsapp, plantillaInforme, variablesDeWhatsapp, type ContenidoCotizacion, type MensajeDeEnvio, type Salida } from "./index";
 
 const formato: VersionFormato = {
   formato: "prueba-ups",
@@ -115,5 +115,41 @@ describe("plantillas", () => {
     }
     // La cotización no lleva el botón del portal: el portal solo muestra informes (ADR-0029).
     expect(plantillaDeWhatsapp(cotizacionM).boton).toBeNull();
+  });
+});
+
+describe("el correo que escribe oficina (iteración 30)", () => {
+  const m = {
+    documento: "cotizacion" as const,
+    organizacion: "TEINS",
+    cliente: "Hotel Plaza Real",
+    sitio: "Torre A",
+    cotizacion: "COT-2026-0006",
+    numero: 1,
+    nombreArchivo: "Cotización COT-2026-0006 - Hotel Plaza Real - versión 1.pdf",
+  };
+  const opciones = { nombre: "Ana Torres", portal: undefined, sinAdjunto: false };
+
+  it("sin cambios, el asunto y el texto son los de TEINS, y el texto base es lo que se puede editar", () => {
+    expect(asunto(m)).toBe("Cotización COT-2026-0006 · Torre A");
+    expect(textoBase(m)).toBe("Le enviamos la cotización COT-2026-0006 para Torre A. Va adjunta en PDF.");
+    expect(htmlDeCorreo(m, opciones)).toContain('data-editable="texto"');
+  });
+
+  it("con su texto, el saludo, el pie y el adjunto los sigue poniendo TEINS; lo escrito va escapado", () => {
+    const propio = { ...m, personal: { asunto: "Su cotización de cableado", texto: "Le enviamos la cotización.\n\nCualquier duda <me escribe>." } };
+    expect(asunto(propio)).toBe("Su cotización de cableado");
+    const html = htmlDeCorreo(propio, opciones);
+    expect(html).toContain("Hola, Ana:");
+    expect(html).toContain("Cualquier duda &lt;me escribe&gt;.");
+    expect(html).not.toContain("Va adjunta en PDF.");
+    expect(html).toContain("Recibe este correo porque es contacto de Hotel Plaza Real");
+    const texto = textoDeCorreo(propio, opciones);
+    expect(texto).toContain("Hola, Ana:\n\nLe enviamos la cotización.\n\nCualquier duda <me escribe>.");
+  });
+
+  it("si el PDF no cabe, lo dice aunque el texto sea propio", () => {
+    const propio = { ...m, personal: { asunto: "Asunto", texto: "Va adjunta." } };
+    expect(htmlDeCorreo(propio, { ...opciones, sinAdjunto: true })).toContain("El PDF pesa demasiado para el correo");
   });
 });

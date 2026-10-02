@@ -1,5 +1,15 @@
 import { escapar } from "./escapar";
 
+/**
+ * El asunto y el texto que escribió oficina para un envío (iteración 30, ADR-0036). El saludo con el nombre, el
+ * adjunto, el botón del portal y el pie los sigue poniendo la plantilla. Solo el correo: WhatsApp va con la
+ * plantilla aprobada por Meta.
+ */
+export interface TextoPropio {
+  asunto: string;
+  texto: string;
+}
+
 /** Lo que dice el mensaje, copiado de la versión al programarlo: el envío no lee el documento. */
 export interface MensajeDeInforme {
   /** Los envíos de la iteración 20 no lo llevan: son informes. */
@@ -11,6 +21,7 @@ export interface MensajeDeInforme {
   programadaPara: string;
   numero: number;
   nombreArchivo: string;
+  personal?: TextoPropio | undefined;
 }
 
 /** Una cotización publicada (ADR-0029): sin enlace al portal, que solo muestra informes. */
@@ -24,6 +35,7 @@ export interface MensajeDeCotizacion {
   /** Versión de la cotización. */
   numero: number;
   nombreArchivo: string;
+  personal?: TextoPropio | undefined;
 }
 
 export type MensajeDeEnvio = MensajeDeInforme | MensajeDeCotizacion;
@@ -45,8 +57,13 @@ const version = (m: MensajeDeEnvio) => (m.numero > 1 ? ` (versión ${m.numero})`
  */
 const unaLinea = (texto: string) => texto.replace(/\s+/g, " ").trim();
 
-export function asunto(m: MensajeDeEnvio): string {
+/** El asunto que pone TEINS, el que se ofrece para editar y al que se vuelve con "Volver al texto de TEINS". */
+export function asuntoBase(m: MensajeDeEnvio): string {
   return unaLinea(m.documento === "cotizacion" ? `Cotización ${m.cotizacion} · ${m.sitio}${version(m)}` : `Informe de la visita del ${diaCorto(m.programadaPara)} · ${m.sitio}${version(m)}`);
+}
+
+export function asunto(m: MensajeDeEnvio): string {
+  return m.personal ? unaLinea(m.personal.asunto) : asuntoBase(m);
 }
 
 /** Qué se envía, en texto y en HTML (ADR-0028; la cotización, ADR-0029). */
@@ -56,6 +73,21 @@ function presentacion(m: MensajeDeEnvio, sinAdjunto: boolean, fuerte: (t: string
   }
   return `Le enviamos el informe de la visita del ${fuerte(diaLargo(m.programadaPara))} a ${fuerte(texto(m.sitio))} (${texto(m.motivo)}). ${sinAdjunto ? "El PDF pesa demasiado para el correo: descárguelo del portal." : "Va adjunto en PDF."}`;
 }
+
+/** El texto que pone TEINS entre el saludo y el pie: lo que oficina puede reescribir (iteración 30). */
+export function textoBase(m: MensajeDeEnvio): string {
+  return [presentacion(m, false, (t) => t, (t) => t), ...(m.numero > 1 ? [`Es la versión ${m.numero}: reemplaza a las anteriores.`] : [])].join("\n\n");
+}
+
+/** El aviso de que el PDF no cabe en el correo: va aunque el texto sea propio, porque cambia lo que el cliente debe hacer. */
+const pdfNoCabe = (m: MensajeDeEnvio) => (m.documento === "cotizacion" ? "El PDF pesa demasiado para el correo: respóndanos y se lo hacemos llegar." : "El PDF pesa demasiado para el correo: descárguelo del portal.");
+
+/** Los párrafos del texto propio: separados por una línea en blanco; un salto simple queda como salto. */
+const parrafosPropios = (texto: string) =>
+  texto
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
 
 const tema = (m: MensajeDeEnvio) => (m.documento === "cotizacion" ? "las cotizaciones" : "los informes técnicos");
 
@@ -70,8 +102,9 @@ export interface OpcionesDeCorreo {
 export function textoDeCorreo(m: MensajeDeEnvio, o: OpcionesDeCorreo): string {
   return [
     `Hola, ${primerNombre(o.nombre)}:`,
-    presentacion(m, o.sinAdjunto, (t) => t, (t) => t),
-    ...(m.numero > 1 ? [`Es la versión ${m.numero}: reemplaza a las anteriores.`] : []),
+    ...(m.personal
+      ? [...parrafosPropios(m.personal.texto), ...(o.sinAdjunto ? [pdfNoCabe(m)] : [])]
+      : [presentacion(m, o.sinAdjunto, (t) => t, (t) => t), ...(m.numero > 1 ? [`Es la versión ${m.numero}: reemplaza a las anteriores.`] : [])]),
     ...(o.portal ? [`Portal de ${m.organizacion}: ${o.portal}`, "En el portal están todos sus informes. Si no tiene acceso, respóndanos este correo."] : []),
     "",
     `${m.organizacion}. Recibe este correo porque es contacto de ${m.cliente} para ${tema(m)}. Para dejar de recibirlos, respóndanos este correo.`,
@@ -90,8 +123,11 @@ export function htmlDeCorreo(m: MensajeDeEnvio, o: OpcionesDeCorreo): string {
 <tr><td style="padding:20px 32px;border-bottom:3px solid #002B81;font-size:22px;font-weight:800;color:#002B81;letter-spacing:0.02em">${e.organizacion}</td></tr>
 <tr><td style="padding:28px 32px 12px;font-size:16px;line-height:1.55">
 ${parrafo(`Hola, ${escapar(primerNombre(o.nombre))}:`)}
-${parrafo(presentacion(m, o.sinAdjunto, (t) => `<strong>${t}</strong>`, escapar))}
-${m.numero > 1 ? parrafo(`Es la <strong>versión ${m.numero}</strong>: reemplaza a las anteriores.`) : ""}
+<div data-editable="texto">${
+    m.personal
+      ? [...parrafosPropios(m.personal.texto).map((p) => parrafo(escapar(p).replace(/\n/g, "<br>"))), ...(o.sinAdjunto ? [parrafo(pdfNoCabe(m))] : [])].join("")
+      : `${parrafo(presentacion(m, o.sinAdjunto, (t) => `<strong>${t}</strong>`, escapar))}${m.numero > 1 ? parrafo(`Es la <strong>versión ${m.numero}</strong>: reemplaza a las anteriores.`) : ""}`
+  }</div>
 ${
   o.portal
     ? `<p style="margin:0 0 16px"><a href="${escapar(o.portal)}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#002B81;color:#FFFFFF;font-weight:700;text-decoration:none">Ver en el portal de ${e.organizacion}</a></p>

@@ -232,6 +232,13 @@
       "when": 1790956549255,
       "tag": "0032_correcciones",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790975531097,
+      "tag": "0033_horario_visitas",
+      "breakpoints": true
     }
   ]
 }

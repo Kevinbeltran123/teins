@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { llaveDeEnvio } from "@teins/protocolo";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
-import { cabecerasSync, ORIGEN, servidorDePrueba } from "./ayudas";
+import { cabecerasSync, iniciarSesion, ORIGEN, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
@@ -43,6 +43,23 @@ describe("clientes y sitios (iteración 7)", () => {
     const otra = await s.nuevaOrganizacionConUsuarios();
     expect((await pedir(otra.oficina.cookie, "GET", "/api/clientes")).json().clientes).toEqual([]);
     expect((await pedir(otra.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios`, { nombre: "X", direccion: "Y" })).statusCode).toBe(404);
+  });
+
+  it("el cliente nuevo puede llegar con su contacto principal, en la misma operación (iteración 29)", async () => {
+    const contacto = { nombre: "Ana Torres", cargo: "Mantenimiento", correo: "ana@example.com", recibeCorreo: true, recibeWhatsapp: false, recibeInformes: true, recibeCotizaciones: true };
+    const r = await pedir(org.oficina.cookie, "POST", "/api/clientes", { nombre: "Cliente Con Contacto", sitio: { nombre: "Sede", direccion: "Calle [N]" }, contacto });
+    expect(r.statusCode, r.body).toBe(201);
+    const detalle = (await pedir(org.oficina.cookie, "GET", `/api/clientes/${r.json().id}`)).json();
+    expect(detalle.contactos).toMatchObject([{ nombre: "Ana Torres", correo: "ana@example.com", recibeCorreo: true, recibeCotizaciones: true }]);
+    expect(r.json().reciben).toBe(1);
+    const cadena = await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) => verificarCadena(tx, org.organizacionId, "cliente", r.json().id));
+    expect(cadena).toEqual({ integra: true, eslabones: 2 });
+
+    // Sin correo ni celular no hay por dónde mandarle los documentos: no se crea nada.
+    const sinCanal = await pedir(org.oficina.cookie, "POST", "/api/clientes", { nombre: "Cliente Sin Canal", sitio: { nombre: "Sede", direccion: "Calle [N]" }, contacto: { nombre: "Nadie", recibeCorreo: false, recibeWhatsapp: false } });
+    expect(sinCanal.statusCode).toBe(400);
+    expect(sinCanal.json().campos.map((c: { ruta: string }) => c.ruta)).toContain("cuerpo.contacto.correo");
+    expect((await pedir(org.oficina.cookie, "GET", "/api/clientes")).json().clientes.some((c: { nombre: string }) => c.nombre === "Cliente Sin Canal")).toBe(false);
   });
 
   it("un técnico no crea clientes ni programa visitas", async () => {
@@ -152,7 +169,7 @@ describe("visitas (iteración 7)", () => {
 
   it("dos personas cambiando la misma visita: la segunda recibe conflicto de versión (QA-25)", async () => {
     const visita = await programar(await clienteConSitio());
-    const primera = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 1, programadaPara: "2026-10-05", motivo: "Mantenimiento" });
+    const primera = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 1, programadaPara: "2026-12-05", motivo: "Mantenimiento" });
     expect(primera.statusCode).toBe(200);
     const segunda = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/cancelar`, { version: 1, motivo: "Otra razón" });
     expect(segunda.statusCode).toBe(409);
@@ -197,5 +214,67 @@ describe("visitas (iteración 7)", () => {
     const { tecnicos } = (await pedir(org.oficina.cookie, "GET", "/api/tecnicos")).json();
     expect(tecnicos.map((t: { id: string }) => t.id)).toContain(org.tecnico.id);
     expect(tecnicos.map((t: { id: string }) => t.id)).not.toContain(org.oficina.id);
+  });
+});
+
+describe("visitas con horario (ADR-0037)", () => {
+  const nuevoTecnico = async (nombre: string) => {
+    const usuario = `t.${randomUUID().slice(0, 8)}`;
+    const { id } = await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre, rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    return { id, cookie: await iniciarSesion(app, usuario, "contrasena-de-prueba") };
+  };
+  const conHorario = async (tecnicos: string[], horaInicio: string | null, horaFin: string | null, programadaPara = "2026-11-02") => {
+    const cliente = await clienteConSitio();
+    return pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara, horaInicio, horaFin, tecnicos });
+  };
+
+  it("de una hora a otra: se cruza con lo que la toca, no con lo que empieza cuando termina", async () => {
+    const ana = await nuevoTecnico("Ana Técnica");
+    const primera = await conHorario([ana.id], "09:00", "12:00");
+    expect(primera.statusCode, primera.body).toBe(201);
+    expect(primera.json()).toMatchObject({ horaInicio: "09:00", horaFin: "12:00", terminada: null });
+    const cruzada = await conHorario([ana.id], "11:00", "13:00");
+    expect(cruzada.statusCode).toBe(409);
+    expect(cruzada.json()).toMatchObject({ codigo: "tecnico_ocupado", ocupados: [{ tecnico: { id: ana.id, nombre: "Ana Técnica" }, visitaId: primera.json().id }] });
+    expect((await conHorario([ana.id], "12:00", "13:00")).statusCode).toBe(201);
+    // Otro día no cuenta.
+    expect((await conHorario([ana.id], "09:00", "12:00", "2026-11-03")).statusCode).toBe(201);
+  });
+
+  it("todo el día ocupa el día entero; el fin exige el inicio y va después", async () => {
+    const beto = await nuevoTecnico("Beto Técnico");
+    expect((await conHorario([beto.id], null, null)).statusCode).toBe(201);
+    expect((await conHorario([beto.id], "15:00", "16:00")).json().codigo).toBe("tecnico_ocupado");
+    expect((await conHorario([beto.id], null, "10:00", "2026-11-04")).statusCode).toBe(400);
+    expect((await conHorario([beto.id], "10:00", "09:00", "2026-11-04")).statusCode).toBe(400);
+  });
+
+  it("sin hora de fin ocupa hasta que el técnico la termina desde su teléfono; repetirlo no cambia nada", async () => {
+    const ciro = await nuevoTecnico("Ciro Técnico");
+    const abierta = (await conHorario([ciro.id], "14:00", null, "2026-09-28")).json();
+    expect((await conHorario([ciro.id], "16:00", "17:00", "2026-09-28")).json().codigo).toBe("tecnico_ocupado");
+
+    const ocupacion = (await pedir(org.oficina.cookie, "GET", "/api/visitas/ocupacion?fecha=2026-09-28")).json().ocupaciones;
+    expect(ocupacion).toContainEqual(expect.objectContaining({ tecnicoId: ciro.id, visitaId: abierta.id, horaInicio: "14:00", horaFin: null, terminadaEn: null }));
+
+    // Otro técnico no la termina; el asignado sí, a las 3:00 p. m. de Colombia.
+    expect((await pedir(org.tecnico.cookie, "POST", `/api/visitas/${abierta.id}/terminar`, { llave: randomUUID(), en: "2026-09-28T15:00:00-05:00" })).statusCode).toBe(404);
+    {
+      const terminada = await pedir(ciro.cookie, "POST", `/api/visitas/${abierta.id}/terminar`, { llave: randomUUID(), en: "2026-09-28T15:00:00-05:00" });
+      expect(terminada.json()).toEqual({ terminada: { en: "2026-09-28T20:00:00.000Z" } });
+      const otra = await pedir(ciro.cookie, "POST", `/api/visitas/${abierta.id}/terminar`, { llave: randomUUID(), en: "2026-09-28T16:30:00-05:00" });
+      expect(otra.json()).toEqual({ terminada: { en: "2026-09-28T20:00:00.000Z" } });
+      expect((await conHorario([ciro.id], "16:00", "17:00", "2026-09-28")).statusCode).toBe(201);
+    }
+  });
+
+  it("reprogramar a una hora ocupada se rechaza; el teléfono recibe el horario", async () => {
+    const dora = await nuevoTecnico("Dora Técnica");
+    await conHorario([dora.id], "08:00", "10:00", "2026-11-05");
+    const otra = (await conHorario([dora.id], "13:00", "15:00", "2026-11-05")).json();
+    const r = await pedir(org.oficina.cookie, "POST", `/api/visitas/${otra.id}/reprogramar`, { version: 1, programadaPara: "2026-11-05", horaInicio: "09:00", horaFin: "11:00", motivo: "Mantenimiento" });
+    expect(r.json().codigo).toBe("tecnico_ocupado");
+    const ok = await pedir(org.oficina.cookie, "POST", `/api/visitas/${otra.id}/reprogramar`, { version: 1, programadaPara: "2026-11-05", horaInicio: "10:00", horaFin: null, motivo: "Mantenimiento" });
+    expect(ok.json()).toMatchObject({ horaInicio: "10:00", horaFin: null });
   });
 });

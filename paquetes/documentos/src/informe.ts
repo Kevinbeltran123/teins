@@ -114,7 +114,7 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
               const filas = valor
                 .map((linea) => `<tr><td>${escapar(linea.descripcion)}</td><td class="numero">${aDecimalColombiano(linea.cantidad)}</td><td>${escapar(linea.unidad)}</td><td>${escapar(linea.observacion ?? "")}</td></tr>`)
                 .join("");
-              return `<h4>${escapar(campo.etiqueta)}</h4><table class="cantidades"><thead><tr><th>Descripción</th><th class="numero">Cantidad</th><th>Unidad</th><th>Observación</th></tr></thead><tbody>${filas}</tbody></table>`;
+              return `<h4>${escapar(campo.etiqueta)}</h4><table class="cantidades"><colgroup><col><col class="c-cantidad"><col class="c-unidad"><col class="c-observacion"></colgroup><thead><tr><th>Descripción</th><th class="numero">Cantidad</th><th>Unidad</th><th>Observación</th></tr></thead><tbody>${filas}</tbody></table>`;
             })
             .join("");
           // Constancia de visita (ADR-0024): lo que leyó quien firmó, su firma y cuándo.
@@ -204,7 +204,10 @@ table.datos th, table.datos td { text-align: left; vertical-align: top; padding:
 table.datos th { width: 38%; font-weight: 400; color: ${MARCA.secundario}; }
 table.datos td { font-weight: 600; }
 table.datos tr { break-inside: avoid; }
-table.cantidades { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+/* Columnas de ancho fijo (iteración 29): la tabla queda pareja en la vista y en el PDF, sin importar el texto */
+table.cantidades { width: 100%; border-collapse: collapse; margin-bottom: 8pt; table-layout: fixed; }
+table.cantidades col.c-cantidad { width: 14%; } table.cantidades col.c-unidad { width: 11%; } table.cantidades col.c-observacion { width: 30%; }
+table.cantidades th.numero, table.cantidades td.numero { padding-right: 14pt; }
 table.cantidades th { text-align: left; font-weight: 400; color: ${MARCA.secundario}; border-bottom: 1px solid ${MARCA.division}; padding: 4pt 6pt 4pt 0; }
 table.cantidades td { padding: 4pt 6pt 4pt 0; border-bottom: 1px solid ${MARCA.division}; vertical-align: top; }
 table.cantidades tr { break-inside: avoid; }

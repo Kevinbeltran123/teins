@@ -12,8 +12,8 @@ import { suscripciones } from "./esquema";
 
 /** Hechos que merecen un aviso (ADR-0023): cada uno pide una acción de quien lo recibe. */
 export type Aviso =
-  | { tipo: "visita_asignada" | "visita_cancelada" | "visita_retirada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; programadaPara: string }
-  | { tipo: "visita_reprogramada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; antes: string; despues: string }
+  | { tipo: "visita_asignada" | "visita_cancelada" | "visita_retirada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; programadaPara: string; horaInicio?: string | null }
+  | { tipo: "visita_reprogramada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; antes: string; despues: string; horaAntes?: string | null; horaDespues?: string | null }
   | { tipo: "comentario" | "levantamiento_revisado"; organizacionId: string; tecnicoId: string; levantamientoId: string; creadoEn: Date }
   | { tipo: "levantamiento_enviado"; organizacionId: string; levantamientoId: string; tecnico: string }
   /** A quien publicó o pidió el envío: una copia del informe no llegó al cliente (ADR-0028). */
@@ -29,18 +29,26 @@ export interface Contenido {
 
 const ZONA = "America/Bogota";
 const formatoDia = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-/** "sáb, 3 de oct": la visita tiene día, no hora. */
+/** "sáb, 3 de oct". */
 const dia = (aaaaMmDd: string) => formatoDia.format(new Date(`${aaaaMmDd}T00:00:00Z`));
+/** "14:00" → "2:00 p. m." (ADR-0037). */
+const hora12 = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number) as [number, number];
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h >= 12 ? "p. m." : "a. m."}`;
+};
+const aLas = (hora: string | null | undefined) => (hora ? `, a las ${hora12(hora)}` : "");
 const diaDe = (momento: Date) => dia(momento.toLocaleDateString("en-CA", { timeZone: ZONA }));
 
 export function contenidoDe(aviso: Aviso): Contenido {
   switch (aviso.tipo) {
     case "visita_asignada":
-      return { titulo: "Visita nueva", cuerpo: `Para el ${dia(aviso.programadaPara)}. Ábrela para ver el cliente y el sitio.`, etiqueta: `visita:${aviso.visitaId}` };
+      return { titulo: "Visita nueva", cuerpo: `Para el ${dia(aviso.programadaPara)}${aLas(aviso.horaInicio)}. Ábrela para ver el cliente y el sitio.`, etiqueta: `visita:${aviso.visitaId}` };
     case "visita_reprogramada":
-      return aviso.antes === aviso.despues
-        ? { titulo: "Visita cambiada", cuerpo: `Oficina cambió el motivo de la visita del ${dia(aviso.despues)}.`, etiqueta: `visita:${aviso.visitaId}` }
-        : { titulo: "Visita reprogramada", cuerpo: `La del ${dia(aviso.antes)} pasó al ${dia(aviso.despues)}.`, etiqueta: `visita:${aviso.visitaId}` };
+      return aviso.antes !== aviso.despues
+        ? { titulo: "Visita reprogramada", cuerpo: `La del ${dia(aviso.antes)} pasó al ${dia(aviso.despues)}${aLas(aviso.horaDespues)}.`, etiqueta: `visita:${aviso.visitaId}` }
+        : (aviso.horaAntes ?? null) !== (aviso.horaDespues ?? null)
+          ? { titulo: "Visita reprogramada", cuerpo: `La del ${dia(aviso.despues)} ${aviso.horaDespues ? `ahora es a las ${hora12(aviso.horaDespues)}` : "ahora es todo el día"}.`, etiqueta: `visita:${aviso.visitaId}` }
+          : { titulo: "Visita cambiada", cuerpo: `Oficina cambió el motivo de la visita del ${dia(aviso.despues)}.`, etiqueta: `visita:${aviso.visitaId}` };
     case "visita_cancelada":
       return { titulo: "Visita cancelada", cuerpo: `Oficina canceló la visita del ${dia(aviso.programadaPara)}.`, etiqueta: `visita:${aviso.visitaId}` };
     case "visita_retirada":

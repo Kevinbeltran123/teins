@@ -12,6 +12,7 @@ export type TipoEvento =
   | "visita_reasignada"
   | "visita_reprogramada"
   | "visita_cancelada"
+  | "visita_terminada"
   | "cliente_creado"
   | "sitio_agregado"
   | "contacto_creado"
