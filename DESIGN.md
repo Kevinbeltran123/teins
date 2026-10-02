@@ -100,9 +100,10 @@ Todos viven en `paquetes/ui`; ninguna pantalla define colores ni estilos propios
 | `Tabla` | Listas de oficina. Toda la fila abre el detalle cuando lo hay; el primer dato es un enlace real para el teclado |
 | `Insignia` | Estados: una o dos palabras con su color |
 | `Aviso` | Algo que la persona debe leer y quizá resolver, junto a lo que lo causó. Los errores van siempre aquí, nunca en una notificación |
-| Notificación (`useNotificar`) | Confirma algo ya hecho y no exige respuesta: "Cliente creado", "Foto eliminada · Deshacer". 5 s, 10 s con acción |
+| Notificación (`useNotificar`) | Confirma algo ya hecho y no exige respuesta: "Cliente creado", "Foto eliminada · Deshacer". 5 s, 10 s con acción. La acción es texto, sin borde (iteración 29) |
 | `Dialogo` centrado | Confirmaciones y lo que se entrega una sola vez |
-| `Dialogo` lateral | Crear o editar en oficina: la lista sigue visible detrás |
+| `Dialogo` de formulario (`forma="formulario"`) | Crear o editar algo corto en oficina (iteración 29): centrado, del alto de su contenido, con su equis. `ancho`: 480 (por omisión), 560 (`ancho`, dos columnas de campos), 880 (`doble`, Programar visita) o 1040 (`previa`, con la vista previa al lado) |
+| `Dialogo` lateral | Crear o editar algo largo, o lo que se arma mirando la lista: Nuevo cliente, Nueva cotización, Importar |
 | `Dialogo` inferior | Confirmaciones en campo, al alcance del pulgar |
 | `Confirmacion` | Lo que tiene consecuencias (ver abajo) |
 | `EstadoVacio` | Lista sin nada: qué aparecerá y cómo llega |
@@ -125,7 +126,7 @@ Confirmar lo que se hace a menudo entrena a aceptar sin leer. Por eso hay tres n
 
 En el código, `Confirmacion` exige `nivel`: `consecuencia` o `irreversible` (botón de peligro). Lo que se deshace fácil no usa `Confirmacion`.
 
-Los formularios con cambios sin guardar avisan antes de salir (`useSalidaProtegida` en oficina), con "Guardar y salir" como acción principal y "Salir sin guardar" a la izquierda, en rojo.
+Los formularios con cambios sin guardar avisan antes de salir (`useSalidaProtegida` en oficina), con "Guardar y salir" como acción principal y "Salir sin guardar" a la izquierda, en rojo; el pie va en una sola fila de 480 px y el atajo (↵) solo en la acción principal.
 
 Lo que se hace en una hoja lateral (reasignar técnicos, reprogramar, importar) no lleva un segundo diálogo: la hoja ya es el paso deliberado, y dice antes del botón qué va a pasar ("Juan Pérez deja de verla en su teléfono"); el botón lo repite con el nombre ("Reasignar a María Gómez").
 
@@ -135,7 +136,11 @@ En campo, el botón atrás del teléfono hace lo que la flecha de la pantalla; e
 
 ## Crear y editar
 
-- En oficina, "Nuevo…" abre una **hoja lateral**. Al guardar, la hoja se cierra, lo nuevo aparece **primero** en la lista, resaltado con el azul de la marca que se desvanece en unos 2 s, y una notificación lo confirma. Con movimiento reducido, el resaltado queda fijo.
+- En oficina, un formulario de hasta unos cuatro campos que no necesita ver la lista (nuevo ítem, precio, sitio, contacto, usuario, contraseña) va en un **diálogo centrado del alto de su contenido**; la hoja lateral queda para lo largo o lo que se arma mirando la lista (iteración 29: la hoja a todo el alto para tres campos dejaba media pantalla en blanco). Un formulario se ve entero al abrirse, sin bajar: si no cabe en una columna, va en dos (Programar visita).
+- Al guardar, la capa se cierra, lo nuevo aparece **primero** en la lista con un tinte de la marca al 8 % que se va en 1,2 s, sin barra ni negrita, y una notificación lo confirma. Con movimiento reducido, el tinte queda fijo.
+- Un campo que se escribe libre (la unidad del catálogo) puede ofrecer debajo, como atajos pequeños, los valores que ya se usan; nunca limita lo que se escribe.
+- Ninguna fecha ni hora se elige con el control del navegador en oficina: van en selectores propios (calendario y rejilla de horas), que siguen los tokens.
+- Un panel del carril no lleva botones estirados a todo su ancho: la acción de la pantalla va en la barra superior ("Marcar revisado", "Publicar") y el panel dice el estado en una línea.
 - Los formularios de creación nunca quedan abiertos encima de las listas.
 - Validar al enviar: cada campo con su mensaje, no un mensaje general.
 
@@ -162,7 +167,8 @@ Cuatro pasos numerados en una misma pantalla: confirmar la contraseña; escanear
 | Campo · Captura | El dato que se está llenando, con el anillo azul del foco, y la barra de envío abajo |
 | Campo · Boceto | La hoja, en toda la pantalla: una barra de iconos arriba y, abajo, la hoja en que se está |
 | Oficina · Levantamientos | "Esperando revisión": cuántos hay, el que más lleva esperando y "Tomar para revisar" |
-| Oficina · Visitas | Las próximas visitas, empezando por las de hoy, con "Programar visita" |
+| Oficina · Visitas | Las próximas visitas, empezando por las de hoy y por hora, con "Programar visita"; las que siguen abiertas, "En curso" |
+| Oficina · Mi cuenta | Una columna de 680 px centrada: cada fila con su icono, nombre, estado y una acción secundaria; ninguna es principal |
 | Oficina · Administración | La tabla de la pestaña elegida; al crear una credencial, el diálogo que la entrega |
 | Portal | El informe más reciente y su "Descargar" |
 
@@ -203,7 +209,7 @@ Cada animación tiene un propósito escrito. Desde la iteración 27 (`prototipos
 
 **Qué se mueve:** con dirección (`adelante`, `atras`, `seccion`, `fundido`) se mueve lo que se ve en la ventana, menos lo que tiene nombre propio; la foto es del tamaño de la ventana, nunca del documento entero, para que una lista larga o un levantamiento con fotos no congelen la transición (en el iPhone sí lo harían). Se quedan quietos por su nombre: `menu` y `barra-oficina` (oficina), `barra-paso` y `progreso` (campo) y `carril` (la revisión). Van de su lugar al nuevo, por elemento: `visita-<id>`, `lev-<id>`, `estado-<id>`, `nombre-<id>`, `fila-<id>` e `indicador-<id>` (`nombreDeTransicion`). Las filas de una lista larga llevan su nombre solo mientras se ven (`useNombreEnPantalla`). Un nombre se repite en una pantalla solo si es el mismo elemento.
 
-**Duraciones:** 120 ms (pulsación), 200 ms (capas y salidas), 280 ms (pantallas y hojas), 2,4 s (resaltado). **Curva:** `cubic-bezier(0.2, 0, 0, 1)`. **Con `prefers-reduced-motion`, nada se mueve:** los cambios son instantáneos, las capas se quitan sin salir y lo resaltado queda fijo.
+**Duraciones:** 120 ms (pulsación), 200 ms (capas y salidas), 280 ms (pantallas y hojas), 1,2 s (resaltado, desde la iteración 29). **Curva:** `cubic-bezier(0.2, 0, 0, 1)`. **Con `prefers-reduced-motion`, nada se mueve:** los cambios son instantáneos, las capas se quitan sin salir y lo resaltado queda fijo.
 
 ## Iconos
 

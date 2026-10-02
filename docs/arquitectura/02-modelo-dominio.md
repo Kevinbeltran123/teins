@@ -87,7 +87,7 @@ erDiagram
 | **Levantamiento** | Secciones, respuestas, líneas de cantidad, referencias a evidencias | Técnico en borrador; oficina después | Sube al enviar; su estado baja |
 | **Archivo** | Binario inmutable con huella digital | Quien lo crea | Sube |
 | **Comentario** | Texto, autor, fecha, referencia al campo | Oficina | Baja |
-| **Visita** | Cliente, sitio, motivo, canal de origen, técnicos asignados, fecha | Oficina, supervisor | Baja |
+| **Visita** | Cliente, sitio, motivo, canal de origen, técnicos asignados, fecha y horario (ADR-0037) | Oficina, supervisor | Baja |
 | **Formato** | Nombre, tipo de servicio, versión vigente | Administrador | No |
 | **Versión de formato** | Definición completa (ADR-0006) | Nadie tras publicarse | Baja |
 | **Ítem de catálogo** | Código, descripción, unidad por defecto, activo | Oficina, administrador | Baja |
@@ -135,7 +135,7 @@ La versión publicada es una **copia**, no una referencia.
 
 ### Visita
 
-Su avance se **deduce** de sus levantamientos e informes. Solo *Cancelada* es explícito.
+Su avance se **deduce** de sus levantamientos e informes. Solo *Cancelada* y, desde la iteración 31, *Terminada* son explícitos: un técnico la termina desde su teléfono (ADR-0037). Su horario puede ser todo el día, de una hora a otra, o desde una hora hasta que la terminen; mientras tanto el técnico está ocupado y no se le programa otra visita que se cruce.
 
 ---
 
