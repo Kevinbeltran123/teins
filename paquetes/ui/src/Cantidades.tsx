@@ -35,6 +35,7 @@ export function EditorCantidades({
   obligatorio,
   error,
   agregarDelCatalogo,
+  disposicion = "tarjetas",
 }: {
   etiqueta: string;
   lineas: readonly LineaEditable[];
@@ -46,6 +47,11 @@ export function EditorCantidades({
   error?: string | undefined;
   /** Abre la búsqueda en el catálogo; sin ella (no hay catálogo, o es oficina) solo se agregan líneas libres. */
   agregarDelCatalogo?: (() => void) | undefined;
+  /**
+   * "tabla" en oficina (iteración 29): una fila por línea con un solo encabezado, en lugar de una tarjeta con cuatro
+   * campos que repiten "de la línea N". En el teléfono siguen las tarjetas.
+   */
+  disposicion?: "tarjetas" | "tabla";
 }) {
   const notificar = useNotificar();
   const cambiar = (i: number, cambio: Partial<LineaEditable>) => onCambio(lineas.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
@@ -56,6 +62,55 @@ export function EditorCantidades({
     notificar({ texto: `Línea ${i + 1} quitada`, accion: { texto: "Deshacer", alHacer: () => onCambio(antes) } });
   }
   const errorId = `error-cantidades-${etiqueta}`;
+  const agregarLibre = () => onCambio([...lineas, lineaLibre(nuevoId(), unidades)]);
+  if (disposicion === "tabla") {
+    return (
+      <fieldset className="flex flex-col gap-3" aria-describedby={error ? errorId : undefined}>
+        <legend className="mb-1.5">
+          <EtiquetaCampo obligatorio={obligatorio}>{etiqueta}</EtiquetaCampo>
+        </legend>
+        <div className="mat-tabla">
+          <div className="fila-m cab-m" aria-hidden>
+            <span>Descripción</span>
+            <span className="num">Cantidad</span>
+            <span>Unidad</span>
+            <span>Observación</span>
+            <span />
+          </div>
+          {lineas.length === 0 && <p className="vacia-m">Todavía no hay líneas.</p>}
+          {lineas.map((l, i) => (
+            <div key={l.id} role="group" aria-label={`Línea ${i + 1}`} className="fila-m">
+              {l.catalogo ? (
+                <span className="del-catalogo" title={`Del catálogo${l.catalogo.codigo ? ` · ${l.catalogo.codigo}` : ""}`}>
+                  {l.descripcion}
+                </span>
+              ) : (
+                <input className="control-m" aria-label={`Descripción de la línea ${i + 1}`} defaultValue={l.descripcion} onChange={(e) => cambiar(i, { descripcion: e.target.value })} />
+              )}
+              <input className="control-m num" aria-label={`Cantidad de la línea ${i + 1}`} inputMode="decimal" defaultValue={l.cantidad} onChange={(e) => cambiar(i, { cantidad: e.target.value })} />
+              {l.catalogo ? (
+                <span className="del-catalogo">{l.unidad}</span>
+              ) : (
+                <select className="control-m" aria-label={`Unidad de la línea ${i + 1}`} value={l.unidad} onChange={(e) => cambiar(i, { unidad: e.target.value })}>
+                  {unidades.map((u) => (
+                    <option key={u}>{u}</option>
+                  ))}
+                </select>
+              )}
+              <input className="control-m" aria-label={`Observación de la línea ${i + 1} (opcional)`} placeholder="Opcional" defaultValue={l.observacion} onChange={(e) => cambiar(i, { observacion: e.target.value })} />
+              <BotonIcono icono={Trash} etiqueta={`Quitar la línea ${i + 1}`} tamano="pequeno" onClick={() => quitar(i)} />
+            </div>
+          ))}
+          <div className="nueva-m">
+            <Boton variante="fantasma" tamano="pequeno" icono={Plus} onClick={agregarLibre}>
+              Agregar línea
+            </Boton>
+          </div>
+        </div>
+        {error && <MensajeError id={errorId}>{error}</MensajeError>}
+      </fieldset>
+    );
+  }
   return (
     <fieldset className="flex flex-col gap-3" aria-describedby={error ? errorId : undefined}>
       <legend className="mb-1.5">

@@ -69,6 +69,8 @@
   --t-sobre-peligro: #FFFFFF;
   /* Notificaciones: el color del texto de fondo, para separarse del contenido (el texto va en --t-fondo) */
   --t-notificacion: var(--t-texto);
+  /* La acción de una notificación es texto, sin borde (iteración 29): azul claro sobre el fondo oscuro, la marca sobre el claro */
+  --t-enlace-notificacion: light-dark(#9DB8FF, #2F5FE8);
   /* Visor de fotos: casi negro, para que la foto sea lo único que se ve */
   --t-visor: #0A0B0D;
 
@@ -137,8 +139,8 @@
   --t-duracion-rapida: 120ms;
   --t-duracion-estandar: 200ms;
   --t-duracion-pantalla: 280ms;
-  /* Lo recién creado se resalta y se desvanece (Basecamp, "yellow fade") */
-  --t-duracion-resaltado: 2400ms;
+  /* Lo recién creado se resalta y se desvanece (Basecamp, "yellow fade"); 1,2 s y sin barra desde la iteración 29 */
+  --t-duracion-resaltado: 1200ms;
   --t-curva: cubic-bezier(0.2, 0, 0, 1);
 }
 

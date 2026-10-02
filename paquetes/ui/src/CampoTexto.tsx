@@ -23,6 +23,10 @@ interface Props {
   largo?: boolean | undefined;
   /** Respuestas frecuentes que se eligen con un toque (el formato las declara). */
   valoresComunes?: readonly string[] | undefined;
+  /** Oficina: los valores comunes van debajo del campo, como atajos pequeños, y el campo sigue libre ("Escriba o elija"). */
+  sugerencias?: readonly string[] | undefined;
+  /** Texto de ejemplo dentro del campo vacío. */
+  ejemplo?: string | undefined;
 }
 
 export const claseControl =
@@ -31,7 +35,7 @@ export const claseControl =
 export const claseConError = "animate-[sacudida_var(--t-duracion-estandar)_var(--t-curva)] border-2 border-error";
 
 /** No controlado: cada tecla se guarda sin volver a leer de la base, así el cursor no salta. */
-export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, error, deshabilitado, tipo = "text", minimo, autoComplete = "off", nombre, modoEntrada, seleccionarAlEnfocar, largo, valoresComunes }: Props) {
+export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, error, deshabilitado, tipo = "text", minimo, autoComplete = "off", nombre, modoEntrada, seleccionarAlEnfocar, largo, valoresComunes, sugerencias, ejemplo }: Props) {
   const id = useId();
   const campo = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   // Solo para marcar el valor común elegido; el campo sigue sin controlarse (el cursor no salta).
@@ -55,6 +59,24 @@ export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, erro
             cambiar(v);
           }}
           className="h-11 rounded-full border-[1.5px] border-borde-suave px-4 text-cuerpo font-extrabold transition-colors aria-pressed:border-texto aria-pressed:bg-texto aria-pressed:text-fondo disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+        >
+          {v}
+        </button>
+      ))}
+    </div>
+  );
+  const atajos = sugerencias && sugerencias.length > 0 && (
+    <div role="group" aria-label={`Sugerencias de ${etiqueta}`} className="sugerencias">
+      {sugerencias.map((v) => (
+        <button
+          key={v}
+          type="button"
+          disabled={deshabilitado}
+          aria-pressed={actual === v}
+          onClick={() => {
+            if (campo.current) campo.current.value = v;
+            cambiar(v);
+          }}
         >
           {v}
         </button>
@@ -93,7 +115,7 @@ export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, erro
             className={`${claseControl} ${tipo === "password" ? "pr-12" : ""} ${error ? claseConError : ""}`}
             defaultValue={valorInicial}
             disabled={deshabilitado}
-            placeholder={comunes ? "Otro: escríbelo aquí" : undefined}
+            placeholder={comunes ? "Otro: escríbelo aquí" : (ejemplo ?? (atajos ? "Escriba o elija" : undefined))}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
             onChange={(e) => cambiar(e.target.value)}
@@ -113,6 +135,7 @@ export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, erro
         </div>
       )}
       {error && <MensajeError id={`${id}-error`}>{error}</MensajeError>}
+      {atajos}
     </div>
   );
 }

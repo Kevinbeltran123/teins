@@ -105,7 +105,7 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
                 n.accion!.alHacer();
                 quitar(n.id);
               }}
-              className="min-h-control-sm shrink-0 rounded-[7px] px-3 font-semibold text-inherit shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--t-fondo)_25%,transparent)] hover:bg-fondo/10 focus-visible:outline-2 focus-visible:outline-fondo"
+              className="min-h-control-sm shrink-0 rounded-[7px] px-2.5 font-semibold text-enlace-notificacion underline-offset-3 hover:underline focus-visible:outline-2 focus-visible:outline-fondo"
             >
               {n.accion.texto}
             </button>

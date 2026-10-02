@@ -6,7 +6,9 @@ import { sinMovimiento } from "./transicion";
 const formas = {
   /** Confirmaciones y lo que se entrega una sola vez: interrumpe a propósito. */
   centrado: "m-auto max-h-[calc(100dvh-32px)] w-[min(560px,calc(100vw-32px))] rounded-capa open:animate-aparecer",
-  /** Crear o editar en oficina: la lista sigue a la vista detrás del velo (hoja lateral de 480 px). */
+  /** Crear o editar algo corto en oficina (iteración 29): centrado, del alto de su contenido, con su equis. */
+  formulario: "m-auto max-h-[calc(100dvh-32px)] rounded-capa open:animate-aparecer",
+  /** Crear o editar algo largo en oficina: la lista sigue a la vista detrás del velo (hoja lateral de 480 px). */
   lateral: "my-0 mr-0 ml-auto h-dvh max-h-dvh w-[min(480px,100vw)] rounded-l-capa open:animate-entrar-lateral",
   /** Confirmaciones en el teléfono: abajo, al alcance del pulgar. */
   inferior: "mx-auto mt-auto mb-0 max-h-[90dvh] w-full max-w-xl rounded-t-capa open:animate-subir",
@@ -33,6 +35,10 @@ interface Props {
    * campo, para que el teléfono no abra el teclado encima de la lista.
    */
   focoEnElDialogo?: boolean;
+  /** Ancho de un diálogo centrado o de formulario (oficina): 480, 560, 880 (dos columnas) o 1040 (con vista previa). */
+  ancho?: "medio" | "ancho" | "doble" | "previa" | undefined;
+  /** Lo que va junto a la equis, arriba a la derecha (un interruptor de la vista previa). */
+  cabeceraExtra?: ReactNode;
   /** Tono del icono del encabezado (oficina): la consecuencia se reconoce antes de leer. */
   tono?: "" | "peligro" | "exito";
 }
@@ -131,7 +137,7 @@ function useSalida(ref: RefObject<HTMLDialogElement | null>, forma: string) {
  * Esc funciona sin JavaScript de animación (el movimiento es CSS, DESIGN.md; al quitarse, sale con useSalida). Se abre al montarse: quien lo
  * usa lo muestra u oculta con una condición, y cada apertura empieza limpia.
  */
-export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerrar, cerrable = true, forma = "centrado", amplio = false, focoEnElDialogo = false, tono = "" }: Props) {
+export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerrar, cerrable = true, forma = "centrado", amplio = false, focoEnElDialogo = false, tono = "", ancho, cabeceraExtra }: Props) {
   const modal = useModal(cerrable, alCerrar, focoEnElDialogo);
   useSalida(modal.ref, forma);
   const tituloId = useId();
@@ -141,7 +147,7 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
       {...modal}
       aria-labelledby={tituloId}
       tabIndex={focoEnElDialogo ? -1 : undefined}
-      className={`capa-${forma} bg-panel p-0 text-texto shadow-capa backdrop:bg-velo ${amplio && forma === "centrado" ? "w-[min(820px,calc(100vw-32px))]" : ""} ${amplio && forma === "lateral" ? "amplio" : ""} ${focoEnElDialogo ? "outline-none" : ""} ${formas[forma]}`}
+      className={`capa-${forma} bg-panel p-0 text-texto shadow-capa backdrop:bg-velo ${amplio && forma === "centrado" ? "w-[min(820px,calc(100vw-32px))]" : ""} ${amplio && forma === "lateral" ? "amplio" : ""} ${ancho ?? ""} ${focoEnElDialogo ? "outline-none" : ""} ${formas[forma]}`}
     >
       <div className={`flex flex-col ${forma === "lateral" || forma === "hoja" ? "h-full" : "max-h-[inherit]"}`}>
         {forma === "hoja" && <span aria-hidden className="mx-auto mt-2.5 h-1.5 w-11 shrink-0 rounded-full bg-borde-suave" />}
@@ -151,7 +157,7 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
               <Icono aria-hidden />
             </span>
           )}
-          <div className={`flex min-w-0 grow flex-col ${cerrable ? "pr-8" : ""}`}>
+          <div className={`flex min-w-0 grow flex-col ${cerrable ? "pr-8" : ""} ${cabeceraExtra ? "pr-44" : ""}`}>
             <h2 id={tituloId} className="text-subtitulo leading-snug font-extrabold">
               {titulo}
             </h2>
@@ -174,6 +180,7 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
         )}
       </div>
       {/* Al final del documento: el foco inicial cae en el primer campo o en "Cancelar", no en la equis. */}
+      {cabeceraExtra && <div className="capa-extra absolute top-[14px] right-12 flex items-center gap-2">{cabeceraExtra}</div>}
       {cerrable && <BotonIcono icono={X} etiqueta="Cerrar" tamano="pequeno" className="capa-cerrar absolute top-5 right-4" onClick={alCerrar} />}
     </dialog>
   );

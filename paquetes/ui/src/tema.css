@@ -41,6 +41,7 @@
   --color-alerta-fondo: var(--t-alerta-fondo);
   --color-alerta-texto: var(--t-alerta-texto);
   --color-notificacion: var(--t-notificacion);
+  --color-enlace-notificacion: var(--t-enlace-notificacion);
   --color-velo: var(--t-velo);
   --color-visor: var(--t-visor);
   --color-estado-enviado-fondo: var(--t-estado-enviado-fondo);
@@ -239,7 +240,7 @@ dialog.capa-saliendo[data-forma] {
   pointer-events: none;
   max-width: calc(100% - 6px - 2em);
 }
-dialog.capa-saliendo[data-forma="centrado"] { animation: sale-centro var(--t-duracion-estandar) var(--t-curva) both; }
+dialog.capa-saliendo[data-forma="centrado"], dialog.capa-saliendo[data-forma="formulario"] { animation: sale-centro var(--t-duracion-estandar) var(--t-curva) both; }
 dialog.capa-saliendo[data-forma="lateral"] { max-width: 100%; animation: sale-lado var(--t-duracion-estandar) var(--t-curva) both; }
 dialog.capa-saliendo[data-forma="inferior"],
 dialog.capa-saliendo[data-forma="hoja"] { max-width: 100%; animation: hoja-baja var(--t-duracion-estandar) var(--t-curva) both; }
