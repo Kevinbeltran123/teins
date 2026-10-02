@@ -17,6 +17,7 @@ import {
   LIENZO,
   normalizarDecimal,
   LIMITES,
+  fotosReferenciadas,
   nombreDeDato,
   rutaLegible,
   validarRespuestas,
@@ -75,6 +76,7 @@ import {
   Plus,
   Send,
   Smartphone,
+  TriangleAlert,
   TablaCantidades,
   Trash,
   useNotificar,
@@ -121,7 +123,19 @@ const anclaDeSeccion = (seccion: string) => `seccion-${seccion}`;
  */
 const CabeceraDeLaVisita = createContext<string | undefined>(undefined);
 
-export function Captura({ id, volver, alMostrar }: { id: string; volver: () => void; /** Ya se ve lo del levantamiento (no el esqueleto): la tarjeta del inicio puede convertirse en la cabecera. */ alMostrar?: () => void }) {
+export function Captura({
+  id,
+  volver,
+  alMostrar,
+  alDescartar,
+}: {
+  id: string;
+  volver: () => void;
+  /** Ya se ve lo del levantamiento (no el esqueleto): la tarjeta del inicio puede convertirse en la cabecera. */
+  alMostrar?: () => void;
+  /** Se descartó el borrador (ADR-0035): quien abrió la captura vuelve al inicio y lo dice. */
+  alDescartar?: () => void;
+}) {
   // `null` distingue "no existe" de `undefined` (cargando).
   const levantamiento = useLiveQuery(async () => (await repositorio.obtener(id)) ?? null, [id]);
   const envio = useLiveQuery(async () => (await db.envios.get(id)) ?? null, [id]);
@@ -199,6 +213,7 @@ export function Captura({ id, volver, alMostrar }: { id: string; volver: () => v
             atras={atrasDelBorrador}
             retener={() => setRetenido(true)}
             soltar={soltar}
+            alDescartar={alDescartar ?? volver}
           />
         </div>
       </CabeceraDeLaVisita.Provider>
@@ -336,6 +351,7 @@ function Borrador({
   atras,
   retener,
   soltar,
+  alDescartar,
 }: {
   id: string;
   formato: VersionFormato;
@@ -349,6 +365,7 @@ function Borrador({
   retener: () => void;
   /** Ya bajó la hoja: avanzar a "Enviado". */
   soltar: () => void;
+  alDescartar: () => void;
 }) {
   const pasos = pasosDe(formato);
   const cabecera = useContext(CabeceraDeLaVisita);
@@ -356,6 +373,7 @@ function Borrador({
   const porSubir = useLiveQuery(() => db.envios.filter((e) => e.estado !== "recibido").count(), []);
   const [errores, setErrores] = useState<readonly ErrorValidacion[] | null>(null);
   const [confirmando, setConfirmando] = useState(false);
+  const [descartando, setDescartando] = useState(false);
   const [faltantesDelPaso, setFaltantesDelPaso] = useState<{ pasoId: string; lista: readonly ErrorValidacion[] } | null>(null);
   // Cada intento de enviar con datos pendientes sacude la lista de lo que falta.
   const [sacudir, setSacudir] = useState(0);
@@ -509,6 +527,7 @@ function Borrador({
       />
     ));
   const total = pasos.length + 1;
+  const fotosDelBorrador = fotosReferenciadas(actual.respuestas).length;
   const contador = `${hechos}/${pasos.length}`;
 
   let pantalla: ReactNode;
@@ -538,6 +557,15 @@ function Borrador({
               />
             </ListaRecorrido>
           </nav>
+          {/* Al final y discreto: no se toca por error (ADR-0035). Con un toque, la hoja dice qué pasa con las fotos. */}
+          <button
+            type="button"
+            onClick={() => setDescartando(true)}
+            className="inline-flex min-h-tactil items-center gap-2 self-center rounded-control px-3 text-cuerpo font-medium text-error focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-4"
+          >
+            <Trash aria-hidden />
+            Descartar levantamiento
+          </button>
         </main>
         <BarraDePaso>
           <BotonSiguiente onClick={() => ir(actualEnRecorrido ? { tipo: "paso", paso: actualEnRecorrido.id } : { tipo: "revisar" })}>
@@ -695,6 +723,28 @@ function Borrador({
             })}
           </ul>
         </Dialogo>
+      )}
+      {descartando && (
+        <Confirmacion
+          nivel="irreversible"
+          forma="inferior"
+          titulo="¿Descartar este levantamiento?"
+          confirmar="Descartar"
+          descartar="Volver"
+          accion={() => repositorio.descartar(id, new Date())}
+          mensajeDeError={() => "No se pudo descartar. Intenta de nuevo."}
+          alCerrar={() => setDescartando(false)}
+          alTerminar={alDescartar}
+          consecuencias={[
+            { icono: Smartphone, texto: "Sale de Mis visitas", ...(actual.visitaId ? { detalle: "La visita queda sin levantamiento: se puede iniciar otro" } : {}) },
+            { icono: Trash, texto: "Queda 30 días en Descartados, en tu cuenta", detalle: "De ahí lo recuperas con todo lo que tenía" },
+            {
+              icono: TriangleAlert,
+              texto: `Después se borra del teléfono${fotosDelBorrador > 0 ? ` con ${fotosDelBorrador === 1 ? "su foto" : `sus ${fotosDelBorrador} fotos`}` : ""}`,
+              detalle: "Oficina nunca lo recibió: no queda otra copia",
+            },
+          ]}
+        />
       )}
       {confirmando && (
         <Confirmacion
@@ -1444,6 +1494,8 @@ function Enviado({
                 <p className="text-ayuda text-texto-secundario">
                   {c.autor} · {fechaHora(c.creadoEn)}
                   {sobre(c) && ` · Sobre ${sobre(c)}`}
+                  {/* Oficina lo corrigió (ADR-0035): se ve la última versión. */}
+                  {c.editadoEn && " · Editado"}
                 </p>
                 <p className="text-cuerpo whitespace-pre-line">{c.texto}</p>
               </li>

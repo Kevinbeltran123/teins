@@ -1,7 +1,7 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LockKeyhole, LogOut, MapPin, OPCIONES_DE_TEMA, Smartphone, nombreDeTransicion, useNombreEnPantalla, useSinRepetir, useTema } from "@teins/ui";
+import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LockKeyhole, LogOut, MapPin, OPCIONES_DE_TEMA, Smartphone, nombreDeTransicion, Trash, useNombreEnPantalla, useSinRepetir, useTema } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
@@ -21,6 +21,8 @@ import { Diagnostico } from "./Diagnostico";
 const SugerirLlave = lazy(() => import("./SugerirLlave"));
 const TarjetaAvisos = lazy(() => import("./TarjetaAvisos"));
 const HojaCambiarContrasena = lazy(() => import("./HojaCambiarContrasena"));
+// La papelera (ADR-0035): solo al abrirla.
+const Papelera = lazy(() => import("./Papelera"));
 const GuiaDeInstalacion = lazy(() => import("./InstalarApp").then((m) => ({ default: m.GuiaDeInstalacion })));
 
 interface Props {
@@ -28,6 +30,8 @@ interface Props {
   abrir: (id: string) => void;
   /** El levantamiento que se acaba de cerrar: se resalta en su lista (lo enviado, en "Enviados"). */
   recien?: string | undefined;
+  /** Cambia cuando se pide abrir la papelera desde fuera ("Ver en Descartados" al descartar). */
+  pedirPapelera?: number | undefined;
   pedirSesion: () => void;
   actualizacion: { disponible: boolean; aplicar: () => void };
 }
@@ -56,7 +60,7 @@ interface Contexto {
   recien: string | undefined;
 }
 
-export function Inicio({ usuario, abrir, recien, pedirSesion, actualizacion }: Props) {
+export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion, actualizacion }: Props) {
   // Al volver de una captura, el inicio empieza con lo que ya había leído: sin esqueleto (iteración 27).
   const lista = useLecturaRecordada(`lista:${usuario.id}`, () => repositorio.listar(usuario.id), [usuario.id]);
   const envios = useLecturaRecordada(`envios:${usuario.id}`, async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
@@ -71,6 +75,11 @@ export function Inicio({ usuario, abrir, recien, pedirSesion, actualizacion }: P
   const [guiaAbierta, setGuiaAbierta] = useState(false);
   const [cuentaAbierta, setCuentaAbierta] = useState(false);
   const [cambiandoContrasena, setCambiandoContrasena] = useState(false);
+  const [papeleraAbierta, setPapeleraAbierta] = useState(false);
+  const descartados = useLecturaRecordada(`descartados:${usuario.id}`, async () => (await repositorio.descartados(usuario.id)).length, [usuario.id]);
+  useEffect(() => {
+    if (pedirPapelera > 0) setPapeleraAbierta(true);
+  }, [pedirPapelera]);
 
   const deEnvios = [...(envios?.values() ?? [])];
   const porEnviar = deEnvios.filter((e) => e.estado !== "recibido").length;
@@ -262,6 +271,20 @@ export function Inicio({ usuario, abrir, recien, pedirSesion, actualizacion }: P
                 {!alcanzable && <span className="text-ayuda font-normal text-texto-secundario">Necesita señal</span>}
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCuentaAbierta(false);
+                setPapeleraAbierta(true);
+              }}
+              className="flex min-h-tactil items-center gap-3 rounded-panel bg-panel-hundido px-4 py-2 text-left text-cuerpo font-bold focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&_svg]:size-5"
+            >
+              <Trash aria-hidden />
+              <span className="flex grow flex-col">
+                Descartados
+                <span className="text-ayuda font-normal text-texto-secundario">{descartados ? `${descartados} · se recuperan durante 30 días` : "Ninguno"}</span>
+              </span>
+            </button>
             <Diagnostico tecnicoId={usuario.id} />
             <button
               type="button"
@@ -277,6 +300,12 @@ export function Inicio({ usuario, abrir, recien, pedirSesion, actualizacion }: P
             </button>
           </div>
         </Dialogo>
+      )}
+
+      {papeleraAbierta && formatos && (
+        <Suspense fallback={null}>
+          <Papelera usuarioId={usuario.id} formatos={formatos} alCerrar={() => setPapeleraAbierta(false)} />
+        </Suspense>
       )}
 
       {cambiandoContrasena && (

@@ -22,7 +22,7 @@ import {
 import type { Table } from "dexie";
 import { llaveDeEnvio } from "@teins/protocolo/llaves";
 import type { BaseCampo } from "./base";
-import type { ArchivoGuardado, EnvioLocal, LevantamientoGuardado, LevantamientoLocal } from "./modelo";
+import { DIAS_EN_LA_PAPELERA, type ArchivoGuardado, type EnvioLocal, type LevantamientoGuardado, type LevantamientoLocal } from "./modelo";
 import { abrirArchivo, abrirLevantamiento, referencias, sellarArchivo, sellarEnvio, sellarLevantamiento } from "./registros";
 import type { RepositorioLevantamientos } from "./repositorio";
 
@@ -140,9 +140,46 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
     },
     obtener,
     async listar(tecnicoId) {
-      const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
+      const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).filter((g) => !g.descartadoEn).toArray();
       const abiertos = await Promise.all(propios.map((g) => abrirLevantamiento(db, g)));
       return abiertos.sort((a, b) => b.actualizadoEn.localeCompare(a.actualizadoEn));
+    },
+    async descartados(tecnicoId) {
+      const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).filter((g) => !!g.descartadoEn).toArray();
+      const abiertos = await Promise.all(propios.map((g) => abrirLevantamiento(db, g)));
+      return abiertos.sort((a, b) => b.descartadoEn!.localeCompare(a.descartadoEn!));
+    },
+    descartar(id, ahora) {
+      return escribir(id, async (actual) => {
+        // Solo un borrador nunca enviado: lo enviado ya es de oficina.
+        if (actual.estado !== "borrador") throw new Error("Solo se descarta un borrador");
+        if (await db.envios.get(id)) throw new Error("Este levantamiento ya se envió");
+        return { resultado: undefined, levantamiento: { ...actual, descartadoEn: ahora.toISOString() } };
+      });
+    },
+    recuperar(id) {
+      return escribir(id, async (actual) => {
+        const otroEnLaVisita =
+          actual.visitaId !== undefined &&
+          (await db.levantamientos.filter((g) => g.id !== id && g.visitaId === actual.visitaId && g.estado === "borrador" && !g.descartadoEn && g.tecnicoId === actual.tecnicoId).count()) > 0;
+        const { descartadoEn: _d, ...sinDescarte } = actual;
+        const recuperado: LevantamientoLocal = otroEnLaVisita ? { ...sinDescarte, visitaId: undefined } : sinDescarte;
+        return { resultado: { suelto: otroEnLaVisita }, levantamiento: recuperado };
+      });
+    },
+    async vaciarPapelera(ahora) {
+      const limite = new Date(ahora.getTime() - DIAS_EN_LA_PAPELERA * 24 * 60 * 60 * 1000).toISOString();
+      return db.transaction("rw", [db.levantamientos, db.archivos], async () => {
+        const vencidos = await db.levantamientos.filter((g) => !!g.descartadoEn && g.descartadoEn < limite).toArray();
+        if (vencidos.length === 0) return 0;
+        const quedan = await db.levantamientos.filter((g) => !vencidos.some((v) => v.id === g.id)).toArray();
+        // Las huellas de cada levantamiento están a la vista: no hace falta abrir ninguno.
+        const enUso = new Set(quedan.flatMap((g) => referencias(g).archivos));
+        const huellas = [...new Set(vencidos.flatMap((g) => referencias(g).archivos))].filter((h) => !enUso.has(h));
+        await db.archivos.bulkDelete(huellas);
+        await db.levantamientos.bulkDelete(vencidos.map((g) => g.id));
+        return vencidos.length;
+      });
     },
     async contarDeOtros(tecnicoId) {
       return db.levantamientos.filter((l) => l.tecnicoId !== undefined && l.tecnicoId !== tecnicoId).count();

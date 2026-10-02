@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
-import { Aviso, conTransicion } from "@teins/ui";
+import { Aviso, conTransicion, useNotificar } from "@teins/ui";
+import { repositorio } from "./datos/instancia";
 import { olvidarLecturas } from "./datos/lecturaRecordada";
 import { debeGuiarInstalacion } from "./dispositivo/instalacion";
 import { Inicio } from "./pantallas/Inicio";
@@ -14,7 +15,7 @@ const InstalarApp = lazy(() => import("./pantallas/InstalarApp"));
 // La captura no hace falta para abrir la app: se carga aparte, apenas se abre el inicio, para que abrir una visita no
 // pase por una pantalla de carga (iteración 27). El service worker la guarda con todo lo demás, así que abre igual
 // sin conexión (ADR-0011).
-type PropsCaptura = { id: string; volver: () => void; alMostrar?: () => void };
+type PropsCaptura = { id: string; volver: () => void; alMostrar?: () => void; alDescartar?: () => void };
 let moduloCaptura: Promise<ComponentType<PropsCaptura>> | undefined;
 const cargarCaptura = () => (moduloCaptura ??= import("./pantallas/Captura").then((m) => m.Captura));
 /** Lo más que se espera a que la captura lea el levantamiento antes de mostrarse (si tarda, abre con su esqueleto). */
@@ -55,6 +56,9 @@ export function App() {
   // El levantamiento que se acaba de cerrar: el inicio lo resalta en su lista (lo enviado baja a "Enviados").
   const [recien, setRecien] = useState<string>();
   const mostrada = useRef<(() => void) | null>(null);
+  // "Ver en Descartados" pide al inicio abrir la papelera (ADR-0035).
+  const [pedirPapelera, setPedirPapelera] = useState(0);
+  const notificar = useNotificar();
   const [pidiendoSesion, setPidiendoSesion] = useState(false);
   const [guiarInstalacion, setGuiarInstalacion] = useState(debeGuiarInstalacion);
   const {
@@ -70,7 +74,11 @@ export function App() {
   const conSesion = Boolean(usuario);
   useEffect(() => (conSesion ? programarSincronizacion() : undefined), [conSesion]);
   useEffect(() => {
-    if (conSesion) void cargarCaptura().then((c) => setCaptura(() => c));
+    if (conSesion) {
+      void cargarCaptura().then((c) => setCaptura(() => c));
+      // Lo que lleva más de 30 días en la papelera se borra del teléfono con sus fotos (ADR-0035).
+      void repositorio.vaciarPapelera(new Date()).catch(() => undefined);
+    }
     // Sin sesión no queda nada de la persona anterior en memoria.
     else olvidarLecturas();
   }, [conSesion]);
@@ -107,7 +115,21 @@ export function App() {
   // La primera instalación requiere iniciar sesión (ADR-0015, sección 5).
   else if (usuario === null) pantalla = guiarInstalacion ? <InstalarApp alSeguir={() => setGuiarInstalacion(false)} /> : <IniciarSesion />;
   else if (pidiendoSesion) pantalla = <IniciarSesion alCancelar={() => setPidiendoSesion(false)} />;
-  else if (abierto && Captura) pantalla = <Captura id={abierto} volver={volver} alMostrar={() => mostrada.current?.()} />;
+  else if (abierto && Captura)
+    pantalla = (
+      <Captura
+        id={abierto}
+        volver={volver}
+        alMostrar={() => mostrada.current?.()}
+        alDescartar={() => {
+          void conTransicion(() => {
+            setAbierto(undefined);
+            window.scrollTo(0, 0);
+          }, "fundido");
+          notificar({ texto: "Levantamiento descartado", accion: { texto: "Ver en Descartados", alHacer: () => setPedirPapelera((n) => n + 1) } });
+        }}
+      />
+    );
   else if (abierto) pantalla = <Abriendo />;
   else
     pantalla = (
@@ -116,6 +138,7 @@ export function App() {
         usuario={usuario}
         abrir={abrir}
         recien={recien}
+        pedirPapelera={pedirPapelera}
         pedirSesion={() => setPidiendoSesion(true)}
         actualizacion={{ disponible: actualizacionDisponible, aplicar: () => void updateServiceWorker(true) }}
       />

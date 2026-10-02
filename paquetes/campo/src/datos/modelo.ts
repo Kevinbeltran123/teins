@@ -18,7 +18,17 @@ export interface ClaveLocal {
  * Levantamiento en el dispositivo, con su responsable (regla 1). Un teléfono puede compartirse:
  * solo se envía con la sesión de quien lo creó. Los del corte 0 no tienen responsable hasta el primer inicio de sesión.
  */
-export type LevantamientoLocal = Levantamiento & { tecnicoId?: string | undefined };
+export type LevantamientoLocal = Levantamiento & {
+  tecnicoId?: string | undefined;
+  /**
+   * Descartado por el técnico (ADR-0035): sale de Mis visitas y queda en la papelera del teléfono, de donde se recupera
+   * durante 30 días; después se borra con sus fotos. A la vista, sin sellar: la papelera no necesita abrirlo.
+   */
+  descartadoEn?: string | undefined;
+};
+
+/** Días que un levantamiento descartado se puede recuperar antes de borrarse del teléfono (ADR-0035). */
+export const DIAS_EN_LA_PAPELERA = 30;
 
 /**
  * Como se guarda (ADR-0022): respuestas y repeticiones van selladas; a la vista queda lo que necesitan
@@ -153,6 +163,8 @@ export interface ComentarioDeOficina {
   campo?: string | undefined;
   autor: string;
   creadoEn: string;
+  /** Oficina lo corrigió (ADR-0035). */
+  editadoEn?: string | undefined;
 }
 
 /** Estado de negocio de un levantamiento propio según el servidor. Distinto del estado de envío. */

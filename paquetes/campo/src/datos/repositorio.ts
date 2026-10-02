@@ -17,8 +17,19 @@ export type ArchivoNuevo = Omit<ArchivoLocal, "subida" | "ultimoErrorDeSubida">;
 export interface RepositorioLevantamientos {
   crear(levantamiento: Levantamiento, tecnicoId: string): Promise<void>;
   obtener(id: string): Promise<LevantamientoLocal | undefined>;
-  /** Levantamientos de un técnico, del más reciente al más antiguo. */
+  /** Levantamientos de un técnico, del más reciente al más antiguo, sin los descartados. */
   listar(tecnicoId: string): Promise<LevantamientoLocal[]>;
+  /** La papelera del técnico (ADR-0035): lo descartado, del más reciente al más antiguo. */
+  descartados(tecnicoId: string): Promise<LevantamientoLocal[]>;
+  /** Descarta un borrador nunca enviado: sale de Mis visitas y queda en la papelera. */
+  descartar(id: string, ahora: Date): Promise<void>;
+  /**
+   * Lo saca de la papelera. Si su visita ya tiene otro borrador, vuelve como levantamiento suelto: una visita no
+   * tiene dos borradores.
+   */
+  recuperar(id: string): Promise<{ suelto: boolean }>;
+  /** Borra lo que lleva más de 30 días en la papelera, con las fotos y dibujos que nada más usa. Devuelve cuántos. */
+  vaciarPapelera(ahora: Date): Promise<number>;
   /** Cuántos levantamientos del teléfono son de otras personas: se conservan, no se muestran. */
   contarDeOtros(tecnicoId: string): Promise<number>;
   /** Los levantamientos del corte 0 no tenían responsable: pasan a quien inicia sesión primero. */

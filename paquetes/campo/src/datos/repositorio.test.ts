@@ -366,3 +366,66 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
     expect(Date.parse(bajada!.permisoLocalHasta) - Date.now()).toBeGreaterThan(6.9 * 86_400_000);
   });
 });
+
+describe("descartar un borrador (ADR-0035)", () => {
+  it("sale de Mis visitas, queda en la papelera y se recupera tal como estaba", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const id = "0192f0e0-0000-7000-8000-000000000500";
+    await repo.crear(crearLevantamiento(formato, id, ahora, "0192f0e0-0000-7000-8000-000000000501"), "t1");
+    await repo.guardarRespuesta(id, "s", "t", "Cuarto de prueba", ahora);
+    await repo.agregarFoto(id, "s", "fotos", archivo(h("a")), ahora);
+
+    await repo.descartar(id, despues);
+    expect(await repo.listar("t1")).toEqual([]);
+    expect((await repo.descartados("t1")).map((l) => [l.id, l.descartadoEn])).toEqual([[id, despues.toISOString()]]);
+
+    expect(await repo.recuperar(id)).toEqual({ suelto: false });
+    const [recuperado] = await repo.listar("t1");
+    expect(recuperado).toMatchObject({ id, respuestas: { s: { t: "Cuarto de prueba", fotos: [h("a")] } } });
+    expect(recuperado!.descartadoEn).toBeUndefined();
+    expect(await repo.descartados("t1")).toEqual([]);
+  });
+
+  it("un levantamiento enviado no se descarta", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const id = "0192f0e0-0000-7000-8000-000000000510";
+    const sinObligatorios: VersionFormato = { ...formato, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "t", etiqueta: "T", tipo: "texto" }] }] };
+    await repo.crear(crearLevantamiento(sinObligatorios, id, ahora), "t1");
+    expect((await repo.enviar(id, sinObligatorios, despues)).ok).toBe(true);
+    await expect(repo.descartar(id, despues)).rejects.toThrow();
+  });
+
+  it("si la visita ya tiene otro borrador, vuelve como suelto", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const visita = "0192f0e0-0000-7000-8000-000000000521";
+    const [primero, segundo] = ["0192f0e0-0000-7000-8000-000000000522", "0192f0e0-0000-7000-8000-000000000523"];
+    await repo.crear(crearLevantamiento(formato, primero, ahora, visita), "t1");
+    await repo.descartar(primero, ahora);
+    await repo.crear(crearLevantamiento(formato, segundo, ahora, visita), "t1");
+    expect(await repo.recuperar(primero)).toEqual({ suelto: true });
+    expect((await repo.obtener(primero))!.visitaId).toBeUndefined();
+    expect((await repo.obtener(segundo))!.visitaId).toBe(visita);
+  });
+
+  it("a los 30 días se borra con sus fotos, salvo las que usa otro levantamiento", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const [viejo, reciente, otro] = ["0192f0e0-0000-7000-8000-000000000530", "0192f0e0-0000-7000-8000-000000000531", "0192f0e0-0000-7000-8000-000000000532"];
+    for (const id of [viejo, reciente, otro]) await repo.crear(crearLevantamiento(formato, id, ahora), "t1");
+    await repo.agregarFoto(viejo, "s", "fotos", archivo(h("b")), ahora);
+    await repo.agregarFoto(viejo, "s", "fotos", archivo(h("c")), ahora);
+    await repo.agregarFoto(otro, "s", "fotos", archivo(h("c")), ahora);
+    await repo.descartar(viejo, ahora);
+    await repo.descartar(reciente, new Date("2026-10-20T10:00:00.000Z"));
+
+    expect(await repo.vaciarPapelera(new Date("2026-10-23T10:00:00.000Z"))).toBe(0);
+    expect(await repo.vaciarPapelera(new Date("2026-10-25T10:00:00.000Z"))).toBe(1);
+    expect(await repo.obtener(viejo)).toBeUndefined();
+    expect((await repo.descartados("t1")).map((l) => l.id)).toEqual([reciente]);
+    // La foto que solo usaba el viejo se borró; la que también usa otro, no.
+    expect((await repo.obtenerArchivos([h("b"), h("c")])).map((a) => a.id)).toEqual([h("c")]);
+  });
+});
