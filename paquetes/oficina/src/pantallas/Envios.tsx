@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import type { MensajeDeEnvio } from "@teins/documentos";
+import type { MensajeDeEnvio, TextoPropio } from "@teins/documentos";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import { Aviso, Boton, Dialogo, Insignia, Mail, MessageCircle, RefreshCw, Send, useNotificar } from "@teins/ui";
-import type { Plantillas } from "../documentos";
+import { usePlantillas, type Plantillas } from "../documentos";
 import { aFechaCorta } from "../formato";
 import { textoDelServidor } from "../mensajes";
-import { Lienzo, VistaDeCorreo, VistaDeWhatsapp } from "./Lienzo";
+import { Lienzo, VistaDeCorreo, VistaDeWhatsapp, type EdicionDeCorreo } from "./Lienzo";
 
 type Contacto = Respuesta<"obtenerCliente">["contactos"][number];
 type Envio = Respuesta<"obtenerInforme">["versiones"][number]["envios"][number];
@@ -55,7 +55,7 @@ export function Destinatarios({
   if (conCanal.length === 0) {
     return (
       <Aviso tono="alerta">
-        <span>{`Nadie de ${c.nombre} recibe el informe: solo quedará en el portal y habrá que avisarles.`}</span>
+        <span>{`Nadie de ${c.nombre} tiene correo ni WhatsApp para recibirlo: agregue uno en Clientes.`}</span>
         {enlace}
       </Aviso>
     );
@@ -161,8 +161,11 @@ interface PropsEnvios {
   contactos: readonly Contacto[] | undefined;
   /** Lo que dice el correo o el WhatsApp de esta versión, para ver lo que recibe cada contacto antes de enviar. */
   mensaje: (p: Plantillas) => MensajeDeEnvio;
-  /** `llave`: la decisión de enviar (regla 4). El mismo pedido repetido con su llave sale una sola vez. */
-  enviar: (destinos: Destino[], llave: string) => Promise<unknown>;
+  /**
+   * `llave`: la decisión de enviar (regla 4). El mismo pedido repetido con su llave sale una sola vez. `mensaje`: el
+   * asunto y el texto que escribió oficina para el correo (ADR-0036); sin él, sale el de TEINS.
+   */
+  enviar: (destinos: Destino[], llave: string, mensaje?: TextoPropio) => Promise<unknown>;
   recargar: () => void;
   /** Acciones de la versión que van junto a "Enviar a otro contacto" (retirar del portal). */
   acciones?: ReactNode;
@@ -260,6 +263,7 @@ export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, r
                 ) : e.enviadoEn ? (
                   <span className="det">
                     {e.canal === "correo" ? "Correo" : "WhatsApp"} · {aFechaCorta(e.enviadoEn)}
+                    {e.personalizado && " · con su texto"}
                     {e.estado === "enviado" && (e.canal === "whatsapp" ? " · Meta no ha confirmado la entrega" : " · El servidor del cliente no ha confirmado la entrega")}
                   </span>
                 ) : (
@@ -279,17 +283,51 @@ export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, r
         )}
         {acciones}
       </div>
-      {eligiendo && contactos && <EnviarAContactos cliente={c} numero={version.numero} contactos={contactos} mensaje={mensaje} enviar={enviar} alCerrar={() => setEligiendo(false)} alEnviar={recargar} />}
+      {eligiendo && contactos && (
+        <EnviarAContactos
+          cliente={c}
+          numero={version.numero}
+          // A otro contacto: quien ya la tiene (o la tiene en camino) no se vuelve a ofrecer (iteración 29).
+          contactos={contactos.filter((x) => !version.envios.some((e) => e.contacto.id === x.id && (e.estado === "en_cola" || e.estado === "enviado" || e.estado === "entregado")))}
+          mensaje={mensaje}
+          enviar={enviar}
+          alCerrar={() => setEligiendo(false)}
+          alEnviar={recargar}
+        />
+      )}
     </section>
   );
 }
 
 type DestinoVisto = { contacto: Contacto; canal: "correo" | "whatsapp" };
 
+const LLAVE_VER_COMO_LLEGA = "teins-ver-como-llega";
+/** "Ver cómo llega" se recuerda en este equipo (iteración 29); sin almacenamiento, empieza apagado. */
+function useVerComoLlega(): [boolean, (v: boolean) => void] {
+  const [ver, setVer] = useState(() => {
+    try {
+      return localStorage.getItem(LLAVE_VER_COMO_LLEGA) === "1";
+    } catch {
+      return false;
+    }
+  });
+  return [
+    ver,
+    (v) => {
+      setVer(v);
+      try {
+        localStorage.setItem(LLAVE_VER_COMO_LLEGA, v ? "1" : "0");
+      } catch {
+        // Sin almacenamiento, vale solo mientras el diálogo esté abierto.
+      }
+    },
+  ];
+}
+
 /**
- * Enviar una versión a otros contactos, en una hoja lateral ancha (iteración 26): a quién y, debajo, lo que recibe
- * cada uno por cada canal, tal como sale. La hoja ya es el paso deliberado: dice antes del botón que lo enviado no
- * se recupera (DESIGN.md), sin un segundo diálogo.
+ * Enviar una versión a otros contactos (iteración 29, prototipos/ajustes-oficina): un diálogo centrado con los
+ * contactos que todavía no la recibieron. Lo que recibe cada uno se ve a voluntad ("Ver cómo llega"), al lado. El
+ * diálogo ya es el paso deliberado: dice antes del botón que lo enviado no se recupera (DESIGN.md).
  */
 function EnviarAContactos({
   cliente: c,
@@ -304,15 +342,19 @@ function EnviarAContactos({
   numero: number;
   contactos: readonly Contacto[];
   mensaje: (p: Plantillas) => MensajeDeEnvio;
-  enviar: (destinos: Destino[], llave: string) => Promise<unknown>;
+  enviar: (destinos: Destino[], llave: string, mensaje?: TextoPropio) => Promise<unknown>;
   alCerrar: () => void;
   alEnviar: () => void;
 }) {
   const notificar = useNotificar();
+  // El texto del correo: null es el de TEINS. Es el mismo en el formulario y en "Ver cómo llega" (ADR-0036).
+  const [propio, setPropio] = useState<TextoPropio | null>(null);
+  const edicion: EdicionDeCorreo = { propio, alCambiar: setPropio };
   const [elegidos, setElegidos] = useState<string[]>([]);
   const [viendo, setViendo] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verComoLlega, setVerComoLlega] = useVerComoLlega();
   // Reintentar a los mismos es el mismo pedido; cambiar a quién es otra decisión.
   const llave = useMemo(() => crypto.randomUUID(), [elegidos.join()]);
   const nombres = contactos.filter((x) => elegidos.includes(x.id)).map((x) => x.nombre);
@@ -321,13 +363,18 @@ function EnviarAContactos({
     .flatMap((x) => [...(x.recibeCorreo && x.correo ? [{ contacto: x, canal: "correo" as const }] : []), ...(x.recibeWhatsapp && x.celular ? [{ contacto: x, canal: "whatsapp" as const }] : [])]);
   const clave = (d: DestinoVisto) => `${d.contacto.id}:${d.canal}`;
   const actual = destinos.find((d) => clave(d) === viendo) ?? destinos[0];
+  const conCanal = contactos.filter((x) => x.recibeCorreo || x.recibeWhatsapp);
 
   async function enviarYa() {
     if (elegidos.length === 0) return setError("Marque a quién enviarla.");
     setOcupado(true);
     setError(null);
     try {
-      await enviar(elegidos.map((contactoId) => ({ contactoId })), llave);
+      await enviar(
+        elegidos.map((contactoId) => ({ contactoId })),
+        llave,
+        propio ?? undefined,
+      );
       alEnviar();
       alCerrar();
       notificar({ texto: nombres.length === 1 ? `Envío a ${nombres[0]} en cola` : `${nombres.length} envíos en cola` });
@@ -338,59 +385,129 @@ function EnviarAContactos({
     }
   }
 
+  const aQuien =
+    contactos.length === 0 ? (
+      <div className="vacio-o">
+        <b>Todos los contactos ya la recibieron</b>
+        <span>{`Agregue un contacto a ${c.nombre} para enviarle esta versión.`}</span>
+        <Link to="/clientes/$id" params={{ id: c.id }} className="migas">
+          {`Contactos de ${c.nombre}`}
+        </Link>
+      </div>
+    ) : (
+      <Destinatarios contactos={contactos} elegidos={elegidos} alCambiar={setElegidos} cliente={c} titulo="A quién" />
+    );
+
+  const vista = (
+    <Lienzo
+      nota="Así le llega"
+      cabecera={
+        destinos.length > 1 && (
+          <div className="pestanas" role="tablist" aria-label="Lo que recibe">
+            {destinos.map((d) => {
+              const Icono = d.canal === "correo" ? Mail : MessageCircle;
+              return (
+                <button key={clave(d)} type="button" role="tab" aria-selected={actual !== undefined && clave(d) === clave(actual)} onClick={() => setViendo(clave(d))}>
+                  <Icono aria-hidden size={14} strokeWidth={1.6} />
+                  {`${d.contacto.nombre.split(" ")[0]} · ${d.canal === "correo" ? "Correo" : "WhatsApp"}`}
+                </button>
+              );
+            })}
+          </div>
+        )
+      }
+    >
+      {actual ? (
+        actual.canal === "correo" ? (
+          <VistaDeCorreo key={clave(actual)} mensaje={mensaje} contacto={actual.contacto} edicion={edicion} />
+        ) : (
+          <VistaDeWhatsapp mensaje={mensaje} contacto={actual.contacto} />
+        )
+      ) : (
+        <div className="lienzo-vacio">
+          <b>Elija a quién enviar</b>
+          <p>Aquí aparece lo que recibe, con el adjunto.</p>
+        </div>
+      )}
+    </Lienzo>
+  );
+
   return (
     <Dialogo
-      forma="lateral"
-      amplio
+      forma="formulario"
+      ancho={verComoLlega ? "previa" : "ancho"}
       titulo={`Enviar la versión ${numero} a otro contacto`}
       subtitulo={c.nombre}
       cerrable={!ocupado}
       alCerrar={alCerrar}
+      cabeceraExtra={
+        <button type="button" role="switch" aria-checked={verComoLlega} className="interruptor" onClick={() => setVerComoLlega(!verComoLlega)}>
+          <i aria-hidden />
+          Ver cómo llega
+        </button>
+      }
       pie={
         <>
+          <span className="nota-capa mr-auto">Lo enviado no se puede recuperar.</span>
           <Boton disabled={ocupado} onClick={alCerrar}>
             Cancelar
           </Boton>
-          <Boton variante="principal" icono={Send} cargando={ocupado} onClick={() => void enviarYa()}>
-            {nombres.length === 1 ? `Enviar a ${nombres[0]}` : nombres.length > 1 ? `Enviar a ${nombres.length}` : "Enviar"}
+          <Boton variante="principal" icono={Send} cargando={ocupado} disabled={conCanal.length === 0} onClick={() => void enviarYa()}>
+            {nombres.length === 1 ? `Enviar a ${nombres[0]!.split(" ")[0]}` : nombres.length > 1 ? `Enviar a ${nombres.length}` : "Enviar"}
           </Boton>
         </>
       }
     >
-      <Destinatarios contactos={contactos} elegidos={elegidos} alCambiar={setElegidos} cliente={c} titulo="A quién" />
-      <Lienzo
-        nota="Lo que recibe, tal como sale"
-        cabecera={
-          destinos.length > 0 && (
-            <div className="pestanas" role="tablist" aria-label="Lo que recibe">
-              {destinos.map((d) => {
-                const Icono = d.canal === "correo" ? Mail : MessageCircle;
-                return (
-                  <button key={clave(d)} type="button" role="tab" aria-selected={actual !== undefined && clave(d) === clave(actual)} onClick={() => setViendo(clave(d))}>
-                    <Icono aria-hidden size={14} strokeWidth={1.6} />
-                    {`${d.contacto.nombre} · ${d.canal === "correo" ? "Correo" : "WhatsApp"}`}
-                  </button>
-                );
-              })}
-            </div>
-          )
-        }
-      >
-        {actual ? (
-          actual.canal === "correo" ? (
-            <VistaDeCorreo key={clave(actual)} mensaje={mensaje} contacto={actual.contacto} />
-          ) : (
-            <VistaDeWhatsapp mensaje={mensaje} contacto={actual.contacto} />
-          )
-        ) : (
-          <div className="lienzo-vacio">
-            <b>Elija a quién enviar</b>
-            <p>Aquí aparece lo que recibe cada uno, con el adjunto.</p>
+      {verComoLlega ? (
+        <div className="dos-col">
+          <div className="col-f">
+            {aQuien}
+            {destinos.some((d) => d.canal === "whatsapp") && <p className="nota-capa">Por WhatsApp va la plantilla aprobada por Meta: ese mensaje no se edita.</p>}
           </div>
-        )}
-      </Lienzo>
+          {vista}
+        </div>
+      ) : (
+        <>
+          {aQuien}
+          {destinos.some((d) => d.canal === "correo") && <MensajeEnFormulario mensaje={mensaje} edicion={edicion} nombre={destinos.filter((d) => d.canal === "correo").length > 1 ? "[nombre de cada uno]" : destinos.find((d) => d.canal === "correo")!.contacto.nombre} whatsapp={destinos.some((d) => d.canal === "whatsapp")} />}
+        </>
+      )}
       {error && <Aviso tono="error">{error}</Aviso>}
-      <p className="ayuda">{`Va con el PDF adjunto, por los canales de cada contacto. Lo enviado no se puede recuperar: retirar la versión no borra el correo ni el WhatsApp.`}</p>
     </Dialogo>
+  );
+}
+
+/**
+ * El asunto y el texto del correo en el formulario, cuando "Ver cómo llega" está apagado (ADR-0036). El saludo, el
+ * adjunto y el pie los pone la plantilla.
+ */
+function MensajeEnFormulario({ mensaje: armar, edicion, nombre, whatsapp }: { mensaje: (p: Plantillas) => MensajeDeEnvio; edicion: EdicionDeCorreo; nombre: string; whatsapp: boolean }) {
+  const { plantillas } = usePlantillas();
+  if (!plantillas) return null;
+  const m = armar(plantillas);
+  const base: TextoPropio = { asunto: plantillas.asuntoBase(m), texto: plantillas.textoBase(m) };
+  const actual = edicion.propio ?? base;
+  const cambiar = (p: TextoPropio) => edicion.alCambiar(p.asunto === base.asunto && p.texto === base.texto ? null : p);
+  return (
+    <div className="campo">
+      <span className="etq fila-flex" style={{ justifyContent: "space-between" }}>
+        <span>Mensaje{edicion.propio && <span className="sec"> · con su texto</span>}</span>
+        {edicion.propio && (
+          <button type="button" className="enlace-acc" onClick={() => edicion.alCambiar(null)}>
+            Volver al texto de TEINS
+          </button>
+        )}
+      </span>
+      <div className="mensaje-c">
+        <label className="asunto">
+          <span>Asunto</span>
+          <input value={actual.asunto} onChange={(e) => cambiar({ ...actual, asunto: e.target.value })} />
+        </label>
+        <div className="saludo" aria-hidden>{`Hola, ${nombre.split(" ")[0]}:`}</div>
+        <textarea aria-label="Texto del correo" value={actual.texto} rows={Math.max(4, actual.texto.split("\n").length + 1)} onChange={(e) => cambiar({ ...actual, texto: e.target.value })} />
+        <div className="fijo">El saludo lleva el nombre de cada uno. Se agregan solos: el PDF adjunto y el pie de TEINS.</div>
+      </div>
+      {whatsapp && <p className="nota-capa">Por WhatsApp va la plantilla aprobada por Meta: ese mensaje no se edita.</p>}
+    </div>
   );
 }

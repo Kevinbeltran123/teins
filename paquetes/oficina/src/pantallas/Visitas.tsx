@@ -44,6 +44,8 @@ import { csvDetalle, csvResumen, descargar } from "../csv";
 import { aFechaHora } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
 import { consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
+import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../horario";
+import { CuandoVisita, resumenDeHorario, TecnicosDisponibles } from "./HorarioDeVisita";
 
 type Visita = Respuesta<"listarVisitas">["visitas"][number];
 type Tecnico = Respuesta<"listarTecnicos">["tecnicos"][number];
@@ -119,7 +121,9 @@ export function Visitas() {
   const filtradas = todas.filter((v) => coincide(busqueda, v.cliente.nombre, v.sitio.nombre, v.sitio.direccion, ...v.tecnicos.map((t) => t.nombre)));
   // Por día, en el orden en que llegan (el servidor ya las ordena).
   const dias: { fecha: string; visitas: Visita[] }[] = [];
-  for (const v of filtradas) {
+  // Dentro de cada día, por hora de inicio; las de todo el día al final (ADR-0037). El orden de los días lo da el servidor.
+  const enOrden = vista === "canceladas" ? filtradas : [...filtradas].sort((a, b) => (a.programadaPara === b.programadaPara ? ordenDelDia(a, b) : 0));
+  for (const v of enOrden) {
     const clave = vista === "canceladas" ? "canceladas" : v.programadaPara;
     const grupo = dias.at(-1);
     if (grupo?.fecha === clave) grupo.visitas.push(v);
@@ -186,6 +190,7 @@ export function Visitas() {
             etiqueta="Visitas"
             agrupada
             columnas={[
+              { titulo: "Hora" },
               { titulo: "Cliente y sitio" },
               { titulo: "Técnicos" },
               { titulo: "Motivo" },
@@ -196,12 +201,12 @@ export function Visitas() {
             {dias.map((d) => (
               <CuerpoTabla key={d.fecha}>
                 <tr>
-                  <td colSpan={5} className={`dia ${d.fecha === hoy ? "hoy" : ""}`}>
+                  <td colSpan={6} className={`dia ${d.fecha === hoy ? "hoy" : ""}`}>
                     {vista === "canceladas" ? "Canceladas" : tituloDia(d.fecha, hoy)}
                   </td>
                 </tr>
                 {d.visitas.map((v) => (
-                  <FilaVisita key={v.id} visita={v} busqueda={busqueda} resaltada={recientes.includes(v.id)} editar={(tipo) => setEdicion({ tipo, v })} />
+                  <FilaVisita key={v.id} visita={v} hoy={hoy} busqueda={busqueda} resaltada={recientes.includes(v.id)} editar={(tipo) => setEdicion({ tipo, v })} />
                 ))}
               </CuerpoTabla>
             ))}
@@ -217,7 +222,7 @@ export function Visitas() {
             setProgramando(false);
             if (vista === "proximas") destacar(v.id);
             else mostrarEn("proximas", v.id);
-            notificar({ texto: `Visita programada: ${v.cliente}, ${dia(v.programadaPara)}` });
+            notificar({ texto: `Visita programada: ${v.cliente}, ${dia(v.programadaPara)}${v.horaInicio ? `, ${hora12(v.horaInicio)}` : ""}`, accion: { texto: "Programar otra", alHacer: () => setProgramando(true) } });
           }}
         />
       )}
@@ -274,9 +279,23 @@ function Avance({ v }: { v: Visita }) {
   );
 }
 
-function FilaVisita({ visita: v, busqueda, resaltada, editar }: { visita: Visita; busqueda: string; resaltada: boolean; editar: (tipo: Edicion["tipo"]) => void }) {
+function FilaVisita({ visita: v, hoy, busqueda, resaltada, editar }: { visita: Visita; hoy: string; busqueda: string; resaltada: boolean; editar: (tipo: Edicion["tipo"]) => void }) {
+  const { hora, detalle } = horarioTexto(v);
   return (
     <FilaTabla resaltada={resaltada} clave={v.id}>
+      <CeldaTabla>
+        <span className="hora-visita">
+          {hora}
+          {!v.cancelada && enCurso(v, hoy) ? (
+            <span className="en-curso">
+              <i aria-hidden />
+              En curso
+            </span>
+          ) : (
+            detalle && <small>{detalle}</small>
+          )}
+        </span>
+      </CeldaTabla>
       <CeldaTabla>
         <span className="fuerte">
           <Marcado texto={v.cliente.nombre} busqueda={busqueda} />
@@ -338,24 +357,7 @@ function AbrirInforme({ visitaId, cliente: nombre }: { visitaId: string; cliente
 
 // Programar -------------------------------------------------------------------------------------
 
-function ElegirTecnicos({ tecnicos, elegidos, onCambio, error }: { tecnicos: Tecnico[]; elegidos: string[]; onCambio: (ids: string[]) => void; error?: string | undefined }) {
-  if (tecnicos.length === 0) return <Aviso tono="alerta">No hay técnicos activos. Quien administra los crea en Administración.</Aviso>;
-  return (
-    <fieldset className="casillas-filas flex flex-col gap-1">
-      <legend className="mb-1.5 text-cuerpo font-medium">Técnicos</legend>
-      <div className="flex flex-col">
-        {tecnicos.map((t) => (
-          <Casilla key={t.id} marcada={elegidos.includes(t.id)} onCambio={(m) => onCambio(m ? [...elegidos, t.id] : elegidos.filter((x) => x !== t.id))}>
-            {t.nombre}
-          </Casilla>
-        ))}
-      </div>
-      {error && <p className="text-ayuda font-bold text-error">{error}</p>}
-    </fieldset>
-  );
-}
-
-function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar: () => void; alProgramar: (v: { id: string; cliente: string; programadaPara: string }) => void }) {
+function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar: () => void; alProgramar: (v: { id: string; cliente: string; programadaPara: string; horaInicio: string | null }) => void }) {
   const formulario = useId();
   const clientes = useQuery(consultasDeProgramacion.clientes());
   const tecnicos = useQuery(consultasDeProgramacion.tecnicos());
@@ -363,21 +365,23 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
   const [sitioId, setSitioId] = useState("");
   const [motivo, setMotivo] = useState<Motivo>("Mantenimiento");
   const [fecha, setFecha] = useState(hoy);
+  // Por omisión, de 9 a 11: lo más común; "Todo el día" y "No sé cuánto dura" están a un toque.
+  const [horario, setHorario] = useState<Horario>({ horaInicio: "09:00", horaFin: "11:00" });
   const [elegidos, setElegidos] = useState<string[]>([]);
-  const [errores, setErrores] = useState<{ cliente?: string; sitio?: string; fecha?: string; tecnicos?: string }>({});
+  const [errores, setErrores] = useState<{ cliente?: string; sitio?: string; tecnicos?: string }>({});
   const [error, setError] = useState<string | null>(null);
-  const programar = useAccionDeProgramacion(() => cliente.llamar("programarVisita", { cuerpo: { clienteId, sitioId, motivo, programadaPara: fecha, tecnicos: elegidos } }));
+  const programar = useAccionDeProgramacion(() => cliente.llamar("programarVisita", { cuerpo: { clienteId, sitioId, motivo, programadaPara: fecha, ...horario, tecnicos: elegidos } }));
 
   const lista = clientes.data?.clientes ?? [];
   const sitios = lista.find((c) => c.id === clienteId)?.sitios ?? [];
+  const nombres = (tecnicos.data?.tecnicos ?? []).filter((t) => elegidos.includes(t.id)).map((t) => t.nombre);
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     const faltan = {
       ...(!clienteId ? { cliente: "Elija el cliente." } : {}),
       ...(clienteId && !sitioId ? { sitio: "Elija el sitio." } : {}),
-      ...(!fecha ? { fecha: "Elija la fecha." } : fecha < hoy ? { fecha: "Elija hoy o una fecha próxima." } : {}),
-      ...(elegidos.length === 0 ? { tecnicos: "Asigne al menos un técnico." } : {}),
+      ...(elegidos.length === 0 ? { tecnicos: "Elija al menos un técnico libre." } : {}),
     };
     setErrores(faltan);
     if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
@@ -385,7 +389,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
     setError(null);
     try {
       const v = await programar.mutateAsync(undefined);
-      alProgramar({ id: v.id, cliente: lista.find((c) => c.id === clienteId)?.nombre ?? "", programadaPara: fecha });
+      alProgramar({ id: v.id, cliente: lista.find((c) => c.id === clienteId)?.nombre ?? "", programadaPara: fecha, horaInicio: horario.horaInicio });
     } catch (e) {
       setError(mensajeDeProgramacion(e));
     }
@@ -414,42 +418,55 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
     );
   } else {
     contenido = (
-      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <CampoSeleccion
-          etiqueta="Cliente"
-          vacio="Elija un cliente"
-          valor={clienteId}
-          error={errores.cliente}
-          onCambio={(id) => {
-            setClienteId(id);
-            // Con un solo sitio, queda elegido.
-            const deEse = lista.find((c) => c.id === id)?.sitios ?? [];
-            setSitioId(deEse.length === 1 ? deEse[0]!.id : "");
-          }}
-          opciones={lista.map((c) => ({ valor: c.id, texto: c.nombre }))}
-        />
-        <CampoSeleccion
-          etiqueta="Sitio"
-          vacio={clienteId ? "Elija un sitio" : "Primero elija el cliente"}
-          valor={sitioId}
-          error={errores.sitio}
-          onCambio={setSitioId}
-          deshabilitado={!clienteId}
-          opciones={sitios.map((s) => ({ valor: s.id, texto: `${s.nombre} · ${s.direccion}` }))}
-        />
-        <CampoTexto etiqueta="Fecha" tipo="date" minimo={hoy} nombre="fecha" valorInicial={hoy} onCambio={setFecha} error={errores.fecha} />
-        <div className="opciones-pastilla">
-          <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+      <form id={formulario} onSubmit={enviar} noValidate className="dos-col">
+        <div className="col-f">
+          <div className="fila-campos">
+            <CampoSeleccion
+              etiqueta="Cliente"
+              vacio="Elija un cliente"
+              valor={clienteId}
+              error={errores.cliente}
+              onCambio={(id) => {
+                setClienteId(id);
+                // Con un solo sitio, queda elegido.
+                const deEse = lista.find((c) => c.id === id)?.sitios ?? [];
+                setSitioId(deEse.length === 1 ? deEse[0]!.id : "");
+              }}
+              opciones={lista.map((c) => ({ valor: c.id, texto: c.nombre }))}
+            />
+            <CampoSeleccion
+              etiqueta="Sitio"
+              vacio={clienteId ? "Elija un sitio" : "Primero el cliente"}
+              valor={sitioId}
+              error={errores.sitio}
+              onCambio={setSitioId}
+              deshabilitado={!clienteId}
+              opciones={sitios.map((x) => ({ valor: x.id, texto: x.nombre }))}
+            />
+          </div>
+          <div className="opciones-pastilla">
+            <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+          </div>
+          <CuandoVisita fecha={fecha} horario={horario} hoy={hoy} alCambiar={(f, h) => (setFecha(f), setHorario(h))} />
+          {nombres.length > 0 && (
+            <p className="nota-capa">
+              <Smartphone aria-hidden />
+              {`${nombres.join(" y ")} ${nombres.length > 1 ? "la ven" : "la ve"} en su teléfono al sincronizar.`}
+            </p>
+          )}
+          {error && <Aviso tono="error">{error}</Aviso>}
         </div>
-        <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} error={errores.tecnicos} />
-        {error && <Aviso tono="error">{error}</Aviso>}
+        <div className="col-f">
+          <TecnicosDisponibles tecnicos={tecnicos.data.tecnicos} fecha={fecha} horario={horario} elegidos={elegidos} alCambiar={setElegidos} error={errores.tecnicos} />
+        </div>
       </form>
     );
   }
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
+      ancho="doble"
       titulo="Programar visita"
       cerrable={!programar.isPending}
       alCerrar={alCerrar}
@@ -459,7 +476,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
             Cancelar
           </Boton>
           <Boton type="submit" form={formulario} variante="principal" cargando={programar.isPending} disabled={lista.length === 0}>
-            Programar la visita
+            {nombres.length === 1 ? `Programar con ${nombres[0]!.split(" ")[0]}` : "Programar la visita"}
           </Boton>
         </>
       }
@@ -471,7 +488,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
 
 // Una visita -------------------------------------------------------------------------------------
 
-const deLaVisita = (v: Visita) => `${v.cliente.nombre} · ${dia(v.programadaPara)}`;
+const deLaVisita = (v: Visita) => `${v.cliente.nombre} · ${dia(v.programadaPara)} · ${resumenDeHorario(v)}`;
 
 function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void; alGuardar: () => void }) {
   const formulario = useId();
@@ -505,6 +522,8 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
 
   return (
     <Dialogo
+      forma="formulario"
+      ancho="ancho"
       titulo="Reasignar técnicos"
       subtitulo={deLaVisita(v)}
       cerrable={!accion.isPending}
@@ -526,7 +545,7 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
         ) : tecnicos.isError ? (
           <Aviso tono="error">No se pudieron cargar los técnicos.</Aviso>
         ) : (
-          <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} error={errorCampo} />
+          <TecnicosDisponibles tecnicos={tecnicos.data.tecnicos} fecha={v.programadaPara} horario={v} elegidos={elegidos} alCambiar={setElegidos} excluir={v.id} error={errorCampo} />
         )}
         {elegidos.length > 0 && salen.length + entran.length > 0 && (
           <ul aria-label="Lo que cambia" className="flex flex-col gap-1.5 rounded-control bg-panel-hundido px-3 py-2.5 text-ayuda">
@@ -550,17 +569,15 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
 
 function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void; alGuardar: (fecha: string) => void }) {
   const formulario = useId();
-  const [fecha, setFecha] = useState(v.programadaPara);
+  const hoy = hoyLocal();
+  const [fecha, setFecha] = useState(v.programadaPara < hoy ? hoy : v.programadaPara);
+  const [horario, setHorario] = useState<Horario>({ horaInicio: v.horaInicio, horaFin: v.horaFin });
   const [motivo, setMotivo] = useState<Motivo>(motivoConocido(v.motivo));
-  const [errorFecha, setErrorFecha] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
-  const accion = useAccionDeProgramacion(() => cliente.llamar("reprogramarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, programadaPara: fecha, motivo } }));
+  const accion = useAccionDeProgramacion(() => cliente.llamar("reprogramarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, programadaPara: fecha, ...horario, motivo } }));
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    if (!fecha) return setErrorFecha("Elija la fecha.");
-    if (fecha < hoyLocal()) return setErrorFecha("Elija hoy o una fecha próxima.");
-    setErrorFecha(undefined);
     setError(null);
     try {
       await accion.mutateAsync(undefined);
@@ -572,6 +589,7 @@ function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => vo
 
   return (
     <Dialogo
+      forma="formulario"
       titulo="Reprogramar visita"
       subtitulo={deLaVisita(v)}
       cerrable={!accion.isPending}
@@ -588,9 +606,8 @@ function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => vo
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <div className="max-w-xs">
-          <CampoTexto etiqueta="Fecha nueva" tipo="date" minimo={hoyLocal()} valorInicial={v.programadaPara} onCambio={setFecha} error={errorFecha} />
-        </div>
+        <CuandoVisita fecha={fecha} horario={horario} hoy={hoy} alCambiar={(f, h) => (setFecha(f), setHorario(h))} />
+        {v.tecnicos.length > 0 && <p className="nota-capa">{`${v.tecnicos.map((t) => t.nombre).join(" y ")} ${v.tecnicos.length > 1 ? "reciben" : "recibe"} el cambio en su teléfono. Si a esa hora tienen otra visita, no se guarda.`}</p>}
         <div className="opciones-pastilla">
           <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
         </div>

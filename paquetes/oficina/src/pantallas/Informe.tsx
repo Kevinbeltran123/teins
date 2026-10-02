@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { MensajeDeInforme } from "@teins/documentos";
+import type { MensajeDeInforme, TextoPropio } from "@teins/documentos";
 import type { ContenidoVersion } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
@@ -43,7 +43,7 @@ import { consultasDeProgramacion } from "../programacion";
 import { useHojaAlLado, type Plantillas } from "../documentos";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores, useCancelarEnvio } from "./Envios";
-import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type QueSeVe } from "./Lienzo";
+import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
 
 type Informe = Respuesta<"obtenerInforme">;
 type Envio = Informe["versiones"][number]["envios"][number];
@@ -136,6 +136,9 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "informes") : []);
   const guardar = useGuardarInforme(informe.id);
   const publicar = usePublicarInforme(informe.id);
+  // El correo de la versión que se va a publicar, escrito sobre la pestaña "Correo" (ADR-0036): null es el de TEINS.
+  const [textoCorreo, setTextoCorreo] = useState<TextoPropio | null>(null);
+  const edicionCorreo = { propio: textoCorreo, alCambiar: setTextoCorreo };
   const siguiente = (informe.versiones[0]?.numero ?? 0) + 1;
   const nombreDe = (lid: string) => {
     const c = informe.candidatos.find((x) => x.id === lid);
@@ -230,7 +233,8 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   async function guardarYPublicar() {
     // Lo que se publica es lo guardado: si hay cambios, primero se guardan.
     const guardada = cambiado ? await guardarBorrador() : version;
-    await publicar.mutateAsync({ version: guardada, destinatarios: elegidos });
+    await publicar.mutateAsync({ version: guardada, destinatarios: elegidos, mensaje: textoCorreo ?? undefined });
+    setTextoCorreo(null);
   }
 
   function recargarDescartando() {
@@ -426,7 +430,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
                   version={vigente}
                   contactos={contactos.data?.contactos}
                   mensaje={(p) => mensajeDeVersion(p, vigente.numero)}
-                  enviar={(destinos, llave) => cliente.llamar("enviarVersion", { parametros: { id: informe.id, numero: vigente.numero }, cuerpo: { destinos, llave } })}
+                  enviar={(destinos, llave, mensaje) => cliente.llamar("enviarVersion", { parametros: { id: informe.id, numero: vigente.numero }, cuerpo: { destinos, llave, ...(mensaje && { mensaje }) } })}
                   corregirEnvio={(envio, accion) => cliente.llamar(accion === "cancelar" ? "cancelarEnvio" : "reanudarEnvio", { parametros: { id: informe.id, numero: vigente.numero, envio } })}
                   recargar={recargar}
                 />
@@ -436,11 +440,11 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
         </div>
       </div>
       {alLado && (
-        <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={ancla} />
+        <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={ancla} edicion={edicionCorreo} />
       )}
       {vistaLateral && !alLado && (
         <Dialogo forma="lateral" amplio titulo="Vista previa" subtitulo={`Informe de ${informe.visita.cliente}, versión ${siguiente}`} alCerrar={() => setVistaLateral(false)}>
-          <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={null} />
+          <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={null} edicion={edicionCorreo} />
         </Dialogo>
       )}
 
@@ -462,6 +466,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
               { icono: Globe, texto: "El cliente la verá en el portal", detalle: "Queda congelada: no se podrá modificar" },
               { icono: FileText, texto: "Es el documento de la vista previa", detalle: "El PDF puede partir las páginas distinto" },
               { icono: History, texto: `Para corregir algo se publica la versión ${siguiente + 1}`, detalle: siguiente > 1 ? `La versión ${siguiente - 1} se conserva` : "Esta se conserva" },
+              ...(textoCorreo && elegidos.length > 0 ? [{ icono: Mail, texto: "El correo va con el texto que usted escribió", detalle: `Asunto: ${textoCorreo.asunto}` }] : []),
               // Se puede publicar igual, pero se dice antes: un plano que no se anexa hace fallar el PDF y sus envíos.
               ...ilegibles.map((p) => ({ icono: TriangleAlert, texto: `El plano «${p.nombre}» no se puede anexar`, detalle: "El PDF del informe fallará y no se enviará: vuelva a exportar el plano y súbalo de nuevo" })),
             ]}
@@ -521,6 +526,7 @@ function LienzoInforme({
   contactos,
   cliente: cl,
   ancla,
+  edicion,
 }: {
   vista: QueSeVe;
   alCambiar: (v: QueSeVe) => void;
@@ -531,13 +537,14 @@ function LienzoInforme({
   contactos: readonly Contacto[];
   cliente: { id: string; nombre: string };
   ancla: AnclaDeHoja | null;
+  edicion: EdicionDeCorreo;
 }) {
   return (
     <Lienzo cabecera={<PestanasDeVista documento="Informe" vista={vista} alCambiar={alCambiar} />} sinConexion="Las fotos que no alcanzaron a cargar salen como [FOTO]. ">
       {vista === "documento" ? (
         <VistaDeDocumento titulo={`Vista previa del informe de ${documento.visita.cliente}`} generar={(p) => p.plantillaInforme(documento, { salida: { tipo: "vista" }, ...recursos })} alPintar={alPintar} ancla={ancla} />
       ) : (
-        <CorreoDeContactos contactos={contactos} mensaje={mensaje} cliente={cl} documento="el informe" />
+        <CorreoDeContactos contactos={contactos} mensaje={mensaje} cliente={cl} documento="el informe" edicion={edicion} />
       )}
     </Lienzo>
   );

@@ -1,3 +1,4 @@
+import type { TextoPropio } from "@teins/documentos";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, type CuerpoEntrada } from "@teins/protocolo";
 import { cliente } from "./api";
@@ -28,7 +29,8 @@ export function useGuardarInforme(id: string) {
 export function usePublicarInforme(id: string) {
   const refrescar = useRefrescar();
   return useMutation({
-    mutationFn: ({ version, destinatarios }: { version: number; destinatarios: string[] }) => cliente.llamar("publicarInforme", { parametros: { id }, cuerpo: { version, destinatarios } }),
+    mutationFn: ({ version, destinatarios, mensaje }: { version: number; destinatarios: string[]; mensaje?: TextoPropio | undefined }) =>
+      cliente.llamar("publicarInforme", { parametros: { id }, cuerpo: { version, destinatarios, ...(mensaje && { mensaje }) } }),
     onSettled: () => refrescar(),
   });
 }

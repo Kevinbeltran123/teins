@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { CELULAR, ErrorApi, type Respuesta } from "@teins/protocolo";
+import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
   Boton,
@@ -38,6 +38,7 @@ import { cliente } from "../api";
 import { aFechaHora } from "../formato";
 import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
 import { AgregarSitio } from "./Clientes";
+import { celularLegible, useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
 
 type Detalle = Respuesta<"obtenerCliente">;
 type Contacto = Detalle["contactos"][number];
@@ -55,14 +56,10 @@ const dia = (iso: string) => new Intl.DateTimeFormat("es-CO", { day: "numeric", 
  * Celular como lo exige WhatsApp (E.164). Oficina escribe el número colombiano de 10 dígitos, con o sin
  * espacios; uno de otro país se escribe con su "+".
  */
-export function aCelular(texto: string): string | null {
-  const limpio = texto.replace(/[\s().-]/g, "");
-  if (limpio === "") return null;
-  return limpio.startsWith("+") ? limpio : /^3\d{9}$/.test(limpio) ? `+57${limpio}` : limpio;
-}
+
 
 /** "+57 300 555 0117": legible para dictarlo. */
-const celularLegible = (e164: string) => (e164.startsWith("+57") && e164.length === 13 ? `+57 ${e164.slice(3, 6)} ${e164.slice(6, 9)} ${e164.slice(9)}` : e164);
+
 
 export function DetalleCliente({ id }: { id: string }) {
   const consulta = useQuery(consultasDeProgramacion.cliente(id));
@@ -367,14 +364,8 @@ export function DetalleCliente({ id }: { id: string }) {
   );
 }
 
-interface Errores {
-  nombre?: string;
-  correo?: string;
-  celular?: string;
-  autorizacion?: string;
-}
 
-/** Crear o editar un contacto, en la hoja lateral (DESIGN.md, crear y editar). */
+/** Crear o editar un contacto, en un diálogo centrado (iteración 29). */
 function FormularioContacto({
   clienteId,
   clienteNombre,
@@ -389,34 +380,10 @@ function FormularioContacto({
   alGuardar: (detalle: Detalle, nombre: string) => void;
 }) {
   const formulario = useId();
-  const [nombre, setNombre] = useState(contacto?.nombre ?? "");
-  const [cargo, setCargo] = useState(contacto?.cargo ?? "");
-  const [correo, setCorreo] = useState(contacto?.correo ?? "");
-  const [celular, setCelular] = useState(contacto?.celular ?? "");
-  const [recibeCorreo, setRecibeCorreo] = useState(contacto?.recibeCorreo ?? true);
-  const [recibeWhatsapp, setRecibeWhatsapp] = useState(contacto?.recibeWhatsapp ?? false);
-  const [recibeInformes, setRecibeInformes] = useState(contacto?.recibeInformes ?? true);
-  const [recibeCotizaciones, setRecibeCotizaciones] = useState(contacto?.recibeCotizaciones ?? false);
-  const [autorizado, setAutorizado] = useState(contacto?.whatsappAutorizado !== null && contacto?.whatsappAutorizado !== undefined);
-  const [errores, setErrores] = useState<Errores>({});
+  const c = useCamposDeContacto(contacto);
+  const [errores, setErrores] = useState<ErroresDeContacto>({});
   const [error, setError] = useState<string | null>(null);
-
-  const celularE164 = aCelular(celular);
-  // La autorización es del número: si cambia, se vuelve a confirmar (ADR-0028, parte 5).
-  const autorizacionVigente = contacto?.whatsappAutorizado && contacto.celular === celularE164 ? contacto.whatsappAutorizado : null;
-  const quien = nombre.trim().split(/\s+/)[0] || "El contacto";
-
-  const datos = () => ({
-    nombre: nombre.trim(),
-    cargo: cargo.trim(),
-    correo: correo.trim() || null,
-    celular: celularE164,
-    recibeCorreo,
-    recibeWhatsapp,
-    recibeInformes,
-    recibeCotizaciones,
-    whatsappAutorizado: recibeWhatsapp && autorizado,
-  });
+  const datos = c.datos;
   const guardar = useAccionDeProgramacion(() =>
     contacto
       ? cliente.llamar("editarContacto", { parametros: { id: clienteId, contactoId: contacto.id }, cuerpo: datos() })
@@ -425,21 +392,13 @@ function FormularioContacto({
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    const correoLimpio = correo.trim();
-    const faltan: Errores = {
-      ...(nombre.trim() === "" ? { nombre: "Escriba el nombre del contacto." } : {}),
-      ...(recibeCorreo && correoLimpio === "" ? { correo: "Para recibir el informe por correo hace falta el correo." } : {}),
-      ...(correoLimpio !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoLimpio) ? { correo: "Revise el correo: le falta algo, como la @ o el dominio." } : {}),
-      ...(recibeWhatsapp && !celularE164 ? { celular: "Para recibir el informe por WhatsApp hace falta el celular." } : {}),
-      ...(celularE164 && !CELULAR.test(celularE164) ? { celular: "Escriba los 10 dígitos del celular, o el número con + y el indicativo si es de otro país." } : {}),
-      ...(recibeWhatsapp && !autorizado ? { autorizacion: "WhatsApp exige que el contacto haya autorizado los mensajes." } : {}),
-    };
+    const faltan = c.validar();
     setErrores(faltan);
     if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
-      alGuardar(await guardar.mutateAsync(undefined), nombre.trim());
+      alGuardar(await guardar.mutateAsync(undefined), c.nombre);
     } catch (e) {
       setError(mensajeDeProgramacion(e));
     }
@@ -447,7 +406,8 @@ function FormularioContacto({
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
+      ancho="ancho"
       titulo={contacto ? `Editar a ${contacto.nombre}` : "Nuevo contacto"}
       subtitulo={clienteNombre}
       cerrable={!guardar.isPending}
@@ -463,53 +423,8 @@ function FormularioContacto({
         </>
       }
     >
-      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <CampoTexto etiqueta="Nombre" nombre="nombre" valorInicial={nombre} onCambio={setNombre} error={errores.nombre} autoComplete="off" />
-        <CampoTexto etiqueta="Cargo (opcional)" nombre="cargo" valorInicial={cargo} onCambio={setCargo} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <CampoTexto etiqueta="Correo" nombre="correo" tipo="email" modoEntrada="email" autoComplete="email" valorInicial={correo} onCambio={setCorreo} error={errores.correo} />
-          <CampoTexto etiqueta="Celular" nombre="celular" valorInicial={contacto?.celular ? celularLegible(contacto.celular) : ""} onCambio={setCelular} error={errores.celular} tipo="tel" modoEntrada="tel" autoComplete="tel" />
-        </div>
-        <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="etq" style={{ marginBottom: 6 }}>Recibe</legend>
-          <div className="opciones">
-            <label className="opcion">
-              <input type="checkbox" checked={recibeInformes} onChange={(e) => setRecibeInformes(e.target.checked)} />
-              Los informes
-            </label>
-            <label className="opcion">
-              <input type="checkbox" checked={recibeCotizaciones} onChange={(e) => setRecibeCotizaciones(e.target.checked)} />
-              Las cotizaciones
-            </label>
-          </div>
-        </fieldset>
-        <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="etq" style={{ marginBottom: 6 }}>Por</legend>
-          <div className="opciones">
-            <label className="opcion">
-              <input type="checkbox" checked={recibeCorreo} onChange={(e) => setRecibeCorreo(e.target.checked)} />
-              Correo
-            </label>
-            <label className="opcion">
-              <input type="checkbox" checked={recibeWhatsapp} onChange={(e) => setRecibeWhatsapp(e.target.checked)} />
-              WhatsApp
-            </label>
-          </div>
-        </fieldset>
-        {recibeWhatsapp && (
-          <label className="casilla" style={{ boxShadow: errores.autorizacion ? "inset 0 0 0 2px var(--peligro)" : undefined }}>
-            <input type="checkbox" checked={autorizado} onChange={(e) => setAutorizado(e.target.checked)} />
-            <span>
-              <b>{`${quien} autorizó recibir el informe por WhatsApp`}</b>
-              <span style={{ display: "block", color: "var(--sec)", fontSize: 13 }}>
-                {autorizacionVigente && autorizado
-                  ? `Lo confirmó ${autorizacionVigente.por.nombre} el ${aFechaHora(autorizacionVigente.en)}.`
-                  : "WhatsApp lo exige. Queda registrado que usted lo confirmó, y cuándo."}
-              </span>
-              {errores.autorizacion && <span className="msj-error">{errores.autorizacion}</span>}
-            </span>
-          </label>
-        )}
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        {c.campos(errores)}
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>
@@ -542,7 +457,7 @@ function EditarCliente({ detalle, alCerrar, alGuardar }: { detalle: Detalle; alC
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
       titulo="Editar cliente"
       subtitulo="Lo ya publicado conserva el nombre con que salió"
       cerrable={!guardar.isPending}
@@ -589,7 +504,7 @@ function EditarSitio({ clienteId, sitio, alCerrar, alGuardar }: { clienteId: str
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
       titulo="Editar sitio"
       subtitulo={sitio.nombre}
       cerrable={!guardar.isPending}

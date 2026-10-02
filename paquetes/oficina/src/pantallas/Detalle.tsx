@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -29,8 +30,12 @@ import {
   CampoMedida,
   CampoSeleccion,
   CampoTexto,
+  BotonIcono,
   Check,
   ChevronLeft,
+  ChevronRight,
+  DestinoAccionesBarra,
+  Dialogo,
   Confirmacion,
   EditorCantidades,
   EncabezadoPagina,
@@ -40,6 +45,7 @@ import {
   HojasDeBoceto,
   Insignia,
   Link2,
+  Maximize2,
   nombreDeTransicion,
   MarcaNoObtenido,
   MessageSquare,
@@ -66,6 +72,7 @@ import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
 import { useBandeja, useComentar, useCorregir, useCorregirComentario, useMarcarRevisado, useTomar } from "../revision";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { Lienzo, VistaDeDocumento } from "./Lienzo";
+import type { Plantillas } from "../documentos";
 
 type Levantamiento = Respuesta<"obtenerLevantamiento">;
 type Historial = Respuesta<"historialLevantamiento">;
@@ -256,10 +263,16 @@ export function Detalle({ id }: { id: string }) {
   );
 }
 
+/**
+ * La revisión en el carril (iteración 29, prototipos/ajustes-oficina): una línea de estado (quién la tiene, o quién la
+ * revisó) y, debajo, lo que ayuda a decidir. La acción de la pantalla ("Tomar para revisar", "Marcar revisado",
+ * "Abrir el informe") va arriba a la derecha, en la barra, de tamaño normal: no un botón estirado en el carril.
+ */
 function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; mia: boolean; correcciones: number; recargar: () => void }) {
   const tomar = useTomar();
   const marcar = useMarcarRevisado(l.id);
   const notificar = useNotificar();
+  const destino = useContext(DestinoAccionesBarra);
   const [confirmando, setConfirmando] = useState<"revisado" | "reasignar" | null>(null);
   // El chulo se dibuja solo cuando se acaba de marcar revisado, no cada vez que se abre uno ya revisado.
   const revisadoAlAbrir = useRef(l.estado === "revisado");
@@ -269,33 +282,57 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
   const etiqueta = (seccion: string, campo?: string) => (campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo) : rutaLegible(l.formatoDefinicion, l.repeticiones, seccion));
   const nombre = l.revisor?.nombre ?? "otra persona";
 
-  let texto: ReactNode;
+  let linea: ReactNode;
+  let ayuda: ReactNode = null;
   let accion: ReactNode = null;
   if (l.estado === "enviado") {
-    texto = "Nadie ha tomado este levantamiento. Tómelo para corregirlo y marcarlo revisado.";
+    linea = (
+      <>
+        <Insignia tono="enviado">Esperando revisión</Insignia>
+        <span>Nadie la ha tomado</span>
+      </>
+    );
+    ayuda = "Tómelo para corregirlo y marcarlo revisado.";
     accion = (
       <Boton variante="principal" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada })}>
         Tomar para revisar
       </Boton>
     );
   } else if (l.estado === "revisado") {
-    texto = (
+    linea = (
       <>
-        Por <b>{l.revisor?.nombre ?? "[Sin responsable]"}</b>. {l.visita ? `Queda listo para el informe de la visita; ${l.tecnico.nombre} lo ve como revisado en su teléfono.` : "No tiene visita, así que no entra en un informe."}
+        <i className="chulo-linea" aria-hidden>
+          <svg className={revisadoAlAbrir.current ? undefined : "chulo"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ "--largo": 24 } as CSSProperties}>
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </i>
+        <span>
+          <b>Revisado</b> · por {l.revisor?.nombre ?? "[Sin responsable]"}
+        </span>
       </>
     );
-    accion = <SiguienteEnSerie actual={l.id} visitaId={l.visita?.id ?? null} />;
+    ayuda = l.visita ? `Ya puede ir en el informe de la visita; ${l.tecnico.nombre} lo ve como revisado en su teléfono.` : "No tiene visita, así que no entra en un informe.";
+    accion = l.visita ? <AbrirInforme visitaId={l.visita.id} /> : null;
   } else if (mia) {
-    texto = "Usted tiene la revisión. Corrija lo que haga falta y márquelo revisado cuando esté listo.";
+    linea = (
+      <>
+        <Insignia tono="revision">En revisión</Insignia>
+        <span>La tomó usted</span>
+      </>
+    );
+    ayuda = "Corrija lo que haga falta y márquelo revisado cuando esté listo.";
     accion = (
       <Boton variante="principal" icono={Check} onClick={() => setConfirmando("revisado")}>
         Marcar revisado
       </Boton>
     );
   } else {
-    texto = (
+    linea = (
       <>
-        La revisión la tiene <b>{nombre}</b>.
+        <Insignia tono="revision">En revisión</Insignia>
+        <span>
+          La tiene <b>{nombre}</b>
+        </span>
       </>
     );
     accion = <Boton onClick={() => setConfirmando("reasignar")}>Tomar la revisión de {nombre}</Boton>;
@@ -303,22 +340,10 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
 
   return (
     <section className="grupo-c" aria-label="Revisión">
-      {l.estado === "revisado" ? (
-        <h2 className="chulo-revisado">
-          <i>
-            <svg className={revisadoAlAbrir.current ? undefined : "chulo"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ "--largo": 24 } as CSSProperties} aria-hidden>
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          </i>
-          Revisado
-        </h2>
-      ) : (
-        <h2>Revisión</h2>
-      )}
-      <p className="ayuda" style={{ fontSize: 14 }}>
-        {texto}
-      </p>
-      {accion && <div className="col" style={{ gap: 8 }}>{accion}</div>}
+      <div className="rev-linea">{linea}</div>
+      {ayuda && <p className="ayuda">{ayuda}</p>}
+      {l.estado === "revisado" && <SiguienteEnSerie actual={l.id} />}
+      {accion && (destino ? createPortal(<div className="acciones">{accion}</div>, destino) : <div className="col">{accion}</div>)}
       {correcciones > 0 && (
         <span className="corregido" style={{ margin: 0 }}>
           <Pencil aria-hidden size={13} />
@@ -384,42 +409,36 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
 
 /**
  * Revisar en serie (iteración 27): al marcar revisado, el que más lleva esperando, con cuántos quedan, para seguir
- * sin volver a la lista. Abrirlo desliza el cuerpo y deja el carril en su sitio.
+ * sin volver a la lista. Es una fila del carril, no un botón relleno: la acción principal es abrir el informe.
  */
-function SiguienteEnSerie({ actual, visitaId }: { actual: string; visitaId: string | null }) {
+function SiguienteEnSerie({ actual }: { actual: string }) {
   const esperando = useBandeja("enviado");
   const navegar = useNavigate();
   const primera = esperando.data?.pages[0];
   const siguiente = primera?.elementos.find((e) => e.id !== actual);
   const quedan = primera ? primera.total - (primera.elementos.some((e) => e.id === actual) ? 1 : 0) : 0;
-  if (esperando.isPending) return visitaId && <AbrirInforme visitaId={visitaId} />;
+  if (esperando.isPending) return null;
+  if (!siguiente) return <span className="quedan">No queda nada esperando revisión.</span>;
   return (
-    <>
-      {siguiente ? (
-        <>
-          <Boton variante="principal" className="siguiente-serie" onClick={() => void navegar({ to: "/levantamientos/$id", params: { id: siguiente.id } })}>
-            <span>Siguiente: {siguiente.visita?.cliente ?? `Levantamiento de ${siguiente.tecnico.nombre}`}</span>
-            <small>
-              {siguiente.nombreFormato ?? siguiente.formato} de {siguiente.tecnico.nombre} · lleva {cuantoLleva(siguiente.recibidoEn).texto}
-            </small>
-          </Boton>
-          <span className="quedan">{quedan === 1 ? "Queda 1 esperando revisión" : `Quedan ${quedan} esperando revisión`}</span>
-        </>
-      ) : (
-        <span className="quedan">No queda nada esperando revisión.</span>
-      )}
-      {visitaId && <AbrirInforme visitaId={visitaId} principal={!siguiente} />}
-    </>
+    <button type="button" className="siguiente-fila" onClick={() => void navegar({ to: "/levantamientos/$id", params: { id: siguiente.id } })}>
+      <span>
+        <b>Siguiente: {siguiente.visita?.cliente ?? `Levantamiento de ${siguiente.tecnico.nombre}`}</b>
+        <small>
+          {siguiente.nombreFormato ?? siguiente.formato} de {siguiente.tecnico.nombre} · lleva {cuantoLleva(siguiente.recibidoEn).texto} · {quedan === 1 ? "queda 1" : `quedan ${quedan}`}
+        </small>
+      </span>
+      <ChevronRight aria-hidden size={16} />
+    </button>
   );
 }
 
-function AbrirInforme({ visitaId, principal = true }: { visitaId: string; principal?: boolean }) {
+function AbrirInforme({ visitaId }: { visitaId: string }) {
   const abrir = useAbrirInformeDeVisita();
   const navegar = useNavigate();
   return (
     <>
-      <Boton variante={principal ? "principal" : "secundaria"} icono={FileText} cargando={abrir.isPending} onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}>
-        Abrir el informe de esta visita
+      <Boton variante="principal" icono={FileText} cargando={abrir.isPending} onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}>
+        Abrir el informe de la visita
       </Boton>
       {abrir.isError && <Aviso tono="error">{mensajeDeError(abrir.error)}</Aviso>}
     </>
@@ -1001,7 +1020,7 @@ function CorregirCantidades({
           })),
     );
   }
-  return <EditorCantidades etiqueta={etiqueta} lineas={lineas} unidades={unidades} onCambio={cambiar} nuevoId={nuevoIdDeLinea} error={error} />;
+  return <EditorCantidades etiqueta={etiqueta} lineas={lineas} unidades={unidades} onCambio={cambiar} nuevoId={nuevoIdDeLinea} error={error} disposicion="tabla" />;
 }
 
 /**
@@ -1333,10 +1352,31 @@ function CapituloEnVivo({ l, correcciones, enCurso, organizacion }: { l: Levanta
   useEffect(() => {
     if (claveEnCurso) setAncla((a) => ({ selector: `tr[data-dato="${CSS.escape(claveEnCurso)}"]`, vez: (a?.vez ?? 0) + 1 }));
   }, [claveEnCurso]);
+  // "Ver en grande" (iteración 29): el capítulo a tamaño real en un diálogo ancho; en el carril se lee reducido.
+  const [enGrande, setEnGrande] = useState(false);
+  const generar = (p: Plantillas) => p.plantillaInforme(contenido, { salida: { tipo: "vista" }, ...recursos });
   return (
-    <Lienzo clase="en-carril" cabecera={<span className="nota-l">El capítulo, como saldrá en el informe</span>} nota="Lo azul no sale en el PDF">
-      <VistaDeDocumento ancho={740} titulo="Capítulo del informe" generar={(p) => p.plantillaInforme(contenido, { salida: { tipo: "vista" }, ...recursos })} alPintar={marcar} ancla={ancla} />
-    </Lienzo>
+    <>
+      <Lienzo
+        clase="en-carril"
+        cabecera={
+          <span className="fila-flex" style={{ gap: 6 }}>
+            <span className="nota-l">El capítulo, como saldrá en el informe</span>
+            <BotonIcono icono={Maximize2} etiqueta="Ver el capítulo en grande" tamano="pequeno" onClick={() => setEnGrande(true)} />
+          </span>
+        }
+        nota="Lo azul no sale en el PDF"
+      >
+        <VistaDeDocumento ancho={740} titulo="Capítulo del informe" generar={generar} alPintar={marcar} ancla={ancla} />
+      </Lienzo>
+      {enGrande && (
+        <Dialogo forma="formulario" ancho="previa" titulo="El capítulo en el informe" subtitulo="Vista previa · lo azul es lo corregido y no sale en el PDF" alCerrar={() => setEnGrande(false)}>
+          <div className="capitulo-grande">
+            <VistaDeDocumento ancho={740} titulo="Capítulo del informe, en grande" generar={generar} alPintar={marcar} />
+          </div>
+        </Dialogo>
+      )}
+    </>
   );
 }
 

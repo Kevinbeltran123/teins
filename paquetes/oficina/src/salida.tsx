@@ -35,7 +35,8 @@ function GuardarAntesDeSalir({ que, guardar, salir, quedarse }: { que: string; g
 
   return (
     <Dialogo
-      titulo={`¿Guardar los cambios de ${que} antes de salir?`}
+      titulo="¿Guardar los cambios antes de salir?"
+      ancho="medio"
       alCerrar={quedarse}
       cerrable={!guardando}
       pie={
@@ -43,11 +44,9 @@ function GuardarAntesDeSalir({ que, guardar, salir, quedarse }: { que: string; g
           <Boton variante="fantasma" className="texto-peligro mr-auto" onClick={salir} disabled={guardando}>
             Salir sin guardar
           </Boton>
+          {/* El atajo va solo en la acción principal: Esc cierra cualquier diálogo y con los dos el pie no cabía en una fila. */}
           <Boton onClick={quedarse} disabled={guardando}>
             Seguir editando
-            <span aria-hidden className="kbd">
-              Esc
-            </span>
           </Boton>
           <Boton id={idGuardar} variante="principal" cargando={guardando} onClick={() => void guardarYSalir()}>
             Guardar y salir
@@ -58,7 +57,7 @@ function GuardarAntesDeSalir({ que, guardar, salir, quedarse }: { que: string; g
         </>
       }
     >
-      <p>Se guarda el borrador; lo publicado no cambia.</p>
+      <p className="text-texto-secundario">{que[0]!.toUpperCase() + que.slice(1)} · se guarda el borrador; lo publicado no cambia.</p>
       {error && <Aviso tono="error">{error}</Aviso>}
     </Dialogo>
   );

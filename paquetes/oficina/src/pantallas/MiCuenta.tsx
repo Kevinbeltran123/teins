@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { esLlaveCancelada } from "@teins/protocolo";
 import {
@@ -12,17 +12,20 @@ import {
   Dialogo,
   EncabezadoPagina,
   enfocarPrimerError,
-  GrupoDeOpciones,
+  Info,
   Insignia,
   KeyRound,
   LockKeyhole,
   LogOut,
+  Monitor,
+  Moon,
   OPCIONES_DE_TEMA,
   Plus,
   RefreshCw,
   RequisitosDeContrasena,
   ShieldCheck,
   ShieldOff,
+  Sun,
   Trash,
   useNotificar,
   useTema,
@@ -54,17 +57,30 @@ export function MiCuenta({ nombre }: { nombre: string }) {
 
   return (
     <>
+      {/* Centrada en el área (iteración 29): la columna de 680 px ya no queda pegada a la izquierda. */}
+      <div className="cuenta-centrada">
       <EncabezadoPagina titulo="Mi cuenta" descripcion={<span>{nombre}</span>} />
-      <div className="doc estrecho">
-      <Acceso nombre={nombre} />
-      <section aria-labelledby="titulo-llaves">
-        <div className="cab-sec">
-            <h2 id="titulo-llaves">Llaves de acceso</h2>
-          <Boton tamano="pequeno" icono={Plus} cargando={crear.isPending} onClick={() => crear.mutate(undefined, { onSuccess: () => notificar({ texto: 'Llave creada. La próxima vez use "Entrar con llave de acceso".' }) })}>
-            Crear llave de acceso
-          </Boton>
-        </div>
-        <p className="ayuda">Con una llave de acceso entra sin escribir la contraseña: con la huella, el rostro o el PIN de este computador, o con su celular. Nadie puede usarla desde otro sitio web.</p>
+      <div className="doc">
+      <Acceso
+        nombre={nombre}
+        llaves={
+          <div className="fila">
+            <KeyRound aria-hidden size={18} />
+            <div className="txt">
+              <b>Llaves de acceso</b>
+              <small>
+                {cuantas === 0
+                  ? "Entre con la huella, el rostro o el PIN de este equipo. Todavía no tiene."
+                  : `${cuantas} ${cuantas === 1 ? "llave" : "llaves"} · entra sin escribir la contraseña`}
+              </small>
+            </div>
+            <Boton cargando={crear.isPending} onClick={() => crear.mutate(undefined, { onSuccess: () => notificar({ texto: 'Llave creada. La próxima vez use "Entrar con llave de acceso".' }) })}>
+              Crear llave
+            </Boton>
+          </div>
+        }
+      />
+      <section aria-label="Sus llaves de acceso" className="llaves-cuenta" hidden={cuantas === 0 && !crear.isError && !llaves.isError}>
         {crear.isError && !esLlaveCancelada(crear.error) && <Aviso tono="error">No se pudo crear la llave de acceso. Intente de nuevo.</Aviso>}
         {llaves.isPending ? (
           <div aria-busy="true" aria-label="Cargando sus llaves de acceso" className="esq" style={{ height: 56 }} />
@@ -77,9 +93,7 @@ export function MiCuenta({ nombre }: { nombre: string }) {
               </Boton>
             </div>
           </Aviso>
-        ) : cuantas === 0 ? (
-          <p className="sec">Todavía no tiene llaves de acceso.</p>
-        ) : (
+        ) : cuantas === 0 ? null : (
           <ul aria-label="Sus llaves de acceso" className="filas" style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {llaves.data.map((l, i) => {
               const nombreLlave = l.nombre ?? `Llave de acceso ${i + 1}`;
@@ -101,9 +115,15 @@ export function MiCuenta({ nombre }: { nombre: string }) {
         )}
       </section>
 
-      <SelectorDeTema />
-      <AvisosDelNavegador />
+      <section aria-labelledby="titulo-preferencias">
+        <h2 id="titulo-preferencias">Preferencias</h2>
+        <div className="filas">
+          <SelectorDeTema />
+          <AvisosDelNavegador />
+        </div>
+      </section>
       <SesionActual />
+      </div>
       </div>
 
       {quitando && (
@@ -155,33 +175,27 @@ function AvisosDelNavegador() {
   }
 
   return (
-    <section aria-labelledby="titulo-avisos">
-      <div className="cab-sec">
-        <h2 id="titulo-avisos">Avisos en este navegador</h2>
-        {estado === "activos" && <Insignia tono="exito">Activos</Insignia>}
-      </div>
-      <div className="filas">
-        <div className="fila">
-          <Bell aria-hidden size={18} />
-          <div className="txt">
-            <b>Levantamientos enviados</b>
-            <small>Le avisamos cuando un técnico envía un levantamiento, aunque la pestaña de TEINS esté cerrada.</small>
-          </div>
+    <>
+      <div className="fila">
+        <Bell aria-hidden size={18} />
+        <div className="txt">
+          <b>Avisos de levantamientos enviados</b>
+          <small>{estado === "activos" ? "Activos en este navegador" : "Aunque la pestaña de TEINS esté cerrada"}</small>
+        </div>
         {estado === "activos" ? (
-          <Boton variante="fantasma" tamano="pequeno" cargando={trabajando} onClick={() => void cambiar(false)}>
+          <Boton variante="fantasma" cargando={trabajando} onClick={() => void cambiar(false)}>
             Desactivar
           </Boton>
         ) : estado === "sin_activar" ? (
-          <Boton variante="principal" tamano="pequeno" cargando={trabajando} onClick={() => void cambiar(true)}>
+          <Boton cargando={trabajando} onClick={() => void cambiar(true)}>
             Activar avisos
           </Boton>
         ) : null}
-        </div>
       </div>
       {/* Bloqueados, la página ya no puede volver a preguntar: solo la persona los permite. */}
       {estado === "bloqueados" && <Aviso tono="alerta">Los bloqueó en este navegador. Para recibirlos, permita las notificaciones de este sitio desde el candado junto a la dirección.</Aviso>}
       {error && <Aviso tono="error">No se pudieron cambiar los avisos. Intente de nuevo.</Aviso>}
-    </section>
+    </>
   );
 }
 
@@ -208,7 +222,7 @@ function SesionActual() {
             <b>Cerrar sesión</b>
             <small>En este navegador</small>
           </div>
-          <Boton tamano="pequeno" cargando={saliendo} onClick={() => void cerrarSesion()}>
+          <Boton cargando={saliendo} onClick={() => void cerrarSesion()}>
             Cerrar sesión
           </Boton>
         </div>
@@ -220,11 +234,26 @@ function SesionActual() {
 /** Claro, oscuro o el del sistema, recordado en este equipo (DESIGN.md, "Tema"). */
 function SelectorDeTema() {
   const [tema, setTema] = useTema();
+  const Icono = tema === "oscuro" ? Moon : tema === "claro" ? Sun : Monitor;
   return (
-    <section>
-      <GrupoDeOpciones etiqueta="Tema" opciones={OPCIONES_DE_TEMA} valor={tema} onCambio={setTema} />
-      <p className="ayuda">Se recuerda en este equipo.</p>
-    </section>
+    <div className="fila">
+      <Icono aria-hidden size={18} />
+      <div className="txt">
+        <b id="titulo-tema">Tema</b>
+        <small>Se recuerda en este equipo</small>
+      </div>
+      <div role="radiogroup" aria-labelledby="titulo-tema" className="segmentos-c">
+        {OPCIONES_DE_TEMA.map((o) => {
+          const I = o.valor === "oscuro" ? Moon : o.valor === "claro" ? Sun : Monitor;
+          return (
+            <button key={o.valor} type="button" role="radio" aria-checked={tema === o.valor} onClick={() => setTema(o.valor)}>
+              <I aria-hidden size={14} />
+              {o.valor === "sistema" ? "Sistema" : o.texto}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -232,7 +261,7 @@ function SelectorDeTema() {
  * Cómo entra la persona (ADR-0033, prototipos/cuenta): cambiar su contraseña y, si no administra, quitar su segundo
  * factor. Quien administra lo necesita siempre (ADR-0009): se dice, sin botón.
  */
-function Acceso({ nombre }: { nombre: string }) {
+function Acceso({ nombre, llaves }: { nombre: string; llaves: ReactNode }) {
   const notificar = useNotificar();
   const consultasCliente = useQueryClient();
   const sesion = useQuery(consultas.sesion());
@@ -250,7 +279,7 @@ function Acceso({ nombre }: { nombre: string }) {
             <b>Contraseña</b>
             <small>{cambiada ? "Cambiada hace un momento" : "Si la olvida, administración la restablece"}</small>
           </div>
-          <Boton tamano="pequeno" onClick={() => setAbierta("contrasena")}>
+          <Boton onClick={() => setAbierta("contrasena")}>
             Cambiar contraseña
           </Boton>
         </div>
@@ -262,16 +291,17 @@ function Acceso({ nombre }: { nombre: string }) {
               {!usuario?.segundoFactor
                 ? "Sin activar"
                 : usuario.administrador
-                  ? "Activo · obligatorio para administrar, no se puede quitar"
+                  ? "Obligatorio para administrar"
                   : "Activo: el ingreso le pide el código de su app autenticadora"}
             </small>
           </div>
-          {usuario?.segundoFactor && !usuario.administrador && (
-            <Boton tamano="pequeno" onClick={() => setAbierta("factor")}>
-              Quitar segundo factor
-            </Boton>
-          )}
+          {usuario?.segundoFactor && !usuario.administrador ? (
+            <Boton onClick={() => setAbierta("factor")}>Quitar segundo factor</Boton>
+          ) : usuario?.segundoFactor ? (
+            <Insignia tono="exito">Activo</Insignia>
+          ) : null}
         </div>
+        {llaves}
       </div>
 
       {abierta === "contrasena" && (
@@ -331,9 +361,8 @@ function CambiarContrasena({ nombre, alCerrar, alCambiar }: { nombre: string; al
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
       titulo="Cambiar contraseña"
-      subtitulo={nombre}
       cerrable={!ocupado}
       alCerrar={alCerrar}
       pie={
@@ -347,17 +376,17 @@ function CambiarContrasena({ nombre, alCerrar, alCambiar }: { nombre: string; al
         </>
       }
     >
-      <form id={formulario} onSubmit={guardar} noValidate className="flex flex-col gap-5">
+      <form id={formulario} onSubmit={guardar} noValidate className="flex flex-col gap-4">
         <CampoTexto etiqueta="Contraseña actual" nombre="actual" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setActual} error={errores.actual} />
-        <CampoTexto etiqueta="Contraseña nueva" nombre="nueva" tipo="password" autoComplete="new-password" valorInicial="" onCambio={setNueva} error={errores.nueva} />
+        <div className="flex flex-col gap-1.5">
+          <CampoTexto etiqueta="Contraseña nueva" nombre="nueva" tipo="password" autoComplete="new-password" valorInicial="" onCambio={setNueva} error={errores.nueva} />
+          <RequisitosDeContrasena actual={actual} nueva={nueva} repetir={repetir} />
+        </div>
         <CampoTexto etiqueta="Repita la contraseña nueva" nombre="repetir" tipo="password" autoComplete="new-password" valorInicial="" onCambio={setRepetir} error={errores.repetir} />
-        <RequisitosDeContrasena actual={actual} nueva={nueva} repetir={repetir} />
-        <Consecuencias
-          lista={[
-            { icono: LogOut, texto: "Se cierran sus sesiones en los demás equipos. Esta sigue abierta." },
-            { icono: KeyRound, texto: "Su segundo factor y sus llaves de acceso no cambian." },
-          ]}
-        />
+        <p className="nota-capa">
+          <Info aria-hidden />
+          Se cierran sus sesiones en los demás equipos; esta sigue abierta. El segundo factor y las llaves no cambian.
+        </p>
         {general && <Aviso tono="error">{general}</Aviso>}
       </form>
     </Dialogo>

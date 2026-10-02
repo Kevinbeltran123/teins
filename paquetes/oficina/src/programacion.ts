@@ -15,6 +15,8 @@ export const consultasDeProgramacion = {
     queryOptions({ queryKey: ["programacion", "clientes", vista], queryFn: () => cliente.llamar("listarClientes", { consulta: { vista } }) }),
   cliente: (id: string) => queryOptions({ queryKey: ["programacion", "cliente", id], queryFn: () => cliente.llamar("obtenerCliente", { parametros: { id } }) }),
   tecnicos: () => queryOptions({ queryKey: ["programacion", "tecnicos"], queryFn: () => cliente.llamar("listarTecnicos"), staleTime: 5 * 60_000 }),
+  /** Lo que ocupa a cada técnico ese día (ADR-0037): para programar solo con los libres. */
+  ocupacion: (fecha: string) => queryOptions({ queryKey: ["programacion", "ocupacion", fecha], queryFn: () => cliente.llamar("ocupacionDeTecnicos", { consulta: { fecha } }), staleTime: 15_000 }),
   visitas: (vista: Vista, hoy: string) =>
     queryOptions({ queryKey: ["programacion", "visitas", vista, hoy], queryFn: () => cliente.llamar("listarVisitas", { consulta: { vista, hoy } }), refetchInterval: 60_000 }),
 };
@@ -44,6 +46,9 @@ export function mensajeDeProgramacion(error: unknown): string {
       return "La visita ya está cancelada.";
     case "no_autenticado":
       return "Su sesión venció. Inicie sesión de nuevo.";
+    // Alguien programó al mismo técnico a esa hora mientras el diálogo estaba abierto (ADR-0037).
+    case "tecnico_ocupado":
+      return `${error.message}: elija otra hora u otro técnico.`;
     case "entrada_invalida":
       return textoDelServidor(error, "Revise los datos.");
     default:

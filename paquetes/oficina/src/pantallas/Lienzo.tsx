@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { MensajeDeEnvio } from "@teins/documentos";
+import type { MensajeDeEnvio, TextoPropio } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
 import { Boton, CircleAlert, FileText, HojaEnVivo, Mail, Paperclip, RefreshCw, WifiOff, type AnclaDeHoja } from "@teins/ui";
 import { consultas } from "../api";
@@ -106,34 +106,110 @@ export function VistaDeDocumento({
   return <ConPlantillas>{(p) => <HojaEnVivo html={generar(p)} ancho={ancho} titulo={titulo} alPintar={alPintar} ancla={ancla} />}</ConPlantillas>;
 }
 
-/** El correo que recibe un contacto, tal como sale: quién, el asunto, el adjunto y el mensaje. */
-export function VistaDeCorreo({ mensaje: armar, contacto }: { mensaje: (p: Plantillas) => MensajeDeEnvio; contacto: Contacto }) {
+/**
+ * Escribir sobre el correo (ADR-0036): el asunto y el texto que va entre el saludo y el pie. `propio` null es el texto
+ * de TEINS; volver a dejarlo igual al de TEINS también lo deja en null.
+ */
+export interface EdicionDeCorreo {
+  propio: TextoPropio | null;
+  alCambiar: (propio: TextoPropio | null) => void;
+}
+
+/** Lo que escribió la persona dentro del bloque editable: párrafos separados por una línea en blanco. */
+const leerTexto = (el: HTMLElement) =>
+  el.innerText
+    .replace(/\u00a0/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+/** El correo que recibe un contacto, tal como sale: quién, el asunto, el adjunto y el mensaje. Con `edicion`, se escribe sobre él. */
+export function VistaDeCorreo({ mensaje: armar, contacto, edicion }: { mensaje: (p: Plantillas) => MensajeDeEnvio; contacto: Contacto; edicion?: EdicionDeCorreo | undefined }) {
   // El portal del entorno, como lo pone el servidor: solo el correo del informe lo lleva, y sin él no hay botón.
   const portal = useQuery(consultas.sesion()).data?.organizacion.portal ?? undefined;
+  return <ConPlantillas>{(p) => <Correo p={p} mensaje={armar(p)} contacto={contacto} portal={portal} edicion={edicion} />}</ConPlantillas>;
+}
+
+function Correo({ p, mensaje, contacto, portal, edicion }: { p: Plantillas; mensaje: MensajeDeEnvio; contacto: Contacto; portal: string | undefined; edicion: EdicionDeCorreo | undefined }) {
+  const base: TextoPropio = { asunto: p.asuntoBase(mensaje), texto: p.textoBase(mensaje) };
+  const actual = edicion?.propio ?? base;
+  const vigente = useRef({ edicion, base, actual });
+  vigente.current = { edicion, base, actual };
+  // Lo que se escribe sobre el correo no vuelve a dibujarlo (el cursor se perdería): el marco se dibuja con el texto que
+  // había al abrirlo, o con el que llegó de afuera ("Volver al texto de TEINS", el formulario).
+  const [dibujado, setDibujado] = useState({ texto: actual.texto, vez: 0 });
+  const escrito = useRef(actual.texto);
+  if (actual.texto !== escrito.current) {
+    escrito.current = actual.texto;
+    setDibujado((d) => ({ texto: actual.texto, vez: d.vez + 1 }));
+  }
+  const cambiar = (propio: TextoPropio) => {
+    const b = vigente.current.base;
+    vigente.current.edicion?.alCambiar(propio.asunto === b.asunto && propio.texto === b.texto ? null : propio);
+  };
+  const marcar = useCallback(
+    (doc: Document) => {
+      if (!vigente.current.edicion) return;
+      const bloque = doc.querySelector<HTMLElement>('[data-editable="texto"]');
+      if (!bloque || bloque.dataset.escuchando) return;
+      bloque.dataset.escuchando = "1";
+      bloque.contentEditable = "plaintext-only";
+      if (bloque.contentEditable !== "plaintext-only") bloque.contentEditable = "true";
+      bloque.spellcheck = true;
+      bloque.setAttribute("aria-label", "Texto del correo: escriba aquí");
+      for (const [propiedad, valor] of [["outline", "1px dashed #9AA3B2"], ["outline-offset", "6px"], ["border-radius", "4px"], ["cursor", "text"]]) bloque.style.setProperty(propiedad!, valor!);
+      bloque.addEventListener("focus", () => bloque.style.setProperty("outline", "2px solid #2F5FE8"));
+      bloque.addEventListener("blur", () => bloque.style.setProperty("outline", "1px dashed #9AA3B2"));
+      bloque.addEventListener("input", () => {
+        const texto = leerTexto(bloque);
+        escrito.current = texto;
+        cambiar({ asunto: vigente.current.actual.asunto, texto });
+      });
+    },
+    [],
+  );
+  // El asunto no se ve dentro del cuerpo: el marco usa siempre el de TEINS para no volver a dibujarse al cambiarlo.
+  const conTexto = edicion ? { ...mensaje, personal: { asunto: base.asunto, texto: dibujado.texto } } : mensaje;
+  // Lo que llegó de afuera se vuelve a dibujar aunque el texto sea el mismo que había al abrir.
+  const html = p.htmlDeCorreo(conTexto, { nombre: contacto.nombre, portal: mensaje.documento === "cotizacion" ? undefined : portal, sinAdjunto: false }).replace("</body>", `<!--${dibujado.vez}--></body>`);
   return (
-    <ConPlantillas>
-      {(p) => {
-        const mensaje = armar(p);
-        return (
-        <>
-          <div className="correo-meta">
-            <span>Para</span>
-            <b>{`${contacto.nombre} <${contacto.correo ?? "[correo]"}>`}</b>
-            <span>Asunto</span>
-            <b>{p.asunto(mensaje)}</b>
-            <span>Adjunto</span>
-            <span className="adjunto">
-              <Paperclip aria-hidden size={13} strokeWidth={1.6} />
-              {mensaje.nombreArchivo}
-            </span>
-          </div>
-          <div className="correo-m">
-            <HojaEnVivo html={p.htmlDeCorreo(mensaje, { nombre: contacto.nombre, portal: mensaje.documento === "cotizacion" ? undefined : portal, sinAdjunto: false })} ancho={640} titulo={`Correo a ${contacto.nombre}`} estilosEnLinea />
-          </div>
-        </>
-        );
-      }}
-    </ConPlantillas>
+    <>
+      <div className="correo-meta">
+        <span>Para</span>
+        <b>{`${contacto.nombre} <${contacto.correo ?? "[correo]"}>`}</b>
+        <span>Asunto</span>
+        {edicion ? (
+          <input className="asunto-en-linea" aria-label="Asunto del correo" value={actual.asunto} onChange={(e) => cambiar({ asunto: e.target.value, texto: actual.texto })} />
+        ) : (
+          <b>{p.asunto(mensaje)}</b>
+        )}
+        <span>Adjunto</span>
+        <span className="adjunto">
+          <Paperclip aria-hidden size={13} strokeWidth={1.6} />
+          {mensaje.nombreArchivo}
+        </span>
+      </div>
+      <div className="correo-m">
+        <HojaEnVivo
+          html={html}
+          ancho={640}
+          titulo={`Correo a ${contacto.nombre}`}
+          estilosEnLinea
+          alPintar={marcar}
+        />
+      </div>
+      {edicion && (
+        <p className="nota-correo">
+          {edicion.propio ? (
+            <>
+              Con su texto. <button type="button" className="enlace-acc" onClick={() => edicion.alCambiar(null)}>Volver al texto de TEINS</button>
+            </>
+          ) : (
+            "Escriba sobre el asunto y el texto punteado."
+          )}{" "}
+          El saludo, el adjunto y el pie los pone TEINS.
+        </p>
+      )}
+    </>
   );
 }
 
@@ -174,7 +250,19 @@ export function VistaDeWhatsapp({ mensaje: armar, contacto }: { mensaje: (p: Pla
 }
 
 /** El correo que recibe cada contacto que lo recibe por correo; con varios, se elige a quién mirar. */
-export function CorreoDeContactos({ contactos, mensaje, cliente: cl, documento }: { contactos: readonly Contacto[]; mensaje: (p: Plantillas) => MensajeDeEnvio; cliente: { id: string; nombre: string }; documento: string }) {
+export function CorreoDeContactos({
+  contactos,
+  mensaje,
+  cliente: cl,
+  documento,
+  edicion,
+}: {
+  contactos: readonly Contacto[];
+  mensaje: (p: Plantillas) => MensajeDeEnvio;
+  cliente: { id: string; nombre: string };
+  documento: string;
+  edicion?: EdicionDeCorreo | undefined;
+}) {
   const porCorreo = contactos.filter((x) => x.recibeCorreo && x.correo);
   const [elegido, setElegido] = useState<string | null>(null);
   const contacto = porCorreo.find((x) => x.id === elegido) ?? porCorreo[0];
@@ -200,7 +288,7 @@ export function CorreoDeContactos({ contactos, mensaje, cliente: cl, documento }
           ))}
         </div>
       )}
-      <VistaDeCorreo mensaje={mensaje} contacto={contacto} />
+      <VistaDeCorreo key={contacto.id} mensaje={mensaje} contacto={contacto} edicion={edicion} />
     </>
   );
 }

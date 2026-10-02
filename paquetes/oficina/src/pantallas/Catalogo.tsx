@@ -13,7 +13,8 @@ import {
   EsqueletoLista,
   EstadoVacio,
   FilaTabla,
-    Insignia,
+    Info,
+  Insignia,
   MenuAcciones,
   Package,
   Pencil,
@@ -234,6 +235,13 @@ export function Catalogo() {
   );
 }
 
+/** Las unidades del catálogo por frecuencia (hasta ocho). */
+function unidadesUsadas(items: readonly Item[]): string[] {
+  const cuenta = new Map<string, number>();
+  for (const i of items) cuenta.set(i.unidad, (cuenta.get(i.unidad) ?? 0) + 1);
+  return [...cuenta].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([u]) => u);
+}
+
 /** Crear (sin `item`) o editar un ítem; el código no cambia porque identifica al ítem en las líneas vinculadas. */
 function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: () => void; alGuardar: (i: Item) => void }) {
   const formulario = useId();
@@ -242,6 +250,8 @@ function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: 
   const [unidad, setUnidad] = useState(item?.unidad ?? "");
   const [errores, setErrores] = useState<{ codigo?: string; descripcion?: string; unidad?: string }>({});
   const [error, setError] = useState<string | null>(null);
+  // Las unidades que ya usa el catálogo, de la más usada a la menos, como atajo: la unidad se sigue escribiendo libre.
+  const usadas = useQuery({ ...consultasDeCatalogo.items(), select: (d) => unidadesUsadas(d.items) }).data ?? [];
   const guardar = useAccionDeCatalogo(() =>
     item
       ? cliente.llamar("actualizarItemCatalogo", { parametros: { id: item.id }, cuerpo: { descripcion: descripcion.trim(), unidad: unidad.trim(), activo: item.activo } })
@@ -268,7 +278,7 @@ function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: 
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
       titulo={item ? `Editar ${item.codigo}` : "Nuevo ítem"}
       cerrable={!guardar.isPending}
       alCerrar={alCerrar}
@@ -283,10 +293,22 @@ function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: 
         </>
       }
     >
-      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        {!item && <CampoTexto etiqueta="Código" valorInicial="" onCambio={setCodigo} error={errores.codigo} />}
-        <CampoTexto etiqueta={item ? `Descripción de ${item.codigo}` : "Descripción"} valorInicial={descripcion} onCambio={setDescripcion} error={errores.descripcion} />
-        <CampoTexto etiqueta={item ? `Unidad de ${item.codigo}` : "Unidad"} valorInicial={unidad} onCambio={setUnidad} error={errores.unidad} />
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        <CampoTexto etiqueta="Descripción" ejemplo="Como sale en la cotización" valorInicial={descripcion} onCambio={setDescripcion} error={errores.descripcion} />
+        <div className="fila-campos">
+          {item ? (
+            <CampoTexto etiqueta="Código" valorInicial={item.codigo} onCambio={() => undefined} deshabilitado />
+          ) : (
+            <CampoTexto etiqueta="Código" ejemplo="Por ejemplo: UTP-6A" valorInicial="" onCambio={setCodigo} error={errores.codigo} />
+          )}
+          <CampoTexto etiqueta="Unidad" valorInicial={unidad} onCambio={setUnidad} error={errores.unidad} sugerencias={usadas} />
+        </div>
+        {item && (
+          <p className="nota-capa">
+            <Info aria-hidden />
+            Las cotizaciones publicadas conservan la descripción con que salieron.
+          </p>
+        )}
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>
@@ -318,8 +340,8 @@ function CambiarPrecio({ item, alCerrar, alGuardar }: { item: Item; alCerrar: ()
 
   return (
     <Dialogo
-      forma="lateral"
-      titulo={`Precio de ${item.codigo}`}
+      forma="formulario"
+      titulo={`Cambiar precio de ${item.codigo}`}
       subtitulo={`${item.descripcion} · ${item.unidad}`}
       cerrable={!guardar.isPending}
       alCerrar={alCerrar}
@@ -336,7 +358,10 @@ function CambiarPrecio({ item, alCerrar, alGuardar }: { item: Item; alCerrar: ()
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
         <CampoTexto etiqueta="Precio unitario sin IVA" nombre="precio" valorInicial={texto} onCambio={setTexto} error={errorCampo} />
-        <Aviso>Rige desde hoy para las cotizaciones nuevas y los borradores. Las versiones ya publicadas conservan su precio.</Aviso>
+        <p className="nota-capa">
+          <Info aria-hidden />
+          Rige desde hoy para las cotizaciones nuevas y los borradores; lo publicado no cambia.
+        </p>
         {guardar.isError && <Aviso tono="error">{mensajeDeAdministracion(guardar.error)}</Aviso>}
       </form>
       <section aria-labelledby={`${formulario}-historia`} className="col" style={{ gap: 8 }}>

@@ -30,6 +30,7 @@ import {
 import { cliente } from "../api";
 import { aFechaCorta } from "../formato";
 import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
+import { useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
 
 type Cliente = Respuesta<"listarClientes">["clientes"][number];
 
@@ -195,10 +196,10 @@ export function Clientes() {
             setCreando(false);
             setBusqueda("");
             destacar(c.id);
-            // El siguiente paso: sin contactos, el informe de este cliente solo quedaría en el portal (ADR-0028).
+            // Ya llega con su contacto principal (iteración 29): el siguiente paso es ver el cliente o programarle.
             notificar({
               texto: `Cliente creado: ${c.nombre}`,
-              accion: { texto: "Agregar contactos", alHacer: () => void navegar({ to: "/clientes/$id", params: { id: c.id }, state: { siguiente: "contactos" } }) },
+              accion: { texto: "Ver el cliente", alHacer: () => void navegar({ to: "/clientes/$id", params: { id: c.id } }) },
             });
           }}
         />
@@ -224,8 +225,13 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
   const [sitio, setSitio] = useState("");
   const [direccion, setDireccion] = useState("");
   const [errores, setErrores] = useState<{ nombre?: string; sitio?: string; direccion?: string }>({});
+  const [erroresContacto, setErroresContacto] = useState<ErroresDeContacto>({});
   const [error, setError] = useState<string | null>(null);
-  const crear = useAccionDeProgramacion(() => cliente.llamar("crearCliente", { cuerpo: { nombre: nombre.trim(), sitio: { nombre: sitio.trim(), direccion: direccion.trim() } } }));
+  // El contacto principal va con el cliente (iteración 29): sin él, los documentos no le llegan a nadie.
+  const contacto = useCamposDeContacto(null, { algunCanal: true, recibeCotizaciones: true });
+  const crear = useAccionDeProgramacion(() =>
+    cliente.llamar("crearCliente", { cuerpo: { nombre: nombre.trim(), sitio: { nombre: sitio.trim(), direccion: direccion.trim() }, contacto: contacto.datos() } }),
+  );
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -234,9 +240,12 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
       ...(sitio.trim() === "" ? { sitio: "Escriba el nombre del sitio." } : {}),
       ...(direccion.trim() === "" ? { direccion: "Escriba la dirección del sitio." } : {}),
     };
+    const faltanContacto = contacto.validar();
     setErrores(faltan);
-    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
-    if (Object.keys(faltan).length > 0) return;
+    setErroresContacto(faltanContacto);
+    const hayErrores = Object.keys(faltan).length > 0 || Object.keys(faltanContacto).length > 0;
+    if (hayErrores) enfocarPrimerError(formulario);
+    if (hayErrores) return;
     setError(null);
     try {
       alCrear(await crear.mutateAsync(undefined));
@@ -248,6 +257,7 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
   return (
     <Dialogo
       forma="lateral"
+      amplio
       titulo="Nuevo cliente"
       cerrable={!crear.isPending}
       alCerrar={alCerrar}
@@ -262,13 +272,22 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
         </>
       }
     >
-      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" valorInicial="" onCambio={setNombre} error={errores.nombre} />
-        <fieldset className="flex flex-col gap-4" style={{ border: 0, padding: 16, margin: 0, background: "var(--sup2)", borderRadius: 18 }}>
-          <legend className="sr-only">Sede principal</legend>
-          <span className="ayuda" style={{ fontSize: 14 }}>La sede principal, donde se programan las visitas. Después puede agregar más sitios.</span>
-          <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" valorInicial="" onCambio={setSitio} error={errores.sitio} />
-          <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={setDireccion} error={errores.direccion} />
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        <fieldset className="bloque-form">
+          <legend>Cliente</legend>
+          <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" ejemplo="Como sale en el informe" valorInicial="" onCambio={setNombre} error={errores.nombre} />
+        </fieldset>
+        <fieldset className="bloque-form">
+          <legend>Primer sitio</legend>
+          <div className="fila-campos">
+            <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" ejemplo="Por ejemplo: Torre A" valorInicial="" onCambio={setSitio} error={errores.sitio} />
+            <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={setDireccion} error={errores.direccion} />
+          </div>
+        </fieldset>
+        <fieldset className="bloque-form">
+          <legend>Contacto principal</legend>
+          <p className="ayuda">A quien le llegan los documentos. Puede agregar más contactos después.</p>
+          {contacto.campos(erroresContacto)}
         </fieldset>
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
@@ -304,7 +323,7 @@ export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nomb
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
       titulo="Agregar sitio"
       subtitulo={c.nombre}
       cerrable={!agregar.isPending}

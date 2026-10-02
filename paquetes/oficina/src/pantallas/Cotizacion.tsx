@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { aDecimalColombiano, calcularTotales, normalizarDecimal, PORCENTAJE, type Impuestos, type LineaDeCotizacion } from "@teins/dominio";
-import type { ContenidoCotizacion, MensajeDeCotizacion } from "@teins/documentos";
+import type { ContenidoCotizacion, MensajeDeCotizacion, TextoPropio } from "@teins/documentos";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
@@ -23,6 +23,7 @@ import {
   FilaTabla,
   Insignia,
   LockKeyhole,
+  Mail,
   Plus,
   RefreshCw,
   Send,
@@ -41,7 +42,7 @@ import { consultasDeCotizaciones, mensajeDeCotizacion, useAccionDeCotizacion } f
 import { aFechaCorta, leerPesos, pesos } from "../formato";
 import { consultasDeProgramacion } from "../programacion";
 import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
-import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type QueSeVe } from "./Lienzo";
+import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
 
 type Cotizacion = Respuesta<"obtenerCotizacion">;
 
@@ -176,9 +177,12 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
     condiciones: { validezDias: validez, formaPago: borrador.formaPago.trim(), notas: borrador.notas.trim() },
   });
   const guardar = useAccionDeCotizacion((version: number) => cliente.llamar("guardarCotizacion", { parametros: { id: c.id }, cuerpo: { version, ...cuerpo() } }));
-  const publicar = useAccionDeCotizacion(({ version, destinatarios }: { version: number; destinatarios: string[] }) =>
-    cliente.llamar("publicarCotizacion", { parametros: { id: c.id }, cuerpo: { version, destinatarios } }),
+  const publicar = useAccionDeCotizacion(({ version, destinatarios, mensaje }: { version: number; destinatarios: string[]; mensaje?: TextoPropio | undefined }) =>
+    cliente.llamar("publicarCotizacion", { parametros: { id: c.id }, cuerpo: { version, destinatarios, ...(mensaje && { mensaje }) } }),
   );
+  // El correo de la versión que se va a publicar, escrito sobre la pestaña "Correo" (ADR-0036): null es el de TEINS.
+  const [textoCorreo, setTextoCorreo] = useState<TextoPropio | null>(null);
+  const edicionCorreo = { propio: textoCorreo, alCambiar: setTextoCorreo };
   const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "cotizaciones") : []);
   // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
   const error = [guardar.error, publicar.error].find((e) => e && !esSesionVencida(e)) ?? null;
@@ -235,7 +239,8 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   async function guardarYPublicar() {
     // Lo que se publica es lo guardado: si hay cambios, primero se guardan.
     const guardada = cambiado ? await guardarBorrador() : version;
-    await publicar.mutateAsync({ version: guardada, destinatarios: elegidos });
+    await publicar.mutateAsync({ version: guardada, destinatarios: elegidos, mensaje: textoCorreo ?? undefined });
+    setTextoCorreo(null);
   }
 
   // La confirmación muestra lo que se va a publicar, que es lo guardado: si hay cambios, primero se guardan.
@@ -589,7 +594,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
                   version={vigente}
                   contactos={contactos.data?.contactos}
                   mensaje={(p) => mensajeDeVersion(p, vigente.numero)}
-                  enviar={(destinos, llave) => cliente.llamar("enviarCotizacion", { parametros: { id: c.id, numero: vigente.numero }, cuerpo: { destinos, llave } })}
+                  enviar={(destinos, llave, mensaje) => cliente.llamar("enviarCotizacion", { parametros: { id: c.id, numero: vigente.numero }, cuerpo: { destinos, llave, ...(mensaje && { mensaje }) } })}
                   corregirEnvio={(envio, accion) =>
                     cliente.llamar(accion === "cancelar" ? "cancelarEnvioDeCotizacion" : "reanudarEnvioDeCotizacion", { parametros: { id: c.id, numero: vigente.numero, envio } })
                   }
@@ -600,10 +605,10 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           />
         </div>
       </div>
-      {alLado && <LienzoCotizacion vista={vista} alCambiar={setVista} documento={documentoVista} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} ancla={ancla} />}
+      {alLado && <LienzoCotizacion vista={vista} alCambiar={setVista} documento={documentoVista} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} ancla={ancla} edicion={edicionCorreo} />}
       {vistaLateral && !alLado && (
         <Dialogo forma="lateral" amplio titulo="Vista previa" subtitulo={`Cotización ${c.numero}, versión ${siguiente}`} alCerrar={() => setVistaLateral(false)}>
-          <LienzoCotizacion vista={vista} alCambiar={setVista} documento={documentoVista} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} ancla={null} />
+          <LienzoCotizacion vista={vista} alCambiar={setVista} documento={documentoVista} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} ancla={null} edicion={edicionCorreo} />
         </Dialogo>
       )}
 
@@ -622,6 +627,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
               { icono: LockKeyhole, texto: `Queda congelada con sus precios e impuestos, por ${pesos(totales.total)}`, detalle: "Cambiar la lista de precios después no la afecta" },
               { icono: FileText, texto: "Es el documento de la vista previa", detalle: "El PDF puede partir las páginas distinto" },
               { icono: History, texto: `Para corregir algo se publica la versión ${siguiente + 1}`, detalle: siguiente > 1 ? `La versión ${siguiente - 1} se conserva` : "Esta se conserva" },
+              ...(textoCorreo && elegidos.length > 0 ? [{ icono: Mail, texto: "El correo va con el texto que usted escribió", detalle: `Asunto: ${textoCorreo.asunto}` }] : []),
             ]}
           />
           {contactos.isPending ? (
@@ -759,6 +765,7 @@ function LienzoCotizacion({
   contactos,
   cliente: cl,
   ancla,
+  edicion,
 }: {
   vista: QueSeVe;
   alCambiar: (v: QueSeVe) => void;
@@ -767,13 +774,14 @@ function LienzoCotizacion({
   contactos: readonly Contacto[];
   cliente: { id: string; nombre: string };
   ancla: AnclaDeHoja | null;
+  edicion: EdicionDeCorreo;
 }) {
   return (
     <Lienzo cabecera={<PestanasDeVista documento="Cotización" vista={vista} alCambiar={alCambiar} />}>
       {vista === "documento" ? (
         <VistaDeDocumento titulo={`Vista previa de la cotización ${documento.numero}`} generar={(p) => p.plantillaCotizacion(documento, { salida: { tipo: "vista" } })} ancla={ancla} />
       ) : (
-        <CorreoDeContactos contactos={contactos} mensaje={mensaje} cliente={cl} documento="la cotización" />
+        <CorreoDeContactos contactos={contactos} mensaje={mensaje} cliente={cl} documento="la cotización" edicion={edicion} />
       )}
     </Lienzo>
   );
