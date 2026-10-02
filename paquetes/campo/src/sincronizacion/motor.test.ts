@@ -5,7 +5,8 @@ import fc from "fast-check";
 import { bocetoVacio, crearLevantamiento, TIPO_ARCHIVO_BOCETO, type VersionFormato } from "@teins/dominio";
 import { abrirBase, repositorioDexie } from "../datos/dexie";
 import type { BaseCampo } from "../datos/base";
-import { estadoDe, estadosDe, visitasDe } from "../datos/lecturas";
+import { estadoDe, estadosDe, visitaDe, visitasDe } from "../datos/lecturas";
+import { terminarVisita } from "../datos/terminacion";
 import { almacenDexie } from "./almacen";
 import { crearMotor, espera, ESPERA_MAXIMA_MS, INTERVALO_BAJADA_MS } from "./motor";
 import { servidorFalso, type Falla } from "./pruebas/servidor-falso";
@@ -347,6 +348,95 @@ describe("bajada (ADR-0003)", () => {
     // El mismo dispositivo en cada informe.
     await motorDe(db, s, reloj).sincronizar({ bajar: true });
     expect(new Set(s.informes.map((i) => i.id)).size).toBe(1);
+  });
+});
+
+describe("terminar visita (ADR-0037)", () => {
+  const idVisita = "0192f0e0-0000-7000-8000-000000000950";
+  const abierta = { id: idVisita, cliente: { nombre: "Cliente ficticio" }, sitio: { nombre: "Sede", direccion: "Calle [N]" }, motivo: "Mantenimiento", programadaPara: "2026-09-24", horaInicio: "14:00", horaFin: null };
+
+  /** Un teléfono con la visita abierta ya bajada, que el técnico terminó sin señal. */
+  async function terminadaSinSenal() {
+    const db = abrirBase(`motor-${Math.random()}`);
+    bases.push(db);
+    const s = servidorFalso();
+    let ahora = Date.parse("2026-09-24T20:00:00Z");
+    const reloj = { ahora: () => ahora, avanzar: (ms: number) => void (ahora += ms) };
+    const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+    s.publicar({ tipo: "visita", visita: abierta });
+    await motor.sincronizar();
+    const { llave } = await terminarVisita(db, "t1", idVisita, new Date("2026-09-24T20:30:00Z"));
+    return { db, s, reloj, motor, llave };
+  }
+
+  it("se envía una vez con su llave, queda como dice el servidor y no se repite", async () => {
+    const { db, s, motor, llave } = await terminadaSinSenal();
+    // Un segundo toque no crea otra terminación.
+    expect((await terminarVisita(db, "t1", idVisita, new Date("2026-09-24T20:31:00Z"))).llave).toBe(llave);
+    expect(await motor.sincronizar()).toBe("completa");
+    expect(s.terminadas.get(idVisita)).toMatchObject({ en: "2026-09-24T20:30:00.000Z", llamadas: new Map([[llave, 1]]) });
+    const visita = await visitaDe(db, "t1", idVisita);
+    expect(visita).toMatchObject({ terminada: { en: "2026-09-24T20:30:00.000Z" } });
+    expect(visita?.terminacionPendiente).toBeUndefined();
+    await motor.sincronizar({ bajar: true });
+    expect(s.llamadas.filter((l) => l === "terminarVisita")).toHaveLength(1);
+    expect(await motor.proximoIntento()).toBeNull();
+  });
+
+  it("sin red queda pendiente con su espera y sale al volver la señal, con la misma llave", async () => {
+    const { db, s, reloj, motor, llave } = await terminadaSinSenal();
+    s.programar("terminarVisita", "red_antes");
+    expect(await motor.sincronizar()).toBe("sin_conexion");
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toMatchObject({ llave, intentos: 1 });
+    // No reintenta antes de tiempo, y avisa cuándo despertar.
+    const proximo = await motor.proximoIntento();
+    expect(proximo).toBeGreaterThan(reloj.ahora());
+    await motor.sincronizar();
+    expect(s.terminadas.size).toBe(0);
+    reloj.avanzar(proximo! - reloj.ahora());
+    expect(await motor.sincronizar()).toBe("completa");
+    expect(s.terminadas.get(idVisita)?.llamadas).toEqual(new Map([[llave, 1]]));
+    expect(await visitaDe(db, "t1", idVisita)).toMatchObject({ terminada: { en: "2026-09-24T20:30:00.000Z" } });
+  });
+
+  it("si la respuesta se pierde, el reintento con la misma llave no la duplica", async () => {
+    const { db, s, reloj, motor, llave } = await terminadaSinSenal();
+    s.programar("terminarVisita", "red_despues");
+    await motor.sincronizar();
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect(s.terminadas.get(idVisita)?.llamadas).toEqual(new Map([[llave, 2]]));
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toBeUndefined();
+  });
+
+  it("un rechazo sin remedio (la cancelaron) quita la terminación local: manda el servidor", async () => {
+    const { db, s, motor } = await terminadaSinSenal();
+    s.cancelar(idVisita);
+    expect(await motor.sincronizar()).toBe("completa");
+    const visita = await visitaDe(db, "t1", idVisita);
+    expect(visita?.terminacionPendiente).toBeUndefined();
+    expect(visita?.terminada ?? null).toBeNull();
+    await motor.sincronizar();
+    expect(s.llamadas.filter((l) => l === "terminarVisita")).toHaveLength(1);
+  });
+
+  it("con un error del servidor reintenta después, sin perderla", async () => {
+    const { db, s, motor, llave } = await terminadaSinSenal();
+    s.programar("terminarVisita", "error_500");
+    expect(await motor.sincronizar()).toBe("completa");
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toMatchObject({ llave, intentos: 1 });
+  });
+
+  it("una bajada sin terminada no borra la pendiente; una con terminada deja la del servidor", async () => {
+    const { db, llave } = await terminadaSinSenal();
+    const almacen = almacenDexie(db);
+    const bajada = (visita: typeof abierta & { terminada?: { en: string } }, punto: number) => ({ cambios: [{ tipo: "visita" as const, visita }], puntoDeControl: punto, hayMas: false, permisoLocalHasta: "2026-10-01T00:00:00.000Z" });
+    await almacen.aplicarBajada("t1", bajada({ ...abierta, motivo: "Mantenimiento correctivo" }, 2), 2, "2026-09-24T20:40:00.000Z");
+    expect(await visitaDe(db, "t1", idVisita)).toMatchObject({ motivo: "Mantenimiento correctivo", terminacionPendiente: { llave } });
+    await almacen.aplicarBajada("t1", bajada({ ...abierta, terminada: { en: "2026-09-24T20:10:00.000Z" } }, 3), 2, "2026-09-24T20:41:00.000Z");
+    const visita = await visitaDe(db, "t1", idVisita);
+    expect(visita?.terminada).toEqual({ en: "2026-09-24T20:10:00.000Z" });
+    expect(visita?.terminacionPendiente).toBeUndefined();
   });
 });
 

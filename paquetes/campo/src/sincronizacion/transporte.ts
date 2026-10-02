@@ -12,6 +12,8 @@ export interface Transporte {
   obtenerCambios(desde: number, app: number): Promise<Respuesta<"obtenerCambios">>;
   informarDispositivo(cuerpo: CuerpoEntrada<"informarDispositivo">): Promise<Respuesta<"informarDispositivo">>;
   consultarOrdenes(cuerpo: CuerpoEntrada<"consultarOrdenes">): Promise<Respuesta<"consultarOrdenes">>;
+  /** "Terminar visita" (ADR-0037): idempotente por llave. */
+  terminarVisita(visitaId: string, cuerpo: CuerpoEntrada<"terminarVisita">): Promise<Respuesta<"terminarVisita">>;
 }
 
 /** El almacenamiento rechazó la carga (firma vencida, huella distinta). Se vuelve a pedir autorización. */
@@ -39,5 +41,6 @@ export function transporteHttp(cliente: ClienteApi, f: typeof fetch = globalThis
     obtenerCambios: (desde, app) => cliente.llamar("obtenerCambios", { consulta: { desde, app } }),
     informarDispositivo: (cuerpo) => cliente.llamar("informarDispositivo", { cuerpo }),
     consultarOrdenes: (cuerpo) => cliente.llamar("consultarOrdenes", { cuerpo }),
+    terminarVisita: (id, cuerpo) => cliente.llamar("terminarVisita", { parametros: { id }, cuerpo }),
   };
 }

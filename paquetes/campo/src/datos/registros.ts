@@ -72,21 +72,29 @@ export async function sellarEnvio(db: BaseCampo, e: EnvioLocal): Promise<EnvioGu
   return { ...resto, sellado: await sellarJson(db, e.tecnicoId, contexto.envio(e.levantamientoId), comando) };
 }
 
-type DatosDeVisita = Omit<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida">;
+type DatosDeVisita = Omit<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida" | "terminacionPendiente">;
 
 export async function abrirVisita(db: BaseCampo, g: VisitaGuardada): Promise<VisitaLocal> {
-  const { sellado, id, tecnicoId, fueraDeAlcance, motivoSalida, ...resto } = g;
+  const { sellado, id, tecnicoId, fueraDeAlcance, motivoSalida, terminacionPendiente, ...resto } = g;
   const datos = sellado ? await abrirJson<DatosDeVisita>(db, tecnicoId, contexto.visita(tecnicoId, id), sellado) : (resto as DatosDeVisita);
-  return { ...datos, id, tecnicoId, ...(fueraDeAlcance ? { fueraDeAlcance } : {}), ...(motivoSalida ? { motivoSalida } : {}) };
+  return {
+    ...datos,
+    id,
+    tecnicoId,
+    ...(fueraDeAlcance ? { fueraDeAlcance } : {}),
+    ...(motivoSalida ? { motivoSalida } : {}),
+    ...(terminacionPendiente ? { terminacionPendiente } : {}),
+  };
 }
 
 export async function sellarVisita(db: BaseCampo, v: VisitaLocal): Promise<VisitaGuardada> {
-  const { id, tecnicoId, fueraDeAlcance, motivoSalida, ...datos } = v;
+  const { id, tecnicoId, fueraDeAlcance, motivoSalida, terminacionPendiente, ...datos } = v;
   return {
     id,
     tecnicoId,
     ...(fueraDeAlcance ? { fueraDeAlcance } : {}),
     ...(motivoSalida ? { motivoSalida } : {}),
+    ...(terminacionPendiente ? { terminacionPendiente } : {}),
     sellado: await sellarJson(db, tecnicoId, contexto.visita(tecnicoId, id), datos),
   };
 }

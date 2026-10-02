@@ -149,11 +149,29 @@ export type VisitaLocal = VisitaAsignada & {
   fueraDeAlcance?: true;
   /** Por qué salió (desde la iteración 7); sin él, se trata como reasignada. */
   motivoSalida?: "reasignada" | "cancelada";
+  /** El técnico la terminó en este teléfono y falta que el servidor lo sepa (ADR-0037). */
+  terminacionPendiente?: TerminacionPendiente | undefined;
 };
 
-/** Como se guarda: cliente, sitio, dirección y motivo van sellados. */
-export type VisitaGuardada = Pick<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida"> &
-  Partial<Omit<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida">> & { sellado?: Sellado | undefined };
+/**
+ * "Terminar visita" sin señal (ADR-0037): se ve terminada al instante y el motor la envía con su llave, con la misma
+ * espera que los envíos. Vive en la visita y no en el outbox: es un dato de la visita, no un levantamiento. Va a la
+ * vista, sin sellar: una hora y una llave no dicen nada del cliente, y así la bajada la conserva sin abrir el sellado.
+ */
+export interface TerminacionPendiente {
+  llave: string;
+  /** Hora del teléfono al tocar "Terminar visita": declarativa, la que ve oficina. */
+  en: string;
+  intentos: number;
+  /** Milisegundos desde época: no se intenta antes. */
+  proximoIntentoEn: number;
+}
+
+/** Lo que va a la vista en una visita guardada; lo demás (cliente, sitio, dirección, motivo, horario) va sellado. */
+type AlaVistaDeVisita = "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida" | "terminacionPendiente";
+
+/** Como se guarda: cliente, sitio, dirección, motivo y horario van sellados. */
+export type VisitaGuardada = Pick<VisitaLocal, AlaVistaDeVisita> & Partial<Omit<VisitaLocal, AlaVistaDeVisita>> & { sellado?: Sellado | undefined };
 
 /** Nota de oficina sobre un levantamiento enviado (corte 3). No modifica datos. */
 export interface ComentarioDeOficina {

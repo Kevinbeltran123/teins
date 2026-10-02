@@ -100,6 +100,7 @@ import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion, p
 import { useBotonAtras } from "../dispositivo/atras";
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
+import { compararPorHorario, terminadaEn } from "../visitas";
 
 // El editor de bocetos pesa (perfect-freehand y la lógica del lienzo): se carga solo al dibujar (ADR-0011).
 const EditorBoceto = lazy(() => import("./EditorBoceto"));
@@ -1417,8 +1418,9 @@ function Enviado({
   const siguienteVisita = useLiveQuery(async () => {
     if (!levantamiento.tecnicoId) return null;
     const hoy = new Date().toLocaleDateString("en-CA");
-    const otras = (await visitasDe(db, levantamiento.tecnicoId)).filter((v) => v.id !== levantamiento.visitaId && !v.fueraDeAlcance && v.programadaPara >= hoy);
-    return otras.sort((a, b) => a.programadaPara.localeCompare(b.programadaPara))[0] ?? null;
+    // Una ya terminada no es la siguiente; en el mismo día, por hora de inicio (ADR-0037).
+    const otras = (await visitasDe(db, levantamiento.tecnicoId)).filter((v) => v.id !== levantamiento.visitaId && !v.fueraDeAlcance && v.programadaPara >= hoy && !terminadaEn(v));
+    return otras.sort(compararPorHorario)[0] ?? null;
   }, [levantamiento.tecnicoId, levantamiento.visitaId]);
   // Lo que dijo el servidor en la bajada manda sobre el estado de envío del teléfono.
   const estado = servidor ? estadoSegunServidor(servidor) : envio ? estadoDeEnvio(envio, enLinea) : null;

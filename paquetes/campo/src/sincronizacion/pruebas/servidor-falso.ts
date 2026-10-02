@@ -40,6 +40,10 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
   const confirmados: string[] = [];
   let permisoLocalHasta = "2026-10-01T00:00:00.000Z";
   let tamanoDePagina = 100;
+  /** Visitas terminadas desde el teléfono, con cuántas llamadas llegaron con cada llave (ADR-0037). */
+  const terminadas = new Map<string, { en: string; llamadas: Map<string, number> }>();
+  /** Visitas canceladas: terminarlas responde "estado inválido". */
+  const canceladas = new Set<string>();
 
   function aplicarFalla<T>(op: Operacion, ejecutar: () => T): T {
     llamadas.push(op);
@@ -123,6 +127,16 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
         return { borrar: [...revocados].filter((u) => !confirmados.includes(u)) };
       });
     },
+    async terminarVisita(visitaId, { llave, en }) {
+      return aplicarFalla("terminarVisita", () => {
+        if (canceladas.has(visitaId)) throw error("estado_invalido", 409);
+        // Como el real: repetirla devuelve la primera, con cualquier llave.
+        const previa = terminadas.get(visitaId) ?? { en, llamadas: new Map<string, number>() };
+        previa.llamadas.set(llave, (previa.llamadas.get(llave) ?? 0) + 1);
+        terminadas.set(visitaId, previa);
+        return { terminada: { en: previa.en } };
+      });
+    },
   };
 
   return {
@@ -136,6 +150,10 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
       archivos.delete(huella);
     },
     recibidos,
+    terminadas,
+    cancelar(visitaId: string) {
+      canceladas.add(visitaId);
+    },
     almacenamiento,
     /** Con qué tipo pidió subir cada archivo el teléfono. */
     tipos,

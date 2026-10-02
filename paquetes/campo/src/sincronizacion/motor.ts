@@ -70,6 +70,7 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
     obtenerCambios: conRed(base.obtenerCambios),
     informarDispositivo: conRed(base.informarDispositivo),
     consultarOrdenes: conRed(base.consultarOrdenes),
+    terminarVisita: conRed(base.terminarVisita),
   };
 
   /** Alguna llamada respondió "no autenticado" en esta sincronización: puede ser una revocación. */
@@ -147,6 +148,38 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
           // Error permanente (ADR-0003): no se reintenta solo; el técnico lo ve.
           else await almacen.actualizarEnvio(envio.levantamientoId, { estado: "error", ultimoError: { codigo, mensaje: error.message } });
           return false;
+      }
+    }
+  }
+
+  /**
+   * Visitas terminadas en el teléfono (ADR-0037), con la misma espera que los envíos. Sin red siguen pendientes; un
+   * rechazo sin remedio (cancelada, ya no es suya) quita la terminación local: manda lo que diga el servidor.
+   */
+  async function enviarTerminaciones(tecnicoId: string) {
+    for (const { visitaId, terminacion } of await almacen.terminacionesListas(reloj(), tecnicoId)) {
+      const { llave, en } = terminacion;
+      const intentos = terminacion.intentos + 1;
+      const despues = () => almacen.reintentarTerminacion(tecnicoId, visitaId, llave, { intentos, proximoIntentoEn: reloj() + espera(intentos, aleatorio) });
+      try {
+        const { terminada } = await transporte.terminarVisita(visitaId, { llave, en });
+        await almacen.resolverTerminacion(tecnicoId, visitaId, llave, terminada);
+        // La visita terminada baja en la misma sincronización.
+        huboRecibidos = true;
+      } catch (error) {
+        if (error instanceof ErrorDeRed) {
+          await despues();
+          throw new SinConexion();
+        }
+        if (!(error instanceof ErrorApi)) throw error;
+        if (error.codigo === "no_autenticado") {
+          // Se envía al volver a iniciar sesión.
+          sesionRechazada = true;
+          return;
+        }
+        // Una app vieja que el servidor ya no acepta también espera: la terminación sale al actualizarla.
+        if (error.reintentable || error.codigo === "version_protocolo_no_soportada") await despues();
+        else await almacen.resolverTerminacion(tecnicoId, visitaId, llave, null);
       }
     }
   }
@@ -229,6 +262,7 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
         }
         if (!otraPasada) break;
       }
+      if (!sesionRechazada) await enviarTerminaciones(tecnicoId);
       if (!sesionRechazada && (await tocaBajar(tecnicoId, bajadaPedida))) await bajar(tecnicoId);
 
       if (sesionRechazada) {

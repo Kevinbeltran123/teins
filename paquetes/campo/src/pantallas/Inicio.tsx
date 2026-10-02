@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LockKeyhole, LogOut, MapPin, OPCIONES_DE_TEMA, Smartphone, nombreDeTransicion, Trash, useNombreEnPantalla, useSinRepetir, useTema } from "@teins/ui";
+import { Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleCheck, Clock, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LockKeyhole, LogOut, MapPin, OPCIONES_DE_TEMA, Send, Smartphone, nombreDeTransicion, Trash, useNombreEnPantalla, useNotificar, useSinRepetir, useTema } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
@@ -14,7 +14,9 @@ import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/u
 import { fechaHora } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos, vigentes } from "../formatos";
 import { claseDeTono, comentariosDeOficina, estadoDeEnvio, estadoSegunServidor } from "../mensajes";
-import { fechaDeVisita, hoyLocal, ordenarVisitas } from "../visitas";
+import { terminarVisita } from "../datos/terminacion";
+import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
+import { enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, ordenarVisitas, terminadaEn } from "../visitas";
 import { Diagnostico } from "./Diagnostico";
 
 // Secundarias: no entran en el JavaScript inicial (ADR-0011).
@@ -356,12 +358,23 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
   const borrador = levantamientos.find((l) => l.estado === "borrador");
   const formato = borrador ? formatoDe(contexto.formatos, borrador) : undefined;
   const resumen = borrador && formato ? resumenDeRecorrido(formato, borrador) : undefined;
+  const [terminando, setTerminando] = useState(false);
+  const notificar = useNotificar();
+  const abierta = enCurso(visita);
+  const terminada = terminadaEn(visita);
   return (
     // Al abrirla, esta tarjeta se convierte en la cabecera de la captura (iteración 27).
     <section aria-label="Siguiente visita" className="flex flex-col gap-3 rounded-2xl border border-division bg-panel p-4" style={{ viewTransitionName: nombreDeTransicion("visita", visita.id) }}>
       <div className="flex justify-between gap-3 text-[12px] font-medium text-texto-secundario">
         <span aria-hidden>Siguiente visita</span>
-        <span className="text-superficie first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
+        {terminada ? (
+          <span className="flex items-center gap-1 text-sync-ok">
+            <CircleCheck aria-hidden className="size-3.5" />
+            {`Terminada ${horaDe(terminada)}`}
+          </span>
+        ) : (
+          <span className="text-superficie first-letter:uppercase">{abierta ? `En curso · desde ${horaCorta(visita.horaInicio!)}` : cuandoEs(visita)}</span>
+        )}
       </div>
       <h2 className="text-subtitulo leading-tight font-semibold tracking-[-0.01em]">{visita.cliente.nombre}</h2>
       <p className="-mt-1 flex flex-col gap-0.5 text-[13px] text-texto-secundario">
@@ -370,6 +383,12 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
           {visita.sitio.nombre} · {visita.sitio.direccion}
         </span>
         <span>{visita.motivo}</span>
+        {abierta && (
+          <span className="flex items-center gap-1.5">
+            <Clock aria-hidden className="size-3.5 shrink-0" />
+            Sin hora de fin
+          </span>
+        )}
       </p>
       {resumen && (
         <div className="flex flex-col gap-2">
@@ -386,8 +405,50 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
       )}
       {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} />}
       <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="principal" />
+      {/* Bajo la acción principal: terminar libera al técnico, no reemplaza capturar (ADR-0037). */}
+      {abierta && !contexto.bloqueado && (
+        <Boton variante="secundaria" className="w-full" onClick={() => setTerminando(true)}>
+          Terminar visita
+        </Boton>
+      )}
+      {terminando && (
+        <Confirmacion
+          nivel="consecuencia"
+          forma="inferior"
+          titulo={`¿Terminar la visita a ${visita.cliente.nombre}?`}
+          confirmar="Terminar visita"
+          accion={async () => {
+            await terminarVisita(db, visita.tecnicoId, visita.id, new Date());
+            sincronizarEnSegundoPlano();
+          }}
+          mensajeDeError={() => "No se pudo terminar la visita. Intenta de nuevo."}
+          alCerrar={() => setTerminando(false)}
+          // Se ve terminada al instante; sin señal, sale cuando vuelva (ADR-0037).
+          alTerminar={() => notificar({ texto: contexto.enLinea ? "Visita terminada: oficina ya te ve libre" : "Visita terminada: oficina lo sabrá cuando tengas señal" })}
+          consecuencias={[
+            { icono: Building, texto: `Oficina ve que terminaste a las ${horaDe(new Date().toISOString())}` },
+            { icono: CalendarDays, texto: "Quedas libre para otras visitas desde ya" },
+            { icono: Send, texto: "Si te falta enviar algo, lo sigues pudiendo enviar" },
+          ]}
+        />
+      )}
     </section>
   );
+}
+
+/** "Hoy · 9:00 a. m. a 11:00 a. m.", "Mañana · Desde 2:00 p. m." o solo el día si es de todo el día. */
+function cuandoEs(visita: VisitaLocal): string {
+  const horario = horarioDeVisita(visita);
+  const dia = fechaDeVisita(visita.programadaPara, hoyLocal());
+  return horario ? `${dia} · ${horario.charAt(0).toLowerCase()}${horario.slice(1)}` : dia;
+}
+
+/** La línea de la hora en una fila: terminada, en curso o el horario; nada si es de todo el día. */
+function horaDeFila(visita: VisitaLocal): string | null {
+  const terminada = terminadaEn(visita);
+  if (terminada) return `Terminada ${horaDe(terminada)}`;
+  if (enCurso(visita)) return `En curso · desde ${horaCorta(visita.horaInicio!)}`;
+  return horarioDeVisita(visita);
 }
 
 /** Otra visita (DoorDash): el día a la izquierda, el cliente y el sitio; tocarla ofrece empezar o seguir. */
@@ -399,7 +460,7 @@ function FilaVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal;
         <span className="w-16 shrink-0 text-[12px] leading-tight text-texto-secundario first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
         <span className="flex min-w-0 flex-col">
           <strong className="text-[14px] leading-snug font-medium">{`${visita.cliente.nombre} · ${visita.sitio.nombre}`}</strong>
-          <span className="text-[13px] text-texto-secundario">{visita.motivo}</span>
+          <span className="text-[13px] text-texto-secundario">{[horaDeFila(visita), visita.motivo].filter(Boolean).join(" · ")}</span>
         </span>
       </button>
       {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} />}

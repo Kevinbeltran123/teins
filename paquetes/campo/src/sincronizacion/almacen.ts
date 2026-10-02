@@ -1,8 +1,8 @@
 import type { Bajada, SaludDispositivo } from "@teins/protocolo";
 import type { BaseCampo } from "../datos/base";
-import type { ArchivoLocal, BajadaLocal, DispositivoLocal, EnvioLocal, EstadoServidorGuardado, VisitaGuardada } from "../datos/modelo";
+import type { ArchivoLocal, BajadaLocal, DispositivoLocal, EnvioLocal, EstadoServidorGuardado, TerminacionPendiente, VisitaGuardada } from "../datos/modelo";
 import { enBorrado } from "../datos/cofre";
-import { abrirArchivo, abrirEnvio, referencias, sellarArchivo, sellarEstado, sellarVisita } from "../datos/registros";
+import { abrirArchivo, abrirEnvio, abrirVisita, referencias, sellarArchivo, sellarEstado, sellarVisita } from "../datos/registros";
 import { estadoAlmacenamiento } from "../dispositivo/almacenamiento";
 
 /** Operaciones del motor sobre la base local. */
@@ -13,7 +13,16 @@ export interface AlmacenSincronizacion {
   registrarErrorDeSubida(huella: string, mensaje: string): Promise<void>;
   marcarPorSubir(huellas: readonly string[]): Promise<void>;
   enviosListos(ahora: number, tecnicoId: string): Promise<EnvioLocal[]>;
-  /** Cuándo toca el próximo intento pendiente de este técnico, o null si no hay nada que esperar. */
+  /** Visitas que el técnico terminó en el teléfono y ya toca avisarle al servidor (ADR-0037). */
+  terminacionesListas(ahora: number, tecnicoId: string): Promise<{ visitaId: string; terminacion: TerminacionPendiente }[]>;
+  /** Otro intento más tarde; solo si sigue pendiente la misma terminación (misma llave). */
+  reintentarTerminacion(tecnicoId: string, visitaId: string, llave: string, cambios: Pick<TerminacionPendiente, "intentos" | "proximoIntentoEn">): Promise<void>;
+  /**
+   * El servidor respondió: con `terminada`, la visita queda como él dice; con null (la rechazó sin remedio), se quita
+   * la terminación local y la visita vuelve a lo que dice el servidor.
+   */
+  resolverTerminacion(tecnicoId: string, visitaId: string, llave: string, terminada: { en: string } | null): Promise<void>;
+  /** Cuándo toca el próximo intento pendiente de este técnico (envíos y terminaciones), o null si no hay nada que esperar. */
   proximoIntento(tecnicoId: string): Promise<number | null>;
   /** Estado, intentos y errores: el comando es inmutable y va sellado. */
   actualizarEnvio(levantamientoId: string, cambios: Partial<Omit<EnvioLocal, "comando">>): Promise<void>;
@@ -43,6 +52,12 @@ export interface AlmacenSincronizacion {
   completarBorrados(): Promise<void>;
   borradosPorConfirmar(): Promise<string[]>;
   quitarConfirmados(ids: readonly string[]): Promise<void>;
+}
+
+/** El mismo sellado (cada uno lleva su vector de inicio aleatorio): nadie reescribió la visita entre tanto. */
+function mismoSellado(a: VisitaGuardada, b: VisitaGuardada): boolean {
+  if (!a.sellado || !b.sellado) return JSON.stringify(a) === JSON.stringify(b);
+  return a.sellado.iv.length === b.sellado.iv.length && a.sellado.iv.every((x, i) => x === b.sellado!.iv[i]);
 }
 
 /** 32 bytes aleatorios en base64url. */
@@ -103,9 +118,36 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
       const listos = pendientes.filter((e) => e.proximoIntentoEn <= ahora).sort((a, b) => a.creadoEn.localeCompare(b.creadoEn));
       return Promise.all(listos.map((e) => abrirEnvio(db, e)));
     },
+    async terminacionesListas(ahora, tecnicoId) {
+      // Pocas visitas por técnico: se filtran sin índice, y la base local no cambia de versión.
+      const visitas = await db.visitas.where("tecnicoId").equals(tecnicoId).toArray();
+      return visitas.flatMap((v) => (v.terminacionPendiente && v.terminacionPendiente.proximoIntentoEn <= ahora ? [{ visitaId: v.id, terminacion: v.terminacionPendiente }] : []));
+    },
+    reintentarTerminacion(tecnicoId, visitaId, llave, cambios) {
+      return db.transaction("rw", db.visitas, async () => {
+        const actual = await db.visitas.get([tecnicoId, visitaId]);
+        if (actual?.terminacionPendiente?.llave === llave) await db.visitas.update([tecnicoId, visitaId], { terminacionPendiente: { ...actual.terminacionPendiente, ...cambios } });
+      });
+    },
+    async resolverTerminacion(tecnicoId, visitaId, llave, terminada) {
+      const previa = await db.visitas.get([tecnicoId, visitaId]);
+      if (previa?.terminacionPendiente?.llave !== llave) return;
+      // Se sella antes: dentro de la transacción no cabe WebCrypto (ADR-0022).
+      const { terminacionPendiente: _t, ...visita } = await abrirVisita(db, previa);
+      const nueva = terminada ? await sellarVisita(db, { ...visita, terminada }) : undefined;
+      await db.transaction("rw", db.visitas, async () => {
+        const actual = await db.visitas.get([tecnicoId, visitaId]);
+        if (actual?.terminacionPendiente?.llave !== llave) return;
+        // Si una bajada la cambió entre tanto, lo sellado ya no sirve: se reintenta (el servidor responde lo mismo).
+        if (nueva && mismoSellado(actual, previa)) await db.visitas.put(nueva);
+        else if (!nueva) await db.visitas.update([tecnicoId, visitaId], { terminacionPendiente: undefined });
+      });
+    },
     async proximoIntento(tecnicoId) {
       const pendientes = await db.envios.where("estado").equals("pendiente").filter((e) => e.tecnicoId === tecnicoId).toArray();
-      return pendientes.length === 0 ? null : Math.min(...pendientes.map((e) => e.proximoIntentoEn));
+      const terminaciones = (await db.visitas.where("tecnicoId").equals(tecnicoId).toArray()).flatMap((v) => (v.terminacionPendiente ? [v.terminacionPendiente.proximoIntentoEn] : []));
+      const momentos = [...pendientes.map((e) => e.proximoIntentoEn), ...terminaciones];
+      return momentos.length === 0 ? null : Math.min(...momentos);
     },
     async actualizarEnvio(levantamientoId, cambios) {
       await db.envios.update(levantamientoId, cambios);
@@ -167,9 +209,12 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
             case "formato":
               await db.formatos.put(cambio.definicion);
               break;
-            case "visita":
-              await db.visitas.put(sellados.get(i) as VisitaGuardada);
+            case "visita": {
+              // Una terminación que todavía no sale se conserva; si el servidor ya la tiene terminada, manda la suya.
+              const pendiente = cambio.visita.terminada ? undefined : (await db.visitas.get([tecnicoId, cambio.visita.id]))?.terminacionPendiente;
+              await db.visitas.put({ ...(sellados.get(i) as VisitaGuardada), ...(pendiente ? { terminacionPendiente: pendiente } : {}) });
               break;
+            }
             case "fuera_de_alcance": {
               const empezados = await db.levantamientos.where("tecnicoId").equals(tecnicoId).filter((l) => l.visitaId === cambio.id).count();
               if (empezados > 0) await db.visitas.update([tecnicoId, cambio.id], { fueraDeAlcance: true, ...(cambio.motivo ? { motivoSalida: cambio.motivo } : {}) });
