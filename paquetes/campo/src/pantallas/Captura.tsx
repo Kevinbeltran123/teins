@@ -2,6 +2,7 @@ import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useLayo
 import { pasosDe, type Paso } from "../recorrido";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
+  aDecimalColombiano,
   archivosReferenciados,
   bloques,
   claveDeRepeticion,
@@ -27,6 +28,7 @@ import {
   type DocumentoBoceto,
   type ErrorValidacion,
   type Valor,
+  type ValorCantidades,
   type ValorFirma,
   type ValorMedida,
   type VersionFormato,
@@ -39,13 +41,17 @@ import {
   BotonRedondo,
   BotonSiguiente,
   Check,
+  CifrasDeRepaso,
+  RefreshCw,
   EncabezadoDePaso,
   FilaDeRepaso,
   FranjaSincronizacion,
   ListaRecorrido,
   PasoDelRecorrido,
   Repaso,
-  TarjetaResumen,
+  FilaDeRepeticion,
+  ListaDeRepeticiones,
+  MenuAcciones,
   conTransicion,
   nombreDeTransicion,
   sinMovimiento,
@@ -100,7 +106,7 @@ import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion, p
 import { useBotonAtras } from "../dispositivo/atras";
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
-import { compararPorHorario, terminadaEn } from "../visitas";
+import { compararPorHorario, horarioDeVisita, terminadaEn } from "../visitas";
 
 // El editor de bocetos pesa (perfect-freehand y la lógica del lienzo): se carga solo al dibujar (ADR-0011).
 const EditorBoceto = lazy(() => import("./EditorBoceto"));
@@ -341,6 +347,39 @@ function datosDeResumen(seccion: DefinicionSeccion, respuestas: Record<string, V
 
 const faltan = (n: number) => (n === 1 ? "Falta 1 dato" : `Faltan ${n} datos`);
 
+const huellasDe = (valor: Valor | undefined): string[] => (Array.isArray(valor) && valor.every((x) => typeof x === "string") ? (valor as string[]) : []);
+
+/** "Cable UTP × 120 m · Breaker × 4 · 2 más". */
+function lineasEnTexto(lineas: ValorCantidades): string {
+  if (lineas.length === 0) return "Sin materiales";
+  const primeras = lineas.slice(0, 2).map((l) => `${l.descripcion} × ${aDecimalColombiano(l.cantidad)}${l.unidad === "und" ? "" : ` ${l.unidad}`}`);
+  return [...primeras, ...(lineas.length > 2 ? [`${lineas.length - 2} más`] : [])].join(" · ");
+}
+
+/** Las primeras fotos de un paso, en el repaso; si hay más, cuántas. */
+function MiniaturasDeFotos({ huellas }: { huellas: readonly string[] }) {
+  const fotos = useUrlsDeFotos(huellas.slice(0, 4));
+  return (
+    <span className="mt-2 flex gap-1">
+      {fotos.map((f) => (
+        <img key={f.id} src={f.url} alt="" className="size-10 rounded-[6px] object-cover" />
+      ))}
+      {huellas.length > 4 && <span className="grid size-10 place-items-center rounded-[6px] bg-panel-hundido text-ayuda font-medium text-texto-secundario">{`+${huellas.length - 4}`}</span>}
+    </span>
+  );
+}
+
+/** La firma en pequeño, en el repaso. */
+function MiniaturaDeFirma({ firma }: { firma: ValorFirma }) {
+  const documento = useLiveQuery(() => repositorio.obtenerBoceto(firma.firma), [firma.firma]);
+  const trazos = documento ? hojasDe(documento)[0] : undefined;
+  return (
+    <span data-tema="claro" className="mt-2 flex h-10 w-30 items-center rounded-[6px] bg-panel-hundido px-1.5">
+      {trazos && <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={`Firma de ${firma.nombre}`} className="max-h-9 w-full" />}
+    </span>
+  );
+}
+
 function Borrador({
   id,
   formato,
@@ -438,6 +477,36 @@ function Borrador({
     if (n > 0) return faltan(n);
     if (tocado(p)) return "Completo";
     return visitados.has(p.id) ? "Sin datos" : p.titulo === p.seccion.titulo ? "Sin datos todavía" : p.seccion.titulo;
+  }
+
+  /** Lo que lleva un paso, en una línea, para el repaso antes de enviar (iteración 32). */
+  function resumenDe(p: Paso): string {
+    if (p.seccion.repetible) {
+      const lista = repeticiones[p.seccion.clave] ?? [];
+      return lista.length === 0 ? `Ningún ${p.seccion.repetible.etiqueta.toLowerCase()}` : `${lista.length} · ${lista.map((r) => r.nombre).join(", ")}`;
+    }
+    const partes = p.campos.flatMap((c) => {
+      const v = actual.respuestas[p.seccion.clave]?.[c.clave];
+      if (v === undefined) return [];
+      if (c.tipo === "cantidades" && esCantidades(v)) return [lineasEnTexto(v)];
+      if (esFirma(v)) return [`${v.nombre}${v.cargo ? ` · ${v.cargo}` : ""}`];
+      if (esBoceto(v)) return ["Dibujado"];
+      return [describirValor(c, v)];
+    });
+    return partes.length > 0 ? partes.slice(0, 3).join(" · ") : "Sin datos";
+  }
+
+  /** Fotos, repeticiones y materiales: lo que se envía en números, solo lo que el formato tiene. */
+  function cifrasDelBorrador() {
+    const cifras = [{ valor: fotosDelBorrador, texto: fotosDelBorrador === 1 ? "foto" : "fotos" }];
+    for (const p of pasos)
+      if (p.seccion.repetible) cifras.push({ valor: repeticiones[p.seccion.clave]?.length ?? 0, texto: p.seccion.titulo.toLowerCase() });
+    const lineas = pasos.flatMap((p) => p.campos.filter((c) => c.tipo === "cantidades").map((c) => actual.respuestas[p.seccion.clave]?.[c.clave]));
+    if (lineas.length > 0) {
+      const total = lineas.reduce<number>((suma, v) => suma + (esCantidades(v) ? v.length : 0), 0);
+      cifras.push({ valor: total, texto: total === 1 ? "material" : "materiales" });
+    }
+    return cifras.slice(0, 3);
   }
 
   const ir = (destino: Vista, direccion: "adelante" | "atras" = "adelante") => navegar(direccion, () => setVista(destino));
@@ -622,10 +691,22 @@ function Borrador({
     );
   } else if (vista.tipo === "repeticion") {
     const seccion = formato.secciones.find((s) => s.clave === vista.seccion)!;
-    const r = repeticiones[seccion.clave]?.find((x) => x.id === vista.repeticion);
+    const lista = repeticiones[seccion.clave] ?? [];
+    const r = lista.find((x) => x.id === vista.repeticion);
     const alPaso = () => ir({ tipo: "paso", paso: seccion.clave }, "atras");
     pantalla = r ? (
-      <Repeticion id={id} seccion={seccion} repeticion={r} avance={avance} error={porClave.get(claveDeError(seccion.clave, ""))} volver={alPaso}>
+      <Repeticion
+        key={r.id}
+        id={id}
+        seccion={seccion}
+        repeticion={r}
+        posicion={{ indice: lista.indexOf(r), total: lista.length }}
+        siguiente={lista[lista.indexOf(r) + 1]}
+        avance={avance}
+        error={porClave.get(claveDeError(seccion.clave, ""))}
+        volver={alPaso}
+        abrirSiguiente={() => ir({ tipo: "repeticion", seccion: seccion.clave, repeticion: lista[lista.indexOf(r) + 1]!.id })}
+      >
         {campos(seccion.campos, claveDeRepeticion(seccion.clave, r.id))}
       </Repeticion>
     ) : (
@@ -642,7 +723,12 @@ function Borrador({
       <>
         <EncabezadoDePaso transicion={cabecera} contexto={`Paso ${total} de ${total} · Revisar`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
         <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 pt-3 pb-40">
-          <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Antes de enviar</h1>
+          <div className="flex flex-col gap-1">
+            <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Revisa y envía</h1>
+            <p className="text-cuerpo font-medium">{contexto}</p>
+            <p className="text-ayuda text-texto-secundario">{nombre}</p>
+          </div>
+          <CifrasDeRepaso cifras={cifrasDelBorrador()} />
           {errores && errores.length > 0 && (
             <div ref={resumen} tabIndex={-1} className="focus:outline-none">
               <ListaFaltantes
@@ -652,18 +738,28 @@ function Borrador({
               />
             </div>
           )}
-          <Aviso tono="alerta">Después de enviar ya no podrás editarlo. Si algo cambia, oficina lo corrige y queda registrado.</Aviso>
           <Repaso etiqueta="Lo que se envía">
-            {pasos.map((p) => (
-              <FilaDeRepaso key={p.id} titulo={p.titulo} detalle={detalleDe(p)} falta={faltanDe(p) > 0} onEditar={() => ir({ tipo: "paso", paso: p.id }, "atras")} />
-            ))}
+            {pasos.map((p) => {
+              const n = faltanDe(p);
+              const fotosDelPaso = p.seccion.repetible ? [] : p.campos.filter((c) => c.tipo === "foto").flatMap((c) => huellasDe(actual.respuestas[p.seccion.clave]?.[c.clave]));
+              const firma = p.seccion.repetible ? undefined : p.campos.map((c) => actual.respuestas[p.seccion.clave]?.[c.clave]).find(esFirma);
+              return (
+                <FilaDeRepaso key={p.id} titulo={p.titulo} detalle={resumenDe(p)} falta={n > 0 ? faltan(n) : undefined} vacio={!tocado(p)} onEditar={() => ir({ tipo: "paso", paso: p.id }, "atras")}>
+                  {fotosDelPaso.length > 0 && <MiniaturasDeFotos huellas={fotosDelPaso} />}
+                  {firma && <MiniaturaDeFirma firma={firma} />}
+                </FilaDeRepaso>
+              );
+            })}
           </Repaso>
-          <p className="text-ayuda text-texto-secundario">{enLinea ? "Sale ahora a oficina." : "Sin señal: queda listo en el teléfono y sale solo cuando vuelva la señal."}</p>
         </main>
         <BarraDePaso>
-          <BotonSiguiente icono={Send} onClick={intentarEnviar}>
-            Enviar a oficina
-          </BotonSiguiente>
+          <div className="flex w-full flex-col gap-2">
+            <BotonSiguiente icono={Send} onClick={intentarEnviar}>
+              Enviar a oficina
+            </BotonSiguiente>
+            {/* La consecuencia, junto a la acción que la causa (iteración 32). */}
+            <p className="text-center text-ayuda text-texto-secundario">{`Después solo oficina puede corregirlo · ${enLinea ? "sale ahora" : "sin señal, sale al volver la señal"}`}</p>
+          </div>
         </BarraDePaso>
       </>
     );
@@ -812,11 +908,17 @@ function Repeticiones({
     <section aria-label={seccion.titulo} className="flex flex-col gap-3">
       {error && <Aviso tono="error">{mensajeDeValidacion[error]}</Aviso>}
       {lista.length === 0 && <p className="text-cuerpo text-texto-secundario">{`Agrega uno por cada ${etiqueta.toLowerCase()} que revises. Si no aplica, sigue.`}</p>}
-      {lista.map((r) => {
-        const clave = claveDeRepeticion(seccion.clave, r.id);
-        const n = faltanEn.get(clave) ?? 0;
-        return <TarjetaResumen key={r.id} titulo={r.nombre} etiqueta={r.nombre} estado={n > 0 ? faltan(n) : "Completo"} completo={n === 0} datos={datosDeResumen(seccion, actual.respuestas[clave])} onClick={() => abrir(r.id)} nueva={esNueva(r.id)} />;
-      })}
+      {lista.length > 0 && (
+        <>
+          <p className="-mt-5 text-ayuda text-texto-secundario">{`${lista.filter((r) => (faltanEn.get(claveDeRepeticion(seccion.clave, r.id)) ?? 0) === 0).length} de ${lista.length} completos`}</p>
+          <ListaDeRepeticiones etiqueta={seccion.titulo}>
+            {lista.map((r) => {
+              const clave = claveDeRepeticion(seccion.clave, r.id);
+              return <FilaDeTablero key={r.id} seccion={seccion} nombre={r.nombre} respuestas={actual.respuestas[clave]} faltan={faltanEn.get(clave) ?? 0} nueva={esNueva(r.id)} onClick={() => abrir(r.id)} />;
+            })}
+          </ListaDeRepeticiones>
+        </>
+      )}
       <BotonAgregar icono={Plus} disabled={lista.length >= maximo} onClick={() => void agregar()}>
         {`Agregar ${etiqueta.toLowerCase()}`}
       </BotonAgregar>
@@ -825,28 +927,54 @@ function Repeticiones({
   );
 }
 
-/** Una repetición abierta: su nombre, sus datos y "Quitar" al final, lejos de "Listo". */
+/**
+ * Una fila de la lista de repeticiones (iteración 32): su primera foto, lo que la identifica en una línea y cuánto
+ * lleva de lo obligatorio.
+ */
+function FilaDeTablero({ seccion, nombre, respuestas, faltan: n, nueva, onClick }: { seccion: DefinicionSeccion; nombre: string; respuestas: Record<string, Valor> | undefined; faltan: number; nueva: boolean; onClick: () => void }) {
+  const huellas = seccion.campos.filter((c) => c.tipo === "foto").flatMap((c) => (Array.isArray(respuestas?.[c.clave]) ? (respuestas![c.clave] as string[]) : []));
+  const [primera] = useUrlsDeFotos(huellas.slice(0, 1));
+  const obligatorios = seccion.campos.filter((c) => c.obligatorio).length;
+  const detalle = [...datosDeResumen(seccion, respuestas).slice(0, 2).map((d) => d.valor), huellas.length === 0 ? "Sin fotos" : fotosEnTexto(huellas.length)].join(" · ");
+  return <FilaDeRepeticion titulo={nombre} detalle={detalle} foto={primera?.url} faltan={n} avance={obligatorios === 0 ? 1 : (obligatorios - n) / obligatorios} nueva={nueva} onClick={onClick} />;
+}
+
+const fotosEnTexto = (n: number) => (n === 1 ? "1 foto" : `${n} fotos`);
+
+/**
+ * Una repetición abierta (iteración 32): su nombre es el título; cambiarlo y quitarla van en el menú de arriba, lejos
+ * del pulgar. Abajo, la siguiente sin volver a la lista; en la última, de vuelta a la lista.
+ */
 function Repeticion({
   id,
   seccion,
   repeticion,
+  posicion,
+  siguiente,
   avance,
   error,
   volver,
+  abrirSiguiente,
   children,
 }: {
   id: string;
   seccion: DefinicionSeccion;
   repeticion: { id: string; nombre: string };
+  /** Cuál es (desde 0) y cuántas hay. */
+  posicion: { indice: number; total: number };
+  siguiente: { id: string; nombre: string } | undefined;
   avance: number;
   error: CodigoErrorValidacion | undefined;
   volver: () => void;
+  abrirSiguiente: () => void;
   children: ReactNode;
 }) {
   const vigilar = useContext(VigilarGuardado);
   const notificar = useNotificar();
   const cabecera = useContext(CabeceraDeLaVisita);
   const etiqueta = seccion.repetible!.etiqueta;
+  const errorDeNombre = error === "nombre_de_repeticion_invalido";
+  const [renombrando, setRenombrando] = useState(errorDeNombre);
 
   /**
    * Quitar es al instante y se deshace desde la notificación (DESIGN.md, iteración 24c): está en el teléfono, así que
@@ -868,29 +996,51 @@ function Repeticion({
   }
   return (
     <>
-      <EncabezadoDePaso transicion={cabecera} contexto={`${seccion.titulo} · ${repeticion.nombre}`} avance={avance} volver={volver} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
+      <EncabezadoDePaso transicion={cabecera} contexto={`${seccion.titulo} · ${posicion.indice + 1} de ${posicion.total}`} avance={avance} volver={volver} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
       <main className="mx-auto flex max-w-xl flex-col gap-8 px-4 pt-3 pb-40">
-        <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{repeticion.nombre}</h1>
-        <article aria-label={repeticion.nombre} className="flex flex-col gap-8">
-          {children}
+        {renombrando ? (
           <CampoTexto
-            etiqueta={`Nombre (${etiqueta.toLowerCase()})`}
+            etiqueta={`Nombre del ${etiqueta.toLowerCase()}`}
             valorInicial={repeticion.nombre}
-            error={error === "nombre_de_repeticion_invalido" ? mensajeDeValidacion.nombre_de_repeticion_invalido : undefined}
+            error={errorDeNombre ? mensajeDeValidacion.nombre_de_repeticion_invalido : undefined}
             onCambio={(texto) => {
               // Un nombre vacío no se guarda: se conserva el anterior.
               if (texto.trim()) vigilar(repositorio.renombrarRepeticion(id, seccion.clave, repeticion.id, texto.trim(), new Date()));
             }}
           />
-          <div>
-            <Boton variante="fantasma" icono={Trash} aria-label={`Quitar ${repeticion.nombre}`} onClick={() => void quitar()}>
-              {`Quitar ${etiqueta.toLowerCase()}`}
-            </Boton>
+        ) : (
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{repeticion.nombre}</h1>
+            <MenuAcciones
+              etiqueta={`Opciones de ${repeticion.nombre}`}
+              opciones={[
+                { texto: "Cambiar nombre", icono: Pencil, alElegir: () => setRenombrando(true) },
+                { texto: `Quitar ${etiqueta.toLowerCase()}`, icono: Trash, peligro: true, alElegir: () => void quitar() },
+              ]}
+            />
           </div>
+        )}
+        <article aria-label={repeticion.nombre} className="flex flex-col gap-8">
+          {children}
         </article>
       </main>
       <BarraDePaso>
-        <BotonSiguiente icono={Check} onClick={volver}>{`Listo este ${etiqueta.toLowerCase()}`}</BotonSiguiente>
+        {renombrando ? (
+          <BotonSiguiente icono={Check} onClick={() => setRenombrando(false)}>
+            Listo
+          </BotonSiguiente>
+        ) : siguiente ? (
+          <div className="flex w-full flex-col gap-1">
+            <BotonSiguiente onClick={abrirSiguiente}>{`Siguiente: ${siguiente.nombre}`}</BotonSiguiente>
+            <Boton variante="fantasma" className="w-full" onClick={volver}>
+              Volver a la lista
+            </Boton>
+          </div>
+        ) : (
+          <BotonSiguiente icono={Check} onClick={volver}>
+            {posicion.total === 1 ? `Listo, ver ${seccion.titulo.toLowerCase()}` : `Listo, ver los ${posicion.total}`}
+          </BotonSiguiente>
+        )}
       </BarraDePaso>
     </>
   );
@@ -1071,7 +1221,6 @@ function CampoCantidades({ campo, unidades, inicial, error, guardar }: { campo: 
           items={catalogo}
           unidades={unidades}
           usos={usos}
-          total={lineas.length}
           cantidadDe={(item) => {
             const i = indiceDe(item.id);
             return i >= 0 ? lineas[i]!.cantidad : undefined;
@@ -1114,21 +1263,27 @@ function PasoCroquis({
 }) {
   const documento = useBoceto(actual);
   const simbolos = useLiveQuery(() => db.simbolos.toArray(), []);
-  if (documento === undefined) return <div aria-busy="true" aria-label="Abriendo el editor" className="fixed inset-0 z-50 bg-fondo" />;
+  // La capa sube una sola vez, mientras se lee el documento y se carga el editor; el editor aparece encima sin subir
+  // otra vez (iteración 32: antes se veía un fondo vacío y después el editor subiendo).
   return (
-    <Suspense fallback={<div aria-busy="true" aria-label="Abriendo el editor" className="fixed inset-0 z-50 bg-fondo" />}>
-      <EditorBoceto
-        etiqueta={campo.etiqueta}
-        inicial={documento}
-        simbolos={simbolos}
-        guardar={async (d) => {
-          await repositorio.guardarBoceto(id, seccion, campo.clave, d, new Date());
-          alGuardar();
-        }}
-        cerrar={volver}
-        listo={listo}
-      />
-    </Suspense>
+    <div aria-busy={documento === undefined} aria-label={documento === undefined ? "Abriendo el editor" : undefined} data-tema="claro" className="fixed inset-0 z-50 bg-fondo motion-safe:animate-hoja-sube">
+      {documento !== undefined && (
+        <Suspense fallback={null}>
+          <EditorBoceto
+            entrar={false}
+            etiqueta={campo.etiqueta}
+            inicial={documento}
+            simbolos={simbolos}
+            guardar={async (d) => {
+              await repositorio.guardarBoceto(id, seccion, campo.clave, d, new Date());
+              alGuardar();
+            }}
+            cerrar={volver}
+            listo={listo}
+          />
+        </Suspense>
+      )}
+    </div>
   );
 }
 
@@ -1178,29 +1333,43 @@ function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: str
 }
 
 const diaLargo = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const diaSinAno = { format: (fecha: Date) => new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long" }).format(fecha).replace(/^./, (c) => c.toUpperCase()) };
 const soloHora = new Intl.DateTimeFormat("es-CO", { timeStyle: "short" });
 const diaCorto = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric" });
 /** "hoy a las 3:40 p. m." o la fecha completa si no fue hoy. */
-const cuandoFirmo = (iso: string) => (new Date(iso).toDateString() === new Date().toDateString() ? `hoy a las ${soloHora.format(new Date(iso))}` : `el ${fechaHora(iso)}`);
+const cuandoFirmo = (iso: string) => (new Date(iso).toDateString() === new Date().toDateString() ? `hoy ${soloHora.format(new Date(iso))}` : fechaHora(iso));
 
-function FirmaTomada({ valor, documento }: { valor: ValorFirma; documento: DocumentoBoceto | null | undefined }) {
+/**
+ * La constancia firmada (iteración 32): la firma grande sobre su línea, quién firmó y la declaración tal como sale en
+ * el informe, con "Repetir" arriba (Liven y Docusign en Mobbin). Clara en los dos temas, como el papel.
+ */
+function FirmaTomada({ valor, documento, cliente, repetir }: { valor: ValorFirma; documento: DocumentoBoceto | null | undefined; cliente?: string | undefined; repetir?: (() => void) | undefined }) {
   // La firma es un boceto de una sola hoja (ADR-0024).
   const trazos = documento ? hojasDe(documento)[0] : undefined;
   return (
-    <>
-      {trazos && (
-        <div className="rounded-control border border-division bg-panel p-2">
-          <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={`Firma de ${valor.nombre}`} className="max-h-32" />
-        </div>
-      )}
-      <div className="flex flex-col gap-0.5">
-        <span className="text-cuerpo font-bold">
-          {valor.nombre}
-          {valor.cargo ? ` · ${valor.cargo}` : ""}
+    <section aria-label="Constancia firmada" data-tema="claro" className="overflow-hidden rounded-capa border border-division bg-panel text-texto">
+      <div className="flex items-center justify-between gap-2 pt-3 pr-2 pl-4">
+        <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-exito-fondo px-3 text-ayuda font-medium text-exito-texto [&_svg]:size-4">
+          <Check aria-hidden />
+          {`Firmada ${cuandoFirmo(valor.firmadoEn)}`}
         </span>
-        <span className="text-ayuda text-texto-secundario">Firmó {cuandoFirmo(valor.firmadoEn)}</span>
+        {repetir ? (
+          <Boton variante="fantasma" icono={RefreshCw} onClick={repetir}>
+            Repetir
+          </Boton>
+        ) : (
+          <span className="h-control-sm" />
+        )}
       </div>
-    </>
+      <div className="mx-4 mt-1 flex h-48 items-center justify-center border-b-[1.5px] border-borde-control">
+        {trazos && <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={`Firma de ${valor.nombre}`} className="max-h-44 w-full" />}
+      </div>
+      <div className="flex flex-col gap-0.5 px-4 pt-2.5 pb-3.5">
+        <strong className="text-[17px] font-semibold">{valor.nombre}</strong>
+        {(valor.cargo || cliente) && <span className="text-ayuda text-texto-secundario">{[valor.cargo, cliente].filter(Boolean).join(" · ")}</span>}
+      </div>
+      <p className="border-t border-division px-4 py-3 text-ayuda leading-relaxed text-texto-secundario">{valor.declaracion}</p>
+    </section>
   );
 }
 
@@ -1229,7 +1398,7 @@ function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: stri
     <div className="flex flex-col gap-3">
       {!propio && <EtiquetaCampo obligatorio={campo.obligatorio}>{campo.etiqueta}</EtiquetaCampo>}
       {firma ? (
-        <FirmaTomada valor={firma} documento={documento} />
+        <FirmaTomada valor={firma} documento={documento} cliente={visita?.cliente.nombre} repetir={() => setConfirmando(true)} />
       ) : propio ? (
         <>
           <p className="text-cuerpo leading-relaxed text-texto-secundario">Vas a entregar el teléfono a quien te recibió. Firma una constancia de que estuviste en el sitio hoy.</p>
@@ -1242,11 +1411,7 @@ function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: stri
         <p className="text-ayuda text-texto-secundario">Entrégale el teléfono a quien recibió la visita: firma una constancia de que estuviste en el sitio.</p>
       )}
       {error && <MensajeError id={`error-${seccion}-${campo.clave}`}>{error}</MensajeError>}
-      {firma ? (
-        <Boton variante="fantasma" className="self-start" onClick={() => setConfirmando(true)}>
-          Volver a firmar
-        </Boton>
-      ) : propio ? (
+      {firma ? null : propio ? (
         <BarraDePaso>
           <BotonSiguiente icono={Smartphone} onClick={() => setFirmando(true)}>
             Entregar el teléfono
@@ -1274,6 +1439,18 @@ function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: stri
         <Suspense fallback={<div aria-busy="true" aria-label="Abriendo la constancia" className="fixed inset-0 z-50 bg-panel" />}>
           <HojaDeFirma
             declaracion={declaracion}
+            recibe={{
+              tecnico: usuario?.nombre ?? "el técnico",
+              cliente: visita?.cliente.nombre,
+              datos: visita
+                ? [
+                    ["Sitio", visita.sitio.nombre],
+                    ["Fecha", diaSinAno.format(new Date())],
+                    ...(horarioDeVisita(visita) ? [["Hora", horarioDeVisita(visita)!] as const] : []),
+                    ["Motivo", visita.motivo],
+                  ]
+                : [["Fecha", diaSinAno.format(new Date())]],
+            }}
             guardar={async (d, datos) => {
               await repositorio.guardarFirma(id, seccion, campo.clave, d, { ...datos, declaracion }, new Date());
               alGuardar();

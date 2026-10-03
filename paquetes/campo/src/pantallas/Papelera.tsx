@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { fotosReferenciadas, type VersionFormato } from "@teins/dominio";
-import { Boton, Dialogo, EstadoVacio, Trash, useNotificar, useSinRepetir } from "@teins/ui";
+import { Boton, EstadoVacio, Trash, useNotificar, useSinRepetir } from "@teins/ui";
 import { db, repositorio } from "../datos/instancia";
 import { visitasDe } from "../datos/lecturas";
 import { DIAS_EN_LA_PAPELERA } from "../datos/modelo";
@@ -18,9 +18,10 @@ function cuando(iso: string): string {
 
 /**
  * Descartados (ADR-0035): lo que el técnico quitó de Mis visitas, solo en este teléfono, con la fecha en que se borra
- * (Journal y Apple Notes en Mobbin dicen arriba cuánto dura). "Recuperar" lo devuelve tal como estaba.
+ * (Journal y Apple Notes en Mobbin dicen arriba cuánto dura). "Recuperar" lo devuelve tal como estaba. Es una página
+ * de "Tu cuenta" (iteración 32): se abre dentro de la misma hoja.
  */
-export default function Papelera({ usuarioId, formatos, alCerrar }: { usuarioId: string; formatos: readonly VersionFormato[]; alCerrar: () => void }) {
+export default function Papelera({ usuarioId, formatos }: { usuarioId: string; formatos: readonly VersionFormato[] }) {
   const descartados = useLiveQuery(() => repositorio.descartados(usuarioId), [usuarioId]);
   const visitas = useLiveQuery(async () => new Map((await visitasDe(db, usuarioId)).map((v) => [v.id, v])), [usuarioId]);
   const notificar = useNotificar();
@@ -30,7 +31,7 @@ export default function Papelera({ usuarioId, formatos, alCerrar }: { usuarioId:
   });
 
   return (
-    <Dialogo forma="hoja" titulo="Descartados" alCerrar={alCerrar}>
+    <>
       <p className="text-ayuda text-texto-secundario">{`Lo que descartas queda aquí ${DIAS_EN_LA_PAPELERA} días, solo en este teléfono. Después se borra con sus fotos.`}</p>
       {descartados === undefined || visitas === undefined ? (
         <div aria-busy="true" aria-label="Cargando los descartados" className="h-24 rounded-panel bg-panel-hundido motion-safe:animate-pulse" />
@@ -60,6 +61,6 @@ export default function Papelera({ usuarioId, formatos, alCerrar }: { usuarioId:
           })}
         </ul>
       )}
-    </Dialogo>
+    </>
   );
 }

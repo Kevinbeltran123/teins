@@ -81,6 +81,34 @@ export function estadoSegunServidor(estado: EstadoServidor): { texto: string; to
   }
 }
 
+/**
+ * El estado en dos o tres palabras, para la lista del inicio (iteración 32): la explicación larga queda en el detalle.
+ * El servidor manda sobre lo que sabe el teléfono.
+ */
+export function estadoCorto(envio: EstadoDeEnvio | undefined, servidor: EstadoServidor | undefined, enLinea: boolean): { texto: string; tono: Tono | "revision" } | null {
+  if (servidor) {
+    if (servidor.estado === "en_revision") return { texto: "En revisión", tono: "revision" };
+    return { texto: servidor.estado === "revisado" ? "Revisado" : "Recibido", tono: "ok" };
+  }
+  if (!envio) return null;
+  switch (envio.estado) {
+    case "recibido":
+      return { texto: "Recibido", tono: "ok" };
+    case "enviando":
+      return { texto: "Enviando…", tono: "pendiente" };
+    case "requiere_sesion":
+      return { texto: "Inicia sesión para enviar", tono: "pendiente" };
+    case "requiere_actualizar":
+      return { texto: "Actualiza la app", tono: "pendiente" };
+    case "error":
+      return { texto: "No se pudo enviar", tono: "error" };
+    case "pendiente":
+      if (!enLinea || envio.ultimoError?.codigo === "sin_conexion") return { texto: "Se envía al tener señal", tono: "pendiente" };
+      if (envio.ultimoError?.codigo === "archivos_en_verificacion") return { texto: "Verificando fotos", tono: "pendiente" };
+      return { texto: "Por enviar", tono: "pendiente" };
+  }
+}
+
 export const comentariosDeOficina = (n: number) => (n === 1 ? "1 comentario de oficina" : `${n} comentarios de oficina`);
 
 export const claseDeTono: Record<Tono, string> = {

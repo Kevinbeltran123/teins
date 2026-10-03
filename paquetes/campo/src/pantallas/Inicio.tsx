@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleCheck, Clock, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, GrupoDeOpciones, Insignia, LockKeyhole, LogOut, MapPin, OPCIONES_DE_TEMA, Send, Smartphone, nombreDeTransicion, Trash, useNombreEnPantalla, useNotificar, useSinRepetir, useTema } from "@teins/ui";
+import { Activity, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
@@ -13,17 +13,18 @@ import { plataforma } from "../dispositivo/instalacion";
 import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/useConexion";
 import { fechaHora } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos, vigentes } from "../formatos";
-import { claseDeTono, comentariosDeOficina, estadoDeEnvio, estadoSegunServidor } from "../mensajes";
+import { claseDeTono, comentariosDeOficina, estadoCorto } from "../mensajes";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 import { enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, ordenarVisitas, terminadaEn } from "../visitas";
-import { Diagnostico } from "./Diagnostico";
+import { VERSION_APP } from "../version";
+import { AvisoDeAlmacenamiento, Diagnostico } from "./Diagnostico";
 
 // Secundarias: no entran en el JavaScript inicial (ADR-0011).
 const SugerirLlave = lazy(() => import("./SugerirLlave"));
 const TarjetaAvisos = lazy(() => import("./TarjetaAvisos"));
 const HojaCambiarContrasena = lazy(() => import("./HojaCambiarContrasena"));
-// La papelera (ADR-0035): solo al abrirla.
+// La papelera (ADR-0035): solo al abrirla, dentro de "Tu cuenta".
 const Papelera = lazy(() => import("./Papelera"));
 const GuiaDeInstalacion = lazy(() => import("./InstalarApp").then((m) => ({ default: m.GuiaDeInstalacion })));
 
@@ -55,6 +56,8 @@ interface Contexto {
   envios: Map<string, EstadoDeEnvio>;
   servidor: Map<string, EstadoServidor>;
   enLinea: boolean;
+  /** Para nombrar un levantamiento por su cliente y sitio en las listas (iteración 32). */
+  visitas: ReadonlyMap<string, VisitaLocal>;
   /** Vencido el permiso de trabajo local, no se crea ni se edita nada (ADR-0009, parte 2). */
   bloqueado: boolean;
   abrir: (id: string) => void;
@@ -76,11 +79,21 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
   const [confirmandoSalida, setConfirmandoSalida] = useState(false);
   const [guiaAbierta, setGuiaAbierta] = useState(false);
   const [cuentaAbierta, setCuentaAbierta] = useState(false);
-  const [cambiandoContrasena, setCambiandoContrasena] = useState(false);
-  const [papeleraAbierta, setPapeleraAbierta] = useState(false);
+  // La página de la cuenta que se ve, y hacia dónde se movió para animarla (iteración 32).
+  const [pagina, setPagina] = useState<PaginaDeCuenta | null>(null);
+  const [direccion, setDireccion] = useState<"adelante" | "atras" | null>(null);
+  const irA = (nueva: PaginaDeCuenta | null) => {
+    setDireccion(nueva ? "adelante" : "atras");
+    setPagina(nueva);
+  };
+  const abrirCuenta = (en: PaginaDeCuenta | null = null) => {
+    setPagina(en);
+    setDireccion(null);
+    setCuentaAbierta(true);
+  };
   const descartados = useLecturaRecordada(`descartados:${usuario.id}`, async () => (await repositorio.descartados(usuario.id)).length, [usuario.id]);
   useEffect(() => {
-    if (pedirPapelera > 0) setPapeleraAbierta(true);
+    if (pedirPapelera > 0) abrirCuenta("descartados");
   }, [pedirPapelera]);
 
   const deEnvios = [...(envios?.values() ?? [])];
@@ -102,7 +115,7 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
   });
 
   const cargando = lista === undefined || envios === undefined || servidor === undefined || visitas === undefined || bajada === undefined || formatos === undefined;
-  const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar, recien };
+  const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, visitas: new Map(visitas.map((v) => [v.id, v])), enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar, recien };
 
   // Visitas con sus levantamientos; una reasignada solo se muestra si el técnico ya empezó algo en ella (regla 17).
   const porVisita = Map.groupBy(lista ?? [], (l) => l.visitaId ?? "");
@@ -117,7 +130,9 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
   const idsMostradas = new Set(mostradas.map((v) => v.id));
   const sueltos = (lista ?? []).filter((l) => !l.visitaId || !idsMostradas.has(l.visitaId));
 
-  const enviados = (lista ?? []).filter((l) => l.estado === "enviado");
+  // Lo que no entró va aparte y arriba: es lo único de la lista que pide hacer algo (iteración 32).
+  const noEntraron = (lista ?? []).filter((l) => l.estado === "enviado" && envios?.get(l.id)?.estado === "error" && !servidor?.has(l.id));
+  const enviados = (lista ?? []).filter((l) => l.estado === "enviado" && !noEntraron.includes(l));
   const borradoresSueltos = sueltos.filter((l) => l.estado === "borrador");
   const primerNombre = usuario.nombre.split(" ")[0] ?? usuario.nombre;
 
@@ -131,7 +146,7 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
           </div>
           <button
             type="button"
-            onClick={() => setCuentaAbierta(true)}
+            onClick={() => abrirCuenta()}
             aria-label="Tu cuenta"
             className="grid size-12 shrink-0 place-items-center rounded-full bg-panel-hundido text-ayuda font-extrabold active:scale-95 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
           >
@@ -195,6 +210,15 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
               </EstadoVacio>
             )}
 
+            {noEntraron.length > 0 && (
+              <section aria-labelledby="titulo-atencion" className="flex flex-col gap-2.5">
+                <h2 id="titulo-atencion" className="pt-2 text-ayuda font-extrabold text-texto-secundario">
+                  Necesita atención
+                </h2>
+                <Filas levantamientos={noEntraron} contexto={contexto} atencion />
+              </section>
+            )}
+
             {/* Bajo la siguiente visita: la acción principal de la pantalla sigue siendo la de la visita. */}
             <Suspense fallback={null}>
               <TarjetaAvisos usuarioId={usuario.id} enLinea={alcanzable} />
@@ -243,77 +267,65 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
       </main>
 
       {cuentaAbierta && (
-        <Dialogo forma="inferior" titulo="Tu cuenta" alCerrar={() => setCuentaAbierta(false)} focoEnElDialogo>
-          <div className="flex flex-col gap-3">
-            {/* Quién está en este teléfono, como la cabecera de una ficha de ajustes. */}
-            <div className="flex items-center gap-3.5 rounded-panel bg-panel-hundido px-4 py-3.5">
-              <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-full bg-superficie text-cuerpo font-extrabold text-sobre-superficie">
-                {iniciales(usuario.nombre)}
-              </span>
-              <span className="flex min-w-0 flex-col">
-                <strong className="truncate text-cuerpo">{usuario.nombre}</strong>
-                <span className="text-ayuda text-texto-secundario">{sinConexion ? "Sin señal · lo capturado queda aquí" : "Conectado · todo al día"}</span>
-              </span>
-            </div>
-            <SelectorDeTema />
-            {/* Sin señal no se abre: el servidor es quien la cambia (ADR-0033). */}
-            <button
-              type="button"
-              aria-disabled={!alcanzable || undefined}
-              onClick={() => {
-                if (!alcanzable) return;
-                setCuentaAbierta(false);
-                setCambiandoContrasena(true);
-              }}
-              className="flex min-h-tactil items-center gap-3 rounded-panel bg-panel-hundido px-4 py-2 text-left text-cuerpo font-bold aria-disabled:opacity-60 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&_svg]:size-5"
-            >
-              <LockKeyhole aria-hidden />
-              <span className="flex flex-col">
-                Cambiar contraseña
-                {!alcanzable && <span className="text-ayuda font-normal text-texto-secundario">Necesita señal</span>}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setCuentaAbierta(false);
-                setPapeleraAbierta(true);
-              }}
-              className="flex min-h-tactil items-center gap-3 rounded-panel bg-panel-hundido px-4 py-2 text-left text-cuerpo font-bold focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&_svg]:size-5"
-            >
-              <Trash aria-hidden />
-              <span className="flex grow flex-col">
-                Descartados
-                <span className="text-ayuda font-normal text-texto-secundario">{descartados ? `${descartados} · se recuperan durante 30 días` : "Ninguno"}</span>
-              </span>
-            </button>
-            <Diagnostico tecnicoId={usuario.id} />
-            <button
-              type="button"
-              onClick={() => {
-                setCuentaAbierta(false);
-                if (porEnviar > 0) setConfirmandoSalida(true);
-                else void cerrarSesion();
-              }}
-              className="flex min-h-tactil items-center gap-3 rounded-panel bg-panel-hundido px-4 text-left text-cuerpo font-bold text-error focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&_svg]:size-5"
-            >
-              <LogOut aria-hidden />
-              Cerrar sesión
-            </button>
+        <Dialogo
+          forma="inferior"
+          titulo={pagina ? TITULO_DE_PAGINA[pagina] : "Tu cuenta"}
+          alCerrar={() => setCuentaAbierta(false)}
+          volver={pagina ? { etiqueta: "Cuenta", alVolver: () => irA(null) } : undefined}
+          focoEnElDialogo
+        >
+          {/* Lo que se abre desde la cuenta entra en la misma hoja, como una página (iteración 32). */}
+          <div key={pagina ?? "cuenta"} className={`flex flex-col gap-4 ${direccion === "adelante" ? "motion-safe:animate-pagina-adelante" : direccion === "atras" ? "motion-safe:animate-pagina-atras" : ""}`}>
+            {pagina === "descartados" && formatos ? (
+              <Suspense fallback={<EsqueletoBloques etiqueta="Cargando los descartados" altos={["bajo"]} />}>
+                <Papelera usuarioId={usuario.id} formatos={formatos} />
+              </Suspense>
+            ) : pagina === "contrasena" ? (
+              <Suspense fallback={<EsqueletoBloques etiqueta="Cargando" altos={["alto"]} />}>
+                <HojaCambiarContrasena alTerminar={() => irA(null)} />
+              </Suspense>
+            ) : pagina === "diagnostico" ? (
+              <Diagnostico tecnicoId={usuario.id} />
+            ) : (
+              <>
+                {/* Quién está en este teléfono y cómo va lo suyo, sin caja (Luma y Shop en Mobbin). */}
+                <div className="flex items-center gap-3.5 px-0.5">
+                  <span aria-hidden className="grid size-13 shrink-0 place-items-center rounded-full bg-superficie-pista text-cuerpo font-semibold">
+                    {iniciales(usuario.nombre)}
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <strong className="truncate text-[18px] font-semibold">{usuario.nombre}</strong>
+                    <span className="flex items-center gap-2 text-ayuda text-texto-secundario">
+                      <span aria-hidden className={`size-2 rounded-full ${sinConexion ? "bg-sync-pendiente" : "bg-sync-ok"}`} />
+                      {sinConexion ? "Sin señal · lo capturado queda aquí" : porEnviar > 0 ? "Conectado · enviando lo pendiente" : "Conectado · todo enviado"}
+                    </span>
+                  </span>
+                </div>
+                <AvisoDeAlmacenamiento />
+                <GrupoDeAjustes>
+                  <FilaDeTema />
+                  {/* Sin señal no se abre: el servidor es quien la cambia (ADR-0033). */}
+                  <FilaDeAjuste icono={LockKeyhole} texto="Cambiar contraseña" detalle={alcanzable ? undefined : "Necesita señal"} apagada={!alcanzable} onClick={() => irA("contrasena")} />
+                  <FilaDeAjuste icono={Trash} texto="Descartados" valor={descartados || undefined} onClick={() => irA("descartados")} />
+                  <FilaDeAjuste icono={Activity} texto="Diagnóstico del teléfono" onClick={() => irA("diagnostico")} />
+                </GrupoDeAjustes>
+                {/* Sola y al final: lejos de lo que se toca a diario. */}
+                <GrupoDeAjustes>
+                  <FilaDeAjuste
+                    texto="Cerrar sesión"
+                    peligro
+                    onClick={() => {
+                      setCuentaAbierta(false);
+                      if (porEnviar > 0) setConfirmandoSalida(true);
+                      else void cerrarSesion();
+                    }}
+                  />
+                </GrupoDeAjustes>
+                <p className="text-center text-ayuda text-texto-terciario">{`TEINS · versión ${VERSION_APP}`}</p>
+              </>
+            )}
           </div>
         </Dialogo>
-      )}
-
-      {papeleraAbierta && formatos && (
-        <Suspense fallback={null}>
-          <Papelera usuarioId={usuario.id} formatos={formatos} alCerrar={() => setPapeleraAbierta(false)} />
-        </Suspense>
-      )}
-
-      {cambiandoContrasena && (
-        <Suspense fallback={null}>
-          <HojaCambiarContrasena alCerrar={() => setCambiandoContrasena(false)} />
-        </Suspense>
       )}
 
       {guiaAbierta && (
@@ -340,6 +352,9 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
     </div>
   );
 }
+
+type PaginaDeCuenta = "contrasena" | "descartados" | "diagnostico";
+const TITULO_DE_PAGINA: Record<PaginaDeCuenta, string> = { contrasena: "Contraseña", descartados: "Descartados", diagnostico: "Diagnóstico" };
 
 const hoyLargo = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long" });
 const iniciales = (nombre: string) =>
@@ -535,9 +550,9 @@ function Acciones({
   );
 }
 
-function Filas({ levantamientos, contexto }: { levantamientos: LevantamientoLocal[]; contexto: Contexto }) {
+function Filas({ levantamientos, contexto, atencion = false }: { levantamientos: LevantamientoLocal[]; contexto: Contexto; atencion?: boolean }) {
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className={`overflow-hidden rounded-panel border bg-panel [&>li+li]:border-t [&>li+li]:border-division ${atencion ? "border-error/40" : "border-division"}`}>
       {levantamientos.map((l) => (
         <li key={l.id}>
           <Fila levantamiento={l} contexto={contexto} />
@@ -547,12 +562,21 @@ function Filas({ levantamientos, contexto }: { levantamientos: LevantamientoLoca
   );
 }
 
+const ICONO_DE_TONO = { ok: CircleCheck, pendiente: Clock, error: CircleAlert, revision: Eye } as const;
+const CLASE_DE_TONO = { ...claseDeTono, revision: "text-estado-revision-texto" } as const;
+
+/**
+ * Un levantamiento en dos líneas (iteración 32): arriba de quién es y cuándo; abajo el estado en dos o tres palabras
+ * con su icono, y el formato. El estado nunca empuja el título: la explicación larga está en el detalle.
+ */
 function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLocal; contexto: Contexto }) {
   const envio = contexto.envios.get(l.id);
   const servidor = contexto.servidor.get(l.id);
-  // El estado de negocio según el servidor manda sobre el de envío del teléfono.
-  const estado = servidor ? estadoSegunServidor(servidor) : envio ? estadoDeEnvio(envio, contexto.enLinea) : null;
+  const estado = l.estado === "borrador" ? { texto: "Borrador", tono: "pendiente" as const } : estadoCorto(envio, servidor, contexto.enLinea);
   const comentarios = servidor?.comentarios?.length ?? 0;
+  const visita = l.visitaId ? contexto.visitas.get(l.visitaId) : undefined;
+  const formato = nombreDeFormato(contexto.formatos, l.formato);
+  const Icono = estado ? (l.estado === "borrador" ? Pencil : ICONO_DE_TONO[estado.tono]) : undefined;
   const enPantalla = useNombreEnPantalla<HTMLButtonElement>(nombreDeTransicion("lev", l.id));
   return (
     <button
@@ -560,20 +584,19 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
       onClick={() => contexto.abrir(l.id)}
       // La lista de enviados crece: la fila lleva su nombre de transición solo mientras se ve.
       ref={enPantalla}
-      className={`flex min-h-tactil w-full items-center gap-3.5 rounded-panel bg-panel p-4 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco ${contexto.recien === l.id ? "animate-resaltar" : ""}`}
+      className={`grid min-h-tactil w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-3 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco ${contexto.recien === l.id ? "animate-resaltar" : ""}`}
     >
-      <span className="w-16 shrink-0 text-ayuda font-extrabold text-texto-secundario">{diaCorto(l.creadoEn)}</span>
-      <span className="flex min-w-0 grow flex-col">
-        <strong className="text-cuerpo leading-snug">{nombreDeFormato(contexto.formatos, l.formato)}</strong>
-        <span className="text-ayuda text-texto-secundario">{fotos(contarFotos(l))}</span>
-        {comentarios > 0 && <span className="text-ayuda font-bold">{comentariosDeOficina(comentarios)}</span>}
+      <strong className="truncate text-cuerpo font-semibold">{visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : formato}</strong>
+      <span className="text-ayuda text-texto-secundario">{diaCorto(l.creadoEn)}</span>
+      <span className="col-span-2 flex min-w-0 items-center gap-1.5 text-ayuda text-texto-secundario">
+        {estado && Icono && (
+          <span className={`inline-flex shrink-0 items-center gap-1.5 font-medium ${CLASE_DE_TONO[estado.tono]} [&_svg]:size-4`}>
+            <Icono aria-hidden />
+            {estado.texto}
+          </span>
+        )}
+        <span className="truncate">{[visita ? formato : fotos(contarFotos(l)), comentarios > 0 ? comentariosDeOficina(comentarios) : ""].filter(Boolean).map((t) => `· ${t}`).join(" ")}</span>
       </span>
-      {/* El estado se dice una vez, en su pastilla (crítica, problema 16). */}
-      {l.estado === "borrador" ? (
-        <Insignia tono="borrador">Borrador</Insignia>
-      ) : (
-        estado && <span className={`shrink-0 rounded-full bg-panel-hundido px-3 py-1 text-right text-ayuda font-extrabold ${claseDeTono[estado.tono]}`}>{estado.texto}</span>
-      )}
     </button>
   );
 }
@@ -586,13 +609,3 @@ const diaCorto = (iso: string) => {
   if (fecha.toDateString() === ayer.toDateString()) return "Ayer";
   return new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" }).format(fecha);
 };
-
-/** Claro, oscuro o el del sistema, recordado en este teléfono (DESIGN.md, "Tema"). */
-function SelectorDeTema() {
-  const [tema, setTema] = useTema();
-  return (
-    <div className="rounded-panel bg-panel-hundido px-4 py-3">
-      <GrupoDeOpciones etiqueta="Tema" opciones={OPCIONES_DE_TEMA} valor={tema} onCambio={setTema} />
-    </div>
-  );
-}

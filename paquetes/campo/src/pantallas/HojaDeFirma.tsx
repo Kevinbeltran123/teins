@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as EventoPuntero } from "react";
 import { bocetoVacio, LIENZO, LIMITES_BOCETO, type DocumentoBoceto, type ElementoBoceto, type Punto, type PuntoConPresion } from "@teins/dominio";
-import { Aviso, BotonIcono, CampoTexto, ElementoDeBoceto, Firma, MensajeError, Smartphone, useCapaQueSale, useSinRepetir, X } from "@teins/ui";
+import { Aviso, Boton, BotonIcono, CampoTexto, ElementoDeBoceto, Firma, Logo, MensajeError, useCapaQueSale, useSinRepetir, X } from "@teins/ui";
 import { contornoDe } from "../dibujo/trazo";
 
 const GROSOR = 9;
@@ -9,13 +9,19 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
 /**
  * Constancia de visita para firmar (ADR-0024). La lee y la firma quien recibió la visita, no el técnico: por eso
  * trata de usted. Pantalla completa, como el editor de bocetos, para que la firma tenga espacio. Se carga aparte.
+ *
+ * Primero, la pantalla que ve quien recibe el teléfono (iteración 32): le habla a esa persona y le muestra qué va a
+ * confirmar antes de pedirle nada (DoorDash Dasher y Jobber en Mobbin).
  */
 export default function HojaDeFirma({
   declaracion,
+  recibe,
   guardar,
   cerrar,
 }: {
   declaracion: string;
+  /** Lo que se confirma, para la pantalla de entrega. Sin visita (levantamiento suelto), solo el técnico. */
+  recibe: { tecnico: string; cliente?: string | undefined; datos: readonly (readonly [string, string])[] };
   guardar: (documento: DocumentoBoceto, datos: { nombre: string; cargo: string }) => Promise<void>;
   cerrar: () => void;
 }) {
@@ -94,7 +100,7 @@ export default function HojaDeFirma({
           Constancia de visita
         </h2>
       </div>
-      <div className="flex grow flex-col gap-4 overflow-y-auto px-5 pt-1 pb-4">
+      <div className={`flex grow flex-col gap-4 overflow-y-auto px-5 pt-1 pb-4 ${entregado ? "motion-safe:animate-fundir" : ""}`}>
         <p className="text-cuerpo leading-relaxed">{declaracion}</p>
         <CampoTexto etiqueta="Nombre de quien firma" autoComplete="name" valorInicial="" onCambio={setNombre} error={errores.nombre} />
         <CampoTexto etiqueta="Cargo (opcional)" autoComplete="organization-title" valorInicial="" onCambio={setCargo} />
@@ -136,22 +142,38 @@ export default function HojaDeFirma({
           Firmar
         </button>
       </div>
-      {/* Primero, entregar el teléfono (Jobber, en Mobbin): la constancia la lee y la firma el cliente. */}
       {!entregado && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-superficie p-8 text-center text-sobre-superficie">
-          <Smartphone aria-hidden className="size-18 motion-safe:animate-[entregar_1.6s_var(--t-curva)_infinite_alternate]" />
-          <strong className="text-titulo leading-tight font-extrabold">Entrega el teléfono a quien te recibió</strong>
-          <p className="max-w-[28ch] text-cuerpo opacity-85">Va a leer y firmar la constancia de que estuviste en el sitio.</p>
-          <button
-            type="button"
-            onClick={() => setEntregado(true)}
-            className="h-15 rounded-control bg-sobre-superficie px-7 text-cuerpo font-extrabold text-superficie active:scale-95 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
-          >
-            Ya lo tiene
-          </button>
-          <button type="button" onClick={salir} className="text-ayuda font-bold underline underline-offset-3 opacity-85">
-            Todavía no
-          </button>
+        <div className="absolute inset-0 flex flex-col bg-fondo pt-[env(safe-area-inset-top)]">
+          <div className="flex min-h-13 items-center justify-between pt-1 pr-2 pl-5">
+            <Logo alto={26} />
+            <Boton variante="fantasma" onClick={salir}>
+              Cancelar
+            </Boton>
+          </div>
+          <div className="flex grow flex-col gap-5 overflow-y-auto px-5 pt-6">
+            <p className="text-ayuda font-medium text-texto-secundario">Constancia de visita</p>
+            <h2 className="text-[30px] leading-[1.12] font-semibold tracking-tight">{recibe.cliente ? `${recibe.cliente}, confirme la visita de ${recibe.tecnico}` : `Confirme la visita de ${recibe.tecnico}`}</h2>
+            {recibe.datos.length > 0 && (
+              <dl className="flex flex-col border-t border-division">
+                {recibe.datos.map(([dato, valor]) => (
+                  <div key={dato} className="flex justify-between gap-4 border-b border-division py-3 text-cuerpo">
+                    <dt className="text-texto-secundario">{dato}</dt>
+                    <dd className="text-right font-medium">{valor}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+          <div className="flex flex-col gap-2.5 px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <button
+              type="button"
+              onClick={() => setEntregado(true)}
+              className="h-control w-full rounded-control bg-superficie text-cuerpo font-semibold text-sobre-superficie active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+            >
+              Revisar y firmar
+            </button>
+            <p className="text-center text-ayuda text-texto-secundario">Su firma solo confirma que la visita ocurrió.</p>
+          </div>
         </div>
       )}
     </div>
