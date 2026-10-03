@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
-import { registro } from "./esquema";
+import { epocas, registro } from "./esquema";
 
 export type Entidad = "formato" | "visita" | "levantamiento" | "item_catalogo" | "simbolo";
 /** `fuera_de_alcance`: el destinatario deja de ver la entidad (por ejemplo, una visita reasignada). */
@@ -46,4 +46,13 @@ export async function leerCambios(tx: TxOrganizacion, usuarioId: string, desde: 
     .orderBy(asc(registro.secuencia))
     .limit(limite);
   return filas as CambioLeido[];
+}
+
+/** La época sin limpiezas (ADR-0038): la de toda organización hasta que alguien deja limpio su entorno. */
+export const EPOCA_INICIAL = "inicial";
+
+/** La época de la bajada de la organización fijada en la transacción (ADR-0038). */
+export async function leerEpoca(tx: TxOrganizacion): Promise<string> {
+  const [fila] = await tx.select({ epoca: epocas.epoca }).from(epocas).limit(1);
+  return fila?.epoca ?? EPOCA_INICIAL;
 }

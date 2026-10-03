@@ -39,6 +39,12 @@ export interface AlmacenSincronizacion {
   estadoBajada(tecnicoId: string): Promise<BajadaLocal | undefined>;
   /** Aplica una página de la bajada y avanza el punto de control en la misma transacción. */
   aplicarBajada(tecnicoId: string, bajada: Bajada, versionApp: number, ahora: string): Promise<void>;
+  /**
+   * El servidor cambió de época (ADR-0038): quita lo que bajó del servidor (visitas sin trabajo pendiente, estados y
+   * catálogo) y deja el punto de control en cero. Al terminar de bajar todo, sale lo enviado y recibido que el servidor
+   * ya no conoce. Los borradores, lo que falta por enviar, los formatos y los símbolos se quedan (regla 5).
+   */
+  reiniciarPorEpoca(tecnicoId: string, epoca: string, versionApp: number): Promise<void>;
   /** Permiso recibido al iniciar sesión; no toca el punto de control. */
   renovarPermiso(tecnicoId: string, permisoLocalHasta: string, versionApp: number): Promise<void>;
   marcarSesionVencida(tecnicoId: string): Promise<void>;
@@ -92,6 +98,22 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
       await db.estadosServidor.where("tecnicoId").equals(tecnicoId).delete();
       await db.bajadas.delete(tecnicoId);
     });
+  }
+
+  /**
+   * Después de bajar todo desde cero, el servidor ya dijo el estado de cada levantamiento que conoce: uno enviado y
+   * recibido sin estado se borró en el servidor. Sale con sus fotos y su envío; un archivo que usa otro se conserva.
+   */
+  async function podarEnviadosSinServidor(tecnicoId: string) {
+    const conocidos = new Set((await db.estadosServidor.where("tecnicoId").equals(tecnicoId).primaryKeys()) as string[]);
+    const recibidos = new Set((await db.envios.where("tecnicoId").equals(tecnicoId).filter((e) => e.estado === "recibido").toArray()).map((e) => e.levantamientoId));
+    const todos = await db.levantamientos.toArray();
+    const salen = todos.filter((l) => l.tecnicoId === tecnicoId && l.estado === "enviado" && recibidos.has(l.id) && !conocidos.has(l.id));
+    if (salen.length === 0) return;
+    const enUso = new Set(todos.filter((l) => !salen.includes(l)).flatMap((l) => referencias(l).archivos));
+    await db.archivos.bulkDelete(salen.flatMap((l) => referencias(l).archivos).filter((h) => !enUso.has(h)));
+    await db.levantamientos.bulkDelete(salen.map((l) => l.id));
+    await db.envios.bulkDelete(salen.map((l) => l.id));
   }
 
   return {
@@ -203,7 +225,7 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
           sellados.set(i, await sellarEstado(db, { id: cambio.id, tecnicoId, estado: cambio.estado, recibidoEn: cambio.recibidoEn, comentarios: cambio.comentarios }));
         }
       }
-      return db.transaction("rw", [db.formatos, db.visitas, db.estadosServidor, db.bajadas, db.levantamientos, db.catalogo, db.simbolos], async () => {
+      return db.transaction("rw", [db.formatos, db.visitas, db.estadosServidor, db.bajadas, db.levantamientos, db.catalogo, db.simbolos, db.archivos, db.envios], async () => {
         for (const [i, cambio] of bajada.cambios.entries()) {
           switch (cambio.tipo) {
             case "formato":
@@ -232,7 +254,38 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
               break;
           }
         }
-        await db.bajadas.put({ tecnicoId, puntoDeControl: bajada.puntoDeControl, versionApp, ultimaEn: ahora, permisoLocalHasta: bajada.permisoLocalHasta });
+        const previa = await db.bajadas.get(tecnicoId);
+        const epoca = bajada.epoca ?? previa?.epoca;
+        // Terminó de bajar todo tras cambiar la época (ADR-0038): lo enviado y recibido que el servidor ya no conoce sale.
+        if (previa?.podar && !bajada.hayMas) await podarEnviadosSinServidor(tecnicoId);
+        await db.bajadas.put({
+          tecnicoId,
+          puntoDeControl: bajada.puntoDeControl,
+          versionApp,
+          ultimaEn: ahora,
+          permisoLocalHasta: bajada.permisoLocalHasta,
+          ...(epoca ? { epoca } : {}),
+          ...(previa?.podar && bajada.hayMas ? { podar: true } : {}),
+        });
+      });
+    },
+
+    reiniciarPorEpoca(tecnicoId, epoca, versionApp) {
+      return db.transaction("rw", [db.levantamientos, db.envios, db.visitas, db.estadosServidor, db.catalogo, db.bajadas], async () => {
+        const recibidos = new Set((await db.envios.where("tecnicoId").equals(tecnicoId).filter((e) => e.estado === "recibido").toArray()).map((e) => e.levantamientoId));
+        // Lo que no ha salido del teléfono es trabajo: su visita se queda, como reasignada (regla 5). Si sigue en el
+        // servidor, vuelve con la bajada.
+        const conTrabajo = new Set(
+          (await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray()).flatMap((l) => (l.visitaId && !(l.estado === "enviado" && recibidos.has(l.id)) ? [l.visitaId] : [])),
+        );
+        for (const v of await db.visitas.where("tecnicoId").equals(tecnicoId).toArray()) {
+          if (conTrabajo.has(v.id) || v.terminacionPendiente) await db.visitas.update([tecnicoId, v.id], { fueraDeAlcance: true });
+          else await db.visitas.delete([tecnicoId, v.id]);
+        }
+        await db.estadosServidor.where("tecnicoId").equals(tecnicoId).delete();
+        await db.catalogo.clear();
+        const previa = await db.bajadas.get(tecnicoId);
+        if (previa) await db.bajadas.put({ ...previa, puntoDeControl: 0, versionApp, epoca, podar: true });
       });
     },
 

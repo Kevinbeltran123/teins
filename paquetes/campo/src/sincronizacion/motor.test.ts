@@ -351,6 +351,77 @@ describe("bajada (ADR-0003)", () => {
   });
 });
 
+describe("época de la bajada (ADR-0038)", () => {
+  const visita = (n: number) => ({
+    id: `0192f0e0-0000-7000-8000-${String(970 + n).padStart(12, "0")}`,
+    cliente: { nombre: "Cliente ficticio" },
+    sitio: { nombre: "Sede", direccion: "Calle [N]" },
+    motivo: "Mantenimiento",
+    programadaPara: "2026-09-30",
+  });
+  const motorDe = (db: BaseCampo, s: ReturnType<typeof servidorFalso>, reloj: { ahora: () => number }) =>
+    crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora });
+
+  it("la primera época que ve el teléfono solo se guarda: no borra nada", async () => {
+    const { db, ids, reloj } = await dispositivo();
+    const s = servidorFalso();
+    s.publicar({ tipo: "visita", visita: visita(1) });
+    await motorDe(db, s, reloj).sincronizar();
+    expect(await db.bajadas.get("t1")).toMatchObject({ epoca: "inicial" });
+    expect((await visitasDe(db, "t1")).map((v) => v.id)).toEqual([visita(1).id]);
+    expect(await db.levantamientos.get(ids[0]!)).toBeDefined();
+  });
+
+  it("otra época quita lo que el servidor ya no tiene y conserva borradores, lo que falta por enviar y sus visitas", async () => {
+    const { db, ids, reloj } = await dispositivo(1, 2);
+    const repo = repositorioDexie(db);
+    const s = servidorFalso();
+    s.publicar({ tipo: "formato", definicion: formato }, { tipo: "visita", visita: visita(1) }, { tipo: "visita", visita: visita(2) });
+    await motorDe(db, s, reloj).sincronizar();
+    const fotosEnviadas = (await db.archivos.toArray()).map((a) => a.id);
+    expect(fotosEnviadas).toHaveLength(2);
+    // Un borrador en la visita 2: es trabajo que solo existe en el teléfono.
+    const borrador = "0192f0e0-0000-7000-8000-000000000981";
+    await repo.crear(crearLevantamiento(formato, borrador, new Date(), visita(2).id), "t1");
+
+    s.limpiar();
+    await motorDe(db, s, reloj).sincronizar({ bajar: true });
+
+    // Lo enviado que oficina ya recibió y el servidor borró sale con sus fotos; la visita sin trabajo, también.
+    expect(await db.levantamientos.get(ids[0]!)).toBeUndefined();
+    expect(await db.envios.get(ids[0]!)).toBeUndefined();
+    expect(await db.archivos.bulkGet(fotosEnviadas)).toEqual([undefined, undefined]);
+    expect(await estadosDe(db, "t1")).toEqual([]);
+    // El borrador se queda, y su visita como reasignada.
+    expect(await db.levantamientos.get(borrador)).toBeDefined();
+    expect(await visitasDe(db, "t1")).toEqual([{ ...visita(2), tecnicoId: "t1", fueraDeAlcance: true }]);
+    // Los formatos se quedan y el punto de control volvió a contar desde cero con la nueva época.
+    expect(await db.formatos.count()).toBe(1);
+    expect(await db.bajadas.get("t1")).toMatchObject({ epoca: `limpieza-4`, puntoDeControl: 4 });
+    expect((await db.bajadas.get("t1"))?.podar).toBeUndefined();
+  });
+
+  it("lo que el servidor recibe después de la limpieza se queda, y una visita que sigue asignada vuelve normal", async () => {
+    const { db, reloj } = await dispositivo(0);
+    const repo = repositorioDexie(db);
+    const s = servidorFalso();
+    s.publicar({ tipo: "visita", visita: visita(3) });
+    await motorDe(db, s, reloj).sincronizar();
+    const nuevo = "0192f0e0-0000-7000-8000-000000000982";
+    await repo.crear(crearLevantamiento(formato, nuevo, new Date("2026-09-24T10:00:00Z"), visita(3).id), "t1");
+    expect((await repo.enviar(nuevo, formato, new Date("2026-09-24T11:00:00Z"))).ok).toBe(true);
+
+    // Se limpia y la visita se vuelve a asignar; el teléfono envía lo pendiente antes de bajar.
+    s.limpiar();
+    s.publicar({ tipo: "visita", visita: visita(3) });
+    await motorDe(db, s, reloj).sincronizar({ bajar: true });
+
+    expect(await db.levantamientos.get(nuevo)).toBeDefined();
+    expect((await estadosDe(db, "t1")).map((e) => e.id)).toEqual([nuevo]);
+    expect(await visitasDe(db, "t1")).toEqual([{ ...visita(3), tecnicoId: "t1" }]);
+  });
+});
+
 describe("terminar visita (ADR-0037)", () => {
   const idVisita = "0192f0e0-0000-7000-8000-000000000950";
   const abierta = { id: idVisita, cliente: { nombre: "Cliente ficticio" }, sitio: { nombre: "Sede", direccion: "Calle [N]" }, motivo: "Mantenimiento", programadaPara: "2026-09-24", horaInicio: "14:00", horaFin: null };

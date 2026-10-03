@@ -5,7 +5,7 @@ import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../pla
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Catalogo } from "../catalogo";
-import { leerCambios, type CambioLeido } from "../cambios";
+import { leerCambios, leerEpoca, type CambioLeido } from "../cambios";
 import { leerIdDeVersion, type Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
@@ -106,7 +106,7 @@ export async function armarBajada(tx: TxOrganizacion, deps: Omit<Dependencias, "
     for (const simbolo of await deps.simbolos.porId(tx, de("simbolo"))) cambios.push({ tipo: "simbolo", simbolo });
   }
 
-  return { cambios, puntoDeControl, hayMas };
+  return { cambios, puntoDeControl, hayMas, epoca: await leerEpoca(tx) };
 }
 
 /** Interfaz pública del módulo de sincronización: compone la bajada con las interfaces de los demás. */

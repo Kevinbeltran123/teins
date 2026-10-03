@@ -208,6 +208,10 @@ export interface BajadaLocal {
   permisoLocalHasta: string;
   /** El servidor rechazó la sesión y no hay orden de borrado: hay que iniciar sesión. */
   sesionVencida?: boolean | undefined;
+  /** La última época de la bajada que vio este teléfono (ADR-0038); sin ella, la primera se adopta sin reiniciar. */
+  epoca?: string | undefined;
+  /** Cambió la época y se baja todo de nuevo: al terminar, sale lo enviado que el servidor ya no conoce (ADR-0038). */
+  podar?: boolean | undefined;
 }
 
 /** Identidad del teléfono ante el servidor. El secreto autentica la consulta de órdenes de borrado. */

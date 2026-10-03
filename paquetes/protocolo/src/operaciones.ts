@@ -212,6 +212,11 @@ export const Bajada = z
     /** Quedan cambios: pedir otra página de inmediato. */
     hayMas: z.boolean(),
     permisoLocalHasta: Fecha,
+    /**
+     * Época de la bajada (ADR-0038), opcional para las apps anteriores (ADR-0015). Cambia solo cuando se deja limpio
+     * un entorno: el teléfono que ve otra quita lo que bajó del servidor y baja todo desde cero.
+     */
+    epoca: z.string().min(1).max(100).optional(),
   })
   .meta({ id: "Bajada" });
 export type Bajada = z.infer<typeof Bajada>;

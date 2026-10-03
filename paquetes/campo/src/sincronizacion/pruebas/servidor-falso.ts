@@ -33,7 +33,9 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
   let verificacionesPendientes = opciones.verificacionesPendientes ?? 0;
   let reloj = 0;
   /** Registro de cambios del servidor: la posición + 1 es la secuencia. */
-  const cambios: Cambio[] = [];
+  const cambios: (Cambio | null)[] = [];
+  /** Época de la bajada (ADR-0038): la cambia `limpiar`. */
+  let epoca = "inicial";
   const informes: { id: string; secreto: string; salud: SaludDispositivo }[] = [];
   /** Revocado: toda operación con sesión responde "no autenticado"; la consulta con secreto devuelve la orden. */
   const revocados = new Set<string>();
@@ -111,7 +113,7 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     async obtenerCambios(desde) {
       return aplicarFalla("obtenerCambios", () => {
         const pagina = cambios.slice(desde, desde + tamanoDePagina);
-        return { cambios: pagina, puntoDeControl: desde + pagina.length, hayMas: desde + pagina.length < cambios.length, permisoLocalHasta };
+        return { cambios: pagina.filter((c) => c !== null), puntoDeControl: desde + pagina.length, hayMas: desde + pagina.length < cambios.length, permisoLocalHasta, epoca };
       });
     },
     async informarDispositivo(cuerpo) {
@@ -172,6 +174,15 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     },
     paginasDe(n: number) {
       tamanoDePagina = n;
+    },
+    /**
+     * Como dejar-limpio.sql (ADR-0038): borra del registro las visitas, los levantamientos y el catálogo (la secuencia
+     * sigue, quedan huecos), conserva formatos y símbolos y cambia la época.
+     */
+    limpiar() {
+      for (const [i, c] of cambios.entries()) if (c && c.tipo !== "formato" && c.tipo !== "simbolo") cambios[i] = null;
+      recibidos.clear();
+      epoca = `limpieza-${cambios.length}`;
     },
   };
 }

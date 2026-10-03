@@ -209,9 +209,18 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
     const previa = await almacen.estadoBajada(tecnicoId);
     // Una app actualizada puede mostrar formatos que antes se saltó: baja desde cero (ADR-0015, punto 4).
     let desde = previa && previa.versionApp === versionApp ? previa.puntoDeControl : 0;
+    let epoca = previa?.epoca;
     try {
       for (let pagina = 0; pagina < PAGINAS_MAXIMAS; pagina++) {
         const bajada = await transporte.obtenerCambios(desde, versionApp);
+        // Otra época (ADR-0038): lo que bajó antes ya no existe en el servidor. Se quita y se baja todo desde cero; la
+        // primera época que ve el teléfono solo se guarda.
+        if (bajada.epoca && epoca && bajada.epoca !== epoca) {
+          await almacen.reiniciarPorEpoca(tecnicoId, bajada.epoca, versionApp);
+          epoca = bajada.epoca;
+          desde = 0;
+          continue;
+        }
         await almacen.aplicarBajada(tecnicoId, bajada, versionApp, new Date(reloj()).toISOString());
         desde = bajada.puntoDeControl;
         if (!bajada.hayMas) break;

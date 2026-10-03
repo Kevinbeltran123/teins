@@ -92,6 +92,19 @@ describe("bajada (ADR-0003)", () => {
   });
 });
 
+describe("época de la bajada (ADR-0038)", () => {
+  it("es la inicial hasta que se deja limpio el entorno, y cada organización tiene la suya", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const otra = await s.nuevaOrganizacionConUsuarios();
+    expect((await bajar(tecnico.cookie)).json().epoca).toBe("inicial");
+
+    // Lo que hace dejar-limpio.sql como dueño de la base: la aplicación solo la lee.
+    await s.propietario.pool.query("insert into cambios.epocas (organizacion_id, epoca) values ($1, 'limpieza-1') on conflict (organizacion_id) do update set epoca = excluded.epoca", [organizacionId]);
+    expect((await bajar(tecnico.cookie)).json().epoca).toBe("limpieza-1");
+    expect((await bajar(otra.tecnico.cookie)).json().epoca).toBe("inicial");
+  });
+});
+
 describe("visitas asignadas", () => {
   it("baja al técnico asignado, no a otros ni a otra organización, y sale del alcance al reasignar (regla 17)", async () => {
     const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
