@@ -142,6 +142,9 @@
   /* Lo recién creado se resalta y se desvanece (Basecamp, "yellow fade"); 1,2 s y sin barra desde la iteración 29 */
   --t-duracion-resaltado: 1200ms;
   --t-curva: cubic-bezier(0.2, 0, 0, 1);
+  /* Hojas de campo (iteración 32): entran desde el borde y frenan al final, en 260 ms, sin sentirse lentas */
+  --t-duracion-hoja: 260ms;
+  --t-curva-hoja: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /*
@@ -203,5 +206,6 @@
     --t-duracion-rapida: 0ms;
     --t-duracion-estandar: 0ms;
     --t-duracion-pantalla: 0ms;
+    --t-duracion-hoja: 0ms;
   }
 }

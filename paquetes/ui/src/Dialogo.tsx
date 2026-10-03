@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, type MouseEvent, type PointerEvent, type ReactNode, type RefObject, type SyntheticEvent } from "react";
 import { BotonIcono } from "./Boton";
-import { X, type LucideIcon } from "./iconos";
+import { ChevronLeft, X, type LucideIcon } from "./iconos";
 import { sinMovimiento } from "./transicion";
 
 const formas = {
@@ -11,9 +11,9 @@ const formas = {
   /** Crear o editar algo largo en oficina: la lista sigue a la vista detrás del velo (hoja lateral de 480 px). */
   lateral: "my-0 mr-0 ml-auto h-dvh max-h-dvh w-[min(480px,100vw)] rounded-l-capa open:animate-entrar-lateral",
   /** Confirmaciones en el teléfono: abajo, al alcance del pulgar. */
-  inferior: "mx-auto mt-auto mb-0 max-h-[90dvh] w-full max-w-xl rounded-t-capa open:animate-subir",
+  inferior: "mx-auto mt-auto mb-0 max-h-[90dvh] w-full max-w-xl rounded-t-capa open:animate-hoja-entra",
   /** Hoja alta de campo (catálogo): casi toda la pantalla, para que el teclado no tape los resultados. */
-  hoja: "mx-auto mt-auto mb-0 h-[86dvh] max-h-[86dvh] w-full max-w-xl rounded-t-capa open:animate-subir",
+  hoja: "mx-auto mt-auto mb-0 h-[86dvh] max-h-[86dvh] w-full max-w-xl rounded-t-capa open:animate-hoja-entra",
 };
 
 interface Props {
@@ -41,6 +41,11 @@ interface Props {
   cabeceraExtra?: ReactNode;
   /** Tono del icono del encabezado (oficina): la consecuencia se reconoce antes de leer. */
   tono?: "" | "peligro" | "exito";
+  /**
+   * Una página abierta dentro de la hoja (campo, iteración 32): "‹ Cuenta" a la izquierda del título vuelve a la
+   * página anterior sin cerrar la hoja.
+   */
+  volver?: { etiqueta: string; alVolver: () => void } | undefined;
 }
 
 /**
@@ -137,7 +142,7 @@ function useSalida(ref: RefObject<HTMLDialogElement | null>, forma: string) {
  * Esc funciona sin JavaScript de animación (el movimiento es CSS, DESIGN.md; al quitarse, sale con useSalida). Se abre al montarse: quien lo
  * usa lo muestra u oculta con una condición, y cada apertura empieza limpia.
  */
-export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerrar, cerrable = true, forma = "centrado", amplio = false, focoEnElDialogo = false, tono = "", ancho, cabeceraExtra }: Props) {
+export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerrar, cerrable = true, forma = "centrado", amplio = false, focoEnElDialogo = false, tono = "", ancho, cabeceraExtra, volver }: Props) {
   const modal = useModal(cerrable, alCerrar, focoEnElDialogo);
   useSalida(modal.ref, forma);
   const tituloId = useId();
@@ -156,6 +161,16 @@ export function Dialogo({ titulo, subtitulo, icono: Icono, children, pie, alCerr
             <span className={`ic-capa ${tono} flex size-10 shrink-0 items-center justify-center rounded-control bg-superficie-suave text-superficie [&_svg]:size-5`}>
               <Icono aria-hidden />
             </span>
+          )}
+          {volver && (
+            <button
+              type="button"
+              onClick={volver.alVolver}
+              className="-my-2 -ml-2 flex min-h-tactil shrink-0 items-center gap-0.5 rounded-control pr-2 text-cuerpo text-superficie focus-visible:outline-3 focus-visible:outline-foco [&_svg]:size-5"
+            >
+              <ChevronLeft aria-hidden />
+              {volver.etiqueta}
+            </button>
           )}
           <div className={`flex min-w-0 grow flex-col ${cerrable ? "pr-8" : ""} ${cabeceraExtra ? "pr-44" : ""}`}>
             <h2 id={tituloId} className="text-subtitulo leading-snug font-extrabold">

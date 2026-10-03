@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, type LucideIcon } from "./iconos";
+import { ArrowRight, Camera, Check, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleCheck, type LucideIcon } from "./iconos";
 
 /**
  * Piezas de la dirección Recorrido (DESIGN.md, campo): la captura sigue el orden de la visita y cada paso
@@ -147,47 +147,67 @@ export function PasoDelRecorrido({
   );
 }
 
-/** Un elemento repetido (un tablero) resumido: su nombre, su estado y tres datos. Tocarlo lo abre. */
-export function TarjetaResumen({
+/**
+ * Un elemento repetido (un tablero) en su lista (iteración 32, prototipos/ajustes-campo): la primera foto, el nombre, lo
+ * que lo identifica en una línea y cuánto lleva. Tocarlo lo abre.
+ */
+export function FilaDeRepeticion({
   titulo,
-  estado,
-  completo,
-  datos,
+  detalle,
+  foto,
+  faltan,
+  avance,
   onClick,
-  etiqueta,
   nueva = false,
 }: {
   titulo: string;
-  estado: string;
-  completo: boolean;
-  datos: readonly { etiqueta: string; valor: string }[];
+  /** Lo que lo identifica, ya unido: "Sótano · 208 V · 3 fotos". */
+  detalle: string;
+  /** La primera foto, si tiene. */
+  foto?: string | undefined;
+  faltan: number;
+  /** De 0 a 1: los obligatorios que ya tienen dato. */
+  avance: number;
   onClick: () => void;
-  etiqueta?: string;
   /** Recién agregada a la vista: entra animada. Las que ya estaban no se animan otra vez al volver (iteración 27). */
   nueva?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={etiqueta}
-      className={`${nueva ? "motion-safe:animate-subir" : ""} flex w-full flex-col gap-3 rounded-panel border border-division bg-panel px-4.5 py-4 text-left active:scale-[0.99] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco`}
-    >
-      <span className="flex items-center gap-3">
-        <strong className="min-w-0 grow text-[16px] leading-tight font-medium">{titulo}</strong>
-        <span className={`shrink-0 rounded-full px-3 py-1 text-ayuda font-extrabold whitespace-nowrap ${completo ? "bg-exito-fondo text-exito-texto" : "bg-alerta-fondo text-alerta-texto"}`}>{estado}</span>
-      </span>
-      {datos.length > 0 && (
-        <span className="grid grid-cols-3 gap-2">
-          {datos.map((d) => (
-            <span key={d.etiqueta} className="flex min-w-0 flex-col rounded-control bg-panel-hundido px-3 py-2">
-              <b className="truncate text-cuerpo tabular-nums">{d.valor}</b>
-              <small className="truncate text-ayuda text-texto-secundario">{d.etiqueta}</small>
-            </span>
-          ))}
+    <li className={nueva ? "motion-safe:animate-resaltar" : undefined}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="grid w-full grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 py-2.5 pr-3 pl-2.5 text-left active:bg-encima focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco"
+      >
+        {foto ? (
+          <img src={foto} alt="" className="size-13 rounded-control object-cover" />
+        ) : (
+          <span aria-hidden className="grid size-13 place-items-center rounded-control bg-panel-hundido text-texto-terciario [&_svg]:size-5">
+            <Camera />
+          </span>
+        )}
+        <span className="flex min-w-0 flex-col">
+          <strong className="truncate text-cuerpo font-semibold">{titulo}</strong>
+          <span className="truncate text-ayuda text-texto-secundario">{detalle}</span>
+          <span aria-hidden className="mt-2 h-1 overflow-hidden rounded-full bg-superficie-pista">
+            <span className={`block h-full rounded-full ${faltan > 0 ? "bg-sync-pendiente" : "bg-sync-ok"}`} style={{ width: `${Math.round(avance * 100)}%` }} />
+          </span>
         </span>
-      )}
-    </button>
+        <span className="flex shrink-0 items-center gap-0.5 text-ayuda">
+          {faltan > 0 ? <span className="font-medium text-alerta-texto">{`Faltan ${faltan}`}</span> : <><Check aria-hidden className="size-5 text-exito-texto" /><span className="sr-only">Completo</span></>}
+          <ChevronRight aria-hidden className="size-[18px] text-texto-terciario" />
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** La lista de repeticiones: una sola caja con líneas. */
+export function ListaDeRepeticiones({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
+  return (
+    <ul aria-label={etiqueta} className="overflow-hidden rounded-panel border border-division bg-panel [&>li+li]:border-t [&>li+li]:border-division">
+      {children}
+    </ul>
   );
 }
 
@@ -206,23 +226,44 @@ export function BotonAgregar({ children, onClick, disabled, icono: Icono }: { ch
   );
 }
 
-/** Una fila del repaso antes de enviar: qué es, cómo quedó y "Editar". */
-export function FilaDeRepaso({ titulo, detalle, falta, onEditar }: { titulo: string; detalle: string; falta?: boolean; onEditar: () => void }) {
+/**
+ * Una sección en el repaso antes de enviar (iteración 32): lo que realmente lleva, con un visto o lo que falta en
+ * ámbar. Toda la fila se toca para editar (Vestiaire Collective y Airbnb en Mobbin).
+ */
+export function FilaDeRepaso({ titulo, detalle, falta, vacio = false, onEditar, children }: { titulo: string; detalle: string; falta?: string | undefined; vacio?: boolean; onEditar: () => void; children?: ReactNode }) {
   return (
-    <li className="flex items-center gap-3 border-t border-division px-4.5 py-3.5 first:border-t-0">
-      <span className="flex min-w-0 grow flex-col">
-        <strong className="text-cuerpo">{titulo}</strong>
-        <span className={`text-ayuda ${falta ? "font-bold text-alerta-texto" : "text-texto-secundario"}`}>{detalle}</span>
-      </span>
+    <li className="border-t border-division first:border-t-0">
       <button
         type="button"
         onClick={onEditar}
         aria-label={`Editar ${titulo}`}
-        className="h-10 shrink-0 rounded-full border-[1.5px] border-borde-suave px-4 text-ayuda font-extrabold focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+        className="grid w-full grid-cols-[22px_minmax(0,1fr)_auto] items-start gap-x-3 py-3 pr-3 pl-3.5 text-left active:bg-encima focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&>svg]:mt-px [&>svg]:size-[22px]"
       >
-        Editar
+        {/* Sin datos y sin nada obligatorio: ni visto ni alerta, para no decir que está hecho. */}
+        {falta ? <CircleAlert aria-hidden className="text-alerta-texto" /> : vacio ? <Circle aria-hidden className="text-texto-terciario" /> : <CircleCheck aria-hidden className="text-exito-texto" />}
+        <span className="flex min-w-0 flex-col">
+          <strong className="text-cuerpo font-semibold">{titulo}</strong>
+          <span className="truncate text-ayuda text-texto-secundario">{detalle}</span>
+          {falta && <span className="text-ayuda font-medium text-alerta-texto">{falta}</span>}
+          {children}
+        </span>
+        <ChevronRight aria-hidden className="size-[18px] self-center text-texto-terciario" />
       </button>
     </li>
+  );
+}
+
+/** Las cifras de lo que se envía, en una fila (fotos, tableros, materiales). */
+export function CifrasDeRepaso({ cifras }: { cifras: readonly { valor: number; texto: string }[] }) {
+  return (
+    <dl className="grid auto-cols-fr grid-flow-col rounded-panel border border-division bg-panel">
+      {cifras.map((c) => (
+        <div key={c.texto} className="flex flex-col-reverse gap-px border-l border-division px-3 py-3 first:border-l-0">
+          <dt className="text-ayuda text-texto-secundario">{c.texto}</dt>
+          <dd className="text-[22px] leading-tight font-semibold tracking-tight tabular-nums">{c.valor}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

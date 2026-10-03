@@ -5,6 +5,7 @@
 */
 export type { LucideIcon } from "lucide-react";
 export {
+  Activity,
   ArrowDown,
   ArrowRight,
   ArrowUp,
@@ -19,6 +20,7 @@ export {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Circle,
   CircleAlert,
   CircleCheck,
   ClipboardCheck,

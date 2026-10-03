@@ -1,4 +1,5 @@
 export { Aviso } from "./Aviso";
+export { FilaDeAjuste, FilaDeTema, GrupoDeAjustes } from "./Ajustes";
 export { Boceto, ElementoDeBoceto, HojasDeBoceto } from "./Boceto";
 export { Firma } from "./Firma";
 export type { ElementoDibujable, HojaDibujable } from "./Boceto";
@@ -39,7 +40,7 @@ export type { Notificacion } from "./Notificaciones";
 export { BotonHerramienta, Pastilla } from "./Pastilla";
 export { EditorMateriales } from "./Materiales";
 export { CampoFlotante } from "./CampoFlotante";
-export { BarraDePaso, BotonAgregar, BotonRedondo, BotonSiguiente, EncabezadoDePaso, FilaDeRepaso, FranjaSincronizacion, ListaFaltantes, ProcesoDeEnvio, type DatoFaltante, type EstadoDeProceso, type EtapaDeProceso, ListaRecorrido, PasoDelRecorrido, Repaso, TarjetaResumen, type EstadoDePaso } from "./Recorrido";
+export { BarraDePaso, BotonAgregar, BotonRedondo, BotonSiguiente, CifrasDeRepaso, EncabezadoDePaso, FilaDeRepaso, FranjaSincronizacion, ListaFaltantes, ProcesoDeEnvio, type DatoFaltante, type EstadoDeProceso, type EtapaDeProceso, ListaRecorrido, PasoDelRecorrido, Repaso, FilaDeRepeticion, ListaDeRepeticiones, type EstadoDePaso } from "./Recorrido";
 export { Pestanas } from "./Pestanas";
 export type { Pestana } from "./Pestanas";
 export { SelectorDeArchivo } from "./SelectorDeArchivo";

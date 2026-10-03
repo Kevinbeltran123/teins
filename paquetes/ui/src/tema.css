@@ -94,8 +94,14 @@
   /* Lo que entra y sale de abajo (notificaciones) y las capas de campo que suben a pantalla completa. */
   --animate-entra-abajo: entra-abajo var(--t-duracion-estandar) var(--t-curva) both;
   --animate-sale-abajo: sale-abajo var(--t-duracion-estandar) var(--t-curva) both;
-  --animate-hoja-sube: hoja-sube var(--t-duracion-pantalla) var(--t-curva) both;
-  --animate-hoja-baja: hoja-baja var(--t-duracion-estandar) var(--t-curva) both;
+  --animate-hoja-sube: hoja-sube var(--t-duracion-pantalla) var(--t-curva-hoja) both;
+  --animate-hoja-baja: hoja-baja var(--t-duracion-estandar) var(--t-curva-hoja) both;
+  /* Hojas de campo (iteración 32): desde el borde, con el velo fundiéndose a la vez; lo que se abre desde una hoja
+     entra en la misma hoja como una página. */
+  --animate-hoja-entra: hoja-sube var(--t-duracion-hoja) var(--t-curva-hoja) both;
+  --animate-pagina-adelante: pagina-adelante var(--t-duracion-hoja) var(--t-curva) both;
+  --animate-pagina-atras: pagina-atras var(--t-duracion-hoja) var(--t-curva) both;
+  --animate-fundir: fundir var(--t-duracion-estandar) ease-out both;
 }
 
 @layer base {
@@ -194,6 +200,8 @@
   Cambios de estado como View Transitions (DESIGN.md, movimiento; iteración 27). El navegador toma una foto antes
   y otra después y anima entre las dos solo lo que tiene nombre: la página no se mueve. Sin soporte o con
   movimiento reducido, el cambio es instantáneo (conTransicion).
+  - Adelante y atrás son cortos (iteración 32): la pantalla anterior se va en 120 ms y la nueva entra 24 px con
+    fundido en 220 ms; barrer un cuarto del ancho se sentía lento en el teléfono.
   - Con dirección (data-direccion), se mueve la raíz: lo que se ve en la ventana, menos lo que tiene nombre propio. Su
     foto es del tamaño de la ventana, nunca del documento entero: una lista de miles de filas o un levantamiento con
     fotos no congelan la transición (en WebKit, el iPhone, una foto del documento entero sí).
@@ -211,16 +219,16 @@
 ::view-transition-old(*),
 ::view-transition-new(*) { animation-duration: var(--t-duracion-estandar); }
 ::view-transition-group(root) { overflow: clip; }
-:root[data-direccion="adelante"]::view-transition-old(root) { animation: vt-sale-izquierda var(--t-duracion-pantalla) var(--t-curva) both; }
-:root[data-direccion="adelante"]::view-transition-new(root) { animation: vt-entra-derecha var(--t-duracion-pantalla) var(--t-curva) both; }
-:root[data-direccion="atras"]::view-transition-old(root) { animation: vt-sale-derecha var(--t-duracion-pantalla) var(--t-curva) both; }
-:root[data-direccion="atras"]::view-transition-new(root) { animation: vt-entra-izquierda var(--t-duracion-pantalla) var(--t-curva) both; }
+:root[data-direccion="adelante"]::view-transition-old(root) { animation: vt-sale-izquierda var(--t-duracion-rapida) ease-in both; }
+:root[data-direccion="adelante"]::view-transition-new(root) { animation: vt-entra-derecha 220ms var(--t-curva) 20ms both; }
+:root[data-direccion="atras"]::view-transition-old(root) { animation: vt-sale-derecha var(--t-duracion-rapida) ease-in both; }
+:root[data-direccion="atras"]::view-transition-new(root) { animation: vt-entra-izquierda 220ms var(--t-curva) 20ms both; }
 :root[data-direccion="seccion"]::view-transition-old(root) { animation: vt-desvanece var(--t-duracion-rapida) linear both; }
 :root[data-direccion="seccion"]::view-transition-new(root) { animation: vt-sube 240ms var(--t-curva) both; }
-@keyframes vt-sale-izquierda { to { transform: translateX(-24%); opacity: 0; } }
-@keyframes vt-entra-derecha { from { transform: translateX(24%); opacity: 0; } }
-@keyframes vt-sale-derecha { to { transform: translateX(24%); opacity: 0; } }
-@keyframes vt-entra-izquierda { from { transform: translateX(-24%); opacity: 0; } }
+@keyframes vt-sale-izquierda { to { transform: translateX(-12px); opacity: 0; } }
+@keyframes vt-entra-derecha { from { transform: translateX(24px); opacity: 0; } }
+@keyframes vt-sale-derecha { to { transform: translateX(12px); opacity: 0; } }
+@keyframes vt-entra-izquierda { from { transform: translateX(-24px); opacity: 0; } }
 @keyframes vt-sube { from { transform: translateY(8px); opacity: 0; } }
 @keyframes vt-desvanece { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
@@ -243,7 +251,9 @@ dialog.capa-saliendo[data-forma] {
 dialog.capa-saliendo[data-forma="centrado"], dialog.capa-saliendo[data-forma="formulario"] { animation: sale-centro var(--t-duracion-estandar) var(--t-curva) both; }
 dialog.capa-saliendo[data-forma="lateral"] { max-width: 100%; animation: sale-lado var(--t-duracion-estandar) var(--t-curva) both; }
 dialog.capa-saliendo[data-forma="inferior"],
-dialog.capa-saliendo[data-forma="hoja"] { max-width: 100%; animation: hoja-baja var(--t-duracion-estandar) var(--t-curva) both; }
+dialog.capa-saliendo[data-forma="hoja"] { max-width: 100%; animation: hoja-baja var(--t-duracion-estandar) var(--t-curva-hoja) both; }
+dialog.capa-inferior[open]::backdrop,
+dialog.capa-hoja[open]::backdrop { animation: velo-entra var(--t-duracion-estandar) ease-out both; }
 .velo-saliendo {
   position: fixed;
   inset: 0;
@@ -257,13 +267,12 @@ dialog.capa-saliendo[data-forma="hoja"] { max-width: 100%; animation: hoja-baja 
 @keyframes hoja-sube { from { transform: translateY(100%); } }
 @keyframes hoja-baja { to { transform: translateY(100%); } }
 @keyframes velo-sale { to { opacity: 0; } }
+@keyframes velo-entra { from { opacity: 0; } }
+@keyframes pagina-adelante { from { transform: translateX(28px); opacity: 0; } }
+@keyframes pagina-atras { from { transform: translateX(-28px); opacity: 0; } }
+@keyframes fundir { from { opacity: 0; } }
 @keyframes entra-abajo { from { opacity: 0; transform: translateY(10px); } }
 @keyframes sale-abajo { to { opacity: 0; transform: translateY(10px); } }
-
-/* Entregar el teléfono para la firma: el icono gira como quien lo pasa (HojaDeFirma). */
-@keyframes entregar {
-  to { transform: rotate(-90deg); }
-}
 
 /* Cola de subida en Enviado: una franja que recorre la barra mientras hay señal. */
 @keyframes cargando {
