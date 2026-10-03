@@ -37,11 +37,15 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 28 | Datos que se corrigen (ADR-0034 y ADR-0035): cancelar un envío en cola, retirar una versión de cotización, editar y archivar clientes y sitios, corregir comentarios y descartar levantamientos en campo | Un error que no se puede corregir sin borrar historia o tocar lo publicado | Desplegada en el entorno de pruebas y en producción (2026-10-02); falta que Kevin la pruebe |
 | Iteración 29 | Ajustes de oficina: formularios cortos en diálogo, Mi cuenta centrada, la cotización que no se corta, enviar solo a quien falta, nuevo cliente con su contacto, la revisión (materiales en tabla, informe legible, «Marcar revisado» arriba) y el fallo de «Regenerar acceso» | Formularios con media pantalla en blanco, una página que se corta al bajar y una clave regenerada que nunca se mostraba | Desplegada en el entorno de pruebas (2026-10-02) y aprobada por Kevin ("la aplicación de oficina ya quedó bien", 2026-10-03) |
 | Iteración 30 | El correo que escribe oficina (ADR-0036): asunto y texto editables al publicar y al enviar, sobre la vista previa del correo | El correo al cliente siempre igual, sin el toque de quien lo envía | Desplegada en el entorno de pruebas (2026-10-02) y aprobada por Kevin ("la aplicación de oficina ya quedó bien", 2026-10-03) |
+| Iteración 32 | Ajustes de campo: movimiento más rápido y desde el borde, Tu cuenta en una lista, tableros en filas con su menú, el pie del catálogo, la barra del croquis, la entrega del teléfono al cliente, la constancia firmada, «Revisa y envía» con contenido y Enviados en dos líneas | Pantallas que se abrían de golpe, botones que confundían y una lista que se desbordaba con un error largo | Construida y verificada en local (2026-10-03); falta desplegar, que Kevin la pruebe y el iPhone |
+| Iteración 33 | Época de la bajada (ADR-0038): el teléfono se entera de que el servidor se dejó limpio | Después de limpiar un entorno, los teléfonos mostraban visitas y enviados que ya no existían hasta reinstalar la app | Construida y verificada en local con la migración `0034` y la app 13 (2026-10-03); falta desplegar |
 | Iteración 31 | Visitas con horario (ADR-0037): todo el día, de una hora a otra o hasta que el técnico la termine; solo técnicos libres al programar | Una visita ocupaba el día entero y se podía asignar a quien ya estaba ocupado | Desplegada en el entorno de pruebas con la migración `0033` y la app 12 (2026-10-02); oficina aprobada por Kevin el 2026-10-03, falta la prueba en el iPhone |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
+
+**Iteraciones 32 y 33 construidas y verificadas en local el 2026-10-03** (sección "Iteraciones 32 y 33"). Kevin aprobó el prototipo `prototipos/ajustes-campo/prototipo.html` (https://claude.ai/artifact/ALQohRzdD6UgBLW1bYmDDX) con un cambio: "la animacion puede ser un poquito mas rapida". Sigue: confirmar los cambios, desplegar en el entorno de pruebas (`campo` primero por la `0034`), que Kevin la pruebe en su iPhone, y producción con las 29 a 31.
 
 **Iteraciones 29 a 31 construidas, verificadas y desplegadas en el entorno de pruebas el 2026-10-02** (sección "Iteraciones 29 a 31"). Kevin aprobó el prototipo `prototipos/ajustes-oficina/prototipo.html` (https://claude.ai/artifact/Ms1PjHDXDjL1YhsDCdbSqu) con sus cambios ("Si, empieza. Deja todo tal cual me lo mostraste en el artifact"). Sigue: que Kevin compare cada pantalla con el prototipo; la prueba en el iPhone de «Terminar visita» (toca campo); y producción cuando Kevin lo apruebe (respaldo antes y `campo` primero por la `0033`).
 
@@ -1031,6 +1035,53 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 **Arquitectura propuesta (va al ADR):** las plantillas del informe y la cotización salen del servidor a un paquete nuevo, `paquetes/documentos`, que solo depende de `dominio` (hoy ya solo dependen de él y de una función de escape). El servidor las sigue usando para imprimir el PDF; oficina las usa para dibujar la vista en vivo sin ir al servidor en cada tecla. Así la vista previa y el PDF salen del mismo código y no se pueden separar. Los estilos de la plantilla pasan a un archivo servido por la misma superficie, para que la CSP de oficina (`style-src 'self'`) los admita en un marco `srcdoc`. Queda por decidir cómo paginar en pantalla (hojas carta fijas o continuo con marcas de salto).
 
 **Lo que ya existe y se reemplaza:** la vista previa de la cotización de la iteración 24 (documento del servidor con la versión guardada), que pasaría a ser en vivo y sin guardar.
+
+## Iteraciones 32 y 33 · Ajustes de campo y la época de la bajada
+
+**Estado:** prototipo `prototipos/ajustes-campo/prototipo.html` (https://claude.ai/artifact/ALQohRzdD6UgBLW1bYmDDX) aprobado por Kevin el 2026-10-03 con sus diez decisiones: "Si, apruebo. pero la animacion puede ser un poquito mas rapida, a esta velocidad da la sensacion de que esta lageada". Construidas y verificadas en local el mismo día; sin confirmar ni desplegar.
+
+**Para qué:** Kevin revisó la app del técnico y pidió lo mismo que en oficina: que nada se abra de golpe, Tu cuenta mejor distribuida, los tableros con «Quitar» en otro lugar, un botón del catálogo que no confunda, el «Listo» del croquis, una entrega del teléfono menos extraña, la firma usando el espacio, un repaso antes de enviar con contenido y una lista de enviados que no se rompa. Y que el teléfono deje de mostrar datos que el servidor ya borró, sin reinstalar la app y sin romper el trabajo sin conexión.
+
+### Alcance
+
+**Iteración 32 · pantallas de campo (sin migración):**
+- **Movimiento** (`paquetes/ui`): las hojas de campo (`Dialogo` inferior y hoja) entran desde el borde en 260 ms con una curva que frena al final (`--t-duracion-hoja`, `--t-curva-hoja`) y el velo se funde a la vez; salen en 200 ms. El paso siguiente entra 24 px con fundido en 220 ms (antes un cuarto del ancho en 280 ms). El croquis sube una sola vez, también mientras carga (antes un fondo vacío y después el editor). `DESIGN.md` tiene los valores nuevos.
+- **Tu cuenta:** la persona y el estado de la sincronización sin caja; una lista con líneas (`GrupoDeAjustes`, `FilaDeAjuste`, `FilaDeTema` en `paquetes/ui`): el tema como tres iconos, Cambiar contraseña, Descartados con su número y Diagnóstico; «Cerrar sesión» sola al final y la versión de la app. Contraseña, Descartados y Diagnóstico se abren dentro de la misma hoja, con «‹ Cuenta» (`Dialogo` con `volver`).
+- **Tableros:** una fila por tablero con su primera foto, lo que lo identifica y la barra de avance (`FilaDeRepeticion`, `ListaDeRepeticiones`); "N de M completos". Dentro, el nombre es el título; «Cambiar nombre» y «Quitar tablero» van en el menú ⋯ (`MenuAcciones`); abajo, «Siguiente: Tablero 2» y «Volver a la lista», o «Listo, ver los N» en el último.
+- **Catálogo:** "Agregar del catálogo", buscador de borde fino y lista con líneas; abajo nada hasta agregar algo, y entonces "N agregados · En Materiales: …" con «Ver materiales».
+- **Croquis:** una barra fija abajo, fuera del lienzo: hojas, símbolos y «Listo» a la derecha.
+- **Entregar el teléfono:** la pantalla le habla a quien recibe ("Cliente, confirme la visita de …", de usted como la constancia, ADR-0024) con el logo, sitio, fecha, hora y motivo, y «Revisar y firmar», que funde a la firma. Sin «Ya lo tiene» ni «Todavía no».
+- **Firma tomada:** una constancia grande con la firma sobre su línea, quién firmó con cargo y cliente, la declaración tal como sale en el informe y «Repetir» (con confirmación).
+- **Revisa y envía:** cliente, sitio y formato; tres cifras (fotos, repeticiones, materiales); cada paso con lo que lleva (datos, miniaturas de fotos, nombres de tableros, materiales, la firma) y un visto, el dato que falta en ámbar o un círculo vacío si no tiene datos; toda la fila edita (`FilaDeRepaso`, `CifrasDeRepaso`). La consecuencia va bajo «Enviar a oficina».
+- **Enviados:** dos líneas: cliente y sitio con la hora; el estado corto con su icono (`estadoCorto`: "No se pudo enviar", "Se envía al tener señal", "En revisión", "Revisado"…) y el formato. Lo que no entró sale aparte, arriba, en "Necesita atención".
+
+**Iteración 33 · época de la bajada (ADR-0038, migración `0034_epoca_de_bajada`, app 13):** tabla `cambios.epocas` que la aplicación solo lee; la bajada trae `epoca`; `dejar-limpio.sql` la cambia al borrar. El teléfono guarda la última; si llega otra, quita las visitas sin trabajo, los estados y el catálogo, baja todo desde cero y al final quita lo enviado y recibido que el servidor ya no conoce. Borradores, lo que falta por enviar, formatos y símbolos no se tocan.
+
+### Fuera de las iteraciones 32 y 33
+
+| Qué | Cuándo |
+|---|---|
+| La prueba en el iPhone de las pantallas nuevas (movimiento, hojas, firma, croquis) | Al desplegar en el entorno de pruebas |
+| Teléfonos con la app 12 o anterior: no conocen la época y siguen necesitando reinstalar tras una limpieza | Se resuelve solo al actualizar a la 13 |
+| "Hora" de la visita en la entrega del teléfono solo cuando la visita tiene horario (ADR-0037) | Ya es así: sin horario no se muestra |
+
+### Terminado cuando
+
+| Criterio | Evidencia |
+|---|---|
+| 1. Como el prototipo | Capturas en WebKit (iPhone 13) de Tu cuenta, Descartados, tableros, un tablero con su menú, el catálogo, la entrega, la constancia firmada y el repaso, comparadas con el prototipo, y el inicio con «Necesita atención»; corregidos el pie del catálogo (se partía en dos líneas) y el visto de un paso sin datos |
+| 2. Pruebas de paquetes | dominio 111, documentos 9, protocolo 25, oficina 18, campo 107 y servidor 214 (una de informes falló una vez por tiempos de la verificación de un plano y pasa 10 de 10 al repetirla dos veces; no toca estas iteraciones). Nuevas: campo con `mensajes.test.ts` (estados cortos) y tres de la época en `motor.test.ts` (la primera no borra; otra quita lo viejo y conserva borrador y visita con trabajo; lo recibido después de limpiar se queda); servidor con la época por organización en `bajada.test.ts` |
+| 3. Reglas | `pnpm typecheck`, `pnpm arquitectura` sin violaciones, `pnpm licencias`, `pnpm audit` sin vulnerabilidades; presupuesto de campo 132,0 de 135 KB |
+| 4. Extremo a extremo | Chromium, los 9 archivos que tocan campo: 20 de 20 (con los textos nuevos: «Revisa y envía», «Revisar y firmar», «Repetir», el menú del tablero, «Ver materiales», "Contraseña" dentro de la cuenta, "Recibido" y "Revisado") |
+| 5. Desplegada | Pendiente |
+
+### Decisiones tomadas al construirlo
+
+- **Las hojas entran en 260 ms y los pasos en 220 ms**, más rápido que el primer prototipo (380 ms): Kevin dijo que así se sentía con retraso.
+- **La entrega del teléfono trata de usted** ("confirme"), como la constancia (ADR-0024), aunque el prototipo decía "confirma": quien la lee es el cliente.
+- **Lo enviado se quita al terminar de bajar todo, no al cambiar la época**: un levantamiento que el servidor recibió después de la limpieza baja con su estado y se queda; solo sale lo que el servidor ya no conoce.
+- **El catálogo se vacía al cambiar la época** aunque haya otra persona en el mismo teléfono: es de la organización y vuelve con la bajada.
+- **La app de campo pasa a la versión 13**: vuelve a bajar todo (ADR-0015) y adopta la época sin borrar nada.
 
 ## Iteraciones 29 a 31 · Ajustes de oficina, el correo que escribe oficina y visitas con horario
 

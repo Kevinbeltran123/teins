@@ -190,12 +190,14 @@ Cada animación tiene un propósito escrito. Desde la iteración 27 (`prototipos
 | Cambiar de sección (oficina) | El contenido se desvanece y el nuevo sube 8 px; el menú y la barra no se mueven | Que la ubicación cambie sin perder el marco |
 | Abrir un detalle desde la lista | El título de la fila se convierte en el del detalle | Saber qué se abrió |
 | Siguiente levantamiento de la serie | El cuerpo se desliza; el carril de la revisión se queda | Revisar en serie sin volver a la lista |
-| Pasar de paso (campo) | Solo se desliza el cuerpo; la cabecera y la barra se quedan y la barra de avance crece | Mostrar hacia dónde se fue sin mover lo que no cambia |
+| Pasar de paso (campo) | Solo se mueve el cuerpo: el anterior se va en 120 ms y el nuevo entra 24 px con fundido (220 ms); la cabecera y la barra se quedan y la barra de avance crece | Mostrar hacia dónde se fue sin barrer la pantalla (iteración 32) |
 | Abrir una visita (campo) | La tarjeta de la visita se convierte en la cabecera de la captura | Que la captura salga de la visita |
 | Estado que cambia en su lugar | La pastilla pasa de un estado al otro; el dato corregido destella | Ver qué cambió sin buscarlo |
 | Diálogo o menú | Aparece con un leve desplazamiento; al cerrarse sale igual (200 ms) | Mostrar de dónde viene y a dónde se va la capa |
 | Hoja lateral | Entra desde la derecha y sale hacia ella | Mostrar que la lista sigue detrás |
-| Croquis y firma | Suben al abrirse y bajan al cerrarse | Que se lean como capas encima de la captura |
+| Hoja de campo (abajo) | Entra desde el borde y frena al final (260 ms) con el velo fundiéndose a la vez; sale igual en 200 ms | Que no se abra de golpe ni se sienta lenta (iteración 32) |
+| Página dentro de una hoja | Lo que se abre desde una hoja (Descartados, Contraseña) entra en la misma hoja, 28 px de lado, con «‹ Cuenta» para volver | No cerrar una hoja para abrir otra |
+| Croquis y firma | Suben una sola vez al abrirse (también mientras cargan) y bajan al cerrarse; de la entrega a la firma, fundido | Que se lean como capas encima de la captura, sin un fondo vacío antes |
 | Notificación | Sube al llegar y baja al irse | Que no desaparezca de golpe |
 | Lo recién creado | Entra arriba resaltado; el resaltado se desvanece | Encontrarlo sin buscarlo |
 | Lo que cambia en la hoja en vivo | Destello azul que se desvanece | Ver dónde cayó lo que se escribió |
@@ -209,7 +211,7 @@ Cada animación tiene un propósito escrito. Desde la iteración 27 (`prototipos
 
 **Qué se mueve:** con dirección (`adelante`, `atras`, `seccion`, `fundido`) se mueve lo que se ve en la ventana, menos lo que tiene nombre propio; la foto es del tamaño de la ventana, nunca del documento entero, para que una lista larga o un levantamiento con fotos no congelen la transición (en el iPhone sí lo harían). Se quedan quietos por su nombre: `menu` y `barra-oficina` (oficina), `barra-paso` y `progreso` (campo) y `carril` (la revisión). Van de su lugar al nuevo, por elemento: `visita-<id>`, `lev-<id>`, `estado-<id>`, `nombre-<id>`, `fila-<id>` e `indicador-<id>` (`nombreDeTransicion`). Las filas de una lista larga llevan su nombre solo mientras se ven (`useNombreEnPantalla`). Un nombre se repite en una pantalla solo si es el mismo elemento.
 
-**Duraciones:** 120 ms (pulsación), 200 ms (capas y salidas), 280 ms (pantallas y hojas), 1,2 s (resaltado, desde la iteración 29). **Curva:** `cubic-bezier(0.2, 0, 0, 1)`. **Con `prefers-reduced-motion`, nada se mueve:** los cambios son instantáneos, las capas se quitan sin salir y lo resaltado queda fijo.
+**Duraciones:** 120 ms (pulsación), 200 ms (capas y salidas), 220 ms (pasos de campo), 260 ms (hojas de campo, `--t-duracion-hoja`), 280 ms (pantallas), 1,2 s (resaltado, desde la iteración 29). Más lento se siente como si la app tuviera retraso (Kevin, iteración 32). **Curvas:** `cubic-bezier(0.2, 0, 0, 1)`; las hojas y capas que suben, `cubic-bezier(0.32, 0.72, 0, 1)` (`--t-curva-hoja`). **Con `prefers-reduced-motion`, nada se mueve:** los cambios son instantáneos, las capas se quitan sin salir y lo resaltado queda fijo.
 
 ## Iconos
 

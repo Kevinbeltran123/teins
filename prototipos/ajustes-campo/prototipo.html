@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ajustes de campo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap">
+<style>
+/* Iteraciones 32 y 33: ajustes de la app del técnico y datos al día después de un reinicio del servidor.
+   Misma base que el prototipo de ajustes de oficina (Precisión). Arriba los casos; a la derecha, el teléfono. */
+:root {
+  --pagina: #ECEEF2; --pagina-texto: #14161A; --pagina-sec: #50555F; --pagina-panel: #FFFFFF; --pagina-borde: #D6DAE1; --pagina-foco: #1F4FD1;
+  --curva: cubic-bezier(0.2, 0, 0, 1);
+  --fuente: "Geist", system-ui, -apple-system, sans-serif;
+  --lento: 1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; --pagina: #050608; --pagina-texto: #ECEEF2; --pagina-sec: #9BA1AD; --pagina-panel: #0E1116; --pagina-borde: #20252E; --pagina-foco: #8FB0FF; }
+}
+:root[data-theme="dark"] { color-scheme: dark; --pagina: #050608; --pagina-texto: #ECEEF2; --pagina-sec: #9BA1AD; --pagina-panel: #0E1116; --pagina-borde: #20252E; --pagina-foco: #8FB0FF; }
+html[data-lento="si"] { --lento: 4; }
+
+.app, .app[data-tema="claro"] {
+  color-scheme: light;
+  --fondo: #FAFAFB; --sup: #FFFFFF; --sup2: #F3F4F6; --sup3: #E9EBEF; --linea: #E5E7EB; --linea-fuerte: #D5D8DE;
+  --texto: #111317; --sec: #5E646E; --ter: #6F7580;
+  --marca: #2F5FE8; --marca-texto: #FFFFFF; --marca-suave: rgba(47,95,232,.09); --marca-borde: rgba(47,95,232,.35);
+  --ok: #188A5B; --alerta: #A15C00; --peligro: #D22F34; --revision: #6B4FD3;
+  --sombra-capa: 0 0 0 1px rgba(17,19,23,.08), 0 18px 48px rgba(17,19,23,.16); --sombra-menu: 0 0 0 1px rgba(17,19,23,.08), 0 8px 24px rgba(17,19,23,.12);
+  --velo: rgba(17,19,23,.28); --filtro-logo: none; --notif: #111317; --notif-texto: #FAFAFB; --notif-enlace: #9DB8FF;
+}
+.app[data-tema="oscuro"] {
+  color-scheme: dark;
+  --fondo: #0A0B0D; --sup: #111316; --sup2: #17191D; --sup3: #1E2126; --linea: #23262C; --linea-fuerte: #2E323A;
+  --texto: #EDEEF0; --sec: #8B9099; --ter: #7C828C;
+  --marca: #3B6FF5; --marca-texto: #FFFFFF; --marca-suave: rgba(59,111,245,.14); --marca-borde: rgba(110,150,255,.45);
+  --ok: #3DBE8B; --alerta: #E8A33D; --peligro: #E5484D; --revision: #A38BFA;
+  --sombra-capa: 0 0 0 1px rgba(255,255,255,.06), 0 16px 48px rgba(0,0,0,.55); --sombra-menu: 0 0 0 1px rgba(255,255,255,.06), 0 8px 24px rgba(0,0,0,.45);
+  --velo: rgba(3,4,6,.62); --filtro-logo: brightness(0) invert(1); --notif: #EDEEF0; --notif-texto: #0A0B0D; --notif-enlace: #2F5FE8;
+}
+@media (prefers-color-scheme: dark) {
+  .app[data-tema="sistema"] {
+    color-scheme: dark;
+    --fondo: #0A0B0D; --sup: #111316; --sup2: #17191D; --sup3: #1E2126; --linea: #23262C; --linea-fuerte: #2E323A;
+    --texto: #EDEEF0; --sec: #8B9099; --ter: #7C828C;
+    --marca: #3B6FF5; --marca-texto: #FFFFFF; --marca-suave: rgba(59,111,245,.14); --marca-borde: rgba(110,150,255,.45);
+    --ok: #3DBE8B; --alerta: #E8A33D; --peligro: #E5484D; --revision: #A38BFA;
+    --sombra-capa: 0 0 0 1px rgba(255,255,255,.06), 0 16px 48px rgba(0,0,0,.55); --sombra-menu: 0 0 0 1px rgba(255,255,255,.06), 0 8px 24px rgba(0,0,0,.45);
+    --velo: rgba(3,4,6,.62); --filtro-logo: brightness(0) invert(1); --notif: #EDEEF0; --notif-texto: #0A0B0D; --notif-enlace: #2F5FE8;
+  }
+}
+/* El croquis y la firma son islas claras dentro del tema oscuro (como en la app). */
+.app .isla-clara {
+  color-scheme: light;
+  --fondo: #FAFAFB; --sup: #FFFFFF; --sup2: #F3F4F6; --sup3: #E9EBEF; --linea: #E5E7EB; --linea-fuerte: #D5D8DE;
+  --texto: #111317; --sec: #5E646E; --ter: #6F7580; --marca: #2F5FE8; --marca-suave: rgba(47,95,232,.09);
+  --ok: #188A5B; --peligro: #D22F34; --filtro-logo: none;
+  color: var(--texto);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--pagina); color: var(--pagina-texto); font-family: var(--fuente); padding: 28px 16px 56px; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--pagina-foco); outline-offset: 2px; }
+
+/* ---------- La página del prototipo ---------- */
+.envoltura { max-width: 1240px; margin-inline: auto; display: flex; flex-direction: column; gap: 18px; }
+.cabeza { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.cabeza h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.cabeza p { margin: 6px 0 0; color: var(--pagina-sec); max-width: 72ch; line-height: 1.5; font-size: 15px; }
+.segmentos { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--pagina-panel); border: 1px solid var(--pagina-borde); flex-wrap: wrap; }
+.segmentos button { border: 0; background: transparent; padding: 7px 12px; border-radius: 7px; font-weight: 500; font-size: 14px; color: var(--pagina-sec); }
+.segmentos button[aria-pressed="true"] { background: var(--pagina-texto); color: var(--pagina); }
+.cuerpo { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { .cuerpo { grid-template-columns: minmax(0, 1fr); } .guia { position: static !important; } }
+.guia { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 16px; }
+.casos { display: flex; flex-direction: column; gap: 2px; }
+.casos .grupo { font-size: 12px; color: var(--pagina-sec); font-weight: 500; padding: 10px 10px 4px; }
+.casos button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 8px; font-size: 14px; color: var(--pagina-texto); display: flex; flex-direction: column; gap: 1px; }
+.casos button small { color: var(--pagina-sec); font-size: 12.5px; }
+.casos button:hover { background: var(--pagina-panel); }
+.casos button[aria-pressed="true"] { background: var(--pagina-panel); box-shadow: inset 0 0 0 1px var(--pagina-borde); font-weight: 500; }
+.nota { background: var(--pagina-panel); border: 1px solid var(--pagina-borde); border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.55; display: flex; flex-direction: column; gap: 10px; }
+.nota h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.nota p { margin: 0; color: var(--pagina-sec); }
+.nota p + p { margin-top: 8px; }
+.nota b { color: var(--pagina-texto); font-weight: 500; }
+.nota .probar { color: var(--pagina-texto); }
+.nota a { color: var(--pagina-foco); text-decoration: none; }
+.nota a:hover { text-decoration: underline; }
+.nota code { font-size: 12.5px; }
+.mandos-n { display: flex; flex-direction: column; gap: 8px; }
+.mandos-n .fila { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--pagina-sec); }
+.antes-despues { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--pagina-panel); border: 1px solid var(--pagina-borde); }
+.antes-despues button { border: 0; background: transparent; padding: 5px 10px; border-radius: 7px; font-weight: 500; font-size: 13px; color: var(--pagina-sec); }
+.antes-despues button[aria-pressed="true"] { background: var(--pagina-texto); color: var(--pagina); }
+.boton-guia { border: 0; border-radius: 7px; padding: 6px 10px; font-size: 13px; font-weight: 500; background: var(--pagina-panel); color: var(--pagina-texto); box-shadow: inset 0 0 0 1px var(--pagina-borde); }
+.refs { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
+
+/* La escena: uno o dos teléfonos */
+.escena { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; align-items: flex-start; }
+.escena > figure { margin: 0; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.escena figcaption { font-size: 13px; color: var(--pagina-sec); }
+
+/* ---------- Resumen ---------- */
+.resumen { background: var(--pagina-panel); border: 1px solid var(--pagina-borde); border-radius: 14px; padding: 22px 24px; display: flex; flex-direction: column; gap: 18px; line-height: 1.55; font-size: 14.5px; }
+.resumen h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.resumen h3 { margin: 0 0 6px; font-size: 14.5px; font-weight: 600; }
+.resumen p { margin: 0; color: var(--pagina-sec); }
+.resumen b { color: var(--pagina-texto); font-weight: 500; }
+.resumen ol, .resumen ul { margin: 6px 0 0; padding-left: 20px; color: var(--pagina-sec); display: flex; flex-direction: column; gap: 6px; }
+.iteraciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.iteraciones > div { border: 1px solid var(--pagina-borde); border-radius: 12px; padding: 14px 16px; }
+.iteraciones small { color: var(--pagina-sec); font-size: 12.5px; }
+
+/* ---------- El teléfono ---------- */
+.app { font-family: var(--fuente); color: var(--texto); font-size: 16px; line-height: 1.45; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+.app svg { width: 20px; height: 20px; flex: none; stroke-width: 1.7; }
+.telefono { width: 372px; max-width: 100%; height: 760px; border-radius: 46px; overflow: hidden; position: relative; isolation: isolate; background: var(--fondo); box-shadow: 0 0 0 9px #040507, 0 0 0 10px #22262d, 0 30px 70px rgba(0,0,0,.28); display: flex; flex-direction: column; }
+.tel-estado { height: 50px; display: flex; justify-content: space-between; align-items: center; padding: 4px 30px 0; font-size: 15px; font-weight: 600; flex: none; position: relative; z-index: 3; }
+.tel-estado .isla { position: absolute; left: 50%; top: 11px; translate: -50% 0; width: 112px; height: 32px; border-radius: 99px; background: #000; }
+.tel-estado .ind { display: flex; gap: 5px; align-items: center; }
+.tel-estado .ind i { display: block; width: 24px; height: 11px; border-radius: 3px; border: 1.5px solid currentColor; opacity: .9; }
+.pantalla { position: absolute; inset: 50px 0 0; display: flex; flex-direction: column; view-transition-name: pantalla; }
+.cab-t { padding: 4px 18px 12px; display: flex; flex-direction: column; gap: 6px; flex: none; }
+.cab-t .fila { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 44px; }
+.cab-t h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+.cab-t .ctx { color: var(--sec); font-size: 13px; }
+.volver { display: inline-flex; align-items: center; gap: 2px; border: 0; background: none; color: var(--sec); font-size: 15px; padding: 0; min-height: 44px; }
+.icono-b { width: 44px; height: 44px; border-radius: 99px; border: 0; background: transparent; display: inline-flex; align-items: center; justify-content: center; color: var(--texto); flex: none; }
+.icono-b.con-fondo { background: var(--sup2); }
+.avatar { width: 40px; height: 40px; border-radius: 99px; background: var(--sup3); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: var(--texto); border: 0; flex: none; }
+.avatar.grande { width: 52px; height: 52px; font-size: 17px; }
+.cuerpo-t { flex: 1; overflow: auto; padding: 0 16px 140px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: none; }
+.cuerpo-t::-webkit-scrollbar { display: none; }
+.sec-t { margin: 12px 2px 0; font-size: 13px; font-weight: 600; color: var(--sec); }
+.barra { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px 30px; background: linear-gradient(to top, var(--fondo) 74%, transparent); z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+.barra .progreso { height: 3px; border-radius: 99px; background: var(--sup3); overflow: hidden; margin-bottom: 4px; }
+.barra .progreso i { display: block; height: 100%; background: var(--marca); border-radius: 99px; }
+.barra .nota-b { text-align: center; color: var(--sec); font-size: 13px; }
+.barra .dos { display: grid; grid-template-columns: auto 1fr; gap: 10px; }
+
+.b { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; padding: 0 18px; border-radius: 12px; border: 0; font-size: 16px; font-weight: 500; background: var(--sup); color: var(--texto); box-shadow: inset 0 0 0 1px var(--linea-fuerte); white-space: nowrap; transition: transform .12s var(--curva), filter .12s; }
+.b:active { transform: scale(.98); }
+.b.p { background: var(--marca); color: var(--marca-texto); box-shadow: none; }
+.b.ancho { width: 100%; }
+.b.chico { min-height: 44px; padding: 0 14px; font-size: 15px; }
+.b.t { background: transparent; box-shadow: none; color: var(--marca); padding: 0 8px; }
+.b.t.sec { color: var(--sec); }
+.b.peligro-t { background: transparent; box-shadow: none; color: var(--peligro); }
+.b.punteado { background: transparent; box-shadow: none; border: 1.5px dashed var(--linea-fuerte); color: var(--sec); }
+.b svg { width: 19px; height: 19px; }
+
+.panel { background: var(--sup); border: 1px solid var(--linea); border-radius: 14px; }
+.grupo-l { background: var(--sup); border: 1px solid var(--linea); border-radius: 14px; overflow: hidden; }
+.grupo-l > * + * { border-top: 1px solid var(--linea); }
+.fila-l { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; width: 100%; background: none; border: 0; text-align: left; font-size: 16px; color: var(--texto); }
+.fila-l > svg:first-child { color: var(--sec); }
+.fila-l .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fila-l .txt small { color: var(--sec); font-size: 13px; }
+.fila-l .der { color: var(--sec); font-size: 15px; display: inline-flex; align-items: center; gap: 4px; }
+.fila-l .der svg { width: 18px; height: 18px; color: var(--ter); }
+.fila-l[aria-disabled="true"] { color: var(--ter); }
+.fila-l[aria-disabled="true"] > svg:first-child { color: var(--ter); }
+.fila-l.centro { justify-content: center; color: var(--peligro); font-weight: 500; }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 99px; font-size: 13px; font-weight: 500; white-space: nowrap; background: var(--sup2); color: var(--sec); }
+.pill.ok { background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
+.pill.alerta { background: color-mix(in srgb, var(--alerta) 12%, transparent); color: var(--alerta); }
+.punto { width: 7px; height: 7px; border-radius: 99px; background: currentColor; flex: none; display: inline-block; }
+
+.aviso { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; font-size: 15px; line-height: 1.45; background: color-mix(in srgb, var(--c, var(--marca)) 8%, var(--sup)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c, var(--marca)) 24%, transparent); }
+.aviso svg { color: var(--c, var(--marca)); margin-top: 1px; }
+.aviso.alerta { --c: var(--alerta); } .aviso.peligro { --c: var(--peligro); }
+
+.campo-t { display: flex; flex-direction: column; gap: 6px; }
+.campo-t label { font-size: 15px; font-weight: 500; }
+.campo-t .control { height: 50px; border-radius: 12px; border: 0; box-shadow: inset 0 0 0 1px var(--linea-fuerte); background: var(--sup); padding: 0 14px; font-size: 16px; width: 100%; }
+.campo-t .control:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--marca), 0 0 0 4px var(--marca-suave); }
+.medida { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.unidades { display: inline-flex; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--linea-fuerte); overflow: hidden; }
+.unidades span { padding: 0 14px; display: inline-flex; align-items: center; font-size: 15px; color: var(--sec); }
+.unidades span.si { background: var(--marca-suave); color: var(--marca); font-weight: 500; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chips span { height: 40px; padding: 0 14px; border-radius: 99px; box-shadow: inset 0 0 0 1px var(--linea-fuerte); display: inline-flex; align-items: center; font-size: 15px; }
+.fotos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.foto { aspect-ratio: 3 / 4; border-radius: 10px; background: linear-gradient(140deg, #8C96A6, #3F4652); position: relative; overflow: hidden; }
+.foto.b2 { background: linear-gradient(160deg, #A9B3A0, #4F5A47); }
+.foto.b3 { background: linear-gradient(120deg, #B6A79A, #5A4C42); }
+.foto.agregar { background: transparent; border: 1.5px dashed var(--linea-fuerte); display: flex; align-items: center; justify-content: center; color: var(--sec); }
+
+/* Capas: velo, hoja inferior, notificación */
+.velo { position: absolute; inset: 0; z-index: 20; background: var(--velo); }
+.hoja { position: absolute; z-index: 21; left: 0; right: 0; bottom: 0; background: var(--sup); border-radius: 18px 18px 0 0; box-shadow: var(--sombra-capa); padding: 8px 16px 30px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100% - 40px); overflow: hidden; }
+.hoja .asa { width: 40px; height: 5px; border-radius: 99px; background: var(--linea-fuerte); margin: 0 auto 2px; flex: none; }
+.hoja .cab-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.hoja .cab-h h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.hoja .cab-h.centrada { display: grid; grid-template-columns: 64px 1fr 64px; }
+.hoja .cab-h.centrada h2 { text-align: center; font-size: 17px; }
+.hoja .dentro-h { overflow: auto; display: flex; flex-direction: column; gap: 12px; margin: 0 -16px; padding: 0 16px; scrollbar-width: none; }
+
+/* Hoy: la hoja sube 24 px y el velo aparece de golpe (Dialogo inferior con open:animate-subir). */
+[data-vista="hoy"] .velo.entra { animation: none; }
+[data-vista="hoy"] .hoja.entra { animation: hoy-subir calc(280ms * var(--lento)) var(--curva) both; }
+[data-vista="hoy"] .velo.sale { animation: velo-sale calc(200ms * var(--lento)) var(--curva) both; }
+[data-vista="hoy"] .hoja.sale { animation: hoja-baja calc(200ms * var(--lento)) var(--curva) both; }
+@keyframes hoy-subir { from { transform: translateY(24px); opacity: 0; } }
+/* Propuesta: la hoja entra desde el borde con una curva que frena al final, y el velo se funde a la vez. */
+[data-vista="propuesta"] .velo.entra { animation: velo-entra calc(200ms * var(--lento)) ease-out both; }
+[data-vista="propuesta"] .hoja.entra { animation: hoja-sube calc(260ms * var(--lento)) cubic-bezier(0.32, 0.72, 0, 1) both; }
+[data-vista="propuesta"] .velo.sale { animation: velo-sale calc(180ms * var(--lento)) ease-in both; }
+[data-vista="propuesta"] .hoja.sale { animation: hoja-baja calc(200ms * var(--lento)) cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes velo-entra { from { opacity: 0; } }
+@keyframes velo-sale { to { opacity: 0; } }
+@keyframes hoja-sube { from { transform: translateY(100%); } }
+@keyframes hoja-baja { to { transform: translateY(100%); } }
+/* Propuesta: dentro de una hoja, la página siguiente se desliza y la hoja cambia de alto sin saltar. */
+.pagina-h.adelante { animation: pag-adelante calc(220ms * var(--lento)) var(--curva) both; }
+.pagina-h.atras { animation: pag-atras calc(220ms * var(--lento)) var(--curva) both; }
+@keyframes pag-adelante { from { transform: translateX(28px); opacity: 0; } }
+@keyframes pag-atras { from { transform: translateX(-28px); opacity: 0; } }
+
+/* Cambio de paso: View Transition. Hoy, 24 % del ancho; propuesta, 24 px y fundido. */
+::view-transition-group(pantalla) { animation-duration: calc(280ms * var(--lento)); }
+::view-transition-old(pantalla), ::view-transition-new(pantalla) { animation-timing-function: var(--curva); animation-duration: calc(280ms * var(--lento)); }
+html[data-dir="adelante"][data-vt="hoy"]::view-transition-old(pantalla) { animation-name: vt-sale-izq-24; }
+html[data-dir="adelante"][data-vt="hoy"]::view-transition-new(pantalla) { animation-name: vt-entra-der-24; }
+html[data-dir="atras"][data-vt="hoy"]::view-transition-old(pantalla) { animation-name: vt-sale-der-24; }
+html[data-dir="atras"][data-vt="hoy"]::view-transition-new(pantalla) { animation-name: vt-entra-izq-24; }
+@keyframes vt-sale-izq-24 { to { transform: translateX(-24%); opacity: 0; } }
+@keyframes vt-entra-der-24 { from { transform: translateX(24%); opacity: 0; } }
+@keyframes vt-sale-der-24 { to { transform: translateX(24%); opacity: 0; } }
+@keyframes vt-entra-izq-24 { from { transform: translateX(-24%); opacity: 0; } }
+html[data-vt="propuesta"]::view-transition-old(pantalla) { animation-duration: calc(120ms * var(--lento)); animation-timing-function: ease-in; }
+html[data-vt="propuesta"]::view-transition-new(pantalla) { animation-duration: calc(220ms * var(--lento)); animation-delay: calc(20ms * var(--lento)); }
+html[data-dir="adelante"][data-vt="propuesta"]::view-transition-old(pantalla) { animation-name: vt-sale-izq-p; }
+html[data-dir="adelante"][data-vt="propuesta"]::view-transition-new(pantalla) { animation-name: vt-entra-der-p; }
+html[data-dir="atras"][data-vt="propuesta"]::view-transition-old(pantalla) { animation-name: vt-sale-der-p; }
+html[data-dir="atras"][data-vt="propuesta"]::view-transition-new(pantalla) { animation-name: vt-entra-izq-p; }
+@keyframes vt-sale-izq-p { to { transform: translateX(-12px); opacity: 0; } }
+@keyframes vt-entra-der-p { from { transform: translateX(24px); opacity: 0; } }
+@keyframes vt-sale-der-p { to { transform: translateX(12px); opacity: 0; } }
+@keyframes vt-entra-izq-p { from { transform: translateX(-24px); opacity: 0; } }
+
+/* Capas a pantalla completa (croquis, firma): hoy aparecen después de un fondo vacío. */
+.completa { position: absolute; inset: 0; z-index: 30; background: var(--fondo); display: flex; flex-direction: column; }
+[data-vista="propuesta"] .completa.entra { animation: hoja-sube calc(300ms * var(--lento)) cubic-bezier(0.32, 0.72, 0, 1) both; }
+[data-vista="propuesta"] .completa.sale { animation: hoja-baja calc(220ms * var(--lento)) cubic-bezier(0.32, 0.72, 0, 1) both; }
+[data-vista="hoy"] .completa.entra { animation: hoja-sube calc(280ms * var(--lento)) var(--curva) both; }
+[data-vista="hoy"] .completa.sale { animation: hoja-baja calc(200ms * var(--lento)) var(--curva) both; }
+.completa.vacia { animation: none !important; }
+.fundir { animation: fundir calc(200ms * var(--lento)) ease-out both; }
+@keyframes fundir { from { opacity: 0; } }
+
+.notif { position: absolute; left: 12px; right: 12px; bottom: 104px; z-index: 40; background: var(--notif); color: var(--notif-texto); border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.28); display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 16px; min-height: 52px; font-size: 15px; animation: notif-entra calc(280ms * var(--lento)) var(--curva) both; }
+.notif span { flex: 1; }
+.notif button { border: 0; background: transparent; color: var(--notif-enlace); font-weight: 600; padding: 10px 12px; min-height: 44px; }
+.notif.sale { animation: notif-sale calc(200ms * var(--lento)) var(--curva) both; }
+@keyframes notif-entra { from { transform: translateY(16px); opacity: 0; } }
+@keyframes notif-sale { to { transform: translateY(16px); opacity: 0; } }
+
+.etiqueta-hoy { display: table; margin: 14px auto 0; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; padding: 3px 8px; border-radius: 99px; background: color-mix(in srgb, var(--peligro) 14%, var(--sup)); color: var(--peligro); pointer-events: none; }
+.etiqueta-hoy.prop { background: color-mix(in srgb, var(--ok) 14%, var(--sup)); color: var(--ok); }
+
+/* ---------- Tu cuenta ---------- */
+.perfil-hoy { background: var(--sup2); border-radius: 14px; padding: 14px 16px; display: flex; gap: 12px; align-items: center; }
+.perfil-hoy .avatar { background: var(--sup); width: 48px; height: 48px; }
+.fila-hoy { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 0 16px; border-radius: 14px; background: var(--sup2); font-weight: 600; font-size: 16px; border: 0; width: 100%; text-align: left; }
+.fila-hoy small { display: block; font-weight: 400; color: var(--sec); font-size: 13px; }
+.radios-hoy { background: var(--sup2); border-radius: 14px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.radios-hoy .op { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.radios-hoy label { display: inline-flex; gap: 6px; align-items: center; font-size: 16px; }
+.radios-hoy input { width: 20px; height: 20px; accent-color: var(--marca); margin: 0; }
+.perfil { display: flex; gap: 14px; align-items: center; padding: 4px 2px 6px; }
+.perfil .nombre { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.perfil .estado-s { display: flex; gap: 7px; align-items: center; color: var(--sec); font-size: 14px; }
+.perfil .estado-s .punto { color: var(--ok); }
+.temas { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--sup2); gap: 2px; }
+.temas button { border: 0; background: transparent; width: 40px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--sec); }
+.temas button svg { width: 18px; height: 18px; }
+.temas button[aria-pressed="true"] { background: var(--sup); color: var(--texto); box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 0 0 1px var(--linea); }
+.cuenta-pie { text-align: center; color: var(--ter); font-size: 12.5px; }
+.descartado { display: flex; gap: 12px; align-items: center; padding: 10px 14px; }
+.descartado .txt { flex: 1; min-width: 0; }
+.descartado .txt b { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.descartado .txt small { color: var(--sec); font-size: 13px; }
+
+/* ---------- Tableros ---------- */
+.rep-hoy { background: var(--sup); border: 1px solid var(--linea); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; text-align: left; width: 100%; }
+.rep-hoy .t { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 17px; }
+.rep-hoy .datos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.rep-hoy .datos span { background: var(--sup2); border-radius: 8px; padding: 6px 8px; font-size: 13px; color: var(--sec); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rep-hoy .datos span b { display: block; color: var(--texto); font-weight: 500; font-size: 14px; }
+.rep { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px 10px 10px; width: 100%; background: none; border: 0; text-align: left; }
+.rep .mini { width: 52px; height: 52px; border-radius: 10px; }
+.rep .mini.vacia { background: var(--sup2); display: flex; align-items: center; justify-content: center; color: var(--ter); }
+.rep .mini.vacia svg { width: 20px; height: 20px; }
+.rep b { font-weight: 600; font-size: 16px; display: block; }
+.rep small { color: var(--sec); font-size: 13.5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rep .barrita { height: 4px; border-radius: 99px; background: var(--sup3); margin-top: 7px; overflow: hidden; }
+.rep .barrita i { display: block; height: 100%; background: var(--ok); }
+.rep .barrita.falta i { background: var(--alerta); }
+.rep .der { display: flex; align-items: center; gap: 2px; color: var(--sec); font-size: 14px; }
+.rep .der svg { width: 18px; height: 18px; color: var(--ter); }
+.titulo-ed { display: flex; align-items: center; gap: 6px; }
+.titulo-ed input { font: inherit; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; border: 0; background: var(--sup2); border-radius: 10px; padding: 2px 8px; margin-left: -8px; width: 100%; color: var(--texto); }
+.titulo-ed input:focus { outline: none; box-shadow: 0 0 0 1.5px var(--marca), 0 0 0 4px var(--marca-suave); }
+.menu-p { position: absolute; z-index: 25; right: 14px; top: 98px; min-width: 220px; background: var(--sup); border-radius: 14px; box-shadow: var(--sombra-menu); overflow: hidden; transform-origin: top right; animation: menu-entra calc(200ms * var(--lento)) var(--curva) both; }
+.menu-p button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 16px; border: 0; background: none; font-size: 16px; text-align: left; }
+.menu-p button + button { border-top: 1px solid var(--linea); }
+.menu-p button.peligro { color: var(--peligro); }
+.menu-p button svg { width: 18px; height: 18px; }
+@keyframes menu-entra { from { opacity: 0; transform: scale(.94); } }
+.cuenta-rep { color: var(--sec); font-size: 13px; }
+
+/* ---------- Catálogo ---------- */
+.buscador { height: 50px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--linea-fuerte); background: var(--sup); display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--sec); font-size: 16px; flex: none; }
+.buscador.hoy { box-shadow: inset 0 0 0 2px var(--marca); height: 56px; }
+.item-c { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px 10px 14px; }
+.item-c.hoy { background: var(--sup2); border-radius: 12px; }
+.item-c b { font-weight: 500; display: block; font-size: 15.5px; }
+.item-c small { color: var(--sec); font-size: 13px; }
+.paso-c { display: inline-flex; align-items: center; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--linea-fuerte); height: 44px; }
+.paso-c button { width: 44px; height: 44px; border: 0; background: none; font-size: 20px; color: var(--marca); }
+.paso-c span { min-width: 28px; text-align: center; font-weight: 600; }
+.paso-c.elegido { box-shadow: inset 0 0 0 1.5px var(--marca); background: var(--marca-suave); }
+.agregar-c { height: 44px; padding: 0 14px; border-radius: 12px; border: 0; background: var(--sup); box-shadow: inset 0 0 0 1px var(--linea-fuerte); font-size: 15px; font-weight: 500; }
+.agregar-c.p { color: var(--marca); background: transparent; display: inline-flex; gap: 4px; align-items: center; }
+.agregar-c.p svg { width: 18px; height: 18px; }
+.pie-c { display: flex; align-items: center; gap: 12px; padding-top: 10px; border-top: 1px solid var(--linea); margin: 0 -16px; padding-inline: 16px; }
+.pie-c .resumen-c { flex: 1; min-width: 0; font-size: 15px; }
+.pie-c .resumen-c small { display: block; color: var(--sec); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pie-c .resumen-c b { font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+.pie-c .resumen-c b svg { width: 17px; height: 17px; color: var(--ok); }
+.pie-c.entra { animation: pie-entra calc(260ms * var(--lento)) var(--curva) both; }
+@keyframes pie-entra { from { transform: translateY(12px); opacity: 0; } }
+
+/* ---------- Croquis ---------- */
+.croquis { background: #FAFAFB; }
+.croquis .arriba { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 6px 8px; }
+.pastilla { display: inline-flex; align-items: center; background: #FFFFFF; border-radius: 14px; box-shadow: 0 0 0 1px rgba(17,19,23,.08), 0 4px 14px rgba(17,19,23,.08); padding: 0 2px; }
+.pastilla button { width: 44px; height: 44px; border: 0; background: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; color: #111317; }
+.pastilla button.si { background: rgba(47,95,232,.12); color: #2F5FE8; }
+.pastilla button[disabled] { color: #B8BDC6; }
+.pastilla .sep { width: 1px; height: 24px; background: #E5E7EB; }
+.lienzo { position: relative; flex: 1; margin: 0; background-image: radial-gradient(#D5D8DE 1px, transparent 1px); background-size: 20px 20px; }
+.lienzo svg.dibujo { position: absolute; inset: 0; width: 100%; height: 100%; }
+.flotante { position: absolute; bottom: 14px; display: inline-flex; align-items: center; gap: 6px; height: 44px; border-radius: 14px; background: #FFFFFF; box-shadow: 0 0 0 1px rgba(17,19,23,.08), 0 8px 24px rgba(17,19,23,.12); border: 0; padding: 0 12px 0 14px; font-size: 13px; font-weight: 600; color: #111317; }
+.flotante small { font-weight: 400; color: #5E646E; font-size: 13px; }
+.flotante svg { width: 18px; height: 18px; color: #5E646E; }
+.flotante.icono { width: 48px; height: 48px; padding: 0; justify-content: center; color: #2F5FE8; }
+.flotante.icono svg { width: 24px; height: 24px; color: #2F5FE8; }
+.listo-hoy { position: absolute; bottom: 12px; left: 50%; translate: -50% 0; height: 52px; padding: 0 22px; border-radius: 12px; border: 0; background: #2F5FE8; color: #FFF; font-weight: 800; font-size: 16px; display: inline-flex; gap: 8px; align-items: center; box-shadow: 0 8px 24px rgba(17,19,23,.12); }
+.barra-croquis { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px 30px; border-top: 1px solid #E5E7EB; background: #FFFFFF; }
+.barra-croquis .hojas { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px; border-radius: 12px; border: 0; background: #F3F4F6; font-size: 15px; font-weight: 500; color: #111317; }
+.barra-croquis .hojas small { color: #5E646E; font-size: 14px; font-weight: 400; }
+.barra-croquis .hojas svg { width: 17px; height: 17px; color: #5E646E; }
+.barra-croquis .simb { width: 44px; height: 44px; border-radius: 12px; border: 0; background: #F3F4F6; color: #2F5FE8; display: inline-flex; align-items: center; justify-content: center; }
+.barra-croquis .listo { margin-left: auto; height: 44px; padding: 0 20px; border-radius: 12px; border: 0; background: #2F5FE8; color: #FFF; font-size: 16px; font-weight: 600; }
+.barra-croquis .siguiente-c { font-size: 12px; color: #5E646E; text-align: right; margin-left: auto; line-height: 1.2; }
+
+/* ---------- Firma ---------- */
+.entrega-hoy { position: absolute; inset: 0; z-index: 2; background: var(--marca); color: #FFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 30px 28px; text-align: center; }
+.entrega-hoy svg.grande { width: 72px; height: 72px; stroke-width: 1.4; animation: entregar 1.6s var(--curva) infinite alternate; }
+@keyframes entregar { to { transform: rotate(-90deg); } }
+.entrega-hoy h2 { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
+.entrega-hoy p { margin: 0; opacity: .8; font-size: 16px; }
+.entrega-hoy .b { background: #FFF; color: var(--marca); width: 100%; margin-top: 18px; font-weight: 600; }
+.entrega-hoy .t { color: #FFF; background: none; border: 0; min-height: 44px; font-size: 16px; opacity: .85; }
+.bienvenida { position: absolute; inset: 0; z-index: 2; background: var(--fondo); display: flex; flex-direction: column; }
+.bienvenida .cab-b { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px 0 18px; min-height: 52px; }
+.bienvenida .cab-b img { height: 26px; filter: var(--filtro-logo); }
+.bienvenida .cuerpo-b { flex: 1; padding: 22px 22px 0; display: flex; flex-direction: column; gap: 18px; }
+.bienvenida .saludo { font-size: 15px; color: var(--sec); display: flex; gap: 8px; align-items: center; }
+.bienvenida h2 { margin: 0; font-size: 30px; line-height: 1.12; font-weight: 600; letter-spacing: -0.025em; }
+.bienvenida .lo-hecho { display: flex; flex-direction: column; border-top: 1px solid var(--linea); }
+.bienvenida .lo-hecho div { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--linea); font-size: 15.5px; }
+.bienvenida .lo-hecho div span:first-child { color: var(--sec); }
+.bienvenida .lo-hecho div span:last-child { text-align: right; font-weight: 500; }
+.bienvenida .pie-b { padding: 14px 18px 30px; display: flex; flex-direction: column; gap: 10px; }
+.bienvenida .pie-b small { text-align: center; color: var(--sec); font-size: 13px; }
+.giro-tel { display: inline-flex; width: 32px; height: 32px; border-radius: 99px; background: var(--marca-suave); color: var(--marca); align-items: center; justify-content: center; }
+.giro-tel svg { width: 18px; height: 18px; }
+.firmar { position: absolute; inset: 0; z-index: 1; background: var(--fondo); display: flex; flex-direction: column; }
+.firmar .cab-f { display: flex; align-items: center; gap: 6px; padding: 4px 10px; min-height: 52px; }
+.firmar .cab-f b { font-weight: 600; font-size: 17px; }
+.firmar .cuerpo-f { flex: 1; padding: 4px 18px 0; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
+.firmar .decl { font-size: 15px; color: var(--sec); margin: 0; }
+.almohadilla { position: relative; height: 200px; border-radius: 18px; background: var(--sup); box-shadow: inset 0 0 0 1px var(--linea-fuerte); flex: none; }
+.almohadilla .linea { position: absolute; left: 22px; right: 22px; bottom: 50px; border-bottom: 1.5px solid var(--linea-fuerte); }
+.almohadilla small { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; color: var(--ter); font-size: 13px; }
+.almohadilla svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.firmar .pie-f { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 12px 18px 30px; }
+.constancia { background: var(--sup); border: 1px solid var(--linea); border-radius: 16px; overflow: hidden; }
+.constancia .cab-k { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px 0 16px; }
+.constancia .cab-k .pill svg { width: 15px; height: 15px; }
+.constancia .trazo { height: 190px; margin: 6px 16px 0; position: relative; border-bottom: 1.5px solid var(--linea-fuerte); }
+.constancia .trazo svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.constancia .quien { padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 2px; }
+.constancia .quien b { font-weight: 600; font-size: 17px; }
+.constancia .quien small { color: var(--sec); font-size: 14px; }
+.constancia .decl-k { margin: 0; padding: 12px 16px 14px; border-top: 1px solid var(--linea); font-size: 13.5px; color: var(--sec); line-height: 1.5; }
+.firma-hoy { border: 1px solid var(--linea); border-radius: 12px; height: 128px; position: relative; background: var(--sup); }
+.firma-hoy svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* ---------- Antes de enviar ---------- */
+.rep-hoy-l { border: 1px solid var(--linea); border-radius: 14px; background: var(--sup); }
+.rep-hoy-l > div { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; }
+.rep-hoy-l > div + div { border-top: 1px solid var(--linea); }
+.rep-hoy-l b { font-weight: 600; display: block; }
+.rep-hoy-l small { color: var(--sec); font-size: 14px; }
+.rep-hoy-l .ed { height: 40px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--linea-fuerte); background: none; font-size: 15px; font-weight: 500; }
+.para { display: flex; flex-direction: column; gap: 2px; padding: 2px 2px 4px; }
+.para b { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.para small { color: var(--sec); font-size: 14px; }
+.cifras { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--sup); border: 1px solid var(--linea); border-radius: 14px; }
+.cifras div { padding: 12px 12px; display: flex; flex-direction: column; gap: 1px; }
+.cifras div + div { border-left: 1px solid var(--linea); }
+.cifras b { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+.cifras small { color: var(--sec); font-size: 13px; }
+.sec-r { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 12px 12px 14px; width: 100%; background: none; border: 0; text-align: left; align-items: start; }
+.sec-r > svg:first-child { width: 22px; height: 22px; color: var(--ok); margin-top: 1px; }
+.sec-r.falta > svg:first-child { color: var(--alerta); }
+.sec-r b { font-weight: 600; font-size: 16px; display: block; }
+.sec-r small { display: block; color: var(--sec); font-size: 14px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sec-r small.falta { color: var(--alerta); font-weight: 500; }
+.sec-r .fin { color: var(--ter); align-self: center; }
+.sec-r .fin svg { width: 18px; height: 18px; }
+.sec-r .miniaturas { display: flex; gap: 4px; margin-top: 7px; }
+.sec-r .miniaturas .foto { width: 40px; aspect-ratio: 1; border-radius: 6px; }
+.sec-r .miniaturas .mas { width: 40px; height: 40px; border-radius: 6px; background: var(--sup2); color: var(--sec); font-size: 13px; display: inline-flex; align-items: center; justify-content: center; font-weight: 500; }
+.sec-r .firma-mini { margin-top: 6px; height: 38px; width: 120px; border-radius: 6px; background: var(--sup2); position: relative; }
+.sec-r .firma-mini svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* ---------- Enviados ---------- */
+.fila-hoy-e { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 14px; background: var(--sup); border: 1px solid var(--linea); text-align: left; width: 100%; }
+.fila-hoy-e .fecha { width: 64px; flex: none; color: var(--sec); font-size: 15px; }
+.fila-hoy-e .medio { min-width: 0; flex: 1; }
+.fila-hoy-e .medio b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fila-hoy-e .medio small { color: var(--sec); font-size: 14px; }
+.fila-hoy-e .estado-hoy { flex: none; border-radius: 99px; background: var(--sup2); padding: 4px 12px; font-size: 14px; font-weight: 600; text-align: right; }
+.fila-hoy-e .estado-hoy.error { color: var(--peligro); }
+.fila-hoy-e .estado-hoy.ok { color: var(--ok); }
+.env { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 14px; width: 100%; background: none; border: 0; text-align: left; align-items: center; }
+.env b { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.env .cuando { color: var(--sec); font-size: 14px; text-align: right; }
+.env .linea2 { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--sec); min-width: 0; }
+.env .linea2 .est { display: inline-flex; align-items: center; gap: 6px; flex: none; font-weight: 500; }
+.env .linea2 .est svg { width: 16px; height: 16px; }
+.env .linea2 .resto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.est.ok { color: var(--ok); } .est.revision { color: var(--revision); } .est.pend { color: var(--alerta); } .est.error { color: var(--peligro); }
+.atencion { border-color: color-mix(in srgb, var(--peligro) 35%, var(--linea)); }
+.atencion .env .accion { grid-column: 1 / -1; margin-top: 6px; display: flex; gap: 8px; }
+.detalle-e { display: flex; flex-direction: column; gap: 12px; }
+.pasos-e { display: flex; flex-direction: column; gap: 0; }
+.pasos-e div { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 8px 0; font-size: 15px; }
+.pasos-e svg { width: 20px; height: 20px; }
+
+/* ---------- Datos al día ---------- */
+.diagrama { background: var(--pagina-panel); border: 1px solid var(--pagina-borde); border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; font-size: 14px; line-height: 1.55; max-width: 520px; }
+.diagrama h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.diagrama p { margin: 0; color: var(--pagina-sec); }
+.diagrama table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.diagrama th, .diagrama td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--pagina-borde); vertical-align: top; }
+.diagrama th { font-weight: 500; color: var(--pagina-sec); font-size: 12.5px; }
+.diagrama td.si { color: #188A5B; font-weight: 500; }
+.diagrama td.no { color: #D22F34; font-weight: 500; }
+.linea-t { display: flex; flex-direction: column; gap: 8px; }
+.linea-t div { display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
+.linea-t span.n { width: 22px; height: 22px; border-radius: 99px; background: var(--pagina); border: 1px solid var(--pagina-borde); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; }
+.visita-c { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.visita-c .hora { color: var(--sec); font-size: 14px; }
+.visita-c b { font-size: 18px; font-weight: 600; }
+.visita-c small { color: var(--sec); font-size: 14px; }
+.visita-c.sale { animation: sale-fila calc(360ms * var(--lento)) var(--curva) both; }
+@keyframes sale-fila { to { opacity: 0; transform: scale(.97); } }
+.sin-mov *, .sin-mov *::before, .sin-mov *::after { animation: none !important; }
+</style>
+</head>
+<body>
+<div class="envoltura">
+  <div class="cabeza">
+    <div>
+      <h1>Ajustes de campo · propuesta</h1>
+      <p>Sus nueve puntos de la app del técnico y los datos viejos que quedan en el teléfono, en dos iteraciones. Cada caso compara lo de hoy con la propuesta (mando en la nota), se puede tocar como en el teléfono y cita las pantallas de Mobbin de donde sale.</p>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div class="segmentos" role="group" aria-label="Velocidad" id="velocidad"><button data-lento="no" aria-pressed="true">Velocidad real</button><button data-lento="si" aria-pressed="false">Cámara lenta</button></div>
+      <div class="segmentos" role="group" aria-label="Tema" id="temas"><button data-tema="sistema" aria-pressed="true">Sistema</button><button data-tema="claro" aria-pressed="false">Claro</button><button data-tema="oscuro" aria-pressed="false">Oscuro</button></div>
+    </div>
+  </div>
+  <div class="cuerpo">
+    <div class="guia">
+      <div class="casos" id="casos"></div>
+      <div class="nota" id="nota"></div>
+    </div>
+    <div id="escena"></div>
+  </div>
+</div>
+
+<script>
+const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASQAAABaCAYAAAARpivpAAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAABJKADAAQAAAABAAAAWgAAAACDvguzAABAAElEQVR4Ae2dB3xUxdbA597dTSH0kkBABAVBgiD29hTs5UOaxK48C+pTVKqoqAtioVqwV+xKL9Zn76IiUkINHYHQSQIpu3vv9z83u8uWu+kJ+Mzkd7N3zpw5M3PuzJkzZ5qmDhXXyZ2sfNrTZOdyngKeDTwrlTIXKE2T39VKV5nKpXKVauZR82/xEP4/75oOmNLEjHemJNZukLnO3S3/f77ANQX8R3NAOyRK33l0c+U13kTonB2RHwO/j6eQZz/PboTTBmUaK5WpLVK6uVh51DrVsO5u9fOgPML/p1zKoBn/p3T9IWWqwyjYNz6fb+COJ/ts+Z8q5KFUGPfXzmY5u5p7DafLG1ewffeY9L2HUvb+CXk5BASSqamOo56i0Q0oJ8PXEu8HBNU3ymf8qmqpNWq+W4TX39o1v3dGI2+h/huFaB0siKm9mjWxx01Bf81LpXGgyX+m1HbUco00Ta0fROtpmvrcZ2j3bZ/YY0GlJVJDqEQO6CViVDVCm0lxCKN/VSAZabDXKtN8VenaDypPva7SRl2nOj58ZAVoHvSoHo86ikwkhGVEMw4Ip7CAGk9FOeAXRoOg05DHYZrqQl0zPmg+bHqLitKuiV96Dhx8gdSlqZeh2vLSZ7lYzHpoSunQe4Nh3WyV5n5YHTPq+GJjHKKBTs0ldjR4c8CZShdYjatkDjS4Z0o9NCMbzVNr6zMc51VycjXkiuHAwRdIU9OxEemPk8edxeSzPEFpSmkjlGHOVB1HvqA6ujuVh8jBimMaXs2kAKHp6xrD2xpX6RyI8znj0dKddoQNwwzXUu2QamCVxoGDL5CkKBkPLqTtXYRm8wy+j6xH077gdx5PJk8OT3ndYVS2WzCCz1FpI59U7R9tVF5CNfH+NzmQVXvRDkS/1LdItxet9JdIYI2/6jhwaAgkKV/Gg7+phGaDVEL81dajudJVnKu78ppnKYfeGfvQaQitqxFao8H+hGebRCuDOxzcu5TDMw+N6bYyxKtB/V/ngNttOJyOAZrCBnnAsbzEvG173QV0ljWuujjw9xsC9J3iUJs2xal92XWUoXXGmH0ugkrG+e14apWScbKM4Fu0poFq6YMZpYxTrWjNBs883qe0WXygFoGEmfn5dOv4nmiSNa4qOCC2JGdh/KkOh1HX0NT8beN6ra6KdGpoxubA308g2ZVFhNSypf9CwFxFMALKWrfjtEONgGG30u5TBfXfUJl3HlIG4xqBFPGlarz/CA4cOkO2irBbDONL3N+ojIf6K5d5HKRG8JRm/Qj2JPNFlbD7KdXl0SYVyUJN3BoO1HCg4hwojRZR8VRiUXC79Zb5J9TzFnprFyoj0aGrOOXTNU1XPhalFZoutV/LLcje/lw64/lSuj/de8Aco1q5n1K1tJsxVv4bf5diY4vRu9DbTrV336KWu1cWi3sQA5ma9h7E5GuSruFAlXOgWodsqYNmHebVtPaaMlpjD2lHA0ulhKKZ1GeKuzaZkSlW0dqk4clWkBwEyk7gOxharTcMtowobY3XE7dk16SLswkv2bVzpyqX1p+ZtjtBblBChOUYz29Qix/8uQS8Kg+2G7KR6JysCT17VHniNQnUcOAgcaDKBVLTwbM6IAy6sYLmDMrYnucInroVKG8WsyGrDGUu0pT5g1bo+WLrpPTtJdLr6D4NG9N94F1SAm4W+b1aLX3oyxLwqjTYRiAhs1UWAvk7TTNlJbGjTBkwKZU4jfU2mso3DXPOtom93i4TjSpAbjPg4/hsV357TddbUhkbK0PVMjTNR6e1l2+8Md7wLt30RPquKkg6iqTkJddVeBN7JJtQV6ZsndBzaRRSFQAk3RyXt4up+drSGzfj29Znga90zgV03HvIy1bDNFfFmYUL4MVB3bPZeNjsOrppnKr7tLamrtVlUonmKEvmyu5M03QRea+RV/BqYBRURQLJ1JIHz7lKM80+VP5jyWrrsme3VDFk93smTPnGVNp72yb2/KnYWMc/Xk8VFN4M/uPgFdeg0cjMa1WG+9Ni6VVhYAyBVJnfqwAZdfO2Cb3eqsJi2JJuMXBKYqEe31sp4zxN09IQlaIli/Yqs6RiRpAKLpMMMvyW5R3LlGZ+7imIn1pqzZhIZXGSJ48e9xpxrvDHW2tqxtXbxveuMm05ZcicszXT6EuTPoESy2ihMU+cP/3QHznZYgcNeIuma78hA6Zvm9Dj81CEqn5vNHBuc6fDdxv5lA69JY9ssakUR9v9xBXnu/avx3rLaKjynCXp4wr/A8V+PEfyJPFUj9O07WhM8xE2T2+d0EvWKcV2aSO7EfgST5vYSHKyAEehLHmoWj98ID82AikQVJm/s5SWeE3W+Av2VSbRWLRkX5jH52QTtdmDitcCvLLUjzyk1AZdma/58jzPBXrUWGmVFd504MyT6PFlIW7QoZ2MZ5nF0CCgkl6aDJx9oa6bwyAnuwfKs1B3F7xYgjAblzWx94eVlK2YZJIHzbyGjuMhEIprLzHjlybAMLSLtj/R41PpjSrsUt1za/lyjauzzcLBVDQZkrkqTLSsBEyzCR/pQsYk/0oZPOtnZeoPZG3M/01ZW1MiiGU89LU6evS5Sve9TEisvUoN6A3eVh1GXcpapbCKGkHt7+xdm1U7rsqXO1jDsriCO7w+7S46DRFE5ekIE4nUjt70ES0x7ga0i3uy1ud/aPt9y/FF0FLqREUzVe0oWAUAqffMbenz+sYgkLtDpizCODLVhvDiTMytJ6QMmvUZR9QMzhp/6dpIpAr7mXRKzu7yACOy4dCSIWSVOZnIEuJiQK6AY2g2dPbpvhzvXDSTl6TCQKyswkjOPJKhl8yk7eURNV1+pdcu5Cmrkw99rtKM71IOcz0pqqYtgWUj1qsEsyeV413b8CJgMkOFyQivw4vBqc6gQsbr20mQIWW5n51+Gl9qPvNp5e4mEwhV5poOnJOWG1c4G1vBeBI5jKc8wig0f06rnpnGLPm+LYd/WNJERWjcmO+a0qUehjkAUbAwhDJ4mg6eeRHC6CuiyJCwOGEkDVPsRPvoEOUYndjfR2OIq6lebCT/PnnwTOpyZTpTa5rTeQjCyA3VWMJI2qe0XenUyvNIfNq5NsXjLPiV9/JXDlnVGueNF/X7fujEyrCkEenYl2ZuVZq+GUauNk19g6YZW6iwu/j6OajJPs1QcUUGM0OMi83J5eE8bageCAjVDIKlF3oa9gdDG845QnMiM2L5ZVHl0qUvwIqbbMOLgF8rR63uatHQahnaSJJ2QzY0wO/g2Z0OTXNi0y5TZ6JhFYWnmqF5nfBx/7aJvRcWU95KCUoZNPMcU9MmI0BEK4rlNhLwF/ynhzd38P2p2FqSaRip1JFWwCRuccOaL9j2cePmMd03xEqgNHCx58DbsIkM+P3ctgk9by9N/OJwkgfNug4ePE/dFRuZnWPGWFtrKuNP1rys0AxjCxpbAUIyjg6xKUbudsQ/lvy0JnJ9OwLAPGiPd2Jboi5X3Pn5MRNKdhNQYuz/ibxlmIaWp2vYY0m8rKmaOgt7lLYtq3a9KYGOsVxDtiZD57bVvb4JVBZRPUvjRIouQLjMg9Hfuxy+X/8a22tTaSIewDG1lCEz07BFn4rafwYfqQthxxwIj/FmqqNh3Gxm+0Y1qlP4SIY7PVzrKhrS3cz+NmHqv2NQ6aZ8+1G11R0xwqsFzBffhc2gygVJZRQmefCsC6AzlTzXsaPH9/se4fOxaRqfxBKOlqHZEXc6ArQ73/AiKm9bG1rnonlMYfan946xPTbbhB9UUMrgmVeSgdd57DqQfWirNHptWp0C56eZky4WLcPe9X/R1bRu0/MNjOB03r1AihQUzFiZz6cMml1I5/uaPZHSQYXvXtMYhgCMTAOQ+TQz24+Uama7dMmFYZVZqjUbPPtMnwoOz8KI2Xi2UYKPKcRsw6F/SYVBO6ocJ2ua2Ot1HhWV2ZoSp/L9iWrvOZR+5+YJ3WXIE+66up1qhz6VoWcxqq/Zl5m3aeERq8ZnpyHRgP8We9mSB83oTE8v2oadZpNBI3yqToHrzWIbYARbUwfPbY92dzMzTNIpRM9Emeq/jesWdo/qcCLoxPJWhYaUMmTWyXRywoeoIZolkJUxtjxG6SKjuIGxXTvbpjwsFTAv3Dq+1zc2YaUCke9zyfd/QQ6XD5p2X9b4Ho+Vikg5keykdkxSyUNm9WJtyAxyKbai4lw+2tCTDBO6o/L+m6nlWZUpjCThzRN7bpSeILFOvcuYAfg/QPZDsrBcmld6Td8MEWZhYPF84/aqfON63n6OCgsCtCc49K1N0FvzEsUBuZRA1/QpBNgJo/dR03tQqV8uizCSROhEltPIBjOs6kM7WROVsKbO35kb90gU/CAB0NhSadSiqUQJI5r5i654o1d5hJEUR2ajCnwKPphP2RQvHqH9shjQbcJKBmHI5gwxEXThwkhpH1a1MJLMlVogierJ8qfJxLGraELL77QpCKKzEBYDtz7RyzJUBUKq4ldu4tg6vsdHPod2DcNY+UiriksHLeNf7OSeTY/YOgov052tDF2EUmZUWBGgBZXsoRhhNWAOyVfxruFoxUdFMcM0n3HUcdxY0R300oh1n086oD8j00DruNM/VIwMqna/w2veSaIdIhNGe5mYtb7wdllzExlWFv+eJ3vtyZrQ6240ejuNpY3X65NlBWV29fd0rosGe2JkREPJ7GDVu1IJpOTBsxkWaS+Sncgx5YEcMvuDQLiGVZc3VocgOpBw0ZtoYBj0ZnBjRDcgT/DQLuwdAV1MwzfNthdZ9sAq+gb5mHttY2va5arDyL62Yf9wYPK+7JPpnaOMwHS1b9XxxA/Z7O6+vzJYtOXJ3sscynEl33FFBL04Os0H0txTood0EYhV6ZU1TdAfEJ2G9l6j2p57K2upgtDPqlv/QX5ej0wLnt/UdOCMsyLhJfkdmlM0ushJiL8chd5IXpdEqlzhJQokGVtjLJMC2xoni1I1v2JVdlcEwjuVvWCtrKXa+UT3v7Lq1BvGB0kn7tZY8RnmHYcx9A1sE7I6NtwteWgmPc+z4cCgz4XAGqI6uSM/WhDhn/gihlBmR0UriA8vv7bQp7uGlXWIFk4j2idDOBYGDiEkXNPQ1Gk7cl3XRseoJohoiQ69H3UkfEaN2V5nnG9AeW1cMXMvyza0RA6XizrdIt7QyQe2k5hxbQLi9EInXXlY3iGwzeksWidkE6VSQcUKpOShM49kzP4qKcbSjAzCXvc59J4V3vdD1zp4+prDh09b1WXI+5kdB72Xedi9U1Y1GfD2qrput1lsPqM4wkciP9N0Q+tO2KKo8AOArj7le1IW7h0A+d80NZK3H6PgRYCTWEpwZYywfyS40BHPDBhbhcIde6nV/dvHXRKzYwhHL5vPssGY6h1ioSwFHf2ndoViVioIqcaXpjl7j2KBhXSGoY7JRPOBig7TQgmGvlsr7TXtAWCeUDiC5NJmA+ccHwor6b3QiPMiwsL2y8Hcxl5vsVutSiJb6vCYDT1lyGdJLFp5BUqtYlBjyK4msPv8hooarN1TMuKGTct80OHzLTAM9QfL6hc6HeZiZtG+T4wz38s7evXIe6asvGT49JVHxMiLLXjLEz1+Z/Gf7I7/yRahCHh1TrxnUFR4hruQnf+yxionKkwAJksA/uZXLdmWq5xAKtJlRHVERP/Qq7N2qgqd0+kbx7eQtUyh7qTkOk27hgKq6539gWeQVqOI9H6uVbf+RxGwSvWKHRWCkbxuaOjmv8qSUFK8th9BFrkk5zAj3lktkznUI3uHkHQT0tU+1OqSxjODNixWeKnhaEb7tLjrqFRu4jTwx5N81SOVdtiuLjY1cwT2qQ8Nn/7lsA9WPTHsg8xu/V/8vVQ94NYne63jxtfL6LX+8NOO/jFNt6w4jwpY/OC3qN7vRsGLAMximJfHCPtngVlcCn8vjiw0sLcr2llF0oz0/zW2zya+kUxRh2pJ7EJXp0XiVrVfhq3ME50TmQ5C6oXquAYdfj8fmTamh7PkEswoeAzAhtX7s+Hd75HBLNIcGAmrCr+tQJK1Rqg/UcbJQAb48pMrRRhB0D11qQtDZL8A7eJ/zVZUvrtZe/RV/Yb13h42ZeV5xeMXhcr102wM6IMvMwZ+nG6Yk+Rohehw50PAwu0UASTTHMAygKYB7z/1t1lLh8w+Hh1efm2hx+X5IhxWNT7N0J+E8v5Q6sxmHW87FA9FquR3j8NJ/TFPjCCby1x2cRp6BHr5vaYj7kdih0/GaNoJjjhXtJ00VjIsFOZwm68IDhXw4uvbdMjsO2JFqyy4M5KQbAkxvNZUItI+2rFK9AdHHT2msIqOURqIjP5QFMviTDFaaxcPm7LqJY8qfOSJ9LRdxUUXTQktqB/CTwzWTSJxyUAXp88UI6kIoANuyf1ZrOJ+hg8SDi/CaMoU6SW8ip3tH+tM05HG5wu3w2nmyjhfQsOUgdMbGc64yKFcpfFKU17D6/N6WPAqDVFmiALuiOyEghZ4VgcAVf2re1Ujw2EdzXEgKU2bn+BwFls3DyBX7M2VZGT7srk6jDVZIZRSNYc1hFwXAiv21Znk/IH9qXQm1uUZQVw0sCdZ/pPCGqgJsuwgGFCJL1ECKd4Xfy0q5qkx0livfMa1m909wnqjGLilArvT0woRKpNBPqNUEcKRRBUdFKfiTh/+/uoBj19x5G/hweG+beN6/Mi+InYvK9v9PgilW5OHzJ6+bXyPcEO4z/mi0r0ihO16mv+gJb3FCu7C8NT+OT4OVONwNbgX6kzF0MX42NQdmm5gSaoiRwcpW/Qk9cBwP5BSqggIPNUmkCgr2rIZLnwNBPM+vdLaS6Bwdr+bN2/2JNdJWUXXHiqQuF5UL5MWL8szmF1/nAmtU0gndNRA2bQR8Q51EfsUf0bzW42d2cOUU3iZIzOHJEPl2A1nlmwf1ytq/VgoephAojc7gj2Yd1CgaHWFncd8drdoGqEEKuN9z+69b9ZrWLcZnLsLelKJotMvJiEq48mmbswYNnXlXWP7HjWjGFS1bWPhK01bxp1OnGtt8JL9U9c3hYUtu38LQucVsjU8DC4eUx3HXiv5cN9FhVUywMCYVskkK4Uc9aIhhCK/mcDkmAybIAtYKf+KYUh9ZotCG1OlpFccEVah146Sy5z4mNno17DZr+JoVCgsdYtPz0nZGc0TI1RzLFUSHGfyFZ33KGT9OJsIxzMyOJ6yyowc+kvUt4+IYl257KFt7eVooHXUibcT6tR7zc6uFtZzaQ5nH5AxJNs4Tc3dWnfhmzYhFQa9dMsJnqSMto86HZ5OGM8660o7gZZ+PjvF76Sw71DX15GIt4SEWlDs1+/5YNU1xeIxRmbmYSQ4y23x2BvXbOisf0WF6fq7wOy1IJ1p5mpw2EWi61o1pFtSEuQrDpwi2VMScvWFs9TMZs9blaavh7UnSYouxFDuh6rnu3HhJQkVRBaR23ej8hWJY+en834C1eZBwuzrfdHpnjK5JIpNcY+s3ZO1Tc14TiWPE/Ny9s6zm0gKZlRWLZP49USwc5t1nzFSUWC7wMqAud2a8WifDlvGpB+5+PH0NvPHph/1+bi+bSaNTW9zbaHL0YUP+2/S+Y4npvpLQesisZ8fMiWzV3F5Ktq+oL0Ajl15GvgMToqUPT2hTktcA1Nnh4JC3s9Tp060tbmF4JTp1YvKZ1Xm0FjmoXnPPEdQiAYA+w8dh3RciUK58WDniE5VU+6RB1dYM+wpFx/ovDl3/WE+bT/ir+Oxay+Ay+zE3tiJLWaf+k9DCBIIDtm8XuNfcC0tGBLyQmnekeX6IaDqe6X7ZQpFDGhvy4O9SYZaw3g68ti52hxz+vTQ91etH3dF25hT/Yl16r6Yl7v3GpoR2li4gw89U/Ye+2KWUouDIXIWUtrImfj7BmEHXlJVdvZZeD89AKrYm2569yrdEdEzafUsQVmFHUN5cs05z3stK0FIZOrMJgTqeoS41LHqaJAkiTlJyVlRajOqwqPbJvReEpKlg/RKF1ltTgZQchZeRIJiZKuAY8/ce8xAf+s01K185+6QasHDspwynEtmnz42YO11ThfYnjW+5xeCYgkk6wjabN91UQUpIrLT1F0T7elVP3Rsetu37p2x7GOfx/EM49hYQ6UWmm4+5Z67+QJ391RbjUrGr5wdw6FZ5suUIlwbUqo5N090BX5AIElRNf1XDH2beUsVb4jjgDrtfPyVJpBcyrfFoxy5IWnIa8Mm+44/crtSqyLgB9WLCQFNBDEQ4hhdzsqa2GtACKjm9W/MAdaTSb1/kH2Co3dmx59uKENuiqnPjLUIO4O2aC/0kGC0DToJ80ga2Wl4jopgQzxV5ylOiegqZyxZAsnI8bVCGHWLQLS8pDK1qpb+26VXGthjvY/eCd6VLJL8i3wPto+jnbE/f58YyR+zD2f6wON6JzuuUPa92djNtF70CpPDFvaZPhqe9iX0REsLdZi9VKyZyVC8Ur/LdTcpg2dvoqEfGxKpmW76ZJ3LISWQdK93Jedd+ciXI5hXjJ71755Zv6qmh4Pp1LxUKwf8e/G+JlF5yuQaD5pxlFPTWeQc1X46KFdcOsSetTQD1Nt/4RHjVJTzmdpLUcBDBDD28rZD6IknxcyOqe5l6HZkrHDZ8Ikwmk44PIpyp7t8Rrg0l6l9M8b+NpP1J2nullFUKgCgb/md6KHj9gRg51WAZJVETfIlrIGP6yKInxTvlMmJGlfDgSIO7JjYe+XWCT2uR5d6M5In6Fn/lu1qurUJUeNQfFtn/pZUt+7BsR3Z5icamKh5hgCNNVSqozmYqSvG0ZCYxbMOKo/EivMpPXLVLQqSmQFiTiQy/joERuPbIJYWxLBTyiUL/oKO/F4kB+cHAYfAiwh2pObnEVlxsAH5ioN9FEhEnmq8B50D3HKq++5HA1gRkRVuss47Q2+UlJpMJe8SEej3ajPs1grY41YA2smdrI5291Rpo4ZhOB7Fyui7+O2m5AD+EpwsrDQN66xrbNDRDg2q3z1TVsfUXJDYInDDF0L6yWAhPKtof1IIXadzLb6VIZDAq6xBiWVoD+CU6Ter9p+/YaEUARjqUpTDvD0UcCi864YxNSofmnn1thznSVHwGsA/mgOy/5AJj1kRTKgF7DrdoRtdCUiJCBSvmKO+s4FXHqi9uxWC50nuGZnPzvq3SHI0xO+nYY/ld6ZauuwPhNTdqs3TMk0Y0zGbtprp1UfsEJDEnIDni2X8JgqrlzTtv3ZxgZ1YtD8pJHTh/ZuxF60JgQReketmm4CnUn5lNq3o+JfCUHp8mBvZV3RJKOxgvxd6ExZQX76PyEeCrvQxlXVVUQTtGu/fmAO0uciRl9hhuzJNat2gmWRTtvWGU1tnA68cUEf3/ymH9i3ExPAs04hMAVp2LLFrxfHItGInGvkEFb9njur0cGv8MZ3m9U5HIiy1Q2AigLurYk+/skzjR7t4wI7guqGm4WHIcdNcHQ7z+3QtpiZmi18K4NbcbTKkDJ/tgz8csPOEHKZfChKlR2HtlVwuwA0tl1lnYZU+prKuuNatkzoZvYW50/I93tGVfT6RzAw3GTrzWDn8X8mhaDXu78UBFq/ZZNg6+ExmmOwCF2m5Bdk2kSoOSnNfyiFa0tBK04ARUOb57KGbpTo+YqfJWfkZe2X7zUiKyTEy127Y1BXhBuoQRKfTIdLazi4kC+NttB7NTkMim9yZdcxjDUJIV/z1pVs8XDM8AkIyixXitLZ8ttcqy54ktp6muZ0fZP72d7TKqexR+q7ZwNllMkobuvYFPIhaPErl+k9K7ZSHK2v3vVz+6cvxvcrS0QUcsLc4JXevu0YohVSNv8OrrqVFZJMtkepLHfV/IAHUwXCHHvDfKjmO9hj3ETQkmRmrG55iib5OyvS+WOzwTXd8DRW7dUeJ7Eg/PVYKGKF202gybcNNk/xGOM26NTZqiT5Y2JG8ERpVRNxyeOWWCbSy5yOjovYeZzqMqU2HzOwaGVYWf/Jds1N25MRPQol8KCReqk/HVlWGkxdliYRDc9wHjR0hdIpeNXVPTpzn6ebDpos2XG6XMmjOKU7dJ0IvMAyXI1fvb7Zvb6Uuuyh3BmsilsiBZoOnH87wvlcE4n5O1XxTZ2n480imewkMaAisc9PezjdM0WAq2TFsMpQIwNJoRnZpX6wSdve0CxCYQy9cy89vNuHxLFZl+GfvEjwFXmSyxI1yCKrDoraR+ExZB7U3Clkpto/4GtjAKw7Saw2HyC9RhDiHCEHyIUvwH25698xWUeElACxblMOcSvn7R6JiUG+cmprqioQX55ezrqlAt4DjicYz+3sNx8ymg2b3LYugEzoiyNjsOYQr0j/Ge3wkbTrWZpGwGv8hyAE6OEM5xUYcuRxniaOu82dr7L11fM8xHDdAQzZB4mrb8ZfOLk1Rhk5ddRMq1sVUQB8VYsa4y496r9h47UfKMKN3sTjFB7roDfsqjnXjibRVKFkwOfSDzOXsNjkrggwKn3WvfAS4yLupXhNPSs7ev2wDNa7v3tzMQdiB9BxsZTHlTvIolwC8rJpfFBE7gJybTKPs6/U5PiE8cjYvCb6O4HiHSzkW4iNO/PikYVLhvFgHyls9lHJ2Za/XJXy33nRIUr4ox3j1jfLcFCK3vyAgB5Onp6OIslWHdKek1E35WBs062Ndc3wpQiwKTwDYhhiOIXy0s70+sw/5jBJE/nhr2fr0vS2NGuAhwwHrAlFdZ9KKC1cjnaa9JnUtaAyU4wbAkadU7p6pqx5B7boPYWThM3zoMWzqqpSxfds+GZOAQzuGsNSY4aULOEZ1dLRWS+zPuaHSboxBpkkMOOBvGb922UPjjEKhfPXSUhuEz737HHlKN+yGbGKMF+N8lTiZLsXY3BP7zlskYDdE6YR224lzyW/YkRO3hpXe67CrbcIIl0fJnHyphnyuViyEbUnn0x7hSZCtE1bcxt16021DSwFk/9Ok5EEzOeRfewb06HRMxdHE6mJsQJkIrw3YFFeTt+10Jh7D1BMRhs21nOzDyXdr8tq8mCS3Eu9KORW0GJyaoDJyQOx92a6CG9gu1YphTSE3EUc3jtLQpCZRB/n+YvNUcpNvK5toi5wu3wyBBwWSDVJM0L3TVrRnR3y/CATRXvoPm75q2tg+bTdFhBV5Na010tE2qAzAFGbqxQ5hP9NlGjtplDbkTLSIGE6m14fMstN4qOtGfMHO2uEEdR/CyNrhHkkQxuvl4mkkoVh+OakAm08vdgc9Bs6/Y+CJ8Z/HPFUyHuC49RvwxIgIeCNC5LasCdah8bGxShEi5gCGhAgbcyLJxppUaAMv28Dos4WkTIbKTIL1Hsy55Y36B9YKPvX1bMycFxVYRgA7z+3mYUvmVmg6sqs+vKYQinJuHT/iDsWsonfS0mZF57mMu/3lDO4cV+FE6kE/vghDdr5IhdptFFNCy5/LfP+AwI0sNKCyO9NwiJYj2kCkq2N6GOLEchH3PcVCKwEeB3fs0raisd8be5Ct4xAAansMx0yWjc1DkG2kG1ddEHBgCBeDZlWBtz3VI4srxP9DZbmKNDJ5oith2RMvQEt5lcH3mf4bLMpOwSaG0HI4fOdQucUon2+DUh6QfOP3Hcp3QWUII8kAxxZFtQXsjlGw4jLLAW2OyHAIOKrv+BHrBL/oDrGkEx0jMq3XipMjiW8GjDCqUreHFnndlgk9vgukUiaGByKxBkYqRMQ0tBXKuiZbQeWPahmDA2TK+4smY9pqM0KQZY7svLd1XKgnpiQ7J2sjY541ZMQ3yg2PV+CVDxX94YV0NR2iJivo5VgIjLwyeziCCrSMVmU3wyi5iuVEqO4m3kz4dlFW3QX9q+JEUBlqbq294A65Yp203uU7bCfdwliZigGX+rab52sWi/bK2lB4zZYJfdbHwC0z2OFwCu2w78xQY1dZCNHjCY1wp6msqjxHLCIxZGL0hRSc1LgnHK94H3Zhad/yVJXLg/A8h+44Z9v4njNDE7FvVKEYNu8sacpG8Nj1dvU4v7ehTRQ/SBYUWkIhpqYSO24wZKPyudYGfVEvRlPSiIJS02Kvqeo7FcEcF2tIl5+xeXdYRVVxjnjWRdnxThpNWRtaVF7LAsga33sb+I+yMfEppef1oOwXoQl2AVafR8oUzyM9t5RBtEARWjkIhU1w6TuG3jO3T+yxAFjVOobF3Bb5K4lcnTpo1mE+jckNrujButSe0UAd8sIMpdWZSScpfJS85gPfx+dcQ+6Jq3+4dcKlvwGvdLd57+bFnEf9POldA/EEfjNMn/qgLAn59nt+1xLjJhP3MuKJFr/Ap+mzykKjoria5vuQvvIKhOmJ0EKoaHPyDeOnstDdUqf+wpTsvRPge3/i1eGRjkvqD0Url5O40i5EMGYy5nhr6/rCN+2uFLdrVCWm6FTaX9QYu944CU2jRUwChmshh+UvIVyM2+V1vys549rGyQ23+1UmBttoh+IiDdfWpaUpx44crXFEB2nhwrydKvWocIHk8SWx1UUaUKQTIZ0bCawOv3V7qbLukHu3aHZqd3uqUStNczTChJBAOZABZjbToZs1r2OVDPuqI192aWye2HMj8KfkaeX+OiEvd3cbNuKmwOT65DMOfTUfbSqbM6myCgsSNlirwO0IVSaMBahUkNuTh8xicaeWwrXXUwN2jdIm41+3x6712Z+xpqae1xP3XrXkPSSDojWyiv0CFo5ehfjYz2TVe8iR8Pobgm/7ys3PVI7hTQbO/sbhUG0Mw/RQd8TIVi6BxAF+hmkYu5yaMyPmjKo/I+USSI+lt90+bEomi9+iy8kotpNtIQUogqTjyLeINjYmTvEB+fD2pVgo+4/JTFU+s7ONIDdgyppY8XarRGSsT+4Wi3LMSPFtvpUe4oDTObnRfjYNO4y59wDiQXorqlAi+OU5pJ1/8/Yhk9fIIUR5mJc1vsf75YlXWXH8SzVeqSg9a0FuRYmUMX65bEhFaRjL7NJCFp9275RVTezCLJhpvsrvzzHDiw0wx6sl7t9joeg+7SiEUZpNOFpr7Jtr83c6nOS7jU08FCFtQ5QNwLSuQxKhFOlkbFwmu0MkgRp/DQf+yRwov0DSrFXDdnakY3xaMfeJZ7h3ocVcBdMzysZ4c7KqW/fRWHH6TmETRdF1zlEzHcTJdfmcP8SK60jwyXChtW24YUZrVrJYMvR0xAMRc1WC2nzAW/NWw4EaDpSFA+UWSKbp+oSEttskhrahXeWekhF7geBy9zqGexejzUyziR8JEqH3MM8A9fMg0UBsXSsjE3uJNVVpFz7/0auOiGkzcRg+hnm2U5z5PodjlQ3BtjYwiqPtUPPddrY1W/RDEdi1a1cZxpfLVlDR8vTt29euM6ko2QrH79WrV8dLL700tbyE+vTpcwI0zipv/EMt3kUXXRTfu3fvE/lesUdC5cx0uWxIkta49NZbWZn9M3aXwyLTRtvokafFnQM89haUDPcG1WlcP2Xsw+imX4vtRVYeN+KRxiDWnA38fMqVUq+p9u3/tLPIg2M599dfO/dvU3cQqW4AFvIr9h/SiO1A6BqjBS6P9+btDIt5/IsulZ+FNiVZjHCm/X64CKxSefte2red4TJaaT7WVZn+mTsx+DpMp2EY2U6n88+pU6fGFNClSiQEyc3RI4sXLr6X2ZmzevbsmT5r1qwyTRWHkCrzq6S9aOGiaYbXukDhjjITqMIINLxuTA5MdjgcP5KMaPaldjTYppTpZQzcJ7Ou5CMiflvqyIcIIoK0kdfr1ebOnSvtwKr0tRJqXY2FewLwx4GNqcysllsgFWVCf4kZwUt4T4rIlJMMjxr0XuYfE69sszEi7IBXrhZSaobq6p7DQKc+E6WtmPCtBWwX08HrGNShbXAixuIDUeze9m9v3g0xdqddGLB1XD45J0YYx2BPiduRI9c+Rzsq0c/16qncTaFBhVsQwNqRoSD/u4882GlTNqglg3wO3xAawkVMEhjwomgphcGMn8EeYqXPg8LNPJUmkFb/tDrRTDIvgmZidQoj4cTChQsbsD77Qsoq9sVDze3lu87XTX16WTMmDZZydWVC5TJd178ua/yDjd+vX7+E7D3Zn9L5iTC+O5AfvpOsXcvQDf2bAKyyfiskkMb2PfLLe6Zk/kyvem50hrROLt0cPeDjVf0nXdzWbt/XgSjfuFkvYR1ZseMAsHRvbFVpgRB7Bmzb4Sd5e3ps+pExZ7525CacgVA9wi41FoB+H7VB1auOIKU2Nvg5aHkliE6bWDFADqdjSH5+/r30zF4E0ALQMhwuR29+6yXsTdj/1n/fEmFuue7du9cCrxmPnrA/IeudT96xXXPFsKOO4NE4TI/Hs3XOnDk5ARr59fJrsWqlPX5rGM0w4wg0MeqicweaWJihHg2qfnJy8r6XXnrJI0OZeBVfx+vw7p45cyYz59FOhoENGzZsTicVT+hO8MK0TvLTGi1C6sivkbHRMppzF2vtAlWwh/zGHHaTjxTKVo/8ZpPfrUJHYE2bNt21e/duzu/z1uF37zfffCN1LcwJHvzY88knn0TV08aNGy/OW5d3bYDf155/rdX5ip+8NYRHyZQrd8aMGZsCRIE7gLelTOcikN7jfcH+/dxEH+L4Zo3j4uIa+3y+fJfLtZk8F4YEK+FxQUFBnuQJek3IvwHfdvFed/v27fukHLy3hDeJrDTbRfyg+URow4cmPPuAM9KwdRrxD5P4fLsd8k3wO0invrzLN8vOzj4VYZyGCWY2YU3jcuP2S92qW7eumGs+mTx5cpgNWXiTUyunaax6KAJu165dLql30GtIWinwLo8OcD30LO0rjEm22S4ByO7601mj8D1otrRYuzB2XPqRw7Gv2IxxSiBeQvCQGZnJulcaUEwjemahy3nik71axxx+NB0y6w0W5l1rk3/W7Bgnyk0JYdnoMHIwJR0fBivyrFMeFqOtdJdZqNrQCoL4cPV8Xl8maT5NpX84GOB/YUhxCZ/yLrxpPHUQwPP5fZRK9bkfxfrp07NPH0Mz7qKBtANQm+dHaI6G5neCgABqTwOS6fcx0GDhq3Y776ngzKPSPAC9rwRPGgoC8mmEMuciYzNTqh/4ojGuJx8TZsyaEabliP2EBjkIegh+a0jNgkxt3DGdj3mLoZoMpxXDguuATUCTOH/69OkifAXGjKn6D/Du/HL/l7W+6wWv4X0mVJD6G98AtFmG/ZYmuYc834d/G+UZwwKYG2kg+aaP+0Z19QrlnSb0Aw7+3US8/uDJMHVdAB74Jfw+yn8WjadXQkJCgc/juxf6bXm+AH4z6Rxn5U1TL5POowiAPHh0EkL2feCtyf9u7jDbIvkj7T+uvujquvsT9t8I/EbSaMbDAm81F61jNDy26po0Vr75s8AXCZ/5fQheT0ooSHg9PyH/dXAz2WC9kV/RWtDY1TL8D0yfPX0u3/kavsddxDuaeAXkcxLCdixDrqBtE94eTfpSZ3qDG8/7On65wUdrST4vnj5zep/Lel52DvXlXXBkAkcEPHtE1aS8vLzJiQmJT/HuoTwDgFuOdHuCfwe0OgCQ+vUH3/MxvudnRRgk1rv3YDT8E8n3LPDugMax5NFL2i8hmB+W72qrVQQIlOZ33OVtfkToMHSzd8ihYcOmZo4XO489RvmgQ6Ysb617zfeLEUZCeHCxwmjAlCYIowvAsxGm2kcJpndjWO7kbG/NujIqDFzk0dZUtjASujSEY/mRZWkZRekc+E8luIsP+iEQBx/1Cd7HUqFa8LE/4eOfGcDk/WEqwTTCpFKN5hlHmFSGbwg7RfAQGlKxHTy3gHciYc9A83F+j4HedBpJc8FzmS4RUn2Ai72pL3TlqtSHeZczkV9BAAk/LSdCEKHwGwKsIzivgDOaAJa9m5MZpt3mR5OfzjxGrZxaVoMUIQb+zzyXQ3Ma+CPJ0wLeH3U5XI+Ba30v8t7M5XRJ5X6Q/Mzj9xFCvqDSP0a6L4PXhUe0le3AL6DBpeMPOhpmMvGeJV4W2siWYEDoi6muJPxYvoMPDSEJOpcQfB3f435+f4Pmg+RvIXRGIKysYQ1hefitukPYx+DNIf5f8LB2XkLeNOhNBPYztB4g/GV+r8A/k/yIDVUVFhYKr/sCfxT6Isz/oLF/k5eY1wB8VrirYfi7A3+TZxS4jdgzMrV3z97P8j1Gw6vvyYPQXgDuQ2hgwmuLZ8JbvocMweQbvsn7SN5XQmc6GI8gPKVjY2efIRq4pckSJjz+BJqLoCV5vIXncB7Lke4I0p0pHtKcCO4YXpvxDT6lTOdZSEWBPUnjcvIn9eV3hOj94H7DM9SpOweJLbFShITh843QnfpZlFhUfjs3KG97i8OGT8m87/H0Npl2CGWB3fPBqu6oW48Q55hi4r06tm+bucWEKzMubhDhTexxjLlyWWNYmGtXW75r1zBYkcfHJ/zBBl5hELaLDnxsERTLQonJh+ajPsnHHEaPJgLGclT6V+hdpYFI4/iOCngxFWMEeIOnz5guDcFyxP8C2BQabzcA83hEI+FSATV5xswZQywk/oG3GryXaFCn4Z2KbasxOImk/d9a+bX6BoaHfXv0nePTfRk0fmn0nxGvIzjvgvuZ7tJ7iebgpzmhd6/eP0HzEfI61z+kEIG0TYZBMnxCm5HGkcVzPr3wJn+8pxFAz9EobkMDeR1tZj60pdyn0xNfGNETi9bzMmnMJz+b6Hl39unVZzH5aeenZf3QMNzgsXvGuNFuuGbZUPZmx0Fntn/oVFfzau2gs9Lpc/aYOmfqCj+9J8jbat5FsDw2e/bsxfg/gPaZDL3voYx/CR4N903KdB7ftNu0WdO+EZg4yvO1rukfk87NeB93aa5G5Iltaeb3Dq/j+qlzp64VPHhKG6OVaWp6k8ZNrpQhsx/+LfCvgd8AL06AF1bn1b9//2d27NixlHxcDq+fQ+g6qQtTibMLjfACeCh5thz5nQTeHXg+FwB8/4X8fgGPmjZq0ujOkLTkW2GdKDqHnk4nnfopAmYUGt5DEiaOvAr//+B5iKHcT9aQV4690dR64vYCV7RxcU/xbRZA47L58+ePq7CGJBQnXNVuBxvyRGoGbRICD3UIkL7o5x8Om7JyqPv1tQmhYaV9H/b+yqOHTln1HDuE3yNOccLo17xCNai4YWLqPXNbQkMqkB0Plhp63NdR+dK1U4HVi4IrVGNDfWIDrzCIDyUVoLBevXpWpQwheA/vWzw+z5vSiKnUrfhNBRbHI7YcyxBOBbyP94UIraAwwq+oED9Qic6h9O9SWXV64pMBb2yc3PheCQ84KuQy3nfTiKzKT2USlVxzGI7RAWEkuAVmgWgEnJuj7Rc/FXEoPzp2r/4hwkiCUEpN+X71EHLyDfhM2hHAFss7do8ridyShnVniDCSIGkEMoTQHcrRqm/3vq15F+1lRKgw8uPN5PcvaG6Nj4/f7Yd9z28TGkqy+OGXaIi3SXx4IfyKcnv37m0DMAXhYDUehj4todmA/L0UIowkHmBr/Vl+gAj87Mq7CCI6Kyo/s6bEu5ZnbKgwkjAEg9SdLTwnih/txOIxfBkREEYCx9+Jn70I2dEBASFweCZ1YyeZGBsQRgIXHHi2hTQ92CM1tJA+gFvxLW8KFUaCC+1nwdtHvi2FgToRR904CZoLsL0FFRfiCt9RyR0L5Jf6KfVwSagwErjFU9M6X61LdmJ2Q+g1hb7w7lXCAsJIUGk6hvC/UN7tGqPAy+zGXH7Ud5yacisRo4yGB4hJD6WN3Z/k/YVrsB8dNm31CQfC7N+GvLkwaeiUzAuHTVn1CsumP6F/EPUzyR5boNoKh6FfO+matraG3UA8n9cr2lGrgD/slyN8o64PP/7xeuBcHoYX8Mjmz44dfgt4K/VXswTv+lADoggfKtDhpNPE6XB+z/MLqve3VMwf0I6+A96RBvIFlUDy3JpKMN0uT1SMZTT69YQ5oHcslS8ztKL744imE8+Miggmqbhp/Gw3HEaYgESVl4rqpHbNFzycGESloVnagQXx/4OG5EsETK6VR1OxB1KbT4/uIv55BC3DBvOjHz34E4jHcGWzz+U7hwCKraK0YKfXWZew2lIehKFV0RE8osHWpiFZHRn0RwFbXGtfrReDCUS/HA1IaK2UIOJQf1W+7tN/FX/AWfnm5hzSsxoaHUMdwtpCfxEGaLGzKQzH3fDvpgyioYQ5WdcDACNr8HSBjvizENjB0YQMZ+CXDN+3IUwWhhJAQAm+C9rfhMIvueQSmb1MBfZHs2bN2I+m9eR9eaRAtOJ46WjF5qT7Fyznq+b4RYguDetQNNXeKodLWyD1kLjHgCcdRbTTrA3T2fBtP2URISvfQr5DqOOMF70ZgCWSx6DkC8Uo7/uY9KPeHTplpai4z0EjsRg6nSloJwwX/RE0G0ypgKa2hhNptmmG4eGUqUQ2VqYifvmoYqw1ZVhlVeJiaMIXtVw3fFc8dkU7qwLFwk0ZMutckK+PEb6cjW/TosLyC+Wjd42CFwHmFrdOKkacEsHSS2HsawavvgpFpmI1I/+tqcCi9bzOB08CT+fDetFc8r261+X1eVeJdsW3SKKRi/YS5aCfSGWTXr02vdTh/IalIxHoMY/nJ3979vbVMptHuiKQMjt16rQZYSYolqNRtCNfnExpLhAhg2CsT9y/oG9pCAE8SZOwc8BbihBbQUU9nny7sCfIbFYcXY186+1hjQCANMhFfy66GF5sadKkye87tu24iHexfQW1kkAaCCvRfuqRvqV1WXCHWgAfaqN9tL6sx2WnMWS5hDL3tYYSgYgRv5QnDTqkQoeDQyB0gJ87tDhtVSjqtm3bWjLkEqH6p8AxbjejfGJUZjKsaFaPMOyVZoGj0LEzNK68JyYmnktYLbSPz+WbwxOxua1iqLklgLt582YH5eFEUNlbCeUQBw+Ohb4INSufgSC0wzZgtoT2IuloGBq1IEyEQpSDLz1JUzocq+NhvZvUh/rEXR5Alrzx7Trjl1nB7fCxLZ2DCyG2PYAT+BUNltNAu8GH/9Lx7UIzPU7CqKdBISt+aB4GzWSStvJYaRqSEBc3Lv2oyQiSq3jdZAFi/5MP3YinCy9X0Xjuw3I7EY5M0jC6wvzBwHsQ3oanRGEEzndOQ+8x5op2Yb0H8DBnXVrI0bsA64cFFHngv/nu9nHdwyoc66QQ3EY/UBw2cXzU1Ck28IqDCtBuig61CysT9gupADlUn7qi5aCm/06v+SszIBlUrOuoVHczI+SlLFKhPXzsU0IzQyVoiB3nQxbtvcF7Eg0glThS4Q80YH8EKlRH4q+VhgWO8KwTsHUICCOUJnE7kNfd2JXWAs8lb3Q05mmBIZLgylSy4TFu5PVMaD0rQoffE8CLpwFkbizcyOZkay1XGvFEOwm6xYsXn0c+/sMz3RqKyFoYHPG7BJF4wZbVgbyM5JWb0A+sC2M5xGZgqwjrTSMaSZrT4N0BiRpK5MC7dEJbefYIiDIdy89O8i2woEMAtcMj9TkwFJGGH0/6wcaMX+w1DdAsT+c36ESLocyPA9iyc89OyU8T0jlGeMx7UPBs3bo1gRRaA8vgCXOUiRt51C6m40VYBR1CXvLlQissEqhFF1k0xa4onUrQYT/qRqdwCzRy69SpI/mUYaPElaFZaBnEHNCZvFnlx2a4A78c/XyGX0uUKCJkEukUhvNal+cVHqwsVseW26VLlzCN2fRwlLJSjVkAbCkRlaohQdhyYy9vM2vItDVr0FYmAfgXj3yskpwIx/IIyFxK+0aSWTjcfUVabkmJFHi8Ulm7xcBbqHyy2DPC7XIcySe6OgIa8H6lEppFVZJAYEV+UfNltknWaoRWCoX9IpMG+wZhd9Hr5dDTzyYd0UjuoLKcQkUcNnWGNVRZB95X4N1CpdsAzlc8yQgi4UFzuH0tjSuXsFOojA78YeWwNCKGHoR9DL7YKkSNb0TlDcsPFdBBLyc8LQjYlTB2vsRXfw6B8Rx5sIZF5COd/N0E3otoV6JFizuLx2BmaasIPfLyCml0J423mHq+j/c8BMjZ2MIeAO9T7Dj3SCTcpzy3Ev429FNpOIt8mq8Tz+XAmpP2BvgWFBxJhyXl5e3I+y8wmW7eRNyLhEgsR5lEG0gjv8ux32ULL8j/afjnRcaRBgmsHoLJalSUWQSEaFRBjYWwT6G3no73eXjDnKS5gjjC20f4jSdOb3/5D8PPMSzhN7uiTbaDB41IP6zTsDTHhYtOJM7affv2efg94LQimxTC3hICxH2JMnSHzgz4PJz87QL5PPIg0/8N+P7LAqYBwpzgIknMS+Fvbb79N2g3tcA/mnr2tSSCQF+J4fst8jpg5/adojHNQeA2YLZxALROheZAcL7y5/EkoqyP7MigfwpwB99to9AsjwCQeCW68ZcdsSivtjofWSQVaX2JEcqHsABm3Dyub9s73OklCyOu0bmFZAbETErTxtieE+QzhhIn0TaeZr6g5t8SXhFsEcsORIVvzEddikoeJgCEEo2EtV3W1PxVVJwved7ja9YhTs/ps6aHCtX/QOMNKt0gnu943qSy7WDIImt+PhNaVLDG/MxjFkYaSdBRCVuQhhy+b1VA4omGtMxn+n4LIvHSoEGDQD2y8CTMyoPGlVem6kTePuIRoSmV9A5m8W4VHMsVXTTwaU5OTqH4EVRfg9OPx4kg+oie+gvKdT10Hs3Lz+sZWE8jmiE4N5K3X6E9GtyPEWL/Rhhzfrc5C/x95F+0Isv5DbxF+dbUk8QPaDMBlLBfGl8ygN3wxloASD2TNV7bef4bhljkEZvRPIS71fCJk4B/Ibas4PCEsF0On+NS4v9EI3yR/P3C8zR4CzDgn025fxFSAR5js/td/AEHPIX3X/gN431GRoakvREefEIavgC+/IIrCse3CHvRZESAfA6/7uIVrZ7LQJX2OTy7kDojbeJz8v2T4ImDd3P5mUZ+LwPvFepgMjyoDWwZ3+M7wRGXV5A3FFpPgneV9a3kTC7qIRrPlaT3rOCsmrdK4m0kbau+CSzgyKNoUYugbX2rKtGQAon5V2g/cs/7Kz40HY4b4JAMwQ4PhJf3V+PjoxXN1kz9uTF9Y6/CDqWP3ai7MC4UFvauqam259h0GIV6a8bSjpZzbuYXYXQq0ZPvyX+zVq1aH1DRgj19gLy/JxvQo0ePsUwTH0ll2jZ19tSlgfDAL5ViJ+/9UNPbUqkOw960EUG0KhAuv2hYL/Pz2kcffWQNgwJhCL0N9LrpCJxtAqOR/kLFuUDUboaIATRrNoce98qk3KSwiQQa2SQMn9KDdqTiyYrcP4hkBiPywrT4LQhCa+VxAE6eZ6ChzDYLzZMZFuhoFgtDF0NKj8sUcQJ4PxDndFlbA32NZQ1WY2U4OoFG9Ct8C9OYgaWDv5x8vhBIK9YvGs02GvLlrKa2GrN/tu5s8LdHxiHth8ENdkqF3kIZprwyY+4MK24A3z8zd4HM8EG/MfFWwaOwzhoe/yg87tSl018YnwNRZT3ad+Sh14ypM8LqAt9mP8O5a9Ec5TuHORaRjoJeYeh3Jb0XSf8D0uhM+rl8k/kSie+3tNBTuDdAAN5t4J3P0LclNAzqzCbeEws8BeeSj+DQ0L9cYiDxJyBE26D5bQc3TNMW7TRna85VdnlEOI8lncf89RSZVY0Og/exOmtLmPc9i35ZVLWGZUheehs282pfYuz4WA6JK23c5MGzz8Mu9Q4CsYltHFNt8JqO03Y+0T1sfGvhpo38kN9LbONprLZd8uBrtmE1wCrjgCxvYIHkJATpr1TkMaEJMRzqLxoIAvpytLSgbY9hRw8EEldymN2JI9+0xh2CHKhSDSmyvBi8/wT257DZy59XHsbEPl9bDkBrTwU6HEGDimzWQVCRJ7kBxNxNp7eFUexaVnsvYfvV6scuaxc1dIlMI9IvN7PSE7xKv2wvjIiAVL7NXhi5LyPYXhiJcbHQmBOZXo2/6jlAD52NnUK2OfRGAIU2HgAAEtBJREFU0Mh0/FS0PyfDj74InNHk4HW/gdjKjOyx2qf2PYXn0xphVPXfpyIpVKuGFCujbMCNT9odV8ub6HFx3rNuOn1GwX4zf2tcm31T07WwcXEsGnbwlMGzbgIuPWhMTQzNabjc3BsVv5ObTbva58DbR4UJoEY7smVLdQFlDQxT7c+QnnQYMjQSO1YcvcuTDA0eC9iagMlw5AE6pMEIq1MRSNa0tsBr3KHHgWrVkGIV329rKogVXla4XHSnJ8Y9SrybeRJixjfNZ7bWqT/BNtxnHQpnL4zYGqHijfdt49UAq4UD2D7WMXS7EltMRxIUu2QemtJi7BfBma1ARtCkpupe/T2ZnQzAan4PTQ4cEhpSpbGm/4uuJnWanMz89dNYTrsUT9d8TWm17vTf1hGOmjbqDoaMouJLrxvpuJaHDY5L3HazLZG4Nf4aDtRwoAwcsFvoV4bohw4qV7a0qZ2Q5GbLuUw1phabM25oddR13Ln10Yv3R+GluS8EJuunZM1FtOMIBoTR89EBNZCDwQGZ+Tn88MMdmZmZ5R7aV0e+GTY2O+KII1yrVq3Kr470SpGGnIdUOy0tzbd06dKwmc9SxLVQZDFkh0YdEhetXuQtbZyS8Ow0gJLiHFLhKUNmdMRwPYodl+wgV7eTueLLxNqPrIk9bvJfFRNelmNGHYNx6GmAsWxOv6lCjuSocYcEB6RBschzHKvSryJDh6y2jzA6jrUVvyTEJUTbKg8SJ5kMOJPp/MmyTcWfBU3OlvIvhi1Vrtind8e+2vse5zvIWqJKcYeEDamsJWk0cG5zp+bpoumOixHtlzGLFnMGLYR2Lu8PZk3s+UQI7MCrZcRmAaGsnrV3+xmq3V0VZx7ZJ1cDLYkDNKijwbmd2bUR/Jarly8pjcoIZ31OYxZuZjGbHLbwtDJoV4DGpXCsD/EtGyqTBJ0dmkPOzRoH7LuS6IpmyvqwWxG0+xJyEypNQ6o2gdT07pmtlFPvyzK8JNYhrTBMfbnXVbBm95j04GKsWExofPf0Zuy0OpKK1x4D5XFcPX4CitCJCKJYUSLhrHbWBse8+K7jIynK8E4lUmy7E6cQMlQLrmSNTKDGX2oOiCZT6g9XHFXWGnVg5kwWdv5QHF4VhZWqHDRcB4sMxd54SNkcaUuHIXzWclKEJSRpV6fAy/NZPjGgVPwq4GwjhzqMeM/G2KBcKv5EplUtAil50IzO3MIrCxPT/Jq1yQE8G+K8cVtYtMjqYDOL3MvRDGgxXOloai5w6ypNb4S/MQva2ELB/iT2YRUJISlr6RzT+m/6fNrDCCP7GZaOow9Tpvc9qMlCzVjuDbXkITFy17gSOEADlN3qchLgOaDW4VnMyQPD2Iogq6nP6ty581BWWpssYJQ9ZbURKr+gPdwOfhsahJzs+CqriT8ITcY6KC07+3biy+LGeuAt5122AbF2jW1hrD4PxQ99l+ESadwPrC3xsqH/LvSfC8WRYQoLLeXY1/8DV/K8HiH3LEsEPg3gkd8+rEI+hrK9xMyeaNnr2XLxO3m/gLKN9K9sDqDLAWV3ktcOrKQeQNzuxJXV2Q+DZ9m6CE8mrRHk5xTwXOQtg0fS/DlIhBc0l5MQHoN4PYr8FVLur8nDBJY1yFIHy8khfAgSOZ5YbKfbofssi0Kn+4OjfmRDL+WTs7Ll5ppd8Og+kP6NbGdZoPYmedsCTx9nxnKBRMYvfL+Zpzl5lLOxRnmUZw/5SkSohbUraN1CHq8AtzFRN7EtZgh5oxlqd7Fd6RGZHRWasVzx9pZYscoCd38tm/RGEgVhFHQiUQ7n4WOYF+Hpx/tACvIAwugh3u9jnY/MdF2JADsPYSSai1S+UjvirODkiD61C+L6xxRGsi3E9M2G6OmxCWtsno2/K3Z4TUiAAxxC1gabzu987weBbaPyfkGDO5le+DP8T1LZL5XNlbLrn4osixgfo0E/z6+H8B955Byn16jU1/JuOQRcy+y92Z8DH0/8Pfx+zu9xrEH6kkZ1I0iLqfB7/ehhPzSkM8CfDf02BEzj2YL/WTYky7DEcpJnjsH9gvwMB7CS5zPwZVPzFARJehEWNVEzryPug5RlGg3xPJ7lhMlROzcgINDYDziEyPHApQNzWHvodFP2e92MAZlqaTXwMwj/mXJcA1z2p4nm3Qf/O5Q92DGK0AYm5ZVTQ78GR84jH47wfFvsPUIL/KvYLPs+cBe8lo6Vk3zMt4nbX8LtHNthmoJ/FI+UV/YyOslHa163AcviN5c8bZcweCinks7g9XAeGcqZfLO34L+ULwe8VfwqWXwKX2UP4QvgG+TlY8CiQMyCV5N5v54NwvKdi3VVLpBSVW4c2tHxxeaicgNl39Ug5dXO2jahx4zMSRcX2JLvOJLjLEwRRl1sw4uA8zng9EY1f/jeYnBqguAAjbA+x9vOpDE3oTIez0ZY2Vw5GK1Adshv9lf4b4VZcgMJP82AZ9Pb3saeuRs40XIA/ouAS+O4SvDEsSL7VeByDtDZHK+RziUCQ1j4eCo4q6j47QhbQPx9Rdjh/wm/AUgLNrWmQ38UeZID8N+WdALHZZDnV8FBE1cnojlJPoaS1nH45Typ0ax1kk2t4loB30/j5cRSMw2812mYsvNgLw0uYBhWctgajfV+cNd6vJ57rZimEhpfizCWPYXkS+qdHNLfifLcySPa4unCIxrwQImDoLmMcBHCT7CZ+UzhJTegXEn6cuqkaGWXCx5xbsGfxZ7Ay8n/o2ijl0M/A1hPK9zmHycjpAKWTsHSbjii9jH8omV+JjyC9m3Q2oSAGQ6tu+DXPQWFBWdS5ruS9iVdCm3BP5NnC0fhbOBX7au1TzoWOa+qt+AQ/x7ydDbl+Qj48cB/y83NDWp1EsfOVfmQrdZOhy83zlhHplrYZaCSYHnQkQVxr5pe7V3bHfuBhFq5Ezif8DY+5EhAop7HcoutK7+tW3ZjodTAAxxAxb8Mnh4lFZLKKJtoLceQYDvCSrSjMwAs84Olt21D47o/9PRCGsJqBJA0pkTBo3e+gp9zedKhKRqC5WS4wtEkr6EhyYHx6wJHZgTCA780ppXUO5Nd6Bdy28cWORoFjasf4U2sA8t69rmN8DNJ7+zaubX/AseqD3quns3s0TzKcxu9egO0kRzitKBxfYDweDtAn4PiVuzYvmMTDfsEGapS1kI2Q3dFY+kBzi2STwTQEfiTSGe+Fc9Qork4GMrcLhtW/bRM4RnlPQ1/jrXVxdw3gvefEOhP83jlthI20ZrkZxFGM7Ic7ORXk88zMPCfRbxP3przVhb5PZOZxyQ/7agfjvoQoWhibLcEErNlrfEnQnRB4Gxx8t0ezfNe4K8jDMcHiPjPPZ/OtxpCujs59WmtaITElUsH7meD88wALvzYC51nKf8V5Hl17dq1vYGwWL9VLpBEQ2Gn/Vgy34FMxJpOj5W/2HBTLpFky4DObROmmuI0Cj+KOpQ/MnZ791Fcs4h0Z2Fj8W4heJerjAcslbZ41JpQGqOch5ROhVxBhfwokiM0KA+VMh/hUSSQDGYyQWai4rcI3NrAW1BXPhU4mod8p930tN+IP8JZthiEhHREto6LJ8Yh4FIRGCO47WMAPf6L3I/2Crvft0oE4GfLD3+P7EvaJ8MM0c5o7hxqZ1pH0P6JoN2DEGgvWOT/E4kXcCLU0GTWECYalUO0I8o5CtQfZ86Y+Yrg0ajllMl6cl6T2G4IuwL8HyN3xAtuwH4kJ1riTePJgq8y1EzkxhHNaTq9XIBQi3zuguZq4HJawj0Iowbw4dX9SfvXINSeZggpJ0RYQy7BiXTw9SjysRNBvdYfJhpeLQTU0gAu6ZxOeeuCF9ygHAjjewJGw1LmRtLxwQO5wSSR893fCeAEfvVC3etz+mQktkxwA/BYv1UukCThrPE956YMmpmOyUxOpcO4yAlxRWqy1RPGylwEPJt+AZWPQ7c0JTdI/Gj4jC92TOyzJQIv2isnPu7QriftR4ifEo0QBvlJGY6rVMaI9WHQGk9MDsh5SGgKR/JNbHlGYzlPIvOb4SdyNL9iTwhoCBaYIzyaOHRHExqCDIVEYLTkm23kgPqoIRlhlq0F3Jidhr8B3EkP/hrDqFvJ3wPxcfGXIEB7E7aLJA6nYS+Uxgw9DqLQdHAgqbGxGwGqW0fwbqWRS+/voOGvsDIa8g8tbx5xLpEbPdBKRMCdhPDpFkCR4RzhiR7Ts5KGLPW9BZJ2biA89FeM67IHjwNXmpOeNPgPCF9Ifqx2gr+Qur8dIcnED1cc4SiHCJ5eco8aZfgP8V5BgJ6JtnSH3eyXpEHcY6Czhksb/xIa/jw6NVfI0bwaF6IWuaj2RXyZXZPnZUGBBzJ0zjvuuOPk8lF/tKIfTo6U4XUTcJaEBcTwVItAkrSzJvb6kp8vU91za5l7jQ6GQ7VBmW5OLUg1TK0ht+XVpSokIKh0DNui2qEBWbMizMBpW7lQeoPDqVZsHtszqlII/WLdDn0YrQFhVJLT5nCL180II7FD1bhScmDlypVmw/oN91LJW4iWEFD7JToqeye0hhsI28WwZAMg6rE1o7aChhVW2fHLUE5ayHL5oeLngtuR4UFtvKIRW06GE4TdSEUXoRJGw48iNpgT0XW67dqzayIzOyLgbgU2mTg/o0FciV8uYkS5Nk2GYa8G4smvHIOLbeka8J4XP43pWPLvRduxtBKBBRzDRjkgbj957EaexvA+NXQYCv3O4O4k7k5/ObzQSw3ED/yivQ3iXYRsOmXeT96EUfPh2bsBHPm1jNWGKuCQuy3w4QKOWmvPjNpTpGm1L8oonf4LuUm5Eu/z0LjyjrCSw/w5Nlr7Sk6o9IefyO8mhJt8H8sRLreYyLt0HgstIP/8V0ON5NUn56ALHDyxsdbP+CNDhFimwMSRF9F2B/PqQRsrVbutNoFk5ZB//hXSv/MqT9W7zqObK6/v/lIk9KzaZwxR69z5pcCtQQnhgP/o1depfE+jJbyJRjLBZbj2cgSvHJd6O6hyGJnYlUy0k6YMQ06kwv9CA5CKHHT01CwPMffpHt1q+DTctwk8h+cttJSH+d2DEfwcaA7gvTXP5zT0MBrALCfnSUNrTKMGjVqS5mMYwl3k4f9IV8KLBIsuZ2SpJxAGzyBYXkAgFoBzIUbkp4EvQ6N5sYiYJSi2ivZi+UP+IWTmU55chB9nwWvJHIpmaYMhKGKqWIlw83Grxm7uSXuDNG6kPDId/gHx5RKGfjTqe8CzhnmE/0I+xTb0FHgy1P2VsMPhx3Dw/o/nDqEP3tkUZxg4OnTe5vj+JuT9AoJkeYDtUBZ4MrQbwZuggIBeK+I0QYBcSlqbGU7+zrl4chztCOATEIIe1hzJnXsdsvdk30aa5wLfwyH+m/klm+Yb0Pw3Qnwamtpg/3G0Z5FfOa30WFA2Uv5dco4VVzHJToeVdAKjJW6k0yMB/3N+r7c5ZapVTLmy4eitKuOhO2qEUTFcKiGICwbkvGaZ8k1neDSPyimXBN5KpXySqGKzWSYkGPaIdpCKALD8AhOH0IiTykuDWd+gaQOrMaHdyIzYKOicz/M9z680JDlH+1WirCFs87HHHstQPtoV+gpnSFye2xEYC8nTfOLLNehyzvNnEgOB8xw/jwoOYfNJW256ldMmn03MTzwF7WS9aATgSJ5/44ly/qHfSui2JN5oLomU2SrLISiSeWkC/V9PPvlkj9iccHL08HRwxzE8/RPh+hvhcnnBELSemyUi+dvJmh2ZJJCjaafz+yfPF+B1RNBeSvizgkcjl+N63wZnopSRod48wGcBuxKtsEjoCmK4O1K8VlkD8KKjkOVK79kIHREY1rntCMrreeUTmtPIp3xPOSN9Bb9Tge9C21oruOTnW2CiCXVk5lEuIF3A8yB+0dL+ID+Sl/3gy1BRZgnb47d1VndhG/K/AkxzN4SniyiOCKZI9xNhd6uMB20rWyRyjb9EDmgYZE+lYaSBmcOZ0vPkokMaZmcEkdgXsugl68RpcceCs4KKHBwaMyWuc712B6fhNCKO4tWI34lWIcOMAnrqefTga2QoiEazJ3SYYZe7Pj36nMxwQeJ70B7my62yEXgaGt1xbJuQoZWPxrcYQRScJZTlAVxzJGnJtU+2w0O58oc0kvcX7v8zdLgq9hqEXkca+XopeyBdhG8iwuQM/CIc9jB1viDi4kkLVQQaGuFpLKqUix7+Qgv6nfKKcA86GSInxSedITNnAPeQz1+FP0GEiBdZxgD/j8RKvjDUxiTDVK7PkkPvtoWWX8rmdXpPRnutBf+WIOh+Jf/NKVMj0pF2FXR8kzSE2Al0NrJYdT7hGbLOSxDk6Bcx6rMGqhNlz5AZyGDEkJf/fYEkhe0wsgdSWewBzfxlp3Jwv7rP+apaft9OP6zmp4YDNRw4yBz4ZwgkYXKHkecglN7hjSld7TK19AHG5dg0a1wNB2o4cMhw4P8Bq3vO2X+jUR4AAAAASUVORK5CYII=";
+const ICONOS = {
+  atras: '<path d="m15 18-6-6 6-6"/>', adelante: '<path d="m9 18 6-6-6-6"/>', abajo: '<path d="m6 9 6 6 6-6"/>', arriba: '<path d="m18 15-6-6-6 6"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>', checkc: '<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>',
+  alerta: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>', triangulo: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>', mas: '<path d="M12 5v14M5 12h14"/>', puntos: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+  lapiz: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', basura: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+  candado: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', papelera: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>',
+  salud: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', salir: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+  sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  luna: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>', monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  tel: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>', camara: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
+  buscar: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', enviar: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+  deshacer: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>', rehacer: '<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
+  pluma: '<path d="m12 19 7-7 3 3-7 7z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="m2 2 7.6 7.6"/><circle cx="11" cy="11" r="2"/>',
+  cuadro: '<rect x="4" y="4" width="16" height="16" rx="1"/>', texto: '<path d="M4 7V4h16v3M9 20h6M12 4v16"/>', regla: '<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0z"/><path d="m14.5 12.5 2-2M11.5 9.5l2-2M8.5 6.5l2-2M17.5 15.5l2-2"/>',
+  mano: '<path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-5.9-2.4L3.3 16.8a2 2 0 0 1 2.8-2.8L8 16"/>',
+  formas: '<path d="M8.3 10a.7.7 0 0 1-.6-1.1l3.7-6a.7.7 0 0 1 1.2 0l3.7 6a.7.7 0 0 1-.6 1.1z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/>',
+  reloj: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', nube: '<path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9z"/>', sinsenal: '<path d="M2 2l20 20M8.5 16.4a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 5.2-2.8M19 12.9a10 10 0 0 0-2.3-1.6M2 8.8a15 15 0 0 1 4.2-2.6M22 8.8A15 15 0 0 0 10.7 5M12 20h.01"/>',
+  ojo: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', recargar: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+  edificio: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>',
+  copiar: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+};
+const ic = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[n] ?? ""}</svg>`;
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const FIRMA = (color = "#1B2A6B") => `<svg viewBox="0 0 300 140" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d="M30 96c10-30 22-58 30-60 9-2-6 52-2 58 4 6 18-40 26-38 7 2-3 30 3 32 8 2 14-22 22-20 8 2 2 18 10 18 10 0 18-26 30-24 9 2-4 22 6 24 12 2 30-20 44-16 10 3 0 14 10 14 14 0 40-12 60-14" fill="none" stroke="${color}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M58 70c30-4 70-6 120-4" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round"/></svg>`;
+
+/* =====================================================================================================
+   Estado y mecánica: capas que entran y salen, notificaciones, cambio de paso con View Transition.
+   Datos inventados (regla 1): ningún cliente, persona ni cifra es real.
+   ===================================================================================================== */
+const e = { caso: "resumen", tema: "sistema", vista: "propuesta", lento: false, capa: null, notif: null };
+const hoy = () => e.vista === "hoy";
+const reducido = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const dur = (ms) => (reducido() ? 0 : ms * (e.lento ? 4 : 1));
+const temporizadores = new Set();
+const luego = (fn, ms) => { const t = setTimeout(() => { temporizadores.delete(t); fn(); }, ms); temporizadores.add(t); };
+const fase = (f) => (f === "entra" ? "entra" : f === "sale" ? "sale" : "");
+
+function abrirCapa(nombre, datos = {}) {
+  e.menu = null;
+  e.capa = { nombre, fase: "entra", ...datos };
+  pintar();
+  luego(() => { if (e.capa?.nombre === nombre && e.capa.fase === "entra") { e.capa.fase = "quieta"; pintar(); } }, dur(320));
+}
+function cerrarCapa(despues) {
+  if (!e.capa) { despues ? despues() : pintar(); return; }
+  e.capa.fase = "sale";
+  pintar();
+  luego(() => { e.capa = null; despues ? despues() : pintar(); }, dur(200));
+}
+let tNotif;
+function notificar(texto, accion = null) {
+  clearTimeout(tNotif);
+  e.notif = { texto, accion, fase: "entra", n: (e.notif?.n ?? 0) + 1 };
+  const n = e.notif.n;
+  pintar();
+  tNotif = setTimeout(() => { if (e.notif?.n !== n) return; e.notif.fase = "sale"; pintar(); luego(() => { if (e.notif?.n === n) { e.notif = null; pintar(); } }, dur(200)); }, accion ? 7000 : 4000);
+}
+const notificacion = () => (e.notif ? `<div class="notif ${fase(e.notif.fase)}" role="status"><span>${esc(e.notif.texto)}</span>${e.notif.accion ? `<button data-a="${e.notif.accion.a}">${e.notif.accion.texto}</button>` : ""}</div>` : "");
+
+/** Cambio de pantalla dentro del teléfono: View Transition con la dirección; hoy, 24 % del ancho; propuesta, 24 px. */
+function navegar(fn, dir = "adelante") {
+  if (!document.startViewTransition || reducido()) { fn(); pintar(); return; }
+  document.documentElement.dataset.dir = dir;
+  document.documentElement.dataset.vt = e.vista;
+  const t = document.startViewTransition(() => { fn(); pintar(); });
+  t.finished.finally(() => { delete document.documentElement.dataset.dir; delete document.documentElement.dataset.vt; });
+}
+
+const estado = () => `<div class="tel-estado"><span>9:41</span><span class="isla"></span><span class="ind">${e.sinSenal ? ic("sinsenal").replace("<svg", '<svg style="width:17px;height:17px"') : '<svg viewBox="0 0 18 12" style="width:18px;height:12px" aria-hidden="true"><path d="M1 11h2V8H1zM5 11h2V6H5zM9 11h2V4H9zM13 11h2V1h-2z" fill="currentColor"/></svg>'}<i></i></span></div>`;
+const marca = () => `<span class="etiqueta-hoy ${hoy() ? "" : "prop"}">${hoy() ? "Hoy" : "Propuesta"}</span>`;
+const telefono = (contenido) => `<div class="app ${reducido() ? "sin-mov" : ""}" data-tema="${e.tema}" data-vista="${e.vista}"><div class="telefono">${estado()}${contenido}${notificacion()}</div>${marca()}</div>`;
+const velo = (cerrable = true) => `<div class="velo ${fase(e.capa.fase)}" ${cerrable ? 'data-a="cerrar"' : ""}></div>`;
+const hoja = (contenido, estilo = "") => `${velo()}<div class="hoja ${fase(e.capa.fase)}" role="dialog" aria-modal="true" style="${estilo}"><div class="asa"></div>${contenido}</div>`;
+
+/* =====================================================================================================
+   1. Movimiento
+   ===================================================================================================== */
+const PASOS = [
+  { t: "Datos del sitio", c: () => `<div class="campo-t"><label>Nombre del cuarto</label><input class="control" value="Cuarto eléctrico sótano"></div><div class="campo-t"><label>Acometida</label><div class="chips"><span>Aérea</span><span style="box-shadow:inset 0 0 0 1.5px var(--marca);background:var(--marca-suave);color:var(--marca)">Subterránea</span></div></div>` },
+  { t: "Fotos del cuarto", c: () => `<div class="fotos"><div class="foto"></div><div class="foto b2"></div><div class="foto b3"></div><div class="foto agregar">${ic("camara")}</div></div><p class="cuenta-rep">3 de 6 sugeridas</p>` },
+  { t: "Medidas", c: () => `<div class="campo-t"><label>Ancho de la puerta</label><div class="medida"><input class="control" value="0,90"><span class="unidades"><span class="si">m</span><span>cm</span></span></div></div><div class="campo-t"><label>Alto libre</label><div class="medida"><input class="control" value="2,40"><span class="unidades"><span class="si">m</span><span>cm</span></span></div></div>` },
+];
+function pantallaPaso() {
+  const i = e.m.paso, p = PASOS[i];
+  return `<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver" data-a="m-atras" ${i === 0 ? 'style="visibility:hidden"' : ""}>${ic("atras")}${i > 0 ? PASOS[i - 1].t : ""}</button><button class="avatar" data-a="m-cuenta" aria-label="Tu cuenta">MG</button></div><span class="ctx">Hotel Plaza Real · Torre A · paso ${i + 1} de 3</span><h1>${p.t}</h1></div>
+    <div class="cuerpo-t">${p.c()}<button class="b punteado ancho" data-a="m-catalogo" style="margin-top:6px">${ic("buscar")}Buscar en el catálogo</button></div>
+    <div class="barra"><div class="progreso"><i style="width:${((i + 1) / 3) * 100}%"></i></div>${i < 2 ? `<button class="b p ancho" data-a="m-siguiente">Siguiente: ${PASOS[i + 1].t}</button>` : `<button class="b p ancho" data-a="m-reiniciar-paso">Volver al primer paso</button>`}</div></div>`;
+}
+function casoMovimiento() {
+  let capa = "";
+  if (e.capa?.nombre === "cuenta") capa = hojaCuenta();
+  if (e.capa?.nombre === "catalogo") capa = hojaCatalogo();
+  if (e.capa?.nombre === "descartados-hoy") capa = descartadosHoy();
+  return telefono(pantallaPaso() + capa);
+}
+
+/* =====================================================================================================
+   2. Tu cuenta
+   ===================================================================================================== */
+const DESCARTADOS = [["Tableros eléctricos", "Colegio Los Andes · hace 2 días", "Quedan 28 días"], ["Cableado estructurado", "Edificio Terra · hace 9 días", "Quedan 21 días"]];
+function hojaCuenta() {
+  const k = e.k;
+  if (hoy()) {
+    const tema = `<div class="radios-hoy"><b style="font-weight:600">Tema</b><div class="op">${["Como el teléfono", "Claro", "Oscuro"].map((t, i) => `<label><input type="radio" name="tema-h" ${i === 0 ? "checked" : ""}>${t}</label>`).join("")}</div></div>`;
+    return hoja(`<div class="cab-h"><h2>Tu cuenta</h2><button class="icono-b" data-a="cerrar" aria-label="Cerrar">${ic("x")}</button></div>
+      <div class="dentro-h"><div class="perfil-hoy"><span class="avatar">MG</span><div><b style="font-weight:600">María Gómez</b><div style="color:var(--sec);font-size:14px">Conectado · todo al día</div></div></div>${tema}
+      <button class="fila-hoy" data-a="k-hueco">${ic("candado")}<span>Cambiar contraseña</span></button>
+      <button class="fila-hoy" data-a="k-hueco">${ic("papelera")}<span>Descartados<small>2 · se recuperan durante 30 días</small></span></button>
+      <button class="fila-hoy" style="justify-content:space-between">Diagnóstico del teléfono ${ic("adelante")}</button>
+      <button class="fila-hoy" style="color:var(--peligro)">${ic("salir")}<span>Cerrar sesión</span></button></div>`);
+  }
+  const pag = k.pagina, dir = k.dir ? `pagina-h ${k.dir}` : "";
+  if (pag === "descartados")
+    return hoja(`<div class="cab-h centrada"><button class="volver" data-a="k-volver" style="color:var(--marca)">${ic("atras")}Cuenta</button><h2>Descartados</h2><span></span></div>
+      <div class="dentro-h ${dir}"><p style="margin:0;color:var(--sec);font-size:15px">Se borran del teléfono 30 días después de descartarlos.</p><div class="grupo-l">${DESCARTADOS.map(([t, s, q]) => `<div class="descartado"><div class="txt"><b>${t}</b><small>${s} · ${q}</small></div><button class="b chico">Recuperar</button></div>`).join("")}</div></div>`);
+  if (pag === "clave")
+    return hoja(`<div class="cab-h centrada"><button class="volver" data-a="k-volver" style="color:var(--marca)">${ic("atras")}Cuenta</button><h2>Contraseña</h2><span></span></div>
+      <div class="dentro-h ${dir}"><div class="campo-t"><label>Contraseña actual</label><input class="control" type="password" value="••••••••"></div><div class="campo-t"><label>Nueva contraseña</label><input class="control" type="password" placeholder="Al menos 12 caracteres"></div><button class="b p ancho" data-a="k-volver" style="margin-top:4px">Cambiar contraseña</button></div>`);
+  const temas = `<span class="temas" role="group" aria-label="Tema">${[["sistema", "monitor", "Como el teléfono"], ["claro", "sol", "Claro"], ["oscuro", "luna", "Oscuro"]].map(([v, i, t]) => `<button aria-pressed="${k.tema === v}" data-a="k-tema" data-v="${v}" aria-label="${t}" title="${t}">${ic(i)}</button>`).join("")}</span>`;
+  const nombreTema = { sistema: "Como el teléfono", claro: "Claro", oscuro: "Oscuro" }[k.tema];
+  return hoja(`<div class="cab-h"><h2>Tu cuenta</h2><button class="icono-b con-fondo" data-a="cerrar" aria-label="Cerrar" style="width:36px;height:36px">${ic("x").replace("<svg", '<svg style="width:18px;height:18px"')}</button></div>
+    <div class="dentro-h ${dir}">
+      <div class="perfil"><span class="avatar grande">MG</span><div><div class="nombre">María Gómez</div><div class="estado-s"><span class="punto"></span>Conectado · todo enviado</div></div></div>
+      <div class="grupo-l">
+        <div class="fila-l">${ic("sol")}<span class="txt">Tema<small>${nombreTema}</small></span>${temas}</div>
+        <button class="fila-l" data-a="k-ir" data-v="clave">${ic("candado")}<span class="txt">Cambiar contraseña</span><span class="der">${ic("adelante")}</span></button>
+        <button class="fila-l" data-a="k-ir" data-v="descartados">${ic("papelera")}<span class="txt">Descartados</span><span class="der">2${ic("adelante")}</span></button>
+        <button class="fila-l">${ic("salud")}<span class="txt">Diagnóstico del teléfono</span><span class="der">${ic("adelante")}</span></button>
+      </div>
+      <div class="grupo-l"><button class="fila-l centro">Cerrar sesión</button></div>
+      <p class="cuenta-pie">TEINS · versión 12</p>
+    </div>`);
+}
+function inicioSimple(extra = "") {
+  return `<div class="pantalla"><div class="cab-t"><div class="fila"><span class="ctx" style="font-size:15px">Sábado 3 de octubre</span><button class="avatar" data-a="k-abrir" aria-label="Tu cuenta">MG</button></div><h1>Mis visitas</h1></div>
+    <div class="cuerpo-t"><div class="panel visita-c"><span class="hora">Hoy · 9:00 a. m. a 12:00 m.</span><b>Hotel Plaza Real</b><small>Torre A · Mantenimiento</small><button class="b p ancho" style="margin-top:10px">Empezar levantamiento</button></div>${extra}</div></div>`;
+}
+function casoCuenta() {
+  let capa = e.capa?.nombre === "cuenta" ? hojaCuenta() : "";
+  if (hoy() && e.capa?.nombre === "hueco") capa = "";
+  if (hoy() && e.capa?.nombre === "descartados-hoy") capa = descartadosHoy();
+  return telefono(inicioSimple() + capa);
+}
+function descartadosHoy() {
+  return hoja(`<div class="cab-h"><h2>Descartados</h2><button class="icono-b" data-a="cerrar" aria-label="Cerrar">${ic("x")}</button></div><div class="dentro-h">${DESCARTADOS.map(([t, s, q]) => `<div class="fila-hoy" style="justify-content:space-between;padding:12px 16px"><span>${t}<small>${s} · ${q}</small></span><button class="b chico">Recuperar</button></div>`).join("")}</div>`, "height:calc(100% - 40px)");
+}
+
+/* =====================================================================================================
+   3. Tableros
+   ===================================================================================================== */
+function datosTablero(t) {
+  return [["Ubicación", t.ubic], ["Tensión", t.tension ? `${t.tension} V` : ""], ["Circuitos", t.circ]];
+}
+function listaTableros() {
+  const t = e.t;
+  const filas = hoy()
+    ? t.lista.map((x, i) => `<button class="rep-hoy" data-a="t-abrir" data-v="${i}"><span class="t">${esc(x.nombre)}<span class="pill ${x.faltan ? "alerta" : "ok"}">${x.faltan ? `Faltan ${x.faltan} datos` : "Completo"}</span></span><span class="datos">${datosTablero(x).map(([n, v]) => `<span>${n.split(" ")[0]}<b>${esc(v || "—")}</b></span>`).join("")}</span></button>`).join("")
+    : `<div class="grupo-l">${t.lista.map((x, i) => {
+        const total = 9, hechos = total - x.faltan;
+        return `<button class="rep" data-a="t-abrir" data-v="${i}">${x.fotos ? `<span class="mini foto ${i % 2 ? "b2" : ""}"></span>` : `<span class="mini vacia">${ic("camara")}</span>`}<span style="min-width:0"><b>${esc(x.nombre)}</b><small>${[x.ubic, x.tension ? `${x.tension} V` : "", x.fotos ? `${x.fotos} fotos` : "Sin fotos"].filter(Boolean).join(" · ")}</small><span class="barrita ${x.faltan ? "falta" : ""}"><i style="width:${(hechos / total) * 100}%"></i></span></span><span class="der">${x.faltan ? `<span style="color:var(--alerta);font-weight:500">Faltan ${x.faltan}</span>` : ic("check").replace("<svg", '<svg style="color:var(--ok);width:20px;height:20px"')}${ic("adelante")}</span></button>`;
+      }).join("")}</div>`;
+  return `<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver">${ic("atras")}Fotos del cuarto</button><span class="avatar">MG</span></div><span class="ctx">Hotel Plaza Real · Torre A · paso 3 de 6</span><h1>Tableros</h1></div>
+    <div class="cuerpo-t">${hoy() ? "" : `<p style="margin:0 2px 2px;color:var(--sec);font-size:15px">${t.lista.length} tableros · ${t.lista.filter((x) => !x.faltan).length} completos</p>`}${filas}<button class="b punteado ancho" data-a="t-agregar">${ic("mas")}Agregar tablero</button></div>
+    <div class="barra"><div class="progreso"><i style="width:50%"></i></div><button class="b p ancho">Siguiente: Materiales</button></div></div>`;
+}
+function tablero() {
+  const t = e.t, i = t.abierto, x = t.lista[i];
+  const campos = `<div class="campo-t"><label>Ubicación</label><input class="control" data-c="t-ubic" value="${esc(x.ubic)}" placeholder="Por ejemplo: Sótano, junto al ascensor"></div>
+    <div class="campo-t"><label>Tensión</label><div class="medida"><input class="control" value="${esc(x.tension)}" placeholder="0"><span class="unidades"><span class="si">V</span></span></div><div class="chips"><span>120</span><span>208</span><span>220</span></div></div>
+    <div class="campo-t"><label>Número de circuitos</label><input class="control" value="${esc(x.circ)}"></div>
+    <div class="campo-t"><label>Fotos del tablero</label><div class="fotos">${x.fotos ? `<div class="foto"></div>` : ""}${x.fotos > 1 ? `<div class="foto b2"></div>` : ""}<div class="foto agregar">${ic("camara")}</div></div></div>`;
+  if (hoy())
+    return `<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver" data-a="t-volver">${ic("atras")}Tableros</button><span class="avatar">MG</span></div><span class="ctx">Tableros · ${esc(x.nombre)}</span><h1>${esc(x.nombre)}</h1></div>
+      <div class="cuerpo-t">${campos}<div class="campo-t"><label>Nombre (tablero)</label><input class="control" data-c="t-nombre" value="${esc(x.nombre)}"></div><button class="b t" data-a="t-quitar" style="align-self:flex-start;padding:0">${ic("basura")}Quitar tablero</button></div>
+      <div class="barra"><div class="progreso"><i style="width:50%"></i></div><button class="b p ancho" data-a="t-volver">Listo este tablero ${ic("check")}</button></div></div>`;
+  const sig = t.lista[i + 1];
+  const titulo = t.renombrando
+    ? `<div class="titulo-ed"><input id="t-nombre-p" data-c="t-nombre" value="${esc(x.nombre)}" aria-label="Nombre del tablero" autofocus></div>`
+    : `<h1>${esc(x.nombre)}</h1>`;
+  return `<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver" data-a="t-volver">${ic("atras")}Tableros</button><button class="icono-b con-fondo" data-a="t-menu" aria-label="Opciones del tablero" aria-expanded="${!!t.menu}">${ic("puntos")}</button></div><span class="ctx">Tableros · ${i + 1} de ${t.lista.length}</span>${titulo}</div>
+    <div class="cuerpo-t">${campos}</div>
+    ${t.menu ? `<div class="menu-p" role="menu"><button role="menuitem" data-a="t-renombrar">Cambiar nombre ${ic("lapiz")}</button><button role="menuitem" class="peligro" data-a="t-quitar">Quitar tablero ${ic("basura")}</button></div>` : ""}
+    <div class="barra"><div class="progreso"><i style="width:50%"></i></div>${t.renombrando ? `<button class="b p ancho" data-a="t-nombre-listo">Guardar nombre</button>` : sig ? `<button class="b p ancho" data-a="t-siguiente">Siguiente: ${esc(sig.nombre)}</button><span class="nota-b"><button class="b t" data-a="t-volver" style="min-height:36px;font-size:15px">Volver a la lista</button></span>` : `<button class="b p ancho" data-a="t-volver">Listo, ver los ${t.lista.length} tableros</button>`}</div></div>`;
+}
+function casoTableros() {
+  const t = e.t;
+  return telefono((t.abierto === null ? listaTableros() : tablero()) + (t.menu ? `<div style="position:absolute;inset:0;z-index:24" data-a="t-menu-cerrar"></div>` : ""));
+}
+
+/* =====================================================================================================
+   4. Catálogo
+   ===================================================================================================== */
+const CATALOGO = [["Cable UTP categoría 6A", "UTP-6A · m"], ["Breaker 1P 20 A", "B20-34ED24 · und"], ["Tubo EMT 3/4\"", "TUB-EMT34 · m"], ["Conector RJ45 categoría 6A", "CNT-RJ45 · und"], ["Canaleta 40 × 25", "CAN-4025 · m"]];
+function hojaCatalogo() {
+  const c = e.c;
+  const elegidos = Object.entries(c.cant).filter(([, v]) => v > 0);
+  const filas = CATALOGO.map(([d, s], i) => {
+    const n = c.cant[i] ?? 0;
+    const control = n > 0
+      ? `<span class="paso-c ${hoy() ? "" : "elegido"}"><button data-a="c-menos" data-v="${i}" aria-label="Uno menos">−</button><span>${n}</span><button data-a="c-mas" data-v="${i}" aria-label="Uno más">+</button></span>`
+      : hoy() ? `<button class="agregar-c" data-a="c-mas" data-v="${i}">Agregar</button>` : `<button class="agregar-c p" data-a="c-mas" data-v="${i}">${ic("mas")}Agregar</button>`;
+    return `<div class="item-c ${hoy() ? "hoy" : ""}"><span style="min-width:0"><b>${d}</b><small>${s}</small></span>${control}</div>`;
+  }).join("");
+  if (hoy())
+    return hoja(`<div class="cab-h"><h2>Catálogo</h2><button class="icono-b" data-a="cerrar" aria-label="Cerrar">${ic("x")}</button></div><div class="buscador hoy">${ic("buscar")}Busca por nombre o código</div>
+      <div class="dentro-h" style="flex:1"><span class="sec-t" style="margin-top:0">Los que más usas</span>${filas}<button class="b t" style="align-self:flex-start;padding:0">No está: agregar como línea libre</button></div>
+      <button class="b p ancho" data-a="cerrar">Listo · ${elegidos.length} ${elegidos.length === 1 ? "material" : "materiales"} ${ic("check")}</button>`, "height:86%");
+  const nombres = elegidos.map(([i, v]) => `${CATALOGO[i][0].split(" ").slice(0, 2).join(" ")} × ${v}`).join(", ");
+  const pie = elegidos.length
+    ? `<div class="pie-c ${c.pieNuevo ? "entra" : ""}"><span class="resumen-c"><b>${ic("checkc")}${elegidos.length} ${elegidos.length === 1 ? "agregado" : "agregados"} a Materiales</b><small>${nombres}</small></span><button class="b p chico" data-a="cerrar">Ver Materiales</button></div>`
+    : "";
+  return hoja(`<div class="cab-h centrada"><span></span><h2>Agregar del catálogo</h2><button class="b t" data-a="cerrar" style="justify-self:end;min-height:44px;padding:0 4px">Cerrar</button></div><div class="buscador">${ic("buscar")}Busca por nombre o código</div>
+    <div class="dentro-h" style="flex:1"><span class="sec-t" style="margin-top:0">Los que más usas</span><div class="grupo-l">${filas}</div><button class="b t" style="align-self:flex-start;padding:0">No está: agregar como línea libre</button></div>${pie}`, "height:86%");
+}
+function pantallaMateriales() {
+  const lineas = Object.entries(e.c.cant).filter(([, v]) => v > 0);
+  return `<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver">${ic("atras")}Tableros</button><span class="avatar">MG</span></div><span class="ctx">Hotel Plaza Real · Torre A · paso 4 de 6</span><h1>Materiales</h1></div>
+    <div class="cuerpo-t">${lineas.length ? `<div class="grupo-l">${lineas.map(([i, v]) => `<div class="item-c"><span><b>${CATALOGO[i][0]}</b><small>${CATALOGO[i][1].split(" · ")[1]}</small></span><span class="paso-c"><button>−</button><span>${v}</span><button>+</button></span></div>`).join("")}</div>` : `<p style="color:var(--sec);margin:6px 2px">Todavía no hay materiales.</p>`}<button class="b punteado ancho" data-a="c-abrir">${ic("buscar")}Buscar en el catálogo</button></div>
+    <div class="barra"><div class="progreso"><i style="width:66%"></i></div><button class="b p ancho">Siguiente: Croquis</button></div></div>`;
+}
+const casoCatalogo = () => telefono(pantallaMateriales() + (e.capa?.nombre === "catalogo" ? hojaCatalogo() : ""));
+
+/* =====================================================================================================
+   5. Croquis
+   ===================================================================================================== */
+const DIBUJO = `<svg class="dibujo" viewBox="0 0 372 560" aria-hidden="true"><g fill="none" stroke="#111317" stroke-width="2.4" stroke-linejoin="round"><rect x="60" y="90" width="250" height="300"/><path d="M60 250h110M170 250v140"/><rect x="230" y="110" width="60" height="26" fill="#E9EBEF"/></g><g fill="#2F5FE8" font-family="Geist, system-ui" font-size="13"><text x="160" y="80">5,20 m</text><text x="20" y="245" transform="rotate(-90 20 245)">6,10 m</text></g><path d="M160 72h0" stroke="#2F5FE8"/><g stroke="#2F5FE8" stroke-width="1.4"><path d="M60 72h250M60 66v12M310 66v12"/></g><text x="236" y="128" font-size="11" font-family="Geist, system-ui" fill="#5E646E">TGD</text></svg>`;
+function casoCroquis() {
+  const arriba = `<div class="arriba"><span class="pastilla"><button aria-label="Volver">${ic("atras")}</button></span><span class="pastilla"><button aria-label="Deshacer">${ic("deshacer")}</button><span class="sep"></span><button aria-label="Rehacer" disabled>${ic("rehacer")}</button></span><span class="pastilla">${["pluma", "formas", "texto", "regla", "mano"].map((n, i) => `<button class="${i === 0 ? "si" : ""}" aria-label="${n}">${ic(n)}</button>`).join("")}</span></div>`;
+  if (hoy())
+    return telefono(`<div class="pantalla isla-clara croquis" style="top:50px">${arriba}<div class="lienzo">${DIBUJO}<button class="flotante" style="left:10px;max-width:34%">Hoja 1 <small>1/1</small>${ic("arriba")}</button><button class="flotante icono" style="right:10px" aria-label="Símbolos">${ic("formas")}</button><button class="listo-hoy" data-a="x-listo">Listo ${ic("check")}</button></div></div>`);
+  return telefono(`<div class="pantalla isla-clara croquis" style="top:50px">${arriba}<div class="lienzo">${DIBUJO}</div>
+    <div class="barra-croquis"><button class="hojas">Hoja 1 <small>1/1</small>${ic("arriba")}</button><button class="simb" aria-label="Símbolos">${ic("formas")}</button><button class="listo" data-a="x-listo">Listo</button></div></div>`);
+}
+
+/* =====================================================================================================
+   6 y 7. Firma: la entrega del teléfono y la constancia firmada
+   ===================================================================================================== */
+function pasoAntesDeFirmar() {
+  return `<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver">${ic("atras")}Croquis</button><span class="avatar">MG</span></div><span class="ctx">Hotel Plaza Real · Torre A · paso 6 de 6</span><h1>Firma del cliente</h1></div>
+    <div class="cuerpo-t"><p style="margin:0;color:var(--sec)">Quien te recibió firma que estuviste en el sitio. La firma va en el informe.</p><div class="panel" style="padding:14px 16px"><b style="font-weight:600">Constancia de visita</b><p style="margin:4px 0 0;color:var(--sec);font-size:15px">Hotel Plaza Real · Torre A · hoy, 9:12 a. m. a 11:48 a. m.</p></div></div>
+    <div class="barra"><div class="progreso"><i style="width:100%"></i></div><button class="b p ancho" data-a="f-entregar">${ic("tel")}Entregar el teléfono</button></div></div>`;
+}
+function capaFirma() {
+  const f = e.f, ca = fase(e.capa.fase);
+  const firmar = `<div class="firmar ${f.fundir && !hoy() ? "fundir" : ""}"><div class="cab-f"><button class="icono-b" data-a="cerrar" aria-label="Cancelar">${ic("x")}</button><b>Constancia de visita</b></div>
+    <div class="cuerpo-f"><p class="decl">Certifico que María Gómez, de TEINS, estuvo en Hotel Plaza Real · Torre A el 3 de octubre de 2026, de 9:12 a. m. a 11:48 a. m.</p>
+    <div class="campo-t"><label>Nombre</label><input class="control" value="${f.trazo ? "Ana Torres" : ""}" placeholder="Quien firma"></div><div class="campo-t"><label>Cargo <span style="color:var(--sec);font-weight:400">(opcional)</span></label><input class="control" value="${f.trazo ? "Jefe de mantenimiento" : ""}"></div>
+    <div class="almohadilla" data-a="f-trazar">${f.trazo ? FIRMA() : ""}<span class="linea"></span><small>${f.trazo ? "" : "Firma con el dedo sobre la línea"}</small></div></div>
+    <div class="pie-f"><button class="b t sec" data-a="f-borrar">Borrar</button><button class="b p" data-a="f-firmar" ${f.trazo ? "" : 'disabled style="opacity:.45"'}>Firmar</button></div></div>`;
+  let encima = "";
+  if (f.paso === "entrega") {
+    encima = hoy()
+      ? `<div class="entrega-hoy">${ic("tel").replace("<svg", '<svg class="grande"')}<h2>Entrega el teléfono a quien te recibió</h2><p>Lee la constancia y firma en la siguiente pantalla.</p><button class="b" data-a="f-ya">Ya lo tiene</button><button class="t" data-a="cerrar">Todavía no</button></div>`
+      : `<div class="bienvenida"><div class="cab-b"><img src="${LOGO}" alt="TEINS"><button class="b t sec" data-a="cerrar" style="min-height:44px;font-size:15px">Cancelar</button></div>
+        <div class="cuerpo-b"><span class="saludo"><span class="giro-tel">${ic("check")}</span>La visita terminó</span><h2>Hotel Plaza Real, confirma la visita de María Gómez</h2>
+          <div class="lo-hecho"><div><span>Sitio</span><span>Torre A</span></div><div><span>Fecha</span><span>Sábado 3 de octubre</span></div><div><span>Hora</span><span>9:12 a. m. a 11:48 a. m.</span></div><div><span>Motivo</span><span>Mantenimiento</span></div></div></div>
+        <div class="pie-b"><button class="b p ancho" data-a="f-ya">Revisar y firmar</button><small>Tu firma solo confirma que la visita ocurrió.</small></div></div>`;
+  }
+  return `<div class="completa isla-clara ${ca}" role="dialog" aria-modal="true" style="top:50px">${firmar}${encima}</div>`;
+}
+function pasoFirmado() {
+  if (hoy())
+    return `<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver">${ic("atras")}Croquis</button><span class="avatar">MG</span></div><span class="ctx">Hotel Plaza Real · Torre A · paso 6 de 6</span><h1>Firma del cliente</h1></div>
+      <div class="cuerpo-t"><div class="firma-hoy">${FIRMA()}</div><span style="font-size:15px"><b style="font-weight:600">Ana Torres</b> · Jefe de mantenimiento</span><span style="color:var(--sec);font-size:14px">Firmó hoy a las 11:52 a. m.</span><button class="b t sec" data-a="f-otra" style="align-self:flex-start;padding:0">Volver a firmar</button></div>
+      <div class="barra"><div class="progreso"><i style="width:100%"></i></div><button class="b p ancho" data-a="f-revisar">Revisar y enviar</button></div></div>`;
+  return `<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver">${ic("atras")}Croquis</button><span class="avatar">MG</span></div><span class="ctx">Hotel Plaza Real · Torre A · paso 6 de 6</span><h1>Firma del cliente</h1></div>
+    <div class="cuerpo-t"><div class="constancia isla-clara ${e.f.recien ? "fundir" : ""}"><div class="cab-k"><span class="pill ok">${ic("check")}Firmada 11:52 a. m.</span><button class="b t" data-a="f-otra" style="min-height:40px;font-size:15px;padding:0 4px">${ic("recargar")}Repetir</button></div>
+      <div class="trazo">${FIRMA()}</div><div class="quien"><b>Ana Torres</b><small>Jefe de mantenimiento · Hotel Plaza Real</small></div>
+      <p class="decl-k">Certifica que María Gómez estuvo en Torre A el 3 de octubre de 2026, de 9:12 a. m. a 11:48 a. m. Va en el informe tal como se ve aquí.</p></div></div>
+    <div class="barra"><div class="progreso"><i style="width:100%"></i></div><button class="b p ancho" data-a="f-revisar">Revisar y enviar</button><span class="nota-b">Todos los pasos completos</span></div></div>`;
+}
+function casoEntrega() {
+  const f = e.f;
+  const base = f.firmada ? pasoFirmado() : pasoAntesDeFirmar();
+  const capa = e.capa?.nombre === "firma" ? capaFirma() : "";
+  let conf = "";
+  if (e.capa?.nombre === "otra") conf = hoja(`<h2 style="margin:4px 0 0;font-size:20px;font-weight:600">¿Volver a firmar?</h2><p style="margin:0;color:var(--sec)">La firma de Ana Torres se reemplaza por la nueva.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="b" data-a="cerrar">Cancelar</button><button class="b p" data-a="f-otra-si">Volver a firmar</button></div>`);
+  return telefono(base + capa + conf);
+}
+const casoFirmada = casoEntrega;
+
+/* =====================================================================================================
+   8. Antes de enviar
+   ===================================================================================================== */
+const SECCIONES = [
+  { t: "Datos del sitio", d: "Cuarto eléctrico sótano · acometida subterránea" },
+  { t: "Fotos del cuarto", d: "6 fotos", fotos: 6 },
+  { t: "Tableros", d: "3 tableros: TGD, Tablero 2, Tablero piso 4", falta: "Tablero piso 4: falta la tensión" },
+  { t: "Materiales", d: "Cable UTP 6A × 120 m · Breaker 20 A × 4 · 2 más" },
+  { t: "Croquis", d: "1 hoja · 3 cotas" },
+  { t: "Firma del cliente", d: "Ana Torres · 11:52 a. m.", firma: true },
+];
+function casoRepaso() {
+  if (hoy())
+    return telefono(`<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver">${ic("atras")}Firma del cliente</button><span class="avatar">MG</span></div><span class="ctx">Hotel Plaza Real · Torre A</span><h1>Antes de enviar</h1></div>
+      <div class="cuerpo-t"><div class="aviso alerta">${ic("alerta")}<span>Después de enviar ya no podrás editarlo. Si algo cambia, oficina lo corrige.</span></div>
+      <div class="rep-hoy-l">${SECCIONES.map((s) => `<div><span><b>${s.t}</b><small>${s.falta ? "Faltan 1 datos" : s.t === "Tableros" ? "3 · Tableros" : "Completo"}</small></span><button class="ed">Editar</button></div>`).join("")}</div><p style="margin:0;color:var(--sec);font-size:14px">Se envía apenas haya señal.</p></div>
+      <div class="barra"><button class="b p ancho">${ic("enviar")}Enviar a oficina</button></div></div>`);
+  const conFalta = e.r.completar ? SECCIONES.map((s) => ({ ...s, falta: null, d: s.t === "Tableros" ? "3 tableros: TGD, Tablero 2, Tablero piso 4" : s.d })) : SECCIONES;
+  const faltan = conFalta.filter((s) => s.falta).length;
+  return telefono(`<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver">${ic("atras")}Firma del cliente</button><span class="avatar">MG</span></div><h1>Revisa y envía</h1></div>
+    <div class="cuerpo-t"><div class="para"><b>Hotel Plaza Real · Torre A</b><small>Tableros eléctricos · hoy, 9:12 a. m. a 11:48 a. m.</small></div>
+      <div class="cifras"><div><b>14</b><small>fotos</small></div><div><b>3</b><small>tableros</small></div><div><b>4</b><small>materiales</small></div></div>
+      ${faltan ? `<div class="aviso alerta">${ic("alerta")}<span>Falta 1 dato obligatorio. Puedes enviar así; oficina lo verá como no obtenido.</span></div>` : ""}
+      <div class="grupo-l">${conFalta.map((s, i) => `<button class="sec-r ${s.falta ? "falta" : ""}" data-a="${s.falta ? "r-completar" : "nada"}">${ic(s.falta ? "alerta" : "checkc")}<span style="min-width:0"><b>${s.t}</b><small>${s.d}</small>${s.falta ? `<small class="falta">${s.falta}</small>` : ""}${s.fotos ? `<span class="miniaturas"><span class="foto"></span><span class="foto b2"></span><span class="foto b3"></span><span class="foto"></span><span class="mas">+2</span></span>` : ""}${s.firma ? `<span class="firma-mini isla-clara">${FIRMA()}</span>` : ""}</span><span class="fin">${ic("adelante")}</span></button>`).join("")}</div>
+    </div>
+    <div class="barra"><button class="b p ancho">${ic("enviar")}Enviar a oficina</button><span class="nota-b">Después solo oficina puede corregirlo · se envía apenas haya señal</span></div></div>`);
+}
+
+/* =====================================================================================================
+   9. Enviados
+   ===================================================================================================== */
+const ENVIADOS = [
+  { cliente: "Clínica Santa Lucía · Sede norte", formato: "Formato de prueba", fotos: 4, cuando: "10:24 a. m.", est: "error", hoyTxt: "No se pudo enviar: oficina no pudo aceptar algunos datos. Avísale a oficina." },
+  { cliente: "Hotel Plaza Real · Torre A", formato: "Tableros eléctricos", fotos: 14, cuando: "9:58 a. m.", est: "pend", hoyTxt: "Sin conexión: se enviará al recuperar señal" },
+  { cliente: "Colegio Los Andes · Bloque B", formato: "Cableado estructurado", fotos: 9, cuando: "Ayer", est: "revision", hoyTxt: "En revisión en oficina", coment: 1 },
+  { cliente: "Edificio Terra · Sótano 1", formato: "Tableros eléctricos", fotos: 11, cuando: "29 sep", est: "ok", hoyTxt: "Revisado por oficina" },
+];
+const EST = { error: ["error", "alerta", "No se pudo enviar"], pend: ["pend", "reloj", "Se envía al tener señal"], revision: ["revision", "ojo", "En revisión"], ok: ["ok", "checkc", "Revisado"] };
+function casoEnviados() {
+  if (e.n.detalle !== null) return telefono(detalleEnviado());
+  if (hoy())
+    return telefono(`<div class="pantalla"><div class="cab-t"><div class="fila"><span class="ctx" style="font-size:15px">Sábado 3 de octubre</span><span class="avatar">MG</span></div><h1>Mis visitas</h1></div>
+      <div class="cuerpo-t"><span class="sec-t">Enviados</span>${ENVIADOS.map((x) => `<button class="fila-hoy-e"><span class="fecha">${x.cuando}</span><span class="medio"><b>${x.formato}</b><small>${x.fotos} fotos</small></span><span class="estado-hoy ${x.est === "error" ? "error" : x.est === "ok" ? "ok" : ""}">${x.hoyTxt}</span></button>`).join("")}</div></div>`);
+  const fila = (x, i) => {
+    const [c, icono, txt] = EST[x.est];
+    return `<button class="env" data-a="n-abrir" data-v="${i}"><b>${x.cliente}</b><span class="cuando">${x.cuando}</span><span class="linea2"><span class="est ${c}">${ic(icono)}${txt}</span><span class="resto">· ${x.formato}${x.coment ? ` · ${x.coment} comentario` : ""}</span></span></button>`;
+  };
+  const malos = ENVIADOS.map((x, i) => [x, i]).filter(([x]) => x.est === "error");
+  const resto = ENVIADOS.map((x, i) => [x, i]).filter(([x]) => x.est !== "error");
+  return telefono(`<div class="pantalla"><div class="cab-t"><div class="fila"><span class="ctx" style="font-size:15px">Sábado 3 de octubre</span><span class="avatar">MG</span></div><h1>Mis visitas</h1></div>
+    <div class="cuerpo-t"><div class="panel visita-c"><span class="hora">Hoy · 2:00 p. m. a 4:00 p. m.</span><b>Edificio Terra</b><small>Sótano 1 · Mantenimiento</small></div>
+      <span class="sec-t">Necesita atención</span><div class="grupo-l atencion">${malos.map(([x, i]) => fila(x, i)).join("")}</div>
+      <span class="sec-t">Enviados</span><div class="grupo-l">${resto.map(([x, i]) => fila(x, i)).join("")}</div></div></div>`);
+}
+function detalleEnviado() {
+  const x = ENVIADOS[e.n.detalle];
+  const [c, icono, txt] = EST[x.est];
+  const error = x.est === "error";
+  return `<div class="pantalla"><div class="cab-t"><div class="fila"><button class="volver" data-a="n-volver">${ic("atras")}Mis visitas</button><span class="avatar">MG</span></div><span class="ctx">${x.formato}</span><h1>${x.cliente.split(" · ")[0]}</h1></div>
+    <div class="cuerpo-t detalle-e">${error ? `<div class="aviso peligro">${ic("alerta")}<span><b style="font-weight:600;display:block">Oficina no pudo aceptar algunos datos</b>Avísale a oficina. Tus datos siguen en el teléfono y no se pierden.</span></div>` : ""}
+      <div class="grupo-l"><div class="fila-l"><span class="txt">Estado</span><span class="est ${c}" style="display:inline-flex;gap:6px;align-items:center;font-size:15px;font-weight:500">${ic(icono).replace("<svg", '<svg style="width:17px;height:17px"')}${txt}</span></div><div class="fila-l"><span class="txt">Capturado</span><span class="der">${x.cuando} · ${x.fotos} fotos</span></div>${error ? `<div class="fila-l"><span class="txt">Intentos</span><span class="der">3 · el último a las 10:31 a. m.</span></div>` : ""}</div>
+</div>
+    ${error ? `<div class="barra"><button class="b p ancho">${ic("recargar")}Reintentar envío</button></div>` : ""}</div>`;
+}
+
+/* =====================================================================================================
+   10. Datos al día después de un reinicio del servidor (ADR-0038 propuesto)
+   ===================================================================================================== */
+function casoDatos() {
+  const d = e.d;
+  const visitas = [
+    { id: "v1", hora: "Hoy · 9:00 a. m. a 12:00 m.", c: "Hotel Plaza Real", s: "Torre A · Mantenimiento", vieja: true },
+    { id: "v2", hora: "Mañana · 8:00 a. m.", c: "Colegio Los Andes", s: "Bloque B · Modificación", vieja: true },
+  ];
+  const borrador = `<span class="sec-t">Sin terminar</span><div class="grupo-l"><div class="env"><b>Edificio Terra · Sótano 1</b><span class="cuando">Ayer</span><span class="linea2"><span class="est pend">${ic("lapiz")}Borrador</span><span class="resto">· Tableros eléctricos · 5 fotos</span></span></div></div>`;
+  const viejasVisibles = d.paso === "antes" || (d.paso === "saliendo" && !hoy()) || (hoy() && d.paso !== "antes");
+  const lista = viejasVisibles ? visitas.map((v) => `<div class="panel visita-c ${d.paso === "saliendo" && !hoy() ? "sale" : ""}"><span class="hora">${v.hora}</span><b>${v.c}</b><small>${v.s}</small></div>`).join("") : `<div class="panel" style="padding:18px 16px;color:var(--sec);font-size:15px;text-align:center">Sin visitas asignadas.<br>Cuando oficina te asigne una, aparece aquí.</div>`;
+  const enviados = viejasVisibles ? `<span class="sec-t">Enviados</span><div class="grupo-l"><div class="env"><b>Clínica Santa Lucía · Sede norte</b><span class="cuando">29 sep</span><span class="linea2"><span class="est ok">${ic("checkc")}Revisado</span><span class="resto">· Formato de prueba</span></span></div></div>` : "";
+  const tel = telefono(`<div class="pantalla"><div class="cab-t"><div class="fila"><span class="ctx" style="font-size:15px">Sábado 3 de octubre</span><span class="avatar">MG</span></div><h1>Mis visitas</h1></div><div class="cuerpo-t">${lista}${borrador}${enviados}</div></div>`);
+  const tabla = `<table><thead><tr><th>En el teléfono</th><th>Al cambiar la época</th></tr></thead><tbody>
+    <tr><td>Borradores y lo que falta por enviar</td><td class="si">Se quedan (regla 5)</td></tr>
+    <tr><td>Formatos y símbolos</td><td class="si">Se quedan (los borradores los necesitan)</td></tr>
+    <tr><td>Visitas con un borrador o una terminación pendiente</td><td class="si">Se quedan, marcadas «ya no asignada»</td></tr>
+    <tr><td>Las demás visitas</td><td class="no">Se quitan</td></tr>
+    <tr><td>Enviados que oficina ya recibió</td><td class="no">Se quitan con sus fotos</td></tr>
+    <tr><td>Estados de oficina y catálogo</td><td class="no">Se quitan y se bajan de nuevo</td></tr></tbody></table>`;
+  return `<div class="escena"><figure>${tel}<figcaption>${d.paso === "antes" ? (d.limpio ? "El servidor ya se limpió; el teléfono todavía no lo sabe" : "Antes de limpiar el entorno") : hoy() ? "Hoy: sigue igual hasta reinstalar la app" : "Propuesta: después de la bajada"}</figcaption></figure>
+    <div class="diagrama"><h3>Cómo se entera el teléfono</h3><div class="linea-t"><div><span class="n">1</span><p>El script que deja limpio un entorno (<code>dejar-limpio.sql</code>) cambia la <b>época</b> de la organización, en la misma transacción en que borra.</p></div><div><span class="n">2</span><p>Cada bajada trae la época. El teléfono guarda la última que vio; la primera vez solo la guarda, sin borrar nada.</p></div><div><span class="n">3</span><p>Si llega una distinta, el teléfono quita lo que vino del servidor y baja todo desde cero, en una sola transacción. Lo capturado y no enviado no se toca.</p></div></div>${tabla}<p>Un solo campo opcional en la bajada (las apps viejas lo ignoran), una tabla pequeña con su migración y una línea en el script. Sin código nuevo para borrar en el servidor.</p></div></div>`;
+}
+
+/* =====================================================================================================
+   La guía: casos, notas con referencias de Mobbin y el resumen
+   ===================================================================================================== */
+const M = (app, id) => `<a href="https://mobbin.com/screens/${id}" target="_blank" rel="noopener">${app}</a>`;
+const mandos = (extra = "") => `<div class="mandos-n"><div class="fila"><span class="antes-despues" role="group" aria-label="Comparar"><button data-a="g-vista" data-v="hoy" aria-pressed="${hoy()}">Hoy</button><button data-a="g-vista" data-v="propuesta" aria-pressed="${!hoy()}">Propuesta</button></span><button class="boton-guia" data-a="g-reiniciar">Empezar de nuevo</button></div>${extra}</div>`;
+const nota = (titulo, problema, propuesta, probar, refs, extra = "") =>
+  `<div><h2>${titulo}</h2><p><b>Lo que pasa hoy.</b> ${problema}</p><p><b>Propuesta.</b> ${propuesta}</p><p class="probar"><b>Pruebe:</b> ${probar}</p>${refs ? `<p class="refs"><b>Mobbin:</b> ${refs}</p>` : ""}</div>${mandos(extra)}`;
+
+const CASOS = [
+  { id: "resumen", titulo: "Resumen", sub: "Grupos, orden y decisiones", nota: () => `<div><h2>Cómo se agrupan</h2><p>Los nueve puntos son de pantalla y van juntos en la iteración 32, sin tocar el servidor. Los datos viejos en el teléfono cambian la sincronización y van aparte, en la 33, con su ADR. A la izquierda, un caso por punto; en cada uno, el mando «Hoy / Propuesta» y «Cámara lenta» arriba para ver el movimiento.</p></div>` },
+  { id: "movimiento", grupo: "Iteración 32 · pantallas de campo", titulo: "1 · Movimiento", sub: "Hojas, pasos y capas", nota: () => nota("1 · Que nada se abra de golpe",
+      "Las hojas suben solo 24 px y el velo aparece de una vez; por eso se sienten como si se abrieran de golpe. El cambio de paso desliza la pantalla un 24 % del ancho, que en un teléfono es mucho. Descartados y Cambiar contraseña se cargan aparte: Tu cuenta se cierra, queda un momento sin nada y luego aparece la otra hoja. El croquis muestra un fondo vacío antes de subir.",
+      "Las hojas entran desde el borde con una curva que frena al final (260 ms) y el velo se funde a la vez; al salir, lo mismo al revés y más rápido. El paso siguiente entra con 24 px y fundido, sin barrer la pantalla. Lo que se abre desde una hoja se abre dentro de la misma hoja, como una página, sin cerrar y volver a abrir. Todo sigue en CSS (regla 10) y los valores pasan a <code>DESIGN.md</code>.",
+      "con «Cámara lenta», toque «Siguiente», el avatar (Tu cuenta) y «Buscar en el catálogo», en Hoy y en Propuesta.",
+      `${M("Shop", "e310b270-1e1c-4fb4-ac1b-e40f4ff9315a")} ${M("eBay", "17132375-00c0-4fa4-8c58-8bcd5d078772")} ${M("Warby Parker", "679d260d-f135-4afb-a7ee-bfa052f65513")}`) },
+  { id: "cuenta", titulo: "2 · Tu cuenta", sub: "Una lista agrupada", nota: () => nota("2 · Tu cuenta",
+      "Cinco cajas grises separadas, cada una con su propio peso; el tema son tres radios que se parten en dos líneas; «Cerrar sesión» se ve igual que lo demás pero en rojo; y el diagnóstico es otra caja.",
+      "Arriba la persona y el estado de la sincronización, sin caja. Debajo, una sola lista con líneas: el tema como tres iconos en la misma fila (no se parte), Cambiar contraseña, Descartados con su número y Diagnóstico, cada una con su flecha. «Cerrar sesión» queda sola y centrada al final, lejos de lo demás. Cambiar contraseña y Descartados se abren dentro de la hoja, con «‹ Cuenta» para volver.",
+      "toque el avatar, cambie el tema y abra Descartados; vuelva con «‹ Cuenta».",
+      `${M("Luma", "b83035f0-7cec-4920-bc66-aff9c29b77c7")} ${M("Shop", "e310b270-1e1c-4fb4-ac1b-e40f4ff9315a")} ${M("Lifesum", "ee803113-579b-4036-b500-f7fba873919a")}`) },
+  { id: "tableros", titulo: "3 · Tableros", sub: "Lista, nombre y quitar", nota: () => nota("3 · Tableros (secciones que se repiten)",
+      "Cada tablero es una tarjeta alta con tres datos cortados («Ubicación», «Tensión», «Circuitos») que casi no se leen. Dentro, el nombre se cambia en un campo al final del formulario y «Quitar tablero» es un enlace azul justo encima de «Listo»: lo más destructivo, en el color de la acción y donde el pulgar pasa más.",
+      "La lista es una fila por tablero: la primera foto, el nombre, lo que lo identifica (ubicación, tensión, fotos) y una barra de avance, con «Faltan 2» en ámbar o un visto. Dentro, el nombre es el título y se cambia desde el menú <b>⋯</b> de arriba, junto a «Quitar tablero» en rojo (sigue con «Deshacer»). Abajo, «Siguiente: Tablero 2» para seguir sin volver a la lista; en el último, «Listo, ver los 3 tableros».",
+      "abra un tablero, pruebe el menú ⋯ (cambiar nombre y quitar) y pase al siguiente.",
+      `${M("Target", "5c2bd4eb-0deb-413f-976c-133844fe32e1")} ${M("Linktree", "ef2b7777-205e-4831-86bf-37ba007f2630")} ${M("Notion", "3829e8ca-ff60-43ab-9451-45320dd1810e")} ${M("Oura", "5f5f6e16-3ef8-4556-9f3e-4d4991dd9bc4")}`) },
+  { id: "catalogo", titulo: "4 · Catálogo", sub: "El botón de abajo", nota: () => nota("4 · «Listo · 1 material ✓»",
+      "Cada «Agregar» ya guarda la línea, pero el botón grande de abajo parece el que confirma: da a entender que si no se toca no se agrega nada, y que «1 material» es lo que va a pasar, no lo que ya pasó.",
+      "Arriba, «Cerrar», como en cualquier hoja. Abajo no hay nada hasta que se agrega algo; entonces aparece una franja que dice lo que ya pasó, «2 agregados a Materiales» con los nombres, y un botón que dice a dónde lleva: «Ver Materiales». Lo agregado queda resaltado con su contador en la lista.",
+      "abra el catálogo, agregue dos materiales y súbales la cantidad; luego «Ver Materiales».",
+      `${M("Warby Parker", "679d260d-f135-4afb-a7ee-bfa052f65513")} ${M("Yami", "7f10da88-7a2e-4a20-8ad3-0e89df9ffcbd")} ${M("eBay", "17132375-00c0-4fa4-8c58-8bcd5d078772")}`) },
+  { id: "croquis", titulo: "5 · Croquis", sub: "«Listo» y la barra de abajo", nota: () => nota("5 · El «Listo» del croquis",
+      "«Listo» flota en el centro, encima del dibujo, entre «Hoja 1 1/1» a la izquierda y el botón de símbolos a la derecha: tres piezas sueltas de tamaños distintos, y el botón tapa justo donde suele estar el plano.",
+      "Una barra fija abajo, del mismo blanco del croquis: hojas a la izquierda, símbolos al lado y «Listo» a la derecha, donde el pulgar termina. El lienzo ya no queda tapado y la barra es la misma con o sin «Listo» (fuera de la captura, sin el botón). Arriba no cabe: las herramientas ocupan el ancho.",
+      "compare Hoy y Propuesta; fíjese en que el dibujo ya no queda debajo de los botones.",
+      `${M("Pinterest", "e0a593e7-f1ac-4750-aa7b-66cde5001d46")} ${M("eBay", "f37601af-1b56-4fb8-9596-afa0d5868695")} ${M("X", "4c4591e1-661b-4384-8fb2-2a6947a1c0c8")}`) },
+  { id: "entrega", titulo: "6 · Entregar el teléfono", sub: "La pantalla para el cliente", nota: () => nota("6 · «Entrega el teléfono a quien te recibió»",
+      "Una pantalla azul entera, con un teléfono girando, que le habla al técnico («entrega el teléfono») cuando quien la va a ver es el cliente. «Ya lo tiene» y «Todavía no» obligan a contestar algo que no aporta, y el paso a la firma es un corte seco.",
+      "La pantalla le habla a quien recibe el teléfono: «Hotel Plaza Real, confirma la visita de María Gómez», con el logo y lo que se va a firmar (sitio, fecha, hora y motivo) antes de pedir nada. Un solo botón, «Revisar y firmar», que funde a la firma; el técnico tiene «Cancelar» arriba. Así el teléfono se entrega ya mostrando lo correcto.",
+      "toque «Entregar el teléfono», luego «Revisar y firmar», trace la firma y «Firmar».",
+      `${M("DoorDash Dasher", "dc8269d4-fab1-46ea-8c0c-267b3b10ed93")} ${M("Jobber", "4fac8d97-26e3-4f2b-8ec6-53899af41b4d")} ${M("Freeform", "1a7db0ee-23a2-45a2-a618-3a6e41255316")}`) },
+  { id: "firmada", titulo: "7 · Firma tomada", sub: "Usar el espacio", nota: () => nota("7 · Después de firmar",
+      "La firma queda en una caja pequeña, «Volver a firmar» es un enlace gris suelto debajo y casi media pantalla queda vacía hasta «Revisar y enviar».",
+      "Una constancia que ocupa el espacio: la firma grande sobre su línea, quién firmó con cargo y cliente, y la declaración exacta que sale en el informe. Arriba de la tarjeta, «Firmada 11:52 a. m.» y «Repetir» (con confirmación, como hoy). Abajo, «Revisar y enviar» con «Todos los pasos completos».",
+      "toque «Repetir» y confirme, o «Revisar y enviar».",
+      `${M("Liven", "d5a3c4d7-0ef2-4ed4-af1b-cbbe498628ea")} ${M("Docusign", "68249fb4-b773-44ce-bc33-9a2380e9103e")}`) },
+  { id: "repaso", titulo: "8 · Antes de enviar", sub: "Un repaso con contenido", nota: () => nota("8 · Antes de enviar",
+      "Un aviso ámbar arriba y una lista de pasos que solo dicen «Completo», cada uno con una pastilla «Editar». No se ve qué se va a enviar, solo que hay algo.",
+      "Título «Revisa y envía» con cliente, sitio, formato y hora; tres cifras (fotos, tableros, materiales); y cada sección con lo que realmente lleva: los datos clave, miniaturas de las fotos, los nombres de los tableros, los materiales y la firma. Toda la fila se toca para editar, con un visto o el dato que falta en ámbar. La advertencia pasa debajo del botón, junto a la acción que la causa.",
+      "toque la fila de Tableros (falta un dato) para completarlo.",
+      `${M("Vestiaire Collective", "87e172a6-ea15-4dd8-80bd-cbcdaf551833")} ${M("Airbnb", "e9da847d-3b16-4b23-a21c-d750ea9dbf06")} ${M("eBay", "3d721318-f32c-4e6c-954e-23018fb3fd68")}`) },
+  { id: "enviados", titulo: "9 · Enviados", sub: "Estados cortos, el error arriba", nota: () => nota("9 · Enviados en el inicio",
+      "El estado es una pastilla con el mensaje completo: el error («No se pudo enviar: oficina no pudo acepta…») ocupa el ancho y aplasta el título a «Formato de pr…». Las pastillas no se cortan y cada una tiene un largo distinto.",
+      "Dos líneas por envío: arriba cliente y sitio con la hora; abajo el estado en dos o tres palabras con su icono y color («No se pudo enviar», «Se envía al tener señal», «En revisión», «Revisado») y el formato. Lo que falló sale aparte, arriba, en «Necesita atención». La explicación larga y «Reintentar envío» están en el detalle.",
+      "toque el envío que falló.",
+      `${M("Quo", "28233f22-360a-456d-9973-ef2942fdf2fa")} ${M("OpenPhone", "fd44cd6d-3bf9-4be7-bae2-f6e4b25cb27d")} ${M("Revolut", "b7a4d4f5-b5a7-4f95-a39e-84e7a258996c")}`) },
+  { id: "datos", grupo: "Iteración 33 · sincronización", titulo: "Datos viejos en el teléfono", sub: "ADR-0038 propuesto", nota: () => nota("Datos que el servidor ya borró",
+      "La bajada solo trae cambios, y al limpiar el entorno se borraron también las marcas de esos cambios: el teléfono nunca se entera de que esas visitas y envíos ya no existen. Ni bajar todo desde cero lo arregla, porque solo agrega. Por eso había que desinstalar.",
+      "Una <b>época</b> por organización. El script de limpieza la cambia; cada bajada la trae; si el teléfono ve una distinta, quita lo que vino del servidor y baja todo otra vez. Borradores, la cola de envío, formatos y visitas con trabajo sin enviar no se tocan. No hay aviso: el inicio queda como debe quedar. Va en un ADR nuevo (0038), sin cambiar los anteriores.",
+      "con «Hoy / Propuesta», toque «Simular la limpieza» y luego «Abrir la app».",
+      "",
+      `<div class="fila"><button class="boton-guia" data-a="d-limpiar">Simular la limpieza</button><button class="boton-guia" data-a="d-abrir">Abrir la app</button></div>`) },
+];
+
+function resumen() {
+  return `<div class="resumen">
+    <div><h2>Dos iteraciones</h2></div>
+    <div class="iteraciones">
+      <div><h3>32 · Pantallas de campo</h3><p>Los nueve puntos. Solo <code>paquetes/campo</code>, <code>paquetes/ui</code> y <code>DESIGN.md</code>: nada cambia en lo que se guarda ni en lo que se envía. Se prueba en el iPhone antes de cerrar.</p><small>Presupuesto de JavaScript: hoy 125 de 135 KB; esto es CSS y marcado, sin librerías.</small></div>
+      <div><h3>33 · Datos al día tras un reinicio</h3><p>La época en la bajada (ADR-0038): un campo opcional en <code>protocolo</code>, una tabla y una migración en el servidor, una línea en <code>dejar-limpio.sql</code> y el reinicio en la base del teléfono. Versión 13 de la app.</p><small>Pruebas: el reinicio conserva borradores, la cola y las terminaciones; la primera época no borra nada.</small></div>
+    </div>
+    <div><h3>Lo que necesito que apruebe</h3><ol>
+      <li><b>Movimiento:</b> hojas desde el borde (260 ms) con el velo fundido, pasos con 24 px y fundido, y lo que se abre desde una hoja dentro de la misma hoja. Valores nuevos en <code>DESIGN.md</code>.</li>
+      <li><b>Tu cuenta:</b> lista agrupada, tema en iconos y «Cerrar sesión» sola al final.</li>
+      <li><b>Tableros:</b> filas con foto y avance; nombre y «Quitar tablero» en el menú ⋯; «Siguiente: Tablero 2».</li>
+      <li><b>Catálogo:</b> «Cerrar» arriba y la franja «N agregados a Materiales · Ver Materiales» solo cuando hay algo.</li>
+      <li><b>Croquis:</b> barra fija abajo con hojas, símbolos y «Listo» a la derecha.</li>
+      <li><b>Entrega:</b> la pantalla le habla al cliente con lo que va a firmar; se quitan «Ya lo tiene» y «Todavía no».</li>
+      <li><b>Firma tomada:</b> la constancia grande con «Repetir».</li>
+      <li><b>Antes de enviar:</b> «Revisa y envía» con cifras y el contenido de cada sección.</li>
+      <li><b>Enviados:</b> dos líneas, estados cortos y «Necesita atención» arriba.</li>
+      <li><b>ADR-0038:</b> la época; al cambiar, el teléfono quita también los enviados que oficina ya recibió (con sus fotos), sin avisar al técnico.</li>
+    </ol></div>
+    <div><h3>Lo que no cambia</h3><ul><li>Lo capturado y no enviado nunca se borra (regla 5), tampoco con la época.</li><li>Quitar un tablero sigue sin confirmación, con «Deshacer».</li><li>Volver a firmar sigue pidiendo confirmación.</li></ul></div>
+  </div>`;
+}
+
+function reiniciar() {
+  temporizadores.forEach(clearTimeout); temporizadores.clear();
+  e.capa = null; e.notif = null; e.sinSenal = false;
+  e.m = { paso: 0 };
+  e.k = { tema: "sistema", pagina: null, dir: "" };
+  e.t = { abierto: null, menu: false, renombrando: false, quitado: null, lista: [
+    { nombre: "TGD", ubic: "Sótano, junto al ascensor", tension: "208", circ: "24", fotos: 3, faltan: 0 },
+    { nombre: "Tablero 2", ubic: "Piso 2, cuarto técnico", tension: "120", circ: "12", fotos: 2, faltan: 0 },
+    { nombre: "Tablero piso 4", ubic: "Piso 4, pasillo", tension: "", circ: "", fotos: 0, faltan: 3 },
+  ] };
+  e.c = { cant: {}, pieNuevo: false };
+  e.f = { paso: "entrega", trazo: false, firmada: e.caso === "firmada", recien: false };
+  e.r = { completar: false };
+  e.n = { detalle: null };
+  e.d = { paso: "antes" };
+}
+
+let pintando = false;
+function pintar() {
+  if (pintando) return;
+  pintando = true;
+  try {
+    document.getElementById("casos").innerHTML = CASOS.reduce((h, c, i) => h + (c.grupo && c.grupo !== CASOS[i - 1]?.grupo ? `<span class="grupo">${c.grupo}</span>` : "") + `<button data-caso="${c.id}" aria-pressed="${c.id === e.caso}">${c.titulo}<small>${c.sub}</small></button>`, "");
+    document.getElementById("nota").innerHTML = CASOS.find((c) => c.id === e.caso).nota();
+    document.querySelectorAll("#temas button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tema === e.tema)));
+    document.querySelectorAll("#velocidad button").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.lento === "si") === e.lento)));
+    document.documentElement.dataset.lento = e.lento ? "si" : "no";
+    const act = document.activeElement, foco = act?.closest?.("#escena") ? act.id : null;
+    let html;
+    if (e.caso === "resumen") html = resumen();
+    else if (e.caso === "datos") html = casoDatos();
+    else html = `<div class="escena">${{ movimiento: casoMovimiento, cuenta: casoCuenta, tableros: casoTableros, catalogo: casoCatalogo, croquis: casoCroquis, entrega: casoEntrega, firmada: casoFirmada, repaso: casoRepaso, enviados: casoEnviados }[e.caso]()}</div>`;
+    document.getElementById("escena").innerHTML = html;
+    if (foco && document.getElementById(foco)) document.getElementById(foco).focus({ preventScroll: true });
+    else document.querySelector("#escena [autofocus]")?.focus({ preventScroll: true });
+  } finally { pintando = false; }
+}
+
+/* =====================================================================================================
+   Acciones
+   ===================================================================================================== */
+document.getElementById("casos").addEventListener("click", (ev) => { const b = ev.target.closest("[data-caso]"); if (b) { e.caso = b.dataset.caso; reiniciar(); pintar(); } });
+document.getElementById("temas").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) { e.tema = b.dataset.tema; pintar(); } });
+document.getElementById("velocidad").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) { e.lento = b.dataset.lento === "si"; pintar(); } });
+document.addEventListener("input", (ev) => {
+  const c = ev.target.dataset?.c;
+  if (c === "t-nombre") e.t.lista[e.t.abierto].nombre = ev.target.value;
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && e.capa) cerrarCapa();
+  if (ev.key === "Enter" && ev.target.id === "t-nombre-p") document.querySelector('[data-a="t-nombre-listo"]')?.click();
+});
+/** Hoy, abrir algo desde Tu cuenta cierra la hoja, deja un momento vacío mientras carga y luego abre la otra. */
+function abrirDesdeCuentaHoy(nombre) {
+  cerrarCapa(() => { e.capa = { nombre: "hueco", fase: "quieta" }; pintar(); luego(() => abrirCapa(nombre), dur(350)); });
+}
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-a]");
+  if (!b || b.disabled || !b.closest("#escena, #nota")) return;
+  const a = b.dataset.a, v = b.dataset.v;
+  const acciones = {
+    "g-vista": () => { e.vista = v; reiniciar(); pintar(); },
+    "g-reiniciar": () => { reiniciar(); pintar(); },
+    cerrar: () => cerrarCapa(),
+    nada: () => {},
+    // 1. Movimiento
+    "m-siguiente": () => navegar(() => { e.m.paso++; }),
+    "m-atras": () => navegar(() => { e.m.paso--; }, "atras"),
+    "m-reiniciar-paso": () => navegar(() => { e.m.paso = 0; }, "atras"),
+    "m-cuenta": () => abrirCapa("cuenta"),
+    "m-catalogo": () => abrirCapa("catalogo"),
+    // 2. Cuenta
+    "k-abrir": () => { e.k.pagina = null; e.k.dir = ""; abrirCapa("cuenta"); },
+    "k-tema": () => { e.k.tema = v; e.k.dir = ""; pintar(); },
+    "k-ir": () => { e.k.pagina = v; e.k.dir = "adelante"; pintar(); },
+    "k-volver": () => { e.k.pagina = null; e.k.dir = "atras"; pintar(); },
+    "k-hueco": () => abrirDesdeCuentaHoy("descartados-hoy"),
+    // 3. Tableros
+    "t-abrir": () => navegar(() => { e.t.abierto = +v; e.t.menu = false; e.t.renombrando = false; }),
+    "t-volver": () => navegar(() => { e.t.abierto = null; e.t.menu = false; e.t.renombrando = false; }, "atras"),
+    "t-siguiente": () => navegar(() => { e.t.abierto++; }),
+    "t-menu": () => { e.t.menu = !e.t.menu; pintar(); },
+    "t-menu-cerrar": () => { e.t.menu = false; pintar(); },
+    "t-renombrar": () => { e.t.nombreAntes = e.t.lista[e.t.abierto].nombre; e.t.menu = false; e.t.renombrando = true; pintar(); const i = document.getElementById("t-nombre-p"); i?.focus(); i?.select(); },
+    "t-nombre-listo": () => { const x = e.t.lista[e.t.abierto]; if (!x.nombre.trim()) x.nombre = e.t.nombreAntes; e.t.renombrando = false; pintar(); },
+    "t-quitar": () => {
+      const i = e.t.abierto, x = e.t.lista[i];
+      e.t.quitado = { i, x };
+      navegar(() => { e.t.lista.splice(i, 1); e.t.abierto = null; e.t.menu = false; }, "atras");
+      notificar(`Quitaste ${x.nombre}`, { texto: "Deshacer", a: "t-deshacer" });
+    },
+    "t-deshacer": () => { const q = e.t.quitado; if (q) { e.t.lista.splice(q.i, 0, q.x); e.t.quitado = null; } e.notif = null; pintar(); },
+    "t-agregar": () => { const n = { nombre: `Tablero ${e.t.lista.length + 1}`, ubic: "", tension: "", circ: "", fotos: 0, faltan: 3 }; e.t.lista.push(n); navegar(() => { e.t.abierto = e.t.lista.length - 1; }); },
+    // 4. Catálogo
+    "c-abrir": () => { e.c.pieNuevo = false; abrirCapa("catalogo"); },
+    "c-mas": () => { const antes = Object.values(e.c.cant).filter((n) => n > 0).length; e.c.cant[v] = (e.c.cant[v] ?? 0) + 1; e.c.pieNuevo = antes === 0; pintar(); e.c.pieNuevo = false; },
+    "c-menos": () => { e.c.cant[v] = Math.max(0, (e.c.cant[v] ?? 0) - 1); pintar(); },
+    // 5. Croquis
+    "x-listo": () => notificar("En la app: guarda el croquis y pasa a «Firma del cliente»."),
+    // 6 y 7. Firma
+    "f-entregar": () => { e.f.paso = "entrega"; e.f.trazo = false; abrirCapa("firma"); },
+    "f-ya": () => { e.f.paso = "firmar"; e.f.fundir = true; pintar(); e.f.fundir = false; },
+    "f-trazar": () => { e.f.trazo = true; pintar(); },
+    "f-borrar": () => { e.f.trazo = false; pintar(); },
+    "f-firmar": () => cerrarCapa(() => { e.f.firmada = true; e.f.recien = true; pintar(); e.f.recien = false; }),
+    "f-otra": () => abrirCapa("otra"),
+    "f-otra-si": () => cerrarCapa(() => { e.f.paso = "firmar"; e.f.trazo = false; abrirCapa("firma"); }),
+    "f-revisar": () => { e.caso = "repaso"; reiniciar(); pintar(); },
+    // 8. Repaso
+    "r-completar": () => { e.r.completar = true; notificar("Tensión de Tablero piso 4: 120 V"); },
+    // 9. Enviados
+    "n-abrir": () => navegar(() => { e.n.detalle = +v; }),
+    "n-volver": () => navegar(() => { e.n.detalle = null; }, "atras"),
+    // 10. Datos
+    "d-limpiar": () => { e.d.paso = "antes"; e.d.limpio = true; pintar(); },
+    "d-abrir": () => { e.d.limpio = true; if (hoy()) { e.d.paso = "despues"; pintar(); return; } e.d.paso = "saliendo"; pintar(); luego(() => { e.d.paso = "despues"; pintar(); }, dur(380)); },
+  };
+  if (acciones[a]) { ev.preventDefault(); acciones[a](); }
+});
+reiniciar();
+pintar();
+</script>
+</body>
+</html>

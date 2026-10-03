@@ -61,6 +61,7 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0035](0035-archivar-clientes-comentarios-y-borradores.md) | Editar y archivar clientes, sitios y comentarios, y descartar borradores en campo | Aceptada |
 | [0036](0036-correo-que-escribe-oficina.md) | El correo de un envío lo puede escribir oficina, sobre la vista previa (amplía 0028) | Aceptada |
 | [0037](0037-visitas-con-horario.md) | Visitas con horario: todo el día, de una hora a otra o hasta que el técnico la termine | Aceptada |
+| [0038](0038-epoca-de-la-bajada.md) | Época de la bajada: el teléfono se entera de que el servidor se dejó limpio | Aceptada |
 
 ### Estados
 
