@@ -57,7 +57,7 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });
   // En la lista, el estado que dio el servidor en la bajada.
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
-  await expect(page.getByRole("region", { name: "Enviados" }).getByText("Recibido en oficina")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Enviados" }).getByText("Recibido", { exact: true })).toBeVisible();
 
   // Oficina, en su propio navegador de escritorio.
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });

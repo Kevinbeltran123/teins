@@ -43,7 +43,7 @@ test("un doble toque en «Iniciar levantamiento» y en «Agregar tablero» crea 
   const tableros = page.getByRole("region", { name: "Tableros" });
   await tableros.getByRole("button", { name: "Agregar tablero" }).dblclick();
   await expect(page.getByRole("article", { name: "Tablero 1" })).toBeVisible();
-  await page.getByRole("button", { name: "Listo este tablero" }).click();
+  await page.getByRole("button", { name: /^Listo, ver / }).click();
   await expect(tableros.getByRole("button", { name: /^Tablero/ })).toHaveCount(1);
 });
 
@@ -143,7 +143,8 @@ test("quitar un tablero es al instante y «Deshacer» lo devuelve con lo escrito
   const tableros = page.getByRole("region", { name: "Tableros" });
   await tableros.getByRole("button", { name: "Agregar tablero" }).click();
   await page.getByRole("article", { name: "Tablero 1" }).getByRole("textbox", { name: "Ubicación del tablero" }).fill("Sótano");
-  await page.getByRole("button", { name: "Quitar Tablero 1" }).click();
+  await page.getByRole("button", { name: "Opciones de Tablero 1" }).click();
+  await page.getByRole("menuitem", { name: "Quitar tablero" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(tableros.getByRole("button", { name: /^Tablero/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Deshacer" }).click();
@@ -167,7 +168,7 @@ test("un doble toque en «Firmar» guarda la firma una sola vez", async ({ page 
   await irAlPaso(page, "Firma del cliente");
   await page.getByRole("button", { name: "Entregar el teléfono" }).click();
   const hoja = page.getByRole("dialog", { name: "Constancia de visita" });
-  await hoja.getByRole("button", { name: "Ya lo tiene" }).click();
+  await hoja.getByRole("button", { name: "Revisar y firmar" }).click();
   await hoja.getByRole("textbox", { name: "Nombre de quien firma" }).fill("Martha Gómez");
   const recuadro = page.getByLabel("Espacio para firmar con el dedo");
   await recuadro.scrollIntoViewIfNeeded();

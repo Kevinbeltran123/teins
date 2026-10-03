@@ -51,10 +51,10 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
   await irAlPaso(page, "Materiales");
   await page.getByRole("button", { name: "Buscar en el catálogo" }).click();
-  const catalogo = page.getByRole("dialog", { name: "Catálogo" });
+  const catalogo = page.getByRole("dialog", { name: "Agregar del catálogo" });
   await catalogo.getByRole("searchbox", { name: "Buscar en el catálogo" }).fill(codigo);
   await catalogo.getByRole("button", { name: `Agregar ${descripcion}` }).click();
-  await catalogo.getByRole("button", { name: /^Listo · / }).click();
+  await catalogo.getByRole("button", { name: "Ver materiales" }).click();
   await page.getByRole("textbox", { name: "Cantidad de la línea 1" }).fill("30");
   await expect(page.getByText("4.800")).toHaveCount(0);
   await irARevisar(page);

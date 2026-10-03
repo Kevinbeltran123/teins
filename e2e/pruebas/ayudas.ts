@@ -137,7 +137,8 @@ export async function arrastrar(page: Page, puntos: [number, number][], { quieto
  */
 export async function irAlRecorrido(page: Page) {
   const recorrido = page.getByRole("navigation", { name: "Recorrido de la visita" });
-  const listo = page.getByRole("button", { name: /^Listo este / });
+  // Desde un tablero abierto (iteración 32): "Volver a la lista" o, en el último, "Listo, ver…".
+  const listo = page.getByRole("button", { name: /^(Volver a la lista|Listo, ver )/ });
   const ver = page.getByRole("button", { name: "Ver el recorrido", exact: true });
   // Espera a que la pantalla (recorrido, paso o repetición) termine de pintarse antes de decidir.
   await expect(recorrido.or(ver).or(listo)).toBeVisible();
@@ -161,7 +162,7 @@ export async function irAlPaso(page: Page, titulo: string) {
 export async function irARevisar(page: Page) {
   const recorrido = await irAlRecorrido(page);
   await recorrido.getByRole("button", { name: /^Revisar y enviar/ }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Antes de enviar" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Revisa y envía" })).toBeVisible();
 }
 
 /** El croquis es un paso que abre el editor a pantalla completa. */

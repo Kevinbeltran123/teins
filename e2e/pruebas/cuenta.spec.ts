@@ -108,7 +108,8 @@ test("reactivar entrega una temporal y el técnico crea la suya al entrar en cam
   // Y la puede cambiar después desde "Tu cuenta".
   await t.getByRole("button", { name: "Tu cuenta" }).click();
   await t.getByRole("button", { name: "Cambiar contraseña" }).click();
-  const hoja = t.getByRole("dialog", { name: "Cambiar contraseña" });
+  // Se abre dentro de la misma hoja, como una página (iteración 32).
+  const hoja = t.getByRole("dialog", { name: "Contraseña" });
   await hoja.getByLabel("Contraseña actual").fill("la-de-mi-telefono");
   await hoja.getByLabel("Contraseña nueva", { exact: true }).fill("la-segunda-del-telefono");
   await hoja.getByLabel("Repite la contraseña nueva").fill("la-segunda-del-telefono");

@@ -121,7 +121,7 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   const esta = page.getByRole("region", { name: "Enviados" });
-  await expect(esta.getByText("Revisado por oficina")).toBeVisible({ timeout: 30_000 });
+  await expect(esta.getByText("Revisado", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(esta.getByText("1 comentario de oficina")).toBeVisible();
   await esta.getByRole("button").first().click();
   await expect(page.getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();

@@ -35,7 +35,9 @@ test("firma del cliente: quien recibe la visita firma la constancia en el teléf
   await irAlPaso(page, "Firma del cliente");
   await page.getByRole("button", { name: "Entregar el teléfono" }).click();
   const hoja = page.getByRole("dialog", { name: "Constancia de visita" });
-  await hoja.getByRole("button", { name: "Ya lo tiene" }).click();
+  // Quien recibe el teléfono ve primero qué va a confirmar (iteración 32).
+  await expect(hoja.getByRole("heading", { name: `${cliente}, confirme la visita de ${tecnico.nombre}` })).toBeVisible();
+  await hoja.getByRole("button", { name: "Revisar y firmar" }).click();
   await expect(hoja.getByText(`Confirmo que ${tecnico.nombre}, de TEINS, visitó ${cliente} · Sede E2E el`)).toBeVisible();
   // Sin nombre ni firma, dice qué falta.
   await hoja.getByRole("button", { name: "Firmar" }).click();
@@ -47,10 +49,12 @@ test("firma del cliente: quien recibe la visita firma la constancia en el teléf
   await hoja.getByRole("button", { name: "Firmar" }).click();
   await expect(hoja).toHaveCount(0);
   await expect(page.getByRole("img", { name: "Firma de Martha Gómez" })).toBeVisible();
-  await expect(page.getByText("Martha Gómez · Jefe de mantenimiento")).toBeVisible();
+  const constancia = page.getByRole("region", { name: "Constancia firmada" });
+  await expect(constancia.getByText("Martha Gómez", { exact: true })).toBeVisible();
+  await expect(constancia.getByText(`Jefe de mantenimiento · ${cliente}`)).toBeVisible();
 
   // Volver a firmar pide confirmar; cancelar deja la firma.
-  await page.getByRole("button", { name: "Volver a firmar" }).click();
+  await constancia.getByRole("button", { name: "Repetir" }).click();
   await page.getByRole("dialog", { name: "¿Volver a firmar?" }).getByRole("button", { name: "Cancelar" }).click();
   await expect(page.getByRole("img", { name: "Firma de Martha Gómez" })).toBeVisible();
 

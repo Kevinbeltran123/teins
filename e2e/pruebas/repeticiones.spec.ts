@@ -28,17 +28,26 @@ test("secciones repetibles: el técnico agrega tableros y quita uno; oficina los
     const nuevo = page.getByRole("article", { name: `Tablero ${i + 1}` });
     await nuevo.getByRole("textbox", { name: "Ubicación del tablero" }).fill(ubicacion);
     await nuevo.getByRole("textbox", { name: "Corriente nominal" }).fill(corriente);
-    await page.getByRole("button", { name: "Listo este tablero" }).click();
+    // El último de la lista vuelve a ella (iteración 32).
+    await page.getByRole("button", { name: /^Listo, ver / }).click();
     await expect(tableros.getByRole("button", { name: `Tablero ${i + 1}` })).toContainText("Completo");
   }
   // El primero cambia de nombre; un tercero se agrega y se quita.
-  await tableros.getByRole("button", { name: "Tablero 1" }).click();
-  await page.getByRole("textbox", { name: "Nombre (tablero)" }).fill("Tablero principal");
-  await page.getByRole("button", { name: "Listo este tablero" }).click();
-  await expect(tableros.getByRole("button", { name: "Tablero principal" })).toBeVisible();
+  // El primero cambia de nombre desde el menú ⋯; abajo sigue al siguiente sin volver a la lista (iteración 32).
+  await tableros.getByRole("button", { name: /^Tablero 1/ }).click();
+  await page.getByRole("button", { name: "Opciones de Tablero 1" }).click();
+  await page.getByRole("menuitem", { name: "Cambiar nombre" }).click();
+  await page.getByRole("textbox", { name: "Nombre del tablero" }).fill("Tablero principal");
+  await page.getByRole("button", { name: "Listo", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Tablero principal" })).toBeVisible();
+  await page.getByRole("button", { name: "Siguiente: Tablero 2" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Tablero 2" })).toBeVisible();
+  await page.getByRole("button", { name: /^Listo, ver / }).click();
+  await expect(tableros.getByRole("button", { name: /^Tablero principal/ })).toBeVisible();
   await tableros.getByRole("button", { name: "Agregar tablero" }).click();
-  // Quitar es al instante y se deshace desde la notificación (iteración 24c).
-  await page.getByRole("button", { name: "Quitar Tablero 3" }).click();
+  // Quitar es al instante, desde el menú, y se deshace desde la notificación (iteración 24c).
+  await page.getByRole("button", { name: "Opciones de Tablero 3" }).click();
+  await page.getByRole("menuitem", { name: "Quitar tablero" }).click();
   await expect(tableros.getByRole("button", { name: /^Tablero/ })).toHaveCount(2);
 
   await irARevisar(page);
