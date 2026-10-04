@@ -1,4 +1,20 @@
-import { aDecimalColombiano, bloques, describirValor, esBoceto, esCantidades, esFirma, esNoObtenido, type ContenidoVersion, type Valor } from "@teins/dominio";
+import {
+  aDecimalColombiano,
+  bloqueOcultoPorOmision,
+  bloques,
+  campoOcultoPorOmision,
+  claveOcultable,
+  describirValor,
+  esBoceto,
+  esCantidades,
+  esFirma,
+  esNoObtenido,
+  ocultosDe,
+  type ContenidoVersion,
+  type DefinicionCampo,
+  type SeleccionInforme,
+  type Valor,
+} from "@teins/dominio";
 import { escapar } from "./escapar";
 import { LOGO_TEINS } from "./logo";
 import { estilosDe, type Salida } from "./salida";
@@ -46,7 +62,17 @@ export interface RecursosPlantilla {
   bocetos?: ReadonlyMap<string, readonly HojaDelInforme[]>;
   /** Firma por huella, en SVG sin cuadrícula y recortada a sus trazos (ADR-0024). */
   firmas?: ReadonlyMap<string, string>;
+  /**
+   * La vista de oficina mientras compone (ADR-0039): el contenido llega completo y lo oculto se dibuja como una franja
+   * con «Mostrar»; lo que sale lleva «Ocultar». Sin ella (el PDF), lo oculto ya no viene y se salta.
+   */
+  seleccion?: SeleccionInforme | undefined;
 }
+
+/** «Ocultar» y «Mostrar» de la vista: la pantalla los atiende por su clave y si la parte sale o no por omisión. */
+const botonOcultar = (clave: string, omision: boolean) => `<button type="button" class="vista-ocultar" data-ocultar="${escapar(clave)}" data-omision="${omision ? 1 : 0}">Ocultar</button>`;
+const franjaOculta = (titulo: string, porque: string, clave: string, omision: boolean) =>
+  `<div class="vista-oculto"><span><b>${escapar(titulo)}</b> no sale en el informe${porque ? ` · <i>${porque}</i>` : ""}</span><button type="button" data-mostrar="${escapar(clave)}" data-omision="${omision ? 1 : 0}">Mostrar</button></div>`;
 
 /**
  * Nombre con que se guarda el PDF al descargarlo y se adjunta: quien lo recibe lo encuentra después en su carpeta
@@ -55,17 +81,35 @@ export interface RecursosPlantilla {
 export const nombreDelPdfDeInforme = (visita: { cliente: string; sitio: string }, numero: number) =>
   `Informe ${visita.cliente} - ${visita.sitio} - versión ${numero}.pdf`.replace(/[/\\:*?"<>|]/g, "-");
 
-export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos = new Map(), firmas = new Map() }: RecursosPlantilla): string {
+export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos = new Map(), firmas = new Map(), seleccion }: RecursosPlantilla): string {
   const capitulos = c.levantamientos
     .map((l, i) => {
+      // Lo oculto (ADR-0039): mientras se compone, según la selección del borrador; en la versión, lo que quedó fuera.
+      const elegidos = seleccion ? ocultosDe(seleccion, l.id) : undefined;
+      const fuera = new Set(l.ocultos ?? []);
       // Cada sección, y cada repetición de las repetibles con su nombre, en orden (iteración 9).
       const secciones = bloques(l.formato, l.repeticiones ?? {})
-        .map(({ seccion: s, clave, titulo }) => {
+        .map((bloque) => {
+          const { seccion: s, clave, titulo } = bloque;
+          const claveBloque = claveOcultable(l.id, clave);
+          if (elegidos ? elegidos.bloque(bloque) : fuera.has(clave)) {
+            return seleccion ? `<section class="seccion">${franjaOculta(titulo, bloqueOcultoPorOmision(bloque) ? "solo para la empresa" : "", claveBloque, bloqueOcultoPorOmision(bloque))}</section>` : "";
+          }
+          const campoFuera = (campo: DefinicionCampo) => (elegidos ? elegidos.campo(bloque, campo) : fuera.has(claveOcultable(clave, campo.clave)));
+          /** Un campo con bloque propio (fotos, croquis, cantidades, firma): oculto, su franja en la vista; si sale, con «Ocultar». */
+          const propio = (campo: DefinicionCampo, html: string) => {
+            if (!html) return "";
+            const claveCampo = claveOcultable(l.id, clave, campo.clave);
+            if (!seleccion) return html;
+            if (campoFuera(campo)) return franjaOculta(campo.etiqueta, campo.tipo === "boceto" ? "croquis de campo: adjunte el plano en Planos anexos" : "", claveCampo, campoOcultoPorOmision(campo));
+            return `<div class="vista-ocultable">${botonOcultar(claveCampo, campoOcultoPorOmision(campo))}${html}</div>`;
+          };
           const datos = s.campos
             // Fotos, bocetos, cantidades y firmas tomadas van en su propio bloque; "no se pudo obtener"
             // de cualquier tipo, y una firma sin tomar, van como cualquier dato, con su motivo.
             .filter((campo) => {
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
+              if (!seleccion && campoFuera(campo)) return false;
               if (valor !== undefined && esNoObtenido(valor)) return true;
               return campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "cantidades" && !(campo.tipo === "firma" && esFirma(valor));
             })
@@ -84,11 +128,15 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
               const figuras = (huellas as readonly string[])
                 .map((h, n) => {
                   const pie = `Foto ${n + 1} de ${escapar(campo.etiqueta.toLowerCase())}`;
+                  const claveFoto = claveOcultable(l.id, clave, campo.clave, h);
+                  if (seleccion && !campoFuera(campo) && elegidos!.foto(bloque, campo, h))
+                    return `<figure class="vista-foto-oculta"><div>No sale</div><button type="button" data-mostrar="${escapar(claveFoto)}" data-omision="0">Mostrar</button></figure>`;
                   const src = fotos.get(h);
-                  return src ? `<figure><img src="${src}" alt="${pie}"><figcaption>${pie}</figcaption></figure>` : `<figure class="falta"><div>[FOTO]</div><figcaption>${pie}</figcaption></figure>`;
+                  const ocultar = seleccion ? botonOcultar(claveFoto, false) : "";
+                  return src ? `<figure>${ocultar}<img src="${src}" alt="${pie}"><figcaption>${pie}</figcaption></figure>` : `<figure class="falta">${ocultar}<div>[FOTO]</div><figcaption>${pie}</figcaption></figure>`;
                 })
                 .join("");
-              return `<h4>${escapar(campo.etiqueta)}</h4><div class="fotos">${figuras}</div>`;
+              return propio(campo, `<h4>${escapar(campo.etiqueta)}</h4><div class="fotos">${figuras}</div>`);
             })
             .join("");
           const croquis = s.campos
@@ -97,12 +145,12 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
               const valor = l.respuestas[clave]?.[campo.clave];
               if (!esBoceto(valor)) return "";
               const hojas = bocetos.get(valor.boceto);
-              if (!hojas) return `<h4>${escapar(campo.etiqueta)}</h4><figure class="boceto"><div class="falta">[BOCETO]</div></figure>`;
+              if (!hojas) return propio(campo, `<h4>${escapar(campo.etiqueta)}</h4><figure class="boceto"><div class="falta">[BOCETO]</div></figure>`);
               // El nombre de cada hoja ("Segundo piso") sale cuando hay más de una.
               const figuras = hojas
                 .map((h) => `<figure class="boceto${h.vertical ? "" : " apaisada"}">${h.svg}${hojas.length > 1 ? `<figcaption>${escapar(h.nombre)}</figcaption>` : ""}</figure>`)
                 .join("");
-              return `<h4>${escapar(campo.etiqueta)}</h4><div class="hojas">${figuras}</div>`;
+              return propio(campo, `<h4>${escapar(campo.etiqueta)}</h4><div class="hojas">${figuras}</div>`);
             })
             .join("");
           // Cantidades (F9): una tabla por campo, sin precios (regla 7).
@@ -114,7 +162,7 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
               const filas = valor
                 .map((linea) => `<tr><td>${escapar(linea.descripcion)}</td><td class="numero">${aDecimalColombiano(linea.cantidad)}</td><td>${escapar(linea.unidad)}</td><td>${escapar(linea.observacion ?? "")}</td></tr>`)
                 .join("");
-              return `<h4>${escapar(campo.etiqueta)}</h4><table class="cantidades"><colgroup><col><col class="c-cantidad"><col class="c-unidad"><col class="c-observacion"></colgroup><thead><tr><th>Descripción</th><th class="numero">Cantidad</th><th>Unidad</th><th>Observación</th></tr></thead><tbody>${filas}</tbody></table>`;
+              return propio(campo, `<h4>${escapar(campo.etiqueta)}</h4><table class="cantidades"><colgroup><col><col class="c-cantidad"><col class="c-unidad"><col class="c-observacion"></colgroup><thead><tr><th>Descripción</th><th class="numero">Cantidad</th><th>Unidad</th><th>Observación</th></tr></thead><tbody>${filas}</tbody></table>`);
             })
             .join("");
           // Constancia de visita (ADR-0024): lo que leyó quien firmó, su firma y cuándo.
@@ -124,10 +172,10 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
               const valor = l.respuestas[clave]?.[campo.clave];
               if (!esFirma(valor)) return "";
               const trazo = firmas.get(valor.firma) ?? '<div class="falta">[FIRMA]</div>';
-              return `<section class="constancia"><h4>Constancia de visita</h4><p>${escapar(valor.declaracion)}</p><div class="firmado"><div class="trazo">${trazo}<p><strong>${escapar(valor.nombre)}</strong>${valor.cargo ? `<br><span class="tenue">${escapar(valor.cargo)}</span>` : ""}</p></div><p class="tenue">Firmado en el sitio el ${fechaHora.format(new Date(valor.firmadoEn))}, en el teléfono del técnico.</p></div></section>`;
+              return propio(campo, `<section class="constancia"><h4>Constancia de visita</h4><p>${escapar(valor.declaracion)}</p><div class="firmado"><div class="trazo">${trazo}<p><strong>${escapar(valor.nombre)}</strong>${valor.cargo ? `<br><span class="tenue">${escapar(valor.cargo)}</span>` : ""}</p></div><p class="tenue">Firmado en el sitio el ${fechaHora.format(new Date(valor.firmadoEn))}, en el teléfono del técnico.</p></div></section>`);
             })
             .join("");
-          return `<section class="seccion"><h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${cantidades}${galerias}${croquis}${constancias}</section>`;
+          return `<section class="seccion${seleccion ? " vista-ocultable" : ""}">${seleccion ? botonOcultar(claveBloque, bloqueOcultoPorOmision(bloque)) : ""}<h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${cantidades}${galerias}${croquis}${constancias}</section>`;
         })
         .join("");
       return `<article class="capitulo" id="capitulo-${escapar(l.id)}">

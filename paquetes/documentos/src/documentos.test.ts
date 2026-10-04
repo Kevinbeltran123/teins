@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularTotales, type ContenidoVersion, type LineaDeCotizacion, type VersionFormato } from "@teins/dominio";
+import { aplicarSeleccion, calcularTotales, SELECCION_VACIA, type ContenidoVersion, type LineaDeCotizacion, type VersionFormato } from "@teins/dominio";
 import { asunto, ESTILOS_COTIZACION, ESTILOS_INFORME, hojaDeLaVista, htmlDeCorreo, plantillaCotizacion, textoBase, textoDeCorreo, plantillaDeWhatsapp, plantillaInforme, variablesDeWhatsapp, type ContenidoCotizacion, type MensajeDeEnvio, type Salida } from "./index";
 
 const formato: VersionFormato = {
@@ -115,6 +115,34 @@ describe("plantillas", () => {
     }
     // La cotización no lleva el botón del portal: el portal solo muestra informes (ADR-0029).
     expect(plantillaDeWhatsapp(cotizacionM).boton).toBeNull();
+  });
+});
+
+describe("qué sale en el informe (ADR-0039)", () => {
+  const id = "0192f0e0-0000-7000-8000-000000000001";
+  const conLlegada: VersionFormato = {
+    ...formato,
+    secciones: [{ clave: "llegada", titulo: "Llegada", soloEmpresa: true, campos: [{ clave: "fotos_llegada", etiqueta: "Fotos de llegada", tipo: "foto" }] }, ...formato.secciones],
+  };
+  const borrador: ContenidoVersion = {
+    ...informe,
+    levantamientos: [{ ...informe.levantamientos[0]!, formato: conLlegada, respuestas: { ...informe.levantamientos[0]!.respuestas, llegada: { fotos_llegada: ["c".repeat(64)] } } }],
+  };
+
+  it("en el PDF, lo que quedó fuera de la versión no deja rastro: ni la sección ni su título", () => {
+    const version = aplicarSeleccion(borrador.levantamientos[0]!, SELECCION_VACIA);
+    const html = plantillaInforme({ ...borrador, levantamientos: [version] }, { salida: PDF, fotos: new Map() });
+    expect(html).not.toContain("Llegada");
+    expect(html).not.toContain("vista-ocultar");
+    expect(html).toContain("Cuarto técnico");
+  });
+
+  it("en la vista de oficina, lo oculto es una franja con «Mostrar» y lo que sale tiene «Ocultar», con su clave", () => {
+    const html = plantillaInforme(borrador, { salida: VISTA, fotos: new Map(), seleccion: SELECCION_VACIA });
+    expect(html).toContain(`data-mostrar="${id}|llegada" data-omision="1"`);
+    expect(html).toContain("solo para la empresa");
+    expect(html).toContain(`data-ocultar="${id}|cuarto_tecnico" data-omision="0"`);
+    expect(html).toContain(`data-ocultar="${id}|cuarto_tecnico|fotos_equipo|${"a".repeat(64)}"`);
   });
 });
 

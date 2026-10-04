@@ -50,6 +50,20 @@ tr.vista-corregido td { background: rgb(47 95 232 / .08); }
 tr.vista-editando th, tr.vista-editando td { background: rgb(47 95 232 / .12); }
 tr.vista-editando { outline: 1.5px solid #2F5FE8; outline-offset: -1px; }
 td[data-antes]::after { content: attr(data-antes); display: block; font-weight: 400; font-size: 8.5pt; color: #2F5FE8; margin-top: 1pt; }
+/* Qué sale en el informe (ADR-0039): al pasar por encima (la pantalla marca vista-encima), «Ocultar»; lo oculto, rayado y con «Mostrar». No va en el PDF. */
+.vista-ocultable { position: relative; border-radius: 4px; }
+.vista-ocultable.vista-encima { box-shadow: 0 0 0 1.5px rgb(47 95 232 / .35); }
+.fotos figure { position: relative; }
+.vista-ocultar { position: absolute; top: 4pt; right: 4pt; z-index: 2; display: none; border: 0; border-radius: 99px; background: #111317; color: #FFFFFF; font: 500 8pt "Geist", sans-serif; padding: 3pt 9pt; cursor: pointer; }
+.vista-encima > .vista-ocultar, .vista-ocultar:focus-visible { display: block; }
+.vista-ocultar:focus-visible, .vista-oculto button:focus-visible, .vista-foto-oculta button:focus-visible { outline: 2px solid #2F5FE8; outline-offset: 2px; }
+.vista-oculto { display: flex; align-items: center; gap: 8pt; margin: 6pt 0; padding: 6pt 10pt; border: 1px dashed #C9CED8; border-radius: 5px; color: #6F7580; font-size: 9pt; background: repeating-linear-gradient(-45deg, #FAFAFB 0 6px, #F3F4F6 6px 12px); }
+.vista-oculto b { color: #40454E; font-weight: 600; }
+.vista-oculto i { font-style: normal; color: #A15C00; }
+.vista-oculto button, .vista-foto-oculta button { margin-left: auto; border: 0; background: none; color: #2F5FE8; font: 500 9pt "Geist", sans-serif; cursor: pointer; padding: 0; }
+.vista-foto-oculta { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2pt; border: 1px dashed #C9CED8; border-radius: 3px; color: #8A909A; font-size: 8pt; background: #FAFAFB; min-height: 90pt; }
+.vista-foto-oculta button { margin-left: 0; font-size: 8pt; }
+@media (prefers-reduced-motion: no-preference) { .vista-ocultable { transition: box-shadow .12s; } }
 /* Un plano anexo no se dibuja: una ficha con su nombre y sus páginas. */
 .vista-anexo { margin-top: 8pt; display: flex; gap: 10pt; align-items: center; border: 1px dashed #C9CED8; border-radius: 6px; padding: 9pt 11pt; color: #525152; break-inside: avoid; }
 .vista-anexo b { color: #15171A; font-weight: 600; }
