@@ -106,7 +106,7 @@ import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion, p
 import { useBotonAtras } from "../dispositivo/atras";
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
-import { compararPorHorario, horarioDeVisita, terminadaEn } from "../visitas";
+import { compararPorHorario, terminadaEn } from "../visitas";
 
 // El editor de bocetos pesa (perfect-freehand y la lógica del lienzo): se carga solo al dibujar (ADR-0011).
 const EditorBoceto = lazy(() => import("./EditorBoceto"));
@@ -1333,7 +1333,6 @@ function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: str
 }
 
 const diaLargo = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-const diaSinAno = { format: (fecha: Date) => new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long" }).format(fecha).replace(/^./, (c) => c.toUpperCase()) };
 const soloHora = new Intl.DateTimeFormat("es-CO", { timeStyle: "short" });
 const diaCorto = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric" });
 /** "hoy a las 3:40 p. m." o la fecha completa si no fue hoy. */
@@ -1439,18 +1438,7 @@ function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: stri
         <Suspense fallback={<div aria-busy="true" aria-label="Abriendo la constancia" className="fixed inset-0 z-50 bg-panel" />}>
           <HojaDeFirma
             declaracion={declaracion}
-            recibe={{
-              tecnico: usuario?.nombre ?? "el técnico",
-              cliente: visita?.cliente.nombre,
-              datos: visita
-                ? [
-                    ["Sitio", visita.sitio.nombre],
-                    ["Fecha", diaSinAno.format(new Date())],
-                    ...(horarioDeVisita(visita) ? [["Hora", horarioDeVisita(visita)!] as const] : []),
-                    ["Motivo", visita.motivo],
-                  ]
-                : [["Fecha", diaSinAno.format(new Date())]],
-            }}
+            recibe={{ tecnico: usuario?.nombre ?? "el técnico", cliente: visita?.cliente.nombre }}
             guardar={async (d, datos) => {
               await repositorio.guardarFirma(id, seccion, campo.clave, d, { ...datos, declaracion }, new Date());
               alGuardar();

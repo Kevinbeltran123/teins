@@ -10,8 +10,8 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
  * Constancia de visita para firmar (ADR-0024). La lee y la firma quien recibió la visita, no el técnico: por eso
  * trata de usted. Pantalla completa, como el editor de bocetos, para que la firma tenga espacio. Se carga aparte.
  *
- * Primero, la pantalla que ve quien recibe el teléfono (iteración 32): le habla a esa persona y le muestra qué va a
- * confirmar antes de pedirle nada (DoorDash Dasher y Jobber en Mobbin).
+ * Una sola pantalla (iteración 34, prototipos/informe-y-firma): le habla a quien recibe el teléfono, le muestra la
+ * declaración exacta que firma, su nombre y cargo en una fila y el recuadro para firmar (Fresha y Liven en Mobbin).
  */
 export default function HojaDeFirma({
   declaracion,
@@ -20,8 +20,8 @@ export default function HojaDeFirma({
   cerrar,
 }: {
   declaracion: string;
-  /** Lo que se confirma, para la pantalla de entrega. Sin visita (levantamiento suelto), solo el técnico. */
-  recibe: { tecnico: string; cliente?: string | undefined; datos: readonly (readonly [string, string])[] };
+  /** A quién se le habla: el técnico y, si hay visita, el cliente. */
+  recibe: { tecnico: string; cliente?: string | undefined };
   guardar: (documento: DocumentoBoceto, datos: { nombre: string; cargo: string }) => Promise<void>;
   cerrar: () => void;
 }) {
@@ -33,7 +33,6 @@ export default function HojaDeFirma({
   const [enCurso, setEnCurso] = useState<{ puntero: number; puntos: PuntoConPresion[]; lapiz: boolean } | null>(null);
   const [errores, setErrores] = useState<{ nombre?: string | undefined; firma?: string | undefined }>({});
   const [estado, setEstado] = useState<"firmando" | "guardando" | "error">("firmando");
-  const [entregado, setEntregado] = useState(false);
   const lienzo = useRef<SVGSVGElement>(null);
   const lapizVisto = useRef(false);
 
@@ -92,22 +91,30 @@ export default function HojaDeFirma({
 
   const enProceso: ElementoBoceto | null = enCurso ? { tipo: "trazo", grosor: GROSOR, puntos: enCurso.puntos, contorno: contornoDe(enCurso.puntos, enCurso.lapiz, GROSOR) } : null;
 
+  const falta = !nombre.trim() && trazos.length === 0 ? "Faltan su nombre y su firma." : !nombre.trim() ? "Falta su nombre." : trazos.length === 0 ? "Falta la firma." : "Su firma solo confirma que la visita ocurrió.";
+
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="titulo-constancia" data-tema="claro" className={`fixed inset-0 z-50 flex flex-col bg-panel pt-[env(safe-area-inset-top)] ${saliendo ? "animate-hoja-baja" : "motion-safe:animate-hoja-sube"}`}>
-      <div className="flex items-center gap-1 py-1.5 pr-3 pl-1">
-        <BotonIcono icono={X} etiqueta="Cancelar y volver al levantamiento" onClick={salir} />
-        <h2 id="titulo-constancia" className="text-subtitulo font-extrabold">
-          Constancia de visita
-        </h2>
+    <div role="dialog" aria-modal="true" aria-label="Constancia de visita" data-tema="claro" className={`fixed inset-0 z-50 flex flex-col bg-fondo pt-[env(safe-area-inset-top)] ${saliendo ? "animate-hoja-baja" : "motion-safe:animate-hoja-sube"}`}>
+      <div className="flex min-h-13 shrink-0 items-center justify-between pt-1 pr-2 pl-5">
+        <Logo alto={24} />
+        <Boton variante="fantasma" onClick={salir} disabled={estado === "guardando"}>
+          Cancelar
+        </Boton>
       </div>
-      <div className={`flex grow flex-col gap-4 overflow-y-auto px-5 pt-1 pb-4 ${entregado ? "motion-safe:animate-fundir" : ""}`}>
-        <p className="text-cuerpo leading-relaxed">{declaracion}</p>
-        <CampoTexto etiqueta="Nombre de quien firma" autoComplete="name" valorInicial="" onCambio={setNombre} error={errores.nombre} />
-        <CampoTexto etiqueta="Cargo (opcional)" autoComplete="organization-title" valorInicial="" onCambio={setCargo} />
+      <div className="flex grow flex-col gap-3.5 overflow-y-auto px-5 pt-1.5 pb-3">
+        <div className="flex flex-col gap-0.5">
+          <p className="text-ayuda text-texto-secundario">{recibe.cliente ? `Constancia de visita · ${recibe.cliente}` : "Constancia de visita"}</p>
+          <h2 className="text-[23px] leading-tight font-semibold tracking-tight">{`Confirme la visita de ${recibe.tecnico}`}</h2>
+        </div>
+        <p className="text-[15px] leading-relaxed text-texto-secundario">{declaracion}</p>
+        <div className="grid grid-cols-[1.4fr_1fr] gap-2">
+          <CampoTexto etiqueta="Su nombre" autoComplete="name" valorInicial="" onCambio={setNombre} error={errores.nombre} />
+          <CampoTexto etiqueta="Cargo (opcional)" autoComplete="organization-title" valorInicial="" onCambio={setCargo} />
+        </div>
         <div className="flex flex-col gap-2">
           <div
             aria-label="Espacio para firmar con el dedo"
-            className={`relative touch-none overflow-hidden rounded-[20px] bg-fondo select-none ${errores.firma ? "outline-2 outline-error" : ""}`}
+            className={`relative touch-none overflow-hidden rounded-[16px] bg-panel shadow-[inset_0_0_0_1px_var(--t-borde-suave)] select-none ${errores.firma ? "outline-2 outline-error" : ""}`}
             onPointerDown={alBajar}
             onPointerMove={alMover}
             onPointerUp={alSubir}
@@ -115,67 +122,43 @@ export default function HojaDeFirma({
           >
             <Firma ref={lienzo} ancho={LIENZO.ancho} alto={LIENZO.alto} recortar={false} elementos={trazos} etiqueta={trazos.length > 0 ? "Su firma" : "Recuadro para firmar, vacío"}>
               {/* Línea base: dónde va la firma (Acorns, en Mobbin). */}
-              <line x1={60} x2={940} y1={560} y2={560} className="stroke-borde-control" strokeWidth={4} />
+              <line x1={60} x2={940} y1={580} y2={580} className="stroke-borde-control" strokeWidth={4} />
               {enProceso && <ElementoDeBoceto elemento={enProceso} />}
             </Firma>
-            <span className="pointer-events-none absolute bottom-3 left-6 text-ayuda text-texto-secundario">Firme sobre la línea</span>
+            {trazos.length === 0 ? (
+              <>
+                <span aria-hidden className="pointer-events-none absolute bottom-[25%] left-6 text-[18px] text-texto-terciario">×</span>
+                <span className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-ayuda text-texto-terciario">Firme aquí con el dedo</span>
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={estado === "guardando"}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => setTrazos([])}
+                className="absolute top-1.5 right-1.5 min-h-11 px-3 text-cuerpo text-superficie"
+              >
+                Borrar
+              </button>
+            )}
           </div>
           {errores.firma && <MensajeError id="error-firma">{errores.firma}</MensajeError>}
         </div>
         {estado === "error" && <Aviso tono="error">No se pudo guardar la firma en el teléfono. Intente de nuevo.</Aviso>}
       </div>
-      <div className="flex items-center gap-2 px-5 pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-        <button
-          type="button"
-          disabled={trazos.length === 0 || estado === "guardando"}
-          onClick={() => setTrazos([])}
-          className="h-15 px-4 text-cuerpo font-extrabold text-texto-secundario underline underline-offset-3 disabled:no-underline disabled:opacity-40"
-        >
-          Borrar
-        </button>
+      <div className="flex shrink-0 flex-col gap-2 px-5 pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
           aria-busy={estado === "guardando" || undefined}
           onClick={() => void firmarUnaVez()}
-          className="h-15 grow rounded-control bg-superficie text-subtitulo font-extrabold text-sobre-superficie active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+          className="h-control w-full rounded-control bg-superficie text-cuerpo font-semibold text-sobre-superficie active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
         >
           Firmar
         </button>
+        <p className="text-center text-ayuda text-texto-secundario" aria-live="polite">
+          {falta}
+        </p>
       </div>
-      {!entregado && (
-        <div className="absolute inset-0 flex flex-col bg-fondo pt-[env(safe-area-inset-top)]">
-          <div className="flex min-h-13 items-center justify-between pt-1 pr-2 pl-5">
-            <Logo alto={26} />
-            <Boton variante="fantasma" onClick={salir}>
-              Cancelar
-            </Boton>
-          </div>
-          <div className="flex grow flex-col gap-5 overflow-y-auto px-5 pt-6">
-            <p className="text-ayuda font-medium text-texto-secundario">Constancia de visita</p>
-            <h2 className="text-[30px] leading-[1.12] font-semibold tracking-tight">{recibe.cliente ? `${recibe.cliente}, confirme la visita de ${recibe.tecnico}` : `Confirme la visita de ${recibe.tecnico}`}</h2>
-            {recibe.datos.length > 0 && (
-              <dl className="flex flex-col border-t border-division">
-                {recibe.datos.map(([dato, valor]) => (
-                  <div key={dato} className="flex justify-between gap-4 border-b border-division py-3 text-cuerpo">
-                    <dt className="text-texto-secundario">{dato}</dt>
-                    <dd className="text-right font-medium">{valor}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </div>
-          <div className="flex flex-col gap-2.5 px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-            <button
-              type="button"
-              onClick={() => setEntregado(true)}
-              className="h-control w-full rounded-control bg-superficie text-cuerpo font-semibold text-sobre-superficie active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
-            >
-              Revisar y firmar
-            </button>
-            <p className="text-center text-ayuda text-texto-secundario">Su firma solo confirma que la visita ocurrió.</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
