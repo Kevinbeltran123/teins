@@ -168,8 +168,7 @@ test("un doble toque en «Firmar» guarda la firma una sola vez", async ({ page 
   await irAlPaso(page, "Firma del cliente");
   await page.getByRole("button", { name: "Entregar el teléfono" }).click();
   const hoja = page.getByRole("dialog", { name: "Constancia de visita" });
-  await hoja.getByRole("button", { name: "Revisar y firmar" }).click();
-  await hoja.getByRole("textbox", { name: "Nombre de quien firma" }).fill("Martha Gómez");
+  await hoja.getByRole("textbox", { name: "Su nombre" }).fill("Martha Gómez");
   const recuadro = page.getByLabel("Espacio para firmar con el dedo");
   await recuadro.scrollIntoViewIfNeeded();
   const caja = (await recuadro.boundingBox())!;
