@@ -151,3 +151,88 @@ test("los planos se ordenan arrastrando y con el teclado; la hoja sigue el orden
   await expect(fichas).toHaveText(["Plano C", "Plano B", "Plano A"]);
   await o.context().close();
 });
+
+/** ⌘ en Mac y Ctrl en lo demás, según el sistema que ve la página (el proyecto emula un teléfono Android). */
+async function modificador(o: Page) {
+  const esMac = await o.evaluate(() => /mac|iphone|ipad/i.test((navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform));
+  return esMac ? "Meta" : "Control";
+}
+
+test("buscar en todo: abre con el atajo, va a un cliente, lo recuerda y lanza acciones (iteración 37)", async ({ browser }) => {
+  const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
+  const revisora = nuevoUsuario("oficina", "oficina");
+  const { cliente } = nuevaVisitaConCliente(tecnico);
+  const contexto = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "es-CO" });
+  const o = await contexto.newPage();
+  await o.goto(`${OFICINA}/`);
+  await iniciarSesion(o, revisora);
+  await expect(o.getByRole("tab", { name: /Esperando revisión/ })).toBeVisible();
+  const mod = await modificador(o);
+
+  await o.keyboard.press(`${mod}+k`);
+  const busqueda = o.getByRole("dialog", { name: "Buscar en oficina" });
+  await expect(busqueda.getByRole("group", { name: "Acciones" })).toBeVisible();
+  await busqueda.getByRole("combobox").fill(cliente);
+  await expect(busqueda.getByRole("group", { name: "Clientes" }).getByRole("option", { name: new RegExp(cliente) })).toBeVisible();
+  await o.keyboard.press("Enter");
+  await expect(busqueda).toHaveCount(0);
+  await expect(o.getByRole("heading", { name: cliente })).toBeVisible();
+
+  // Desde el menú, vacía: lo reciente arriba.
+  await o.getByRole("button", { name: "Buscar" }).click();
+  await expect(busqueda.getByRole("group", { name: "Recientes" }).getByRole("option").first()).toContainText(cliente);
+  await o.keyboard.press("Escape");
+  await expect(busqueda).toHaveCount(0);
+
+  // Una acción: «Programar visita» abre su formulario en Visitas.
+  await o.keyboard.press(`${mod}+k`);
+  await busqueda.getByRole("combobox").fill("programar");
+  await o.keyboard.press("Enter");
+  await expect(o.getByRole("dialog", { name: /Programar visita/ })).toBeVisible();
+  await contexto.close();
+});
+
+test("revisar en serie con el teclado: J, Enter, T, R y S; «?» muestra los atajos (iteración 37)", async ({ browser }) => {
+  const revisora = nuevoUsuario("oficina", "oficina");
+  const contexto = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "es-CO" });
+  const o = await contexto.newPage();
+  await o.goto(`${OFICINA}/`);
+  await iniciarSesion(o, revisora);
+  const esperando = o.getByRole("tab", { name: /Esperando revisión/ });
+  await expect(esperando).toBeVisible();
+  const filas = o.getByRole("tabpanel").getByRole("row");
+  await expect.poll(() => filas.count()).toBeGreaterThan(0);
+  // Los levantamientos los dejan enviados las pruebas de campo que corren antes; sin ellos no hay nada que revisar.
+  test.skip((await filas.count()) < 3, "No hay levantamientos esperando revisión");
+
+  await o.keyboard.press("?");
+  const atajos = o.getByRole("dialog", { name: "Atajos del teclado" });
+  await expect(atajos.getByText("Marcar revisado")).toBeVisible();
+  await o.keyboard.press("Escape");
+  await expect(atajos).toHaveCount(0);
+
+  await o.keyboard.press("j");
+  await expect(o.locator("tr.marcada")).toHaveCount(1);
+  await o.keyboard.press("j");
+  await o.keyboard.press("Enter");
+  const revision = o.getByRole("region", { name: "Revisión" });
+  await expect(revision).toBeVisible();
+  const primero = o.url();
+
+  await o.keyboard.press("t");
+  await expect(revision.getByText("La tomó usted")).toBeVisible();
+  await o.keyboard.press("r");
+  const confirmar = o.getByRole("dialog", { name: /^¿Marcar revisado/ });
+  await expect(confirmar).toBeVisible();
+  await o.keyboard.press("Enter");
+  await expect(revision.getByText("Revisado", { exact: true })).toBeVisible();
+
+  await o.keyboard.press("s");
+  await expect.poll(() => o.url()).not.toBe(primero);
+  await expect(revision.getByText("Esperando revisión")).toBeVisible();
+
+  // Esc vuelve a la bandeja.
+  await o.keyboard.press("Escape");
+  await expect(esperando).toBeVisible();
+  await contexto.close();
+});
