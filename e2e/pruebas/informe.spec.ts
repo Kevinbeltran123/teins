@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { nuevaVisita, nuevoUsuario, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar, pdfDePrueba } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, guardadoSolo, iniciarSesion, irAlPaso, irARevisar, pdfDePrueba } from "./ayudas";
 
 async function enviarDesdeCampo(page: Page, tecnico: Usuario, cliente: string) {
   await page.goto(`${CAMPO}/`);
@@ -72,8 +72,7 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
   await o.mouse.click(ocultar.x + ocultar.width / 2, ocultar.y + ocultar.height / 2);
   await expect(hoja.locator(".vista-foto-oculta")).toHaveCount(1);
   await expect(queSale).toContainText("No salen: Llegada, 1 foto");
-  await o.getByRole("button", { name: "Guardar borrador" }).click();
-  await expect(o.getByText("Todo guardado")).toBeVisible();
+  await guardadoSolo(o);
 
   // El worker verifica el plano en segundos; publicar antes lo avisa y se reintenta.
   // El error queda en el diálogo de confirmación, que sigue abierto: se reintenta desde ahí.

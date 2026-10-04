@@ -191,3 +191,8 @@ export async function crearUsuarioDesdeAdministracion(page: Page, u: { usuario: 
   await entrega.getByRole("button", { name: "Ya la entregué" }).click();
   return temporal;
 }
+
+/** El informe o la cotización ya se guardó solo (guardado automático, prototipos/usabilidad-oficina). */
+export async function guardadoSolo(page: Page) {
+  await expect(page.getByRole("status").filter({ hasText: /^Guardado$/ })).toBeVisible({ timeout: 15_000 });
+}
