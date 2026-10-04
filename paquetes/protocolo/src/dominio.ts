@@ -85,6 +85,8 @@ export const VersionFormato = z
         z.object({
           clave: ClaveEsquema,
           titulo: z.string().min(1).max(200),
+          /** Solo para la empresa (ADR-0039): no sale en el informe salvo que oficina la muestre. Una app anterior la ignora. */
+          soloEmpresa: z.boolean().optional(),
           repetible: z
             .object({
               etiqueta: z.string().min(1).max(60),

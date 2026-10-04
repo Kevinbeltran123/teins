@@ -53,5 +53,7 @@ export { versionesVigentes } from "./vigencia";
 export { describirValor } from "./describir";
 export type { BorradorInforme, ContenidoVersion, ErrorInforme, LevantamientoParaInforme, Plano } from "./informe";
 export { LIMITES_INFORME, validarBorrador, validarParaPublicar } from "./informe";
+export type { CapituloSeleccionable, SeleccionInforme } from "./seleccion";
+export { aplicarSeleccion, bloqueOcultoPorOmision, campoOcultoPorOmision, claveOcultable, elegir, LIMITES_SELECCION, mostrarTodo, ocultosDe, SELECCION_VACIA, tieneBloquePropio, validarSeleccion } from "./seleccion";
 export type { BorradorCotizacion, CondicionesCotizacion, ErrorCotizacion, Impuestos, LineaDeCotizacion, LineaRevisada, Totales } from "./cotizacion";
 export { calcularTotales, lineasDesdeCantidades, numeroDeCotizacion, PORCENTAJE, porcentaje, TARIFA_IVA, totalDeLinea, validarCotizacion } from "./cotizacion";

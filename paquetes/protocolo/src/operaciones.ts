@@ -431,6 +431,12 @@ export const PaginaInformes = z
   })
   .meta({ id: "PaginaInformes" });
 
+/** Qué sale de cada levantamiento en el informe (ADR-0039): lo que oficina ocultó y lo que volvió a mostrar. */
+const ClaveOcultable = z.string().min(1).max(300);
+export const SeleccionInforme = z
+  .object({ ocultos: z.array(ClaveOcultable).max(2000), mostrados: z.array(ClaveOcultable).max(2000) })
+  .meta({ id: "SeleccionInforme" });
+
 export const DetalleInforme = z
   .object({
     id: Uuid,
@@ -443,6 +449,7 @@ export const DetalleInforme = z
     conclusiones: z.string(),
     levantamientos: z.array(Uuid),
     planos: z.array(Plano),
+    seleccion: SeleccionInforme,
     /** Levantamientos de la visita, incluidos o no, para componer (solo los revisados se pueden incluir). */
     candidatos: z.array(z.object({ id: Uuid, formato: z.string(), tecnico: z.string(), estado: EstadoLevantamiento, recibidoEn: Fecha })),
     versiones: z.array(VersionPublicada),
@@ -1010,6 +1017,8 @@ export const operaciones = {
       conclusiones: z.string().max(20_000),
       levantamientos: z.array(Uuid).max(50),
       planos: z.array(Plano).max(20),
+      /** Opcional para una pestaña anterior al despliegue: sin ella, la selección guardada no cambia. */
+      seleccion: SeleccionInforme.optional(),
     }),
     estadoExito: 200,
     respuesta: z.object({ version: z.int().positive() }),
