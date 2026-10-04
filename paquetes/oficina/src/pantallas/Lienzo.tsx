@@ -96,14 +96,17 @@ export function VistaDeDocumento({
   ancho = 816,
   alPintar,
   ancla,
+  botones,
 }: {
   titulo: string;
   generar: (p: Plantillas) => string;
   ancho?: number;
   alPintar?: ((documento: Document) => void) | undefined;
   ancla?: AnclaDeHoja | null | undefined;
+  /** «Ocultar» y «Mostrar» sobre la hoja (ADR-0039). */
+  botones?: { encima: string; alTocar: (boton: HTMLElement) => void } | undefined;
 }) {
-  return <ConPlantillas>{(p) => <HojaEnVivo html={generar(p)} ancho={ancho} titulo={titulo} alPintar={alPintar} ancla={ancla} />}</ConPlantillas>;
+  return <ConPlantillas>{(p) => <HojaEnVivo html={generar(p)} ancho={ancho} titulo={titulo} alPintar={alPintar} ancla={ancla} botones={botones} />}</ConPlantillas>;
 }
 
 /**

@@ -2,7 +2,7 @@ import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState,
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { MensajeDeInforme, TextoPropio } from "@teins/documentos";
-import type { ContenidoVersion } from "@teins/dominio";
+import { elegir, type ContenidoVersion, type SeleccionInforme } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   ArrowDown,
@@ -44,6 +44,7 @@ import { useHojaAlLado, type Plantillas } from "../documentos";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores, useCancelarEnvio } from "./Envios";
 import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
+import { QueSaleEnElInforme } from "./QueSaleEnElInforme";
 
 type Informe = Respuesta<"obtenerInforme">;
 type Envio = Informe["versiones"][number]["envios"][number];
@@ -52,6 +53,8 @@ interface Borrador {
   conclusiones: string;
   levantamientos: string[];
   planos: { huella: string; nombre: string }[];
+  /** Qué sale de cada levantamiento (ADR-0039). */
+  seleccion: SeleccionInforme;
 }
 
 const ESTADO_LEVANTAMIENTO = { enviado: "Enviado: falta revisarlo", en_revision: "En revisión", revisado: "Revisado" } as const;
@@ -125,6 +128,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
     conclusiones: informe.conclusiones,
     levantamientos: [...informe.levantamientos],
     planos: informe.planos.map((p) => ({ huella: p.huella, nombre: p.nombre })),
+    seleccion: informe.seleccion,
   }));
   const [subiendo, setSubiendo] = useState(false);
   const [errorPlano, setErrorPlano] = useState<unknown>(null);
@@ -206,6 +210,15 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
     },
     [clavePlanos],
   );
+  // «Ocultar» y «Mostrar» sobre la hoja (ADR-0039): la hoja entrega el botón tocado con su clave.
+  const botonesDeLaHoja = {
+    encima: ".vista-ocultable, .fotos figure",
+    alTocar: (boton: HTMLElement) => {
+      const ocultar = boton.dataset.ocultar !== undefined;
+      const clave = ocultar ? boton.dataset.ocultar : boton.dataset.mostrar;
+      if (clave) setBorrador((b) => ({ ...b, seleccion: elegir(b.seleccion, clave, ocultar, boton.dataset.omision === "1") }));
+    },
+  };
   const ilegibles = borrador.planos.filter((p) => ["ilegible", "rechazado"].includes(estadosDePlanos.get(p.huella)?.estado ?? ""));
 
   async function agregarPlanos(archivos: File[]) {
@@ -225,7 +238,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
 
   async function guardarBorrador() {
     const enviado = borrador;
-    const r = await guardar.mutateAsync({ version, ...enviado });
+    const r = await guardar.mutateAsync({ version, ...enviado, seleccion: { ocultos: [...enviado.seleccion.ocultos], mostrados: [...enviado.seleccion.mostrados] } });
     guardado(r.version, enviado);
     return r.version;
   }
@@ -249,32 +262,36 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   function capitulo(c: Informe["candidatos"][number], pos: number) {
     const dentro = pos >= 0;
     const revisado = c.estado === "revisado";
+    const detalle = dentro ? detalles.find((d) => d.id === c.id) : undefined;
     return (
-      <label key={c.id} className={`capitulo ${dentro ? "" : "fuera"}`}>
-        <input
-          type="checkbox"
-          checked={dentro}
-          disabled={!revisado && !dentro}
-          onChange={(e) => actualizar({ levantamientos: e.target.checked ? [...borrador.levantamientos, c.id] : borrador.levantamientos.filter((x) => x !== c.id) })}
-        />
-        <span className="n">{dentro ? `2.${pos + 1}` : ""}</span>
-        <span className="txt">
-          <b>{c.formato}</b> de {c.tecnico}
-          <small>
-            recibido {aFechaCorta(c.recibidoEn)} · {ESTADO_LEVANTAMIENTO[c.estado]}
-          </small>
-        </span>
-        {dentro ? (
-          borrador.levantamientos.length > 1 && (
-            <>
-              <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir ${c.formato} de ${c.tecnico}`} disabled={pos === 0} onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, pos, -1) })} />
-              <BotonIcono icono={ArrowDown} tamano="pequeno" etiqueta={`Bajar ${c.formato} de ${c.tecnico}`} disabled={pos === borrador.levantamientos.length - 1} onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, pos, 1) })} />
-            </>
-          )
-        ) : revisado ? null : (
-          <Insignia tono={c.estado === "en_revision" ? "revision" : "enviado"}>{c.estado === "en_revision" ? "En revisión" : "Enviado"}</Insignia>
-        )}
-      </label>
+      <div key={c.id}>
+        <label className={`capitulo ${dentro ? "" : "fuera"}`}>
+          <input
+            type="checkbox"
+            checked={dentro}
+            disabled={!revisado && !dentro}
+            onChange={(e) => actualizar({ levantamientos: e.target.checked ? [...borrador.levantamientos, c.id] : borrador.levantamientos.filter((x) => x !== c.id) })}
+          />
+          <span className="n">{dentro ? `2.${pos + 1}` : ""}</span>
+          <span className="txt">
+            <b>{c.formato}</b> de {c.tecnico}
+            <small>
+              recibido {aFechaCorta(c.recibidoEn)} · {ESTADO_LEVANTAMIENTO[c.estado]}
+            </small>
+          </span>
+          {dentro ? (
+            borrador.levantamientos.length > 1 && (
+              <>
+                <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir ${c.formato} de ${c.tecnico}`} disabled={pos === 0} onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, pos, -1) })} />
+                <BotonIcono icono={ArrowDown} tamano="pequeno" etiqueta={`Bajar ${c.formato} de ${c.tecnico}`} disabled={pos === borrador.levantamientos.length - 1} onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, pos, 1) })} />
+              </>
+            )
+          ) : revisado ? null : (
+            <Insignia tono={c.estado === "en_revision" ? "revision" : "enviado"}>{c.estado === "en_revision" ? "En revisión" : "Enviado"}</Insignia>
+          )}
+        </label>
+        {detalle && <QueSaleEnElInforme detalle={detalle} seleccion={borrador.seleccion} alCambiar={(seleccion) => actualizar({ seleccion })} fotos={recursos.fotos} />}
+      </div>
     );
   }
 
@@ -440,11 +457,11 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
         </div>
       </div>
       {alLado && (
-        <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={ancla} edicion={edicionCorreo} />
+        <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} seleccion={borrador.seleccion} botones={botonesDeLaHoja} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={ancla} edicion={edicionCorreo} />
       )}
       {vistaLateral && !alLado && (
         <Dialogo forma="lateral" amplio titulo="Vista previa" subtitulo={`Informe de ${informe.visita.cliente}, versión ${siguiente}`} alCerrar={() => setVistaLateral(false)}>
-          <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={null} edicion={edicionCorreo} />
+          <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} seleccion={borrador.seleccion} botones={botonesDeLaHoja} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={null} edicion={edicionCorreo} />
         </Dialogo>
       )}
 
@@ -527,6 +544,8 @@ function LienzoInforme({
   cliente: cl,
   ancla,
   edicion,
+  seleccion,
+  botones,
 }: {
   vista: QueSeVe;
   alCambiar: (v: QueSeVe) => void;
@@ -538,11 +557,14 @@ function LienzoInforme({
   cliente: { id: string; nombre: string };
   ancla: AnclaDeHoja | null;
   edicion: EdicionDeCorreo;
+  /** Lo oculto se ve rayado y con «Mostrar» (ADR-0039). */
+  seleccion: SeleccionInforme;
+  botones: { encima: string; alTocar: (boton: HTMLElement) => void };
 }) {
   return (
     <Lienzo cabecera={<PestanasDeVista documento="Informe" vista={vista} alCambiar={alCambiar} />} sinConexion="Las fotos que no alcanzaron a cargar salen como [FOTO]. ">
       {vista === "documento" ? (
-        <VistaDeDocumento titulo={`Vista previa del informe de ${documento.visita.cliente}`} generar={(p) => p.plantillaInforme(documento, { salida: { tipo: "vista" }, ...recursos })} alPintar={alPintar} ancla={ancla} />
+        <VistaDeDocumento titulo={`Vista previa del informe de ${documento.visita.cliente}`} generar={(p) => p.plantillaInforme(documento, { salida: { tipo: "vista" }, ...recursos, seleccion })} alPintar={alPintar} ancla={ancla} botones={botones} />
       ) : (
         <CorreoDeContactos contactos={contactos} mensaje={mensaje} cliente={cl} documento="el informe" edicion={edicion} />
       )}

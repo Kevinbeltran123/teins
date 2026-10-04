@@ -32,6 +32,12 @@ interface Props {
   /** Lo que la pantalla marca encima de la hoja después de cada pintada (el dato corregido, una ficha). */
   alPintar?: ((documento: Document) => void) | undefined;
   ancla?: AnclaDeHoja | null | undefined;
+  /**
+   * Botones dentro de la hoja (ADR-0039: «Ocultar» y «Mostrar»). El marco no ejecuta scripts y Safari tampoco le entrega
+   * a la pantalla sus eventos: una capa encima pregunta qué hay bajo el puntero (elementFromPoint), marca con
+   * `vista-encima` lo que coincide con `encima` (en lugar de :hover) y entrega el botón tocado.
+   */
+  botones?: { encima: string; alTocar: (boton: HTMLElement) => void } | undefined;
 }
 
 const cuerpoDe = (html: string) => html.slice(html.indexOf(">", html.indexOf("<body")) + 1, html.lastIndexOf("</body>"));
@@ -64,7 +70,7 @@ function fondoAlrededor(el: HTMLElement | null): string {
   return "#E9EBEF";
 }
 
-export function HojaEnVivo({ html, ancho, titulo, estilosEnLinea = false, alPintar, ancla }: Props) {
+export function HojaEnVivo({ html, ancho, titulo, estilosEnLinea = false, alPintar, ancla, botones }: Props) {
   const caja = useRef<HTMLDivElement>(null);
   const marco = useRef<HTMLIFrameElement>(null);
   const escala = useRef(1);
@@ -153,10 +159,42 @@ export function HojaEnVivo({ html, ancho, titulo, estilosEnLinea = false, alPint
     if (ancla && cargado.current) irAlAncla();
   }, [ancla?.selector, ancla?.vez]);
 
+  /** Lo que hay en la hoja bajo un punto de la pantalla (la hoja está reducida a `escala`). */
+  function bajo(x: number, y: number): Element | null {
+    const f = marco.current, doc = f?.contentDocument;
+    if (!f || !doc) return null;
+    const r = f.getBoundingClientRect();
+    return doc.elementFromPoint((x - r.left) / escala.current, (y - r.top) / escala.current);
+  }
+  const marcados = useRef<Element[]>([]);
+  function marcarEncima(el: Element | null, capa: HTMLElement) {
+    for (const m of marcados.current) m.classList.remove("vista-encima");
+    marcados.current = [];
+    // Solo la parte más cercana al puntero: una foto, no también su grupo y su sección.
+    const m = botones ? (el?.closest(botones.encima) ?? null) : null;
+    if (m) {
+      m.classList.add("vista-encima");
+      marcados.current.push(m);
+    }
+    capa.style.cursor = el?.closest("button") ? "pointer" : "default";
+  }
+
   return (
     <div ref={caja} className="hoja-en-vivo">
-      <div className="hoja-marco">
+      <div className="hoja-marco" style={botones ? { position: "relative" } : undefined}>
         <iframe ref={marco} title={titulo} sandbox="allow-same-origin" srcDoc={inicial.current} onLoad={alCargar} />
+        {botones && (
+          <div
+            aria-hidden
+            style={{ position: "absolute", inset: 0 }}
+            onPointerMove={(e) => marcarEncima(bajo(e.clientX, e.clientY), e.currentTarget)}
+            onPointerLeave={(e) => marcarEncima(null, e.currentTarget)}
+            onClick={(e) => {
+              const boton = bajo(e.clientX, e.clientY)?.closest<HTMLElement>("button");
+              if (boton) botones.alTocar(boton);
+            }}
+          />
+        )}
       </div>
     </div>
   );
