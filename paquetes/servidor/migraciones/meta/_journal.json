@@ -246,6 +246,13 @@
       "when": 1791049254906,
       "tag": "0034_epoca_de_bajada",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791130048727,
+      "tag": "0035_seleccion_del_informe",
+      "breakpoints": true
     }
   ]
 }

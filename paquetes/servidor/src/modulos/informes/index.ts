@@ -3,7 +3,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { nombreDelPdfDeInforme, piePagina, plantillaInforme, type HojaDelInforme } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
-import { bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
+import { aplicarSeleccion, bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
 import { claveDeObjeto, leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } from "../../plataforma/base-de-datos";
@@ -304,6 +304,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             conclusiones: r.informe.conclusiones,
             levantamientos: r.informe.levantamientos,
             planos: r.informe.planos,
+            seleccion: { ocultos: [...r.informe.seleccion.ocultos], mostrados: [...r.informe.seleccion.mostrados] },
             candidatos: r.lista.map((l) => ({
               id: l.id,
               formato: r.nombresDeFormato.get(`${l.formato}@${l.versionFormato}`) ?? l.formato,
@@ -322,12 +323,19 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const informe = await leerInforme(tx, id);
             if (informe.version !== cuerpo.version) throw problema("conflicto_de_version", "Otra persona guardó este informe mientras usted lo tenía abierto", { versionActual: informe.version });
-            const borrador: BorradorInforme = { introduccion: cuerpo.introduccion, conclusiones: cuerpo.conclusiones, levantamientos: cuerpo.levantamientos, planos: cuerpo.planos };
+            // Una pestaña anterior al ADR-0039 no manda la selección: se conserva la guardada.
+            const borrador: BorradorInforme = { introduccion: cuerpo.introduccion, conclusiones: cuerpo.conclusiones, levantamientos: cuerpo.levantamientos, planos: cuerpo.planos, seleccion: cuerpo.seleccion ?? informe.seleccion };
             const errores = validarBorrador(informe.visitaId, borrador, (await candidatosDe(tx, informe.visitaId)).mapa);
             if (errores.length > 0) throw invalido(errores);
             const guardado = await tx
               .update(informes)
-              .set({ ...borrador, levantamientos: [...borrador.levantamientos], planos: [...borrador.planos], version: sql`${informes.version} + 1` })
+              .set({
+                ...borrador,
+                levantamientos: [...borrador.levantamientos],
+                planos: [...borrador.planos],
+                seleccion: { ocultos: [...borrador.seleccion.ocultos], mostrados: [...borrador.seleccion.mostrados] },
+                version: sql`${informes.version} + 1`,
+              })
               .where(and(eq(informes.id, id), eq(informes.version, cuerpo.version)))
               .returning({ version: informes.version });
             if (guardado.length === 0) throw problema("conflicto_de_version", "Otra persona guardó este informe mientras usted lo tenía abierto");
@@ -390,15 +398,21 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             for (const l of incluidos) {
               const formato = await formatos.obtener(tx, l.formato, l.versionFormato);
               if (!formato) throw problema("error_interno", "El formato de un levantamiento no existe");
-              contenido.levantamientos.push({
-                id: l.id,
-                formato,
-                tecnico: nombres.get(l.tecnicoId) ?? SIN_NOMBRE,
-                revisor: nombres.get(l.revisorId ?? "") ?? SIN_NOMBRE,
-                recibidoEn: l.recibidoEn.toISOString(),
-                respuestas: l.respuestas,
-                ...(Object.keys(l.repeticiones).length > 0 ? { repeticiones: l.repeticiones } : {}),
-              });
+              // Lo que oficina dejó fuera no entra en la copia (ADR-0039, regla 18): tampoco sus fotos en el PDF.
+              contenido.levantamientos.push(
+                aplicarSeleccion(
+                  {
+                    id: l.id,
+                    formato,
+                    tecnico: nombres.get(l.tecnicoId) ?? SIN_NOMBRE,
+                    revisor: nombres.get(l.revisorId ?? "") ?? SIN_NOMBRE,
+                    recibidoEn: l.recibidoEn.toISOString(),
+                    respuestas: l.respuestas,
+                    ...(Object.keys(l.repeticiones).length > 0 ? { repeticiones: l.repeticiones } : {}),
+                  },
+                  informe.seleccion,
+                ),
+              );
             }
 
             const versionId = randomUUID();

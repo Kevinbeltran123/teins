@@ -242,6 +242,23 @@ describe("informe (corte 4)", () => {
     expect(error).toMatch(/permission denied/);
   }, 90_000);
 
+  it("lo que oficina oculta se guarda en el borrador y no entra en la versión, ni su foto (ADR-0039)", async () => {
+    const { oficina, revisado, informeId, foto } = await visitaConRevisado();
+    const seleccion = { ocultos: [`${revisado}|cuarto_tecnico|fotos_equipo|${foto}`], mostrados: [] };
+    const guardado = await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [], seleccion });
+    expect(guardado.statusCode, guardado.body).toBe(200);
+    expect((await get(oficina.cookie, `/api/informes/${informeId}`)).json().seleccion).toEqual(seleccion);
+    // Sin la selección (una pestaña anterior), la guardada no cambia.
+    await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 2, introduccion: "Otra", conclusiones: "", levantamientos: [revisado], planos: [] });
+    expect((await get(oficina.cookie, `/api/informes/${informeId}`)).json().seleccion).toEqual(seleccion);
+
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 3 })).statusCode).toBe(201);
+    const { rows } = await s.propietario.pool.query("select contenido from informes.versiones where informe_id = $1", [informeId]);
+    const capitulo = rows[0].contenido.levantamientos[0];
+    expect(capitulo.respuestas.cuarto_tecnico).toEqual({ potencia_nominal: { valor: "12.5", unidad: "kVA" }, fotos_equipo: [] });
+    expect(JSON.stringify(rows[0].contenido)).not.toContain(foto);
+  });
+
   it("solo entran levantamientos revisados de la visita, y publicar exige alguno y planos verificados (regla 9)", async () => {
     const { oficina, enviado, revisado, informeId } = await visitaConRevisado();
     const r = await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [enviado, randomUUID()], planos: [] });
