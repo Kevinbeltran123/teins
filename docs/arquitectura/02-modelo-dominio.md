@@ -92,7 +92,7 @@ erDiagram
 | **Versión de formato** | Definición completa (ADR-0006) | Nadie tras publicarse | Baja |
 | **Ítem de catálogo** | Código, descripción, unidad por defecto, activo | Oficina, administrador | Baja |
 | **Cliente** | Datos del cliente y sus sitios | Oficina | Lo necesario, baja |
-| **Informe** | Levantamientos incluidos, planos, textos, orden | Oficina | No |
+| **Informe** | Levantamientos incluidos, planos, textos, orden y qué sale de cada uno (ADR-0039) | Oficina | No |
 | **Versión publicada** | Copia congelada de datos, planos y PDF | Nadie; solo puede retirarse | No |
 | **Acceso de cliente** | Credencial, QR, estado, registro de descargas | Administrador | No |
 | **Usuario** | Nombre, identificación, roles, estado | Administrador | Solo el propio |

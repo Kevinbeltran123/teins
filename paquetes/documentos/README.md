@@ -35,3 +35,4 @@ La hoja de la vista la arma `hojaDeLaVista(documento, ESTILOS_…)`: los estilos
 - `pnpm --filter @teins/documentos typecheck`
 - `pnpm --filter @teins/documentos test`
 - Iteración 30 (ADR-0036): `MensajeDeEnvio.personal` (`TextoPropio`: asunto y texto que escribió oficina) cambia el asunto y el texto entre el saludo y el pie en `htmlDeCorreo` y `textoDeCorreo`; `asuntoBase` y `textoBase` son los de TEINS, que se ofrecen para editar. El bloque editable va marcado `data-editable="texto"`. La tabla de cantidades del informe tiene columnas de ancho fijo (iteración 29).
+- Iteración 35 (ADR-0039): `plantillaInforme` salta en el PDF los bloques y campos de `ocultos`; con `seleccion` (la vista de oficina) dibuja lo oculto como una franja rayada con «Mostrar» y pone «Ocultar» en lo que sale, con `data-ocultar`/`data-mostrar` y `data-omision`. Sus estilos van solo en la hoja de la vista (`salida.ts`): «Ocultar» se ve con la clase `vista-encima`, que pone la pantalla.
