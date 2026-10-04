@@ -18,6 +18,7 @@ import { IniciarSesion } from "./pantallas/IniciarSesion";
 import { Marco } from "./pantallas/Marco";
 import { MiCuenta } from "./pantallas/MiCuenta";
 import { Visitas } from "./pantallas/Visitas";
+import { PersonaDeOficina } from "./preferencias";
 import { consultasDeProgramacion } from "./programacion";
 
 /**
@@ -78,9 +79,11 @@ function Raiz() {
   return (
     <>
       {/* Si ingresa otra persona, todo empieza de nuevo: lo escrito por la anterior no queda a la vista. */}
-      <Marco key={sesion.data.usuario.id} nombre={sesion.data.usuario.nombre} administrador={sesion.data.usuario.administrador}>
-        <Outlet />
-      </Marco>
+      <PersonaDeOficina.Provider value={sesion.data.usuario.id}>
+        <Marco key={sesion.data.usuario.id} nombre={sesion.data.usuario.nombre} administrador={sesion.data.usuario.administrador}>
+          <Outlet />
+        </Marco>
+      </PersonaDeOficina.Provider>
       {esSesionVencida(sesion.error) && <SesionVencida />}
     </>
   );

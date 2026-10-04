@@ -5,6 +5,7 @@ import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, coincide, Dialogo, Enca
 import { cliente } from "../api";
 import { consultasDeCotizaciones, mensajeDeCotizacion } from "../cotizaciones";
 import { aDiaCorto, pesos } from "../formato";
+import { useBusquedaRecordada } from "../preferencias";
 
 const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
 
@@ -12,7 +13,7 @@ const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: 
 export function Cotizaciones() {
   const consulta = useQuery(consultasDeCotizaciones.lista());
   const [creando, setCreando] = useState(false);
-  const [busqueda, setBusqueda] = useState("");
+  const [busqueda, setBusqueda] = useBusquedaRecordada("cotizaciones");
   const todas = consulta.data?.cotizaciones ?? [];
   const lista = todas.filter((c) => coincide(busqueda, c.numero, c.visita.cliente, c.visita.sitio));
 

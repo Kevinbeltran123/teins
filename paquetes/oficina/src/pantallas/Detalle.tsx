@@ -73,6 +73,7 @@ import { useBandeja, useComentar, useCorregir, useCorregirComentario, useMarcarR
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { Lienzo, VistaDeDocumento } from "./Lienzo";
 import type { Plantillas } from "../documentos";
+import { esTexto, unoDe, usePreferencia } from "../preferencias";
 
 type Levantamiento = Respuesta<"obtenerLevantamiento">;
 type Historial = Respuesta<"historialLevantamiento">;
@@ -120,7 +121,10 @@ export function Detalle({ id }: { id: string }) {
   const sesion = useQuery(consultas.sesion());
   const historial = useQuery(consultas.historial(id));
   const [comentandoEn, setComentandoEn] = useState<string | null>(null);
-  const [pestana, setPestana] = useState<"comentarios" | "historial" | "informe">("comentarios");
+  const [pestana, setPestana] = usePreferencia<"comentarios" | "historial" | "informe">("revision-carril", "comentarios", unoDe("comentarios", "historial", "informe"));
+  // La bandeja marca la fila que se abrió al volver (prototipos/usabilidad-oficina).
+  const [, setUltima] = usePreferencia("bandeja-ultima", "", esTexto, "pestana");
+  useEffect(() => setUltima(id), [id, setUltima]);
   const [enCurso, setEnCurso] = useState<EnCurso | null>(null);
 
   if (consulta.isPending) {

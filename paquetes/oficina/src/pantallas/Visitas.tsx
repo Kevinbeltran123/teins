@@ -45,6 +45,7 @@ import { aFechaHora } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
 import { consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
 import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../horario";
+import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
 import { CuandoVisita, resumenDeHorario, TecnicosDisponibles } from "./HorarioDeVisita";
 
 type Visita = Respuesta<"listarVisitas">["visitas"][number];
@@ -96,8 +97,9 @@ function tituloDia(aaaaMmDd: string, hoy: string) {
  * sitio o técnico (la lista llega completa, se busca aquí) y el avance de los levantamientos en una barra.
  */
 export function Visitas() {
-  const [vista, setVista] = useState<Vista>("proximas");
-  const [busqueda, setBusqueda] = useState("");
+  // Dónde quedó la persona (prototipos/usabilidad-oficina): la pestaña, en el equipo; la búsqueda, mientras dure la pestaña.
+  const [vista, setVista] = usePreferencia<Vista>("visitas-pestana", "proximas", unoDe("proximas", "anteriores", "canceladas"));
+  const [busqueda, setBusqueda] = useBusquedaRecordada("visitas");
   const [programando, setProgramando] = useState(false);
   const [edicion, setEdicion] = useState<Edicion | null>(null);
   const [recientes, setRecientes] = useState<string[]>([]);

@@ -7,6 +7,7 @@ import { aFechaCorta, aHora, cuantoLleva, iniciales } from "../formato";
 import { mensajeDeError } from "../mensajes";
 import { useBandeja, useTomar, type Estado } from "../revision";
 import { useRetrasado } from "../usarRetraso";
+import { esTexto, unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
 
 
 const PESTANAS: Record<Estado, { etiqueta: string; vacio: string; orden: string }> = {
@@ -22,8 +23,11 @@ const ESTADOS = ["enviado", "en_revision", "revisado"] as const;
  * páginas) y dice cuántos coinciden en las otras pestañas.
  */
 export function Bandeja() {
-  const [estado, setEstado] = useState<Estado>("enviado");
-  const [busqueda, setBusqueda] = useState("");
+  // Dónde quedó la persona (prototipos/usabilidad-oficina): la pestaña, en el equipo; la búsqueda y la fila que abrió,
+  // mientras dure la pestaña del navegador.
+  const [estado, setEstado] = usePreferencia<Estado>("bandeja-pestana", "enviado", unoDe(...ESTADOS));
+  const [busqueda, setBusqueda] = useBusquedaRecordada("bandeja");
+  const [ultima] = usePreferencia("bandeja-ultima", "", esTexto, "pestana");
   const buscar = useRetrasado(busqueda);
   const bandejas = { enviado: useBandeja("enviado", buscar), en_revision: useBandeja("en_revision", buscar), revisado: useBandeja("revisado", buscar) };
   // El resumen del encabezado es de toda la bandeja, no de lo buscado.
@@ -114,7 +118,7 @@ export function Bandeja() {
               {elementos.map((e) => {
                 const lleva = cuantoLleva(e.recibidoEn);
                 return (
-                  <FilaTabla key={e.id} abrir clave={e.id}>
+                  <FilaTabla key={e.id} abrir clave={e.id} marcada={e.id === ultima}>
                     {/* De qué cliente es: lo primero que oficina busca para saber qué revisar (iteración 14). */}
                     <CeldaTabla>
                       {/* Al abrirlo, este título se convierte en el del detalle (iteración 27). */}

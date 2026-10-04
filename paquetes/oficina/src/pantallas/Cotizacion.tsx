@@ -35,14 +35,16 @@ import {
   type AnclaDeHoja,
 } from "@teins/ui";
 import { cliente, consultas, esSesionVencida } from "../api";
-import { useHojaAlLado, type Plantillas } from "../documentos";
+import { type Plantillas } from "../documentos";
+import { useConexion } from "../conexion";
+import { useGuardadoAutomatico } from "../guardado";
 import { useBorrador } from "../borrador";
-import { useSalidaProtegida } from "../salida";
 import { consultasDeCotizaciones, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
 import { aFechaCorta, leerPesos, pesos } from "../formato";
 import { consultasDeProgramacion } from "../programacion";
 import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
-import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
+import { AvisoDeConflicto, EstadoDeGuardado } from "./Guardado";
+import { BotonMostrarVista, CorreoDeContactos, EditorConVista, Lienzo, PestanasDeVista, useVistaPrevia, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
 
 type Cotizacion = Respuesta<"obtenerCotizacion">;
 
@@ -148,11 +150,11 @@ export function DetalleCotizacion({ id }: { id: string }) {
 
 function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const notificar = useNotificar();
-  const { borrador, setBorrador, cambiado, version, guardado, descartar } = useBorrador(c.version, () => inicial(c));
+  const doc = useBorrador(c.version, () => inicial(c));
+  const { borrador, setBorrador } = doc;
   const [confirmando, setConfirmando] = useState(false);
   const [destinatarios, setDestinatarios] = useState<string[] | null>(null);
   const contactos = useQuery(consultasDeProgramacion.cliente(c.clienteId));
-  const salida = useSalidaProtegida(cambiado, { que: `la cotización ${c.numero}`, guardar: guardarBorrador });
 
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
   const cambiarLinea = (id: string, cambio: Partial<LineaEditable>) => actualizar({ lineas: borrador.lineas.map((l) => (l.id === id ? { ...l, ...cambio } : l)) });
@@ -171,12 +173,16 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const porcentajesValidos = borrador.impuestos.tipo === "iva" || [borrador.impuestos.administracion, borrador.impuestos.imprevistos, borrador.impuestos.utilidad].every((p) => PORCENTAJE.test(p) && Number(p) <= 100);
   const guardable = conError === 0 && validezValida && porcentajesValidos;
 
-  const cuerpo = () => ({
-    lineas: lineas.filter((l): l is LineaDeCotizacion => l !== null),
-    impuestos: borrador.impuestos,
-    condiciones: { validezDias: validez, formaPago: borrador.formaPago.trim(), notas: borrador.notas.trim() },
+  /** Lo que se guarda de un borrador: el que se escribió, aunque ya haya otro en pantalla. */
+  const cuerpo = (b: Borrador) => ({
+    lineas: b.lineas.map(comoLinea).filter((l): l is LineaDeCotizacion => l !== null),
+    impuestos: b.impuestos,
+    condiciones: { validezDias: Number(b.validez), formaPago: b.formaPago.trim(), notas: b.notas.trim() },
   });
-  const guardar = useAccionDeCotizacion((version: number) => cliente.llamar("guardarCotizacion", { parametros: { id: c.id }, cuerpo: { version, ...cuerpo() } }));
+  const guardar = useAccionDeCotizacion(({ version, b }: { version: number; b: Borrador }) => cliente.llamar("guardarCotizacion", { parametros: { id: c.id }, cuerpo: { version, ...cuerpo(b) } }));
+  const enLinea = useConexion();
+  // Se guarda solo (prototipos/usabilidad-oficina), mientras no haya campos por corregir.
+  const auto = useGuardadoAutomatico({ documento: `cotizacion:${c.id}`, borrador: doc, puedeGuardar: guardable, guardar: async (version, b) => (await guardar.mutateAsync({ version, b })).version, recargar });
   const publicar = useAccionDeCotizacion(({ version, destinatarios, mensaje }: { version: number; destinatarios: string[]; mensaje?: TextoPropio | undefined }) =>
     cliente.llamar("publicarCotizacion", { parametros: { id: c.id }, cuerpo: { version, destinatarios, ...(mensaje && { mensaje }) } }),
   );
@@ -185,7 +191,8 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const edicionCorreo = { propio: textoCorreo, alCambiar: setTextoCorreo };
   const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "cotizaciones") : []);
   // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
-  const error = [guardar.error, publicar.error].find((e) => e && !esSesionVencida(e)) ?? null;
+  // Sin red y el conflicto los dicen el estado y su aviso.
+  const error = [auto.estado === "error" ? auto.error : null, publicar.error].find((e) => e && !esSesionVencida(e)) ?? null;
   const siguiente = (c.versiones[0]?.numero ?? 0) + 1;
   // La vigente es la más reciente sin retirar (ADR-0034).
   const vigente = c.versiones.find((v) => !v.retirada);
@@ -193,7 +200,8 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   // La vista en vivo (ADR-0031): la siguiente versión tal como la congelaría el servidor al publicar, desde el borrador.
   const sesion = useQuery(consultas.sesion());
   const organizacion = sesion.data?.organizacion.nombre ?? "[ORGANIZACIÓN]";
-  const alLado = useHojaAlLado();
+  const vistaPrevia = useVistaPrevia();
+  const alLado = vistaPrevia.alLado;
   const [vista, setVista] = useState<QueSeVe>("documento");
   const [vistaLateral, setVistaLateral] = useState(false);
   const [ancla, setAncla] = useState<AnclaDeHoja | null>(null);
@@ -229,38 +237,22 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
     nombreArchivo: p.nombreDelPdfDeCotizacion({ numero: c.numero, version: numero, visita: c.visita }),
   });
 
-  async function guardarBorrador() {
-    const enviado = borrador;
-    const r = await guardar.mutateAsync(version);
-    guardado(r.version, enviado);
-    return r.version;
-  }
-
   async function guardarYPublicar() {
-    // Lo que se publica es lo guardado: si hay cambios, primero se guardan.
-    const guardada = cambiado ? await guardarBorrador() : version;
+    // Lo que se publica es lo guardado: lo pendiente se guarda ya.
+    const guardada = await auto.guardarAhora();
     await publicar.mutateAsync({ version: guardada, destinatarios: elegidos, mensaje: textoCorreo ?? undefined });
     setTextoCorreo(null);
   }
 
-  // La confirmación muestra lo que se va a publicar, que es lo guardado: si hay cambios, primero se guardan.
+  // La confirmación muestra lo que se va a publicar, que es lo guardado: lo pendiente se guarda primero.
   async function abrirPublicar() {
-    if (cambiado) {
-      try {
-        await guardarBorrador();
-      } catch {
-        return;
-      }
+    try {
+      await auto.guardarAhora();
+    } catch {
+      return;
     }
     setDestinatarios(null);
     setConfirmando(true);
-  }
-
-  function recargarDescartando() {
-    guardar.reset();
-    publicar.reset();
-    descartar();
-    recargar();
   }
 
   function quitar(linea: LineaEditable) {
@@ -300,14 +292,15 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
       Agregue al menos una línea.
     </span>
   ) : (
-    <span className={`guardado ${cambiado ? "cambios" : ""}`} aria-live="polite">
-      <i />
-      {cambiado ? "Cambios sin guardar" : "Todo guardado"}
-    </span>
+    <EstadoDeGuardado estado={auto.estado} reintentar={auto.reintentar} />
   );
 
   return (
-    <div className={`vivo ${alLado ? "" : "sin-lienzo"}`}>
+    <EditorConVista
+      vista={vistaPrevia}
+      minimoEditor={660}
+      hoja={<LienzoCotizacion vista={vista} alCambiar={setVista} documento={documentoVista} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} ancla={ancla} edicion={edicionCorreo} />}
+      editor={
       <div className="editor-doc">
         <EncabezadoPagina
           migas={migas}
@@ -343,16 +336,14 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
                   Vista previa
                 </Boton>
               )}
-              {cambiado && (
-                <Boton disabled={!guardable} cargando={guardar.isPending} onClick={() => void guardarBorrador().catch(() => undefined)}>
-                  Guardar borrador
-                </Boton>
-              )}
+              <BotonMostrarVista vista={vistaPrevia} />
               <Boton
                 variante="principal"
                 icono={Send}
-                disabled={!guardable || sinPrecio > 0 || borrador.lineas.length === 0}
-                cargando={guardar.isPending}
+                // Publicar necesita la conexión; con un conflicto, primero se elige con cuál versión seguir.
+                disabled={!guardable || sinPrecio > 0 || borrador.lineas.length === 0 || !enLinea || auto.estado === "conflicto"}
+                title={!enLinea ? "Publicar necesita conexión" : undefined}
+                cargando={auto.estado === "guardando" && guardar.isPending}
                 onClick={() => void abrirPublicar()}
               >
                 {`Publicar versión ${siguiente}`}
@@ -363,15 +354,9 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
         {error && (
           <Aviso tono="error">
             <b>{mensajeDeCotizacion(error)}</b>
-            {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
-              <div>
-                <Boton tamano="pequeno" icono={RefreshCw} onClick={recargarDescartando}>
-                  Recargar
-                </Boton>
-              </div>
-            )}
           </Aviso>
         )}
+        {auto.estado === "conflicto" && <AvisoDeConflicto que={`la cotización ${c.numero}`} deAntes={auto.conflictoDeAntes} guardarLaMia={auto.guardarLaMia} cargarLaGuardada={auto.cargarLaGuardada} />}
         {/* Al pasar a una sección, la hoja va hasta esa parte del documento. */}
         <div className="doc" onFocus={(e) => irAParte((e.target as HTMLElement).closest<HTMLElement>("[data-ancla]")?.dataset.ancla)}>
           <section aria-labelledby="titulo-lineas" data-ancla="table.lineas">
@@ -605,7 +590,8 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           />
         </div>
       </div>
-      {alLado && <LienzoCotizacion vista={vista} alCambiar={setVista} documento={documentoVista} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} ancla={ancla} edicion={edicionCorreo} />}
+      }
+    >
       {vistaLateral && !alLado && (
         <Dialogo forma="lateral" amplio titulo="Vista previa" subtitulo={`Cotización ${c.numero}, versión ${siguiente}`} alCerrar={() => setVistaLateral(false)}>
           <LienzoCotizacion vista={vista} alCambiar={setVista} documento={documentoVista} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} ancla={null} edicion={edicionCorreo} />
@@ -640,8 +626,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
           {elegidos.length > 0 && <p className="ayuda">Solo están marcados quienes reciben cotizaciones. Lo enviado no se puede recuperar.</p>}
         </Confirmacion>
       )}
-      {salida}
-    </div>
+    </EditorConVista>
   );
 }
 

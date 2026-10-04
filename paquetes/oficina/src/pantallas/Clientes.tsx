@@ -30,6 +30,7 @@ import {
 import { cliente } from "../api";
 import { aFechaCorta } from "../formato";
 import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
+import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
 import { useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
 
 type Cliente = Respuesta<"listarClientes">["clientes"][number];
@@ -39,11 +40,11 @@ const normalizar = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLo
 export function Clientes() {
   // Activos o archivados (ADR-0035); "Ver en Archivados" al archivar uno llega con esa pestaña.
   const pedida = useLocation({ select: (l) => l.state.vista });
-  const [vista, setVista] = useState<"activos" | "archivados">(pedida ?? "activos");
+  const [vista, setVista] = usePreferencia<"activos" | "archivados">("clientes-pestana", "activos", unoDe("activos", "archivados"));
   // "Ver en Archivados" desde el aviso llega con la pantalla ya abierta: la pestaña pedida manda.
   useEffect(() => {
     if (pedida) setVista(pedida);
-  }, [pedida]);
+  }, [pedida, setVista]);
   const consulta = useQuery(consultasDeProgramacion.clientes(vista));
   const otra = useQuery(consultasDeProgramacion.clientes(vista === "activos" ? "archivados" : "activos"));
   const cantidad = (v: "activos" | "archivados") => (v === vista ? consulta.data : otra.data)?.clientes.length;
@@ -54,7 +55,7 @@ export function Clientes() {
   const [agregandoA, setAgregandoA] = useState<Cliente | null>(null);
   // Lo creado o cambiado en esta visita a la pantalla: va primero y resaltado (DESIGN.md, crear y editar).
   const [recientes, setRecientes] = useState<string[]>([]);
-  const [busqueda, setBusqueda] = useState("");
+  const [busqueda, setBusqueda] = useBusquedaRecordada("clientes");
   const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
   const navegar = useNavigate();
 

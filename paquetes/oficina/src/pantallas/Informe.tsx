@@ -5,8 +5,6 @@ import type { MensajeDeInforme, TextoPropio } from "@teins/documentos";
 import { elegir, type ContenidoVersion, type SeleccionInforme } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
-  ArrowDown,
-  ArrowUp,
   Aviso,
   Boton,
   BotonIcono,
@@ -23,8 +21,10 @@ import {
   Globe,
   History,
   Insignia,
+  ListaOrdenable,
   Mail,
   MessageCircle,
+  moverEnLista,
   RefreshCw,
   SelectorDeArchivo,
   Send,
@@ -35,15 +35,17 @@ import {
 } from "@teins/ui";
 import { cliente, consultas, esSesionVencida } from "../api";
 import { useBorrador } from "../borrador";
-import { useSalidaProtegida } from "../salida";
 import { aFechaCorta, aHora } from "../formato";
 import { mensajeDeAdministracion } from "../administracion";
 import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
 import { consultasDeProgramacion } from "../programacion";
-import { useHojaAlLado, type Plantillas } from "../documentos";
+import { type Plantillas } from "../documentos";
+import { useConexion } from "../conexion";
+import { useGuardadoAutomatico } from "../guardado";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores, useCancelarEnvio } from "./Envios";
-import { CorreoDeContactos, Lienzo, PestanasDeVista, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
+import { AvisoDeConflicto, EstadoDeGuardado } from "./Guardado";
+import { BotonMostrarVista, CorreoDeContactos, EditorConVista, Lienzo, PestanasDeVista, useVistaPrevia, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
 import { QueSaleEnElInforme } from "./QueSaleEnElInforme";
 
 type Informe = Respuesta<"obtenerInforme">;
@@ -62,14 +64,6 @@ const ESTADO_LEVANTAMIENTO = { enviado: "Enviado: falta revisarlo", en_revision:
 const vigenteDe = (informe: Informe) => informe.versiones.find((v) => v.retirada === null);
 
 const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
-
-function mover<T>(lista: T[], i: number, paso: -1 | 1): T[] {
-  const j = i + paso;
-  if (j < 0 || j >= lista.length) return lista;
-  const copia = [...lista];
-  [copia[i], copia[j]] = [copia[j]!, copia[i]!];
-  return copia;
-}
 
 const migas = (
   <Link to="/informes" className="migas">
@@ -123,13 +117,14 @@ export function InformeDeVisita({ id }: { id: string }) {
 
 function Composicion({ informe, recargar }: { informe: Informe; recargar: () => void }) {
   const notificar = useNotificar();
-  const { borrador, setBorrador, cambiado, version, guardado, descartar } = useBorrador<Borrador>(informe.version, () => ({
+  const doc = useBorrador<Borrador>(informe.version, () => ({
     introduccion: informe.introduccion,
     conclusiones: informe.conclusiones,
     levantamientos: [...informe.levantamientos],
     planos: informe.planos.map((p) => ({ huella: p.huella, nombre: p.nombre })),
     seleccion: informe.seleccion,
   }));
+  const { borrador, setBorrador } = doc;
   const [subiendo, setSubiendo] = useState(false);
   const [errorPlano, setErrorPlano] = useState<unknown>(null);
   const [confirmando, setConfirmando] = useState(false);
@@ -139,6 +134,14 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   const contactos = useQuery(consultasDeProgramacion.cliente(informe.clienteId));
   const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "informes") : []);
   const guardar = useGuardarInforme(informe.id);
+  const enLinea = useConexion();
+  // Se guarda solo (prototipos/usabilidad-oficina): sin botón y sin preguntar al salir.
+  const auto = useGuardadoAutomatico({
+    documento: `informe:${informe.id}`,
+    borrador: doc,
+    guardar: async (version, b) => (await guardar.mutateAsync({ version, ...b, seleccion: { ocultos: [...b.seleccion.ocultos], mostrados: [...b.seleccion.mostrados] } })).version,
+    recargar,
+  });
   const publicar = usePublicarInforme(informe.id);
   // El correo de la versión que se va a publicar, escrito sobre la pestaña "Correo" (ADR-0036): null es el de TEINS.
   const [textoCorreo, setTextoCorreo] = useState<TextoPropio | null>(null);
@@ -149,9 +152,9 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
     return c ? `${c.formato} de ${c.tecnico}` : "Un levantamiento";
   };
   // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
-  const error = errorPlano ?? (esSesionVencida(guardar.error) ? null : guardar.error);
+  // Lo que no se pudo guardar por las reglas del informe; sin red y el conflicto los dicen el estado y su aviso.
+  const error = errorPlano ?? (auto.estado === "error" && !esSesionVencida(auto.error) ? auto.error : null);
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
-  const salida = useSalidaProtegida(cambiado, { que: "el informe", guardar: guardarBorrador });
   const vigente = vigenteDe(informe);
   const quienesReciben = contactos.data ? contactos.data.contactos.filter((c) => receptores(contactos.data.contactos, "informes").includes(c.id)) : [];
   const reciben = quienesReciben.map((c) => c.nombre);
@@ -159,7 +162,8 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   // La vista en vivo (ADR-0031): la siguiente versión tal como la congelaría el servidor al publicar, desde el borrador.
   const sesion = useQuery(consultas.sesion());
   const organizacion = sesion.data?.organizacion.nombre ?? "[ORGANIZACIÓN]";
-  const alLado = useHojaAlLado();
+  const vistaPrevia = useVistaPrevia();
+  const alLado = vistaPrevia.alLado;
   const [vista, setVista] = useState<QueSeVe>("documento");
   const [vistaLateral, setVistaLateral] = useState(false);
   const [ancla, setAncla] = useState<AnclaDeHoja | null>(null);
@@ -236,35 +240,24 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
     }
   }
 
-  async function guardarBorrador() {
-    const enviado = borrador;
-    const r = await guardar.mutateAsync({ version, ...enviado, seleccion: { ocultos: [...enviado.seleccion.ocultos], mostrados: [...enviado.seleccion.mostrados] } });
-    guardado(r.version, enviado);
-    return r.version;
-  }
-
   async function guardarYPublicar() {
-    // Lo que se publica es lo guardado: si hay cambios, primero se guardan.
-    const guardada = cambiado ? await guardarBorrador() : version;
+    // Lo que se publica es lo guardado: lo pendiente se guarda ya.
+    const guardada = await auto.guardarAhora();
     await publicar.mutateAsync({ version: guardada, destinatarios: elegidos, mensaje: textoCorreo ?? undefined });
     setTextoCorreo(null);
-  }
-
-  function recargarDescartando() {
-    guardar.reset();
-    descartar();
-    recargar();
   }
 
   const incluidos = borrador.levantamientos.map((lid) => informe.candidatos.find((c) => c.id === lid)).filter((c): c is Informe["candidatos"][number] => Boolean(c));
   const fuera = informe.candidatos.filter((c) => !borrador.levantamientos.includes(c.id));
 
-  function capitulo(c: Informe["candidatos"][number], pos: number) {
+  function capitulo(c: Informe["candidatos"][number], pos: number, asa: ReactNode = <span className="asa vacia" aria-hidden />) {
     const dentro = pos >= 0;
     const revisado = c.estado === "revisado";
     const detalle = dentro ? detalles.find((d) => d.id === c.id) : undefined;
     return (
       <div key={c.id}>
+        <div className="capitulo-cab">
+        {asa}
         <label className={`capitulo ${dentro ? "" : "fuera"}`}>
           <input
             type="checkbox"
@@ -279,24 +272,21 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
               recibido {aFechaCorta(c.recibidoEn)} · {ESTADO_LEVANTAMIENTO[c.estado]}
             </small>
           </span>
-          {dentro ? (
-            borrador.levantamientos.length > 1 && (
-              <>
-                <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir ${c.formato} de ${c.tecnico}`} disabled={pos === 0} onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, pos, -1) })} />
-                <BotonIcono icono={ArrowDown} tamano="pequeno" etiqueta={`Bajar ${c.formato} de ${c.tecnico}`} disabled={pos === borrador.levantamientos.length - 1} onClick={() => actualizar({ levantamientos: mover(borrador.levantamientos, pos, 1) })} />
-              </>
-            )
-          ) : revisado ? null : (
-            <Insignia tono={c.estado === "en_revision" ? "revision" : "enviado"}>{c.estado === "en_revision" ? "En revisión" : "Enviado"}</Insignia>
-          )}
+          {!dentro && !revisado && <Insignia tono={c.estado === "en_revision" ? "revision" : "enviado"}>{c.estado === "en_revision" ? "En revisión" : "Enviado"}</Insignia>}
         </label>
+        </div>
         {detalle && <QueSaleEnElInforme detalle={detalle} seleccion={borrador.seleccion} alCambiar={(seleccion) => actualizar({ seleccion })} fotos={recursos.fotos} />}
       </div>
     );
   }
 
   return (
-    <div className={`vivo ${alLado ? "" : "sin-lienzo"}`}>
+    <EditorConVista
+      vista={vistaPrevia}
+      hoja={
+        <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} seleccion={borrador.seleccion} botones={botonesDeLaHoja} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={ancla} edicion={edicionCorreo} />
+      }
+      editor={
       <div className="editor-doc">
         <EncabezadoPagina
           migas={migas}
@@ -317,24 +307,19 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           }
           acciones={
             <>
-              <span className={`guardado ${cambiado ? "cambios" : ""}`} aria-live="polite">
-                <i />
-                {cambiado ? "Cambios sin guardar" : "Todo guardado"}
-              </span>
+              <EstadoDeGuardado estado={auto.estado} reintentar={auto.reintentar} />
               {!alLado && (
                 <Boton icono={Eye} onClick={() => setVistaLateral(true)}>
                   Vista previa
                 </Boton>
               )}
-              {cambiado && (
-                <Boton cargando={guardar.isPending} disabled={subiendo} onClick={() => void guardarBorrador().catch(() => undefined)}>
-                  Guardar borrador
-                </Boton>
-              )}
+              <BotonMostrarVista vista={vistaPrevia} />
               <Boton
                 variante="principal"
                 icono={Send}
-                disabled={subiendo}
+                // Publicar necesita la conexión; con un conflicto, primero se elige con cuál versión seguir.
+                disabled={subiendo || !enLinea || auto.estado === "conflicto"}
+                title={!enLinea ? "Publicar necesita conexión" : undefined}
                 onClick={() => {
                   // Todos los que reciben el informe, marcados por omisión (ADR-0028, parte 3).
                   setDestinatarios(null);
@@ -361,15 +346,9 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
                 <li key={m}>{m}</li>
               ))}
             </ul>
-            {error instanceof ErrorApi && error.codigo === "conflicto_de_version" && (
-              <div>
-                <Boton tamano="pequeno" icono={RefreshCw} onClick={recargarDescartando}>
-                  Recargar
-                </Boton>
-              </div>
-            )}
           </Aviso>
         )}
+        {auto.estado === "conflicto" && <AvisoDeConflicto que="este informe" deAntes={auto.conflictoDeAntes} guardarLaMia={auto.guardarLaMia} cargarLaGuardada={auto.cargarLaGuardada} />}
         {/* En el orden del PDF: introducción, un capítulo por levantamiento, conclusiones y planos anexos. Al pasar a
             una sección, la hoja va hasta esa parte del documento. */}
         <div className="doc" onFocus={(e) => irAParte((e.target as HTMLElement).closest<HTMLElement>("[data-ancla]")?.dataset.ancla)}>
@@ -388,7 +367,9 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
               <p className="sec">Esta visita todavía no tiene levantamientos enviados.</p>
             ) : (
               <>
-                <div>{incluidos.map((c, k) => capitulo(c, k))}</div>
+                <ListaOrdenable elementos={incluidos} clave={(c) => c.id} nombre={(c) => `${c.formato} de ${c.tecnico}`} alMover={(de, a) => actualizar({ levantamientos: [...moverEnLista(incluidos.map((c) => c.id), de, a), ...borrador.levantamientos.filter((lid) => !incluidos.some((c) => c.id === lid))] })}>
+                  {(c, k, asa) => capitulo(c, k, asa)}
+                </ListaOrdenable>
                 {fuera.length > 0 && (
                   <>
                     <h3>No entran</h3>
@@ -409,8 +390,10 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
               <span className="n">4</span>Planos anexos
             </h2>
             <p className="ayuda">Los planos que elabora oficina, en PDF. Van al final del informe, en este orden.</p>
-            {borrador.planos.map((p, i) => (
-              <div key={p.huella} className="plano-fila">
+            <ListaOrdenable elementos={borrador.planos} clave={(p) => p.huella} nombre={(p) => p.nombre} alMover={(de, a) => actualizar({ planos: moverEnLista(borrador.planos, de, a) })}>
+              {(p, i, asa) => (
+              <div className="plano-fila">
+                {asa}
                 <span className="pdf" aria-hidden>
                   PDF
                 </span>
@@ -428,12 +411,11 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
                   />
                   <EstadoDelPlano id={`plano-estado-${p.huella}`} estado={estadosDePlanos.get(p.huella)} />
                 </div>
-                <BotonIcono icono={ArrowUp} tamano="pequeno" etiqueta={`Subir el plano ${i + 1}`} disabled={i === 0} onClick={() => actualizar({ planos: mover(borrador.planos, i, -1) })} />
-                <BotonIcono icono={ArrowDown} tamano="pequeno" etiqueta={`Bajar el plano ${i + 1}`} disabled={i === borrador.planos.length - 1} onClick={() => actualizar({ planos: mover(borrador.planos, i, 1) })} />
                 {/* Quitar un plano del borrador no pierde nada: el archivo sigue subido y se vuelve a agregar igual. */}
                 <BotonIcono icono={Trash} tamano="pequeno" etiqueta={`Quitar el plano ${i + 1}`} onClick={() => actualizar({ planos: borrador.planos.filter((x) => x.huella !== p.huella) })} />
               </div>
-            ))}
+            )}
+            </ListaOrdenable>
             <SelectorDeArchivo fila etiqueta={subiendo ? "Subiendo…" : "Agregar planos en PDF"} aceptar="application/pdf" deshabilitado={subiendo} onElegir={(a) => void agregarPlanos(a)} />
           </section>
           {/* El costado es la hoja: las versiones y sus envíos van al final del editor (prototipos/vista-en-vivo). */}
@@ -456,9 +438,8 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           />
         </div>
       </div>
-      {alLado && (
-        <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} seleccion={borrador.seleccion} botones={botonesDeLaHoja} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={ancla} edicion={edicionCorreo} />
-      )}
+      }
+    >
       {vistaLateral && !alLado && (
         <Dialogo forma="lateral" amplio titulo="Vista previa" subtitulo={`Informe de ${informe.visita.cliente}, versión ${siguiente}`} alCerrar={() => setVistaLateral(false)}>
           <LienzoInforme vista={vista} alCambiar={setVista} documento={documentoVista} recursos={recursos} alPintar={fichasDePlanos} seleccion={borrador.seleccion} botones={botonesDeLaHoja} mensaje={(p) => mensajeDeVersion(p, siguiente)} contactos={quienesReciben} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} ancla={null} edicion={edicionCorreo} />
@@ -498,8 +479,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           {elegidos.length > 0 && <p className="ayuda">Lo enviado no se puede recuperar, ni retirando la versión del portal.</p>}
         </Confirmacion>
       )}
-      {salida}
-    </div>
+    </EditorConVista>
   );
 }
 

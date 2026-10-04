@@ -1,12 +1,13 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { MensajeDeEnvio, TextoPropio } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
-import { Boton, CircleAlert, FileText, HojaEnVivo, Mail, Paperclip, RefreshCw, WifiOff, type AnclaDeHoja } from "@teins/ui";
+import { Boton, BotonIcono, CircleAlert, FileText, HojaEnVivo, Mail, Maximize2, PanelRight, Paperclip, RefreshCw, WifiOff, X, type AnclaDeHoja } from "@teins/ui";
 import { consultas } from "../api";
 import { useConexion } from "../conexion";
-import { usePlantillas, type Plantillas } from "../documentos";
+import { useHojaAlLado, usePlantillas, type Plantillas } from "../documentos";
+import { esBooleano, usePreferencia } from "../preferencias";
 
 /*
   El lienzo de la vista en vivo (ADR-0031, prototipos/vista-en-vivo): a la derecha del editor, la hoja que recibe el
@@ -19,11 +20,26 @@ export const NOTA_APROXIMADA = "Vista previa: el PDF puede partir las páginas d
 
 export function Lienzo({ cabecera, nota = NOTA_APROXIMADA, sinConexion = "", clase = "", children }: { cabecera: ReactNode; nota?: string; sinConexion?: string; clase?: string; children: ReactNode }) {
   const enLinea = useConexion();
+  const controles = useContext(ControlesDeVista);
   return (
-    <section className={`lienzo ${clase}`} aria-label="Vista previa">
+    <section className={`lienzo ${clase}`} aria-label="Vista previa" {...(controles?.ampliada && { role: "dialog", "aria-modal": true })}>
       <div className="lienzo-cab">
         {cabecera}
         <span className="nota-l">{nota}</span>
+        {controles &&
+          (controles.ampliada ? (
+            <Boton tamano="pequeno" autoFocus onClick={controles.reducir}>
+              Volver al editor
+              <span aria-hidden className="kbd">
+                Esc
+              </span>
+            </Boton>
+          ) : (
+            <span className="controles-l">
+              <BotonIcono icono={Maximize2} tamano="pequeno" etiqueta="Ampliar la vista previa" onClick={controles.ampliar} />
+              <BotonIcono icono={X} tamano="pequeno" etiqueta="Ocultar la vista previa" onClick={controles.ocultar} />
+            </span>
+          ))}
       </div>
       {!enLinea && (
         <p className="franja-lienzo" role="status">
@@ -33,6 +49,126 @@ export function Lienzo({ cabecera, nota = NOTA_APROXIMADA, sinConexion = "", cla
       )}
       {children}
     </section>
+  );
+}
+
+/*
+  El editor con la hoja al lado (prototipos/usabilidad-oficina, «Vista previa»): la hoja se oculta, se amplía a toda la
+  ventana y cambia de ancho con el divisor. Se recuerda en el equipo si va oculta y su ancho, igual para el informe y la
+  cotización; la ampliación no, porque es para mirar un momento. Bajo 1280 px sigue como antes: «Vista previa» abre la
+  hoja lateral.
+*/
+
+const ControlesDeVista = createContext<{ ampliada: boolean; ampliar: () => void; reducir: () => void; ocultar: () => void } | null>(null);
+
+/** La hoja no baja de 360 px; el editor, de lo que pida la pantalla (la tabla de la cotización necesita 660). */
+const MINIMO_HOJA = 360;
+const DIVISOR = 9;
+const esAncho = (v: unknown): v is number | null => v === null || (typeof v === "number" && Number.isFinite(v) && v >= MINIMO_HOJA);
+
+export function useVistaPrevia() {
+  const alLado = useHojaAlLado();
+  const [oculta, setOculta] = usePreferencia("vista-oculta", false, esBooleano);
+  const [ancho, setAncho] = usePreferencia<number | null>("vista-ancho", null, esAncho);
+  return { alLado, oculta, setOculta, ancho, setAncho, alLadoVisible: alLado && !oculta };
+}
+export type VistaPrevia = ReturnType<typeof useVistaPrevia>;
+
+/** «Mostrar la vista previa», en la barra, cuando la persona la ocultó. */
+export function BotonMostrarVista({ vista }: { vista: VistaPrevia }) {
+  if (!vista.alLado || !vista.oculta) return null;
+  return <BotonIcono icono={PanelRight} etiqueta="Mostrar la vista previa" onClick={() => vista.setOculta(false)} />;
+}
+
+export function EditorConVista({ vista, minimoEditor = 520, editor, hoja, children }: { vista: VistaPrevia; minimoEditor?: number; editor: ReactNode; hoja: ReactNode; children?: ReactNode }) {
+  const caja = useRef<HTMLDivElement>(null);
+  const [ampliada, setAmpliada] = useState(false);
+  const arrastre = useRef<{ derecha: number; maximo: number; ancho: number } | null>(null);
+  const lado = vista.alLadoVisible;
+
+  // Ampliada, la hoja cubre la ventana: lo de atrás no recibe el foco y Esc vuelve al editor.
+  useEffect(() => {
+    if (!ampliada) return;
+    const detras = [...(caja.current?.children ?? []), document.querySelector(".app > .menu"), document.querySelector(".barra-sup")].filter(
+      (n): n is HTMLElement => n instanceof HTMLElement && !n.classList.contains("lienzo"),
+    );
+    detras.forEach((n) => (n.inert = true));
+    const alTeclear = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setAmpliada(false);
+      }
+    };
+    window.addEventListener("keydown", alTeclear);
+    return () => {
+      detras.forEach((n) => (n.inert = false));
+      window.removeEventListener("keydown", alTeclear);
+      caja.current?.querySelector<HTMLButtonElement>('[aria-label="Ampliar la vista previa"]')?.focus();
+    };
+  }, [ampliada]);
+
+  const limites = () => {
+    const r = caja.current!.getBoundingClientRect();
+    return { derecha: r.right, maximo: Math.max(MINIMO_HOJA, r.width - minimoEditor - DIVISOR) };
+  };
+  const acotar = (ancho: number, maximo: number) => Math.round(Math.min(Math.max(ancho, MINIMO_HOJA), maximo));
+  const anchoActual = () => caja.current?.querySelector<HTMLElement>(":scope > .lienzo")?.getBoundingClientRect().width ?? MINIMO_HOJA;
+
+  function empezar(e: PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    arrastre.current = { ...limites(), ancho: anchoActual() };
+    caja.current?.classList.add("ajustando");
+  }
+  function mover(e: PointerEvent<HTMLDivElement>) {
+    const a = arrastre.current;
+    if (!a) return;
+    a.ancho = acotar(a.derecha - e.clientX - DIVISOR / 2, a.maximo);
+    caja.current?.style.setProperty("--vista", `${a.ancho}px`);
+  }
+  function soltar() {
+    const a = arrastre.current;
+    if (!a) return;
+    arrastre.current = null;
+    caja.current?.classList.remove("ajustando");
+    vista.setAncho(a.ancho);
+  }
+  function teclado(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    // A la izquierda, la hoja crece.
+    vista.setAncho(acotar(anchoActual() + (e.key === "ArrowLeft" ? 32 : -32), limites().maximo));
+  }
+
+  const estilo = { "--minimo-editor": `${minimoEditor}px`, ...(vista.ancho !== null && { "--vista": `${vista.ancho}px` }) } as CSSProperties;
+  return (
+    <div ref={caja} className={`vivo ${lado ? "con-divisor" : "sin-lienzo"} ${ampliada ? "ampliada" : ""}`} style={estilo}>
+      {editor}
+      {lado && (
+        <>
+          <div
+            className="divisor"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Ancho de la vista previa"
+            title="Arrastre para cambiar el ancho; doble clic para volver al de siempre"
+            tabIndex={0}
+            onPointerDown={empezar}
+            onPointerMove={mover}
+            onPointerUp={soltar}
+            onPointerCancel={soltar}
+            onDoubleClick={() => {
+              caja.current?.style.removeProperty("--vista");
+              vista.setAncho(null);
+            }}
+            onKeyDown={teclado}
+          />
+          <ControlesDeVista.Provider value={{ ampliada, ampliar: () => setAmpliada(true), reducir: () => setAmpliada(false), ocultar: () => vista.setOculta(true) }}>{hoja}</ControlesDeVista.Provider>
+        </>
+      )}
+      {children}
+    </div>
   );
 }
 

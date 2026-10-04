@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Boton, Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, FileText, Logo, LogOut, Package, Receipt, RefreshCw, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
+import { Boton, Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, esAtajo, etiquetaAtajo, FileText, Logo, LogOut, Package, PanelLeftClose, PanelLeftOpen, Receipt, RefreshCw, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useConexion } from "../conexion";
+import { esBooleano, usePreferencia } from "../preferencias";
 import { iniciales } from "../formato";
 import { useBandeja } from "../revision";
 import { useVersionNueva } from "../version";
@@ -30,7 +31,8 @@ const DOCUMENTOS: Seccion[] = [
 /**
  * Marco de oficina (DESIGN.md, Precisión; prototipos/base-visual): menú lateral de 208 px con el logo, las secciones
  * y la cuenta abajo; a la derecha, una barra superior de 48 px con la ubicación y el contenido. Bajo 1100 px el
- * menú queda en iconos.
+ * menú queda en iconos; más ancho, la persona lo pliega a iconos con «Plegar el menú» o ⌘B / Ctrl + B, y se recuerda
+ * en el equipo (prototipos/usabilidad-oficina).
  */
 export function Marco({ nombre, administrador, children }: { nombre: string; administrador: boolean; children: ReactNode }) {
   const consultasCliente = useQueryClient();
@@ -42,6 +44,18 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
   const esperando = useBandeja("enviado").data?.pages[0]?.total ?? 0;
   // En Levantamientos la cifra ya está en el encabezado: repetirla en el menú no agrega nada.
   const enLevantamientos = useRouterState({ select: (e) => e.location.pathname === "/" });
+  const [plegado, setPlegado] = usePreferencia("menu-plegado", false, esBooleano);
+  const atajo = etiquetaAtajo("B");
+
+  useEffect(() => {
+    const alTeclear = (e: KeyboardEvent) => {
+      if (!esAtajo(e, "B")) return;
+      e.preventDefault();
+      setPlegado(!plegado);
+    };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [plegado, setPlegado]);
 
   // Si ya estaban activos, la suscripción se renueva al abrir (ADR-0023): el navegador puede rotarla.
   useEffect(() => void renovarSuscripcion().catch(() => undefined), []);
@@ -68,7 +82,7 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
   );
 
   return (
-    <div className="app">
+    <div className={`app ${plegado ? "plegado" : ""}`}>
       <aside className="menu">
         <div className="marca">
           <Logo alto={30} />
@@ -85,6 +99,14 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
           )}
         </nav>
         <div className="pie">
+          <button type="button" className="plegar" aria-expanded={!plegado} title={`${plegado ? "Desplegar" : "Plegar"} el menú (${atajo})`} onClick={() => setPlegado(!plegado)}>
+            {plegado ? <PanelLeftOpen aria-hidden size={16} strokeWidth={1.6} /> : <PanelLeftClose aria-hidden size={16} strokeWidth={1.6} />}
+            <span className="txt">Plegar el menú</span>
+            <span className="kbd txt" aria-hidden>
+              {atajo}
+            </span>
+            <span className="sr-only">{plegado ? "Desplegar el menú" : ""}</span>
+          </button>
           <div className="usuario">
             <Link to="/cuenta" aria-label={`Mi cuenta: ${nombre}`} activeProps={{ "aria-current": "page" }} className="usuario" style={{ padding: 0, flex: 1, minWidth: 0 }}>
               <span className="avatar" aria-hidden>
