@@ -19,7 +19,7 @@ Herramienta de trabajo para técnicos de Transporte de Datos y Transporte de Ene
 - **Forma.** Radios de 7 a 12 px, bordes y divisiones de 1 px, capas sutiles. Los controles se delimitan con un borde fino (una sombra interior de 1 px), no con relleno.
 - **Iconos.** Lucide con trazo de 1,6, de 16 px en oficina.
 - **Tema.** Claro, oscuro y del sistema, con un selector en la cuenta que se recuerda en el equipo. Por omisión, el del sistema. Lo que se dibuja o se firma (croquis, firma, hoja del PDF) va siempre en papel claro (`data-tema="claro"`).
-- **Confirmaciones sin icono.** El título es la pregunta con el verbo; debajo, una lista con borde de las consecuencias concretas (cada una con su icono y una línea secundaria); el pie, un escalón más oscuro, con "Cancelar" y la acción, y los atajos Esc y ↵ en oficina.
+- **Confirmaciones sin icono.** El título es la pregunta con el verbo; debajo, una lista con borde de las consecuencias concretas (cada una con su icono y una línea secundaria); el pie, un escalón más oscuro, con "Cancelar" y la acción, y los atajos Esc y ↵ en oficina (en Windows, «Enter»).
 - **Inicio de sesión.** El logo arriba, "Ingresar" y una tarjeta de 400 px con borde fino, campos de 46 px, "¿La olvidó?" junto a la etiqueta y la llave de acceso como alternativa bajo un separador "o". Debajo de la tarjeta, "¿Problemas para entrar? Hable con administración." Al fondo, un degradado vertical quieto con los azules de TEINS en la mitad de abajo. Nada se mueve.
 
 ## Estructura que se conserva
@@ -121,12 +121,12 @@ Confirmar lo que se hace a menudo entrena a aceptar sin leer. Por eso hay tres n
 | Nivel | Ejemplos | Cómo |
 |---|---|---|
 | Se deshace fácil | Quitar una foto, una línea de cantidades o un material, una sección repetida (un tablero); desactivar un ítem del catálogo; marcar "No se pudo obtener" | Se hace al instante y la notificación ofrece "Deshacer". En el croquis, el "Deshacer" de su barra |
-| Tiene consecuencias | Restablecer una contraseña, dar o quitar administración, marcar revisado, tomar una revisión ajena, quitar una llave, quitar un contacto, enviar a otro contacto, enviar a oficina, cerrar sesión con envíos pendientes, volver a firmar, salir con cambios sin guardar | `Confirmacion`: el título es una pregunta con el verbo ("¿Desactivar a Juan Pérez?"), las consecuencias concretas en su lista (`consecuencias`), el botón repite el verbo. Si no hay nada que escribir, la acción recibe el foco y en oficina se confirma con ↵ |
+| Tiene consecuencias | Restablecer una contraseña, dar o quitar administración, marcar revisado, tomar una revisión ajena, quitar una llave, quitar un contacto, enviar a otro contacto, enviar a oficina, cerrar sesión con envíos pendientes, volver a firmar | `Confirmacion`: el título es una pregunta con el verbo ("¿Desactivar a Juan Pérez?"), las consecuencias concretas en su lista (`consecuencias`), el botón repite el verbo. Si no hay nada que escribir, la acción recibe el foco y en oficina se confirma con ↵ |
 | No se deshace | Publicar un informe o una cotización, retirar una versión, cancelar una visita, regenerar un acceso, desactivar un usuario (ordena borrar los datos de su teléfono) | Igual, con el botón de peligro, el motivo escrito cuando queda en el registro y el foco en "Cancelar": nunca es la acción predeterminada, y no lleva ↵ |
 
 En el código, `Confirmacion` exige `nivel`: `consecuencia` o `irreversible` (botón de peligro). Lo que se deshace fácil no usa `Confirmacion`.
 
-Los formularios con cambios sin guardar avisan antes de salir (`useSalidaProtegida` en oficina), con "Guardar y salir" como acción principal y "Salir sin guardar" a la izquierda, en rojo; el pie va en una sola fila de 480 px y el atajo (↵) solo en la acción principal.
+El informe y la cotización se guardan solos (iteración 36): no hay "Guardar borrador" ni aviso al salir (ver "Guardado, atajos y lo que se recuerda").
 
 Lo que se hace en una hoja lateral (reasignar técnicos, reprogramar, importar) no lleva un segundo diálogo: la hoja ya es el paso deliberado, y dice antes del botón qué va a pasar ("Juan Pérez deja de verla en su teléfono"); el botón lo repite con el nombre ("Reasignar a María Gómez").
 
@@ -143,6 +143,17 @@ En campo, el botón atrás del teléfono hace lo que la flecha de la pantalla; e
 - Un panel del carril no lleva botones estirados a todo su ancho: la acción de la pantalla va en la barra superior ("Marcar revisado", "Publicar") y el panel dice el estado en una línea.
 - Los formularios de creación nunca quedan abiertos encima de las listas.
 - Validar al enviar: cada campo con su mensaje, no un mensaje general.
+
+## Guardado, atajos y lo que se recuerda (oficina)
+
+Iteración 36, `prototipos/usabilidad-oficina`:
+
+- **Guardado automático** del informe y la cotización: 1,5 s después de dejar de escribir y al salir de la pantalla, con la revisión de versión de siempre. En la barra, junto a «Publicar», una sola línea: «Sin guardar», «Guardando», «Guardado», «Sin conexión · se guarda al volver» o «No se guardó» (con «Reintentar» si fue un error). Mientras no se guarda, lo escrito queda también en el equipo de la persona y vuelve al abrir el documento. Si otra persona guardó antes, no se pisa nada: un aviso ofrece «Guardar la mía encima» o «Cargar la guardada», y «Publicar» espera a que se elija. Publicar guarda primero lo pendiente y necesita conexión.
+- **Atajos** con la tecla del sistema: en Mac «⌘K», «⌘B» y «↵»; en Windows «Ctrl + K», «Ctrl + B» y «Enter». Nunca se muestra ⌘ a quien usa Windows (`etiquetaAtajo`, `etiquetaEnter`, `esAtajo` en `paquetes/ui`). En Mac no se toma Ctrl: en los campos, Ctrl + K borra hasta el final de la línea. Cada botón con atajo muestra su tecla. Las teclas de una letra no hacen nada mientras se escribe en un campo.
+- **Lo que se recuerda**, por persona y en el equipo: la pestaña de cada lista (Levantamientos, Clientes, Visitas) y la del carril de la revisión, el menú plegado, y si la vista previa va oculta y su ancho. Las búsquedas de las listas duran lo que dura la pestaña del navegador (al día siguiente no esconden filas sin que se note). Al volver de un levantamiento, la bandeja marca la fila que se abrió. Nada de esto va al servidor.
+- **Menú plegable** a 60 px con iconos, con «Plegar el menú» al pie o ⌘B / Ctrl + B.
+- **Vista previa** al lado del editor: «Ampliar» (a toda la ventana, a tamaño real; Esc vuelve) y «Ocultar» en su cabecera, y un divisor que se arrastra (o se mueve con las flechas; doble clic vuelve al ancho de siempre). La hoja no baja de 360 px ni el editor de 520 (660 en la cotización, por su tabla). La ampliación no se recuerda.
+- **Ordenar arrastrando** (`ListaOrdenable`): un asa a la izquierda de la fila; con el teclado, Espacio la toma, las flechas la mueven, Espacio la suelta y Esc la devuelve. No hay flechas de subir y bajar.
 
 ## Lo que se entrega una sola vez
 
