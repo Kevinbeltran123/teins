@@ -8,6 +8,7 @@ import { mensajeDeError } from "../mensajes";
 import { useBandeja, useTomar, type Estado } from "../revision";
 import { useRetrasado } from "../usarRetraso";
 import { esTexto, unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
+import { useTeclaSuelta } from "../atajos";
 
 
 const PESTANAS: Record<Estado, { etiqueta: string; vacio: string; orden: string }> = {
@@ -27,7 +28,8 @@ export function Bandeja() {
   // mientras dure la pestaña del navegador.
   const [estado, setEstado] = usePreferencia<Estado>("bandeja-pestana", "enviado", unoDe(...ESTADOS));
   const [busqueda, setBusqueda] = useBusquedaRecordada("bandeja");
-  const [ultima] = usePreferencia("bandeja-ultima", "", esTexto, "pestana");
+  const [ultima, setUltima] = usePreferencia("bandeja-ultima", "", esTexto, "pestana");
+  const navegar = useNavigate();
   const buscar = useRetrasado(busqueda);
   const bandejas = { enviado: useBandeja("enviado", buscar), en_revision: useBandeja("en_revision", buscar), revisado: useBandeja("revisado", buscar) };
   // El resumen del encabezado es de toda la bandeja, no de lo buscado.
@@ -70,6 +72,16 @@ export function Bandeja() {
     );
 
   const elementos = activa.data?.pages.flatMap((p) => p.elementos) ?? [];
+  // Revisar con el teclado (iteración 37): J y K (o ↓ y ↑) mueven la fila marcada, Enter la abre y «/» va a la búsqueda.
+  const marcada = elementos.findIndex((e) => e.id === ultima);
+  const mover = (paso: 1 | -1) => {
+    const destino = elementos[marcada < 0 ? 0 : Math.min(Math.max(marcada + paso, 0), elementos.length - 1)];
+    if (destino) setUltima(destino.id);
+  };
+  useTeclaSuelta(["j", "ArrowDown"], () => mover(1));
+  useTeclaSuelta(["k", "ArrowUp"], () => mover(-1));
+  useTeclaSuelta("Enter", () => void navegar({ to: "/levantamientos/$id", params: { id: ultima } }), marcada >= 0);
+  useTeclaSuelta("/", () => document.querySelector<HTMLInputElement>('input[type="search"]')?.focus());
   const conRevision = estado !== "enviado";
 
   return (

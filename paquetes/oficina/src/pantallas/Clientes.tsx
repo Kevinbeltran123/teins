@@ -52,6 +52,11 @@ export function Clientes() {
   const [errorRecuperar, setErrorRecuperar] = useState<string | null>(null);
   const notificar = useNotificar();
   const [creando, setCreando] = useState(false);
+  // «Nuevo cliente» desde la búsqueda (⌘K / Ctrl + K) llega con el formulario abierto.
+  const pedidoAbrir = useLocation({ select: (l) => l.state.abrir });
+  useEffect(() => {
+    if (pedidoAbrir === "nuevo") setCreando(true);
+  }, [pedidoAbrir]);
   const [agregandoA, setAgregandoA] = useState<Cliente | null>(null);
   // Lo creado o cambiado en esta visita a la pantalla: va primero y resaltado (DESIGN.md, crear y editar).
   const [recientes, setRecientes] = useState<string[]>([]);

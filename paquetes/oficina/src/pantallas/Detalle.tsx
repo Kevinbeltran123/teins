@@ -74,6 +74,8 @@ import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { Lienzo, VistaDeDocumento } from "./Lienzo";
 import type { Plantillas } from "../documentos";
 import { esTexto, unoDe, usePreferencia } from "../preferencias";
+import { useTeclaSuelta } from "../atajos";
+import { useAnotarReciente } from "./Paleta";
 
 type Levantamiento = Respuesta<"obtenerLevantamiento">;
 type Historial = Respuesta<"historialLevantamiento">;
@@ -125,6 +127,11 @@ export function Detalle({ id }: { id: string }) {
   // La bandeja marca la fila que se abrió al volver (prototipos/usabilidad-oficina).
   const [, setUltima] = usePreferencia("bandeja-ultima", "", esTexto, "pestana");
   useEffect(() => setUltima(id), [id, setUltima]);
+  const abierto = consulta.data;
+  useAnotarReciente(abierto ? { tipo: "levantamiento", id, titulo: abierto.visita ? `${abierto.visita.cliente} · ${abierto.visita.sitio}` : `Levantamiento de ${abierto.tecnico.nombre}`, detalle: `${abierto.tecnico.nombre} · ${{ enviado: "esperando revisión", en_revision: "en revisión", revisado: "revisado" }[abierto.estado]}` } : null);
+  // Esc vuelve a la bandeja, con la fila de este levantamiento marcada (iteración 37).
+  const volver = useNavigate();
+  useTeclaSuelta("Escape", () => void volver({ to: "/" }));
   const [enCurso, setEnCurso] = useState<EnCurso | null>(null);
 
   if (consulta.isPending) {
@@ -285,6 +292,9 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
   const invalidos = marcar.error instanceof ErrorApi ? (marcar.error.problema.errores ?? []) : [];
   const etiqueta = (seccion: string, campo?: string) => (campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo) : rutaLegible(l.formatoDefinicion, l.repeticiones, seccion));
   const nombre = l.revisor?.nombre ?? "otra persona";
+  // Revisar con el teclado (iteración 37): T toma y R marca revisado, con la confirmación de siempre.
+  useTeclaSuelta("t", () => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada }), l.estado === "enviado" && !tomar.isPending);
+  useTeclaSuelta("r", () => setConfirmando("revisado"), mia && l.estado === "en_revision");
 
   let linea: ReactNode;
   let ayuda: ReactNode = null;
@@ -300,6 +310,9 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
     accion = (
       <Boton variante="principal" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada })}>
         Tomar para revisar
+        <span aria-hidden className="kbd">
+          T
+        </span>
       </Boton>
     );
   } else if (l.estado === "revisado") {
@@ -328,6 +341,9 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
     accion = (
       <Boton variante="principal" icono={Check} onClick={() => setConfirmando("revisado")}>
         Marcar revisado
+        <span aria-hidden className="kbd">
+          R
+        </span>
       </Boton>
     );
   } else {
@@ -421,6 +437,7 @@ function SiguienteEnSerie({ actual }: { actual: string }) {
   const primera = esperando.data?.pages[0];
   const siguiente = primera?.elementos.find((e) => e.id !== actual);
   const quedan = primera ? primera.total - (primera.elementos.some((e) => e.id === actual) ? 1 : 0) : 0;
+  useTeclaSuelta("s", () => siguiente && void navegar({ to: "/levantamientos/$id", params: { id: siguiente.id } }), Boolean(siguiente));
   if (esperando.isPending) return null;
   if (!siguiente) return <span className="quedan">No queda nada esperando revisión.</span>;
   return (
@@ -430,6 +447,9 @@ function SiguienteEnSerie({ actual }: { actual: string }) {
         <small>
           {siguiente.nombreFormato ?? siguiente.formato} de {siguiente.tecnico.nombre} · lleva {cuantoLleva(siguiente.recibidoEn).texto} · {quedan === 1 ? "queda 1" : `quedan ${quedan}`}
         </small>
+      </span>
+      <span aria-hidden className="kbd">
+        S
       </span>
       <ChevronRight aria-hidden size={16} />
     </button>

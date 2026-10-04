@@ -1,6 +1,6 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, coincide, Dialogo, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, Insignia, Marcado, PieLista, Plus, Receipt, RefreshCw, SinResultados, Tabla } from "@teins/ui";
 import { cliente } from "../api";
 import { consultasDeCotizaciones, mensajeDeCotizacion } from "../cotizaciones";
@@ -13,6 +13,11 @@ const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: 
 export function Cotizaciones() {
   const consulta = useQuery(consultasDeCotizaciones.lista());
   const [creando, setCreando] = useState(false);
+  // «Nueva cotización» desde la búsqueda (⌘K / Ctrl + K) llega con el formulario abierto.
+  const pedido = useLocation({ select: (l) => l.state.abrir });
+  useEffect(() => {
+    if (pedido === "nueva") setCreando(true);
+  }, [pedido]);
   const [busqueda, setBusqueda] = useBusquedaRecordada("cotizaciones");
   const todas = consulta.data?.cotizaciones ?? [];
   const lista = todas.filter((c) => coincide(busqueda, c.numero, c.visita.cliente, c.visita.sitio));

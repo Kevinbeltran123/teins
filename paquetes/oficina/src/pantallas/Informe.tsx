@@ -47,6 +47,7 @@ import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores, useCan
 import { AvisoDeConflicto, EstadoDeGuardado } from "./Guardado";
 import { BotonMostrarVista, CorreoDeContactos, EditorConVista, Lienzo, PestanasDeVista, useVistaPrevia, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
 import { QueSaleEnElInforme } from "./QueSaleEnElInforme";
+import { useAnotarReciente } from "./Paleta";
 
 type Informe = Respuesta<"obtenerInforme">;
 type Envio = Informe["versiones"][number]["envios"][number];
@@ -125,6 +126,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
     seleccion: informe.seleccion,
   }));
   const { borrador, setBorrador } = doc;
+  useAnotarReciente({ tipo: "informe", id: informe.id, titulo: `Informe de ${informe.visita.cliente}`, detalle: informe.visita.sitio });
   const [subiendo, setSubiendo] = useState(false);
   const [errorPlano, setErrorPlano] = useState<unknown>(null);
   const [confirmando, setConfirmando] = useState(false);

@@ -39,6 +39,7 @@ import { aFechaHora } from "../formato";
 import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
 import { AgregarSitio } from "./Clientes";
 import { celularLegible, useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
+import { useAnotarReciente } from "./Paleta";
 
 type Detalle = Respuesta<"obtenerCliente">;
 type Contacto = Detalle["contactos"][number];
@@ -64,6 +65,7 @@ const dia = (iso: string) => new Intl.DateTimeFormat("es-CO", { day: "numeric", 
 export function DetalleCliente({ id }: { id: string }) {
   const consulta = useQuery(consultasDeProgramacion.cliente(id));
   const notificar = useNotificar();
+  useAnotarReciente(consulta.data ? { tipo: "cliente", id, titulo: consulta.data.nombre } : null);
   const [editando, setEditando] = useState<Contacto | "nuevo" | null>(null);
   const [quitando, setQuitando] = useState<Contacto | null>(null);
   const [agregandoSitio, setAgregandoSitio] = useState(false);

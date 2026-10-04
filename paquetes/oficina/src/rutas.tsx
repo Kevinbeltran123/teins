@@ -218,5 +218,7 @@ declare module "@tanstack/react-router" {
     siguiente?: "contactos";
     /** La pestaña con que abre Clientes ("Ver en Archivados" al archivar uno). */
     vista?: "activos" | "archivados";
+    /** Lo que se pidió desde la búsqueda (⌘K / Ctrl + K): la pantalla abre ese formulario (iteración 37). */
+    abrir?: "programar" | "nuevo" | "nueva";
   }
 }

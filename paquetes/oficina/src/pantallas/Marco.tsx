@@ -1,11 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Boton, Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, esAtajo, etiquetaAtajo, FileText, Logo, LogOut, Package, PanelLeftClose, PanelLeftOpen, Receipt, RefreshCw, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
+import { Boton, Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, esAtajo, etiquetaAtajo, FileText, Keyboard, Logo, LogOut, Package, PanelLeftClose, PanelLeftOpen, Receipt, RefreshCw, Search, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useConexion } from "../conexion";
+import { useTeclaSuelta } from "../atajos";
 import { esBooleano, usePreferencia } from "../preferencias";
+import { HojaDeAtajos } from "./Atajos";
+import { Paleta } from "./Paleta";
 import { iniciales } from "../formato";
 import { useBandeja } from "../revision";
 import { useVersionNueva } from "../version";
@@ -46,9 +49,19 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
   const enLevantamientos = useRouterState({ select: (e) => e.location.pathname === "/" });
   const [plegado, setPlegado] = usePreferencia("menu-plegado", false, esBooleano);
   const atajo = etiquetaAtajo("B");
+  // Buscar en todo y la lista de atajos (iteración 37).
+  const [buscando, setBuscando] = useState(false);
+  const [viendoAtajos, setViendoAtajos] = useState(false);
+  useTeclaSuelta("?", () => setViendoAtajos(true));
 
   useEffect(() => {
     const alTeclear = (e: KeyboardEvent) => {
+      if (esAtajo(e, "K")) {
+        // También desde un campo: es la forma de salir a buscar.
+        e.preventDefault();
+        setBuscando((b) => !b);
+        return;
+      }
       if (!esAtajo(e, "B")) return;
       e.preventDefault();
       setPlegado(!plegado);
@@ -88,6 +101,13 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
           <Logo alto={30} />
         </div>
         <nav aria-label="Secciones">
+          <button type="button" className="buscar-m" aria-label="Buscar" title={`Buscar (${etiquetaAtajo("K")})`} onClick={() => setBuscando(true)}>
+            <Search aria-hidden size={16} strokeWidth={1.6} />
+            <span className="txt">Buscar</span>
+            <span className="kbd txt" aria-hidden>
+              {etiquetaAtajo("K")}
+            </span>
+          </button>
           {SECCIONES.map(enlace)}
           <div className="grupo">Documentos</div>
           {DOCUMENTOS.map(enlace)}
@@ -99,6 +119,14 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
           )}
         </nav>
         <div className="pie">
+          <button type="button" className="plegar" title="Atajos del teclado (?)" onClick={() => setViendoAtajos(true)}>
+            <Keyboard aria-hidden size={16} strokeWidth={1.6} />
+            <span className="txt">Atajos del teclado</span>
+            <span className="kbd txt" aria-hidden>
+              ?
+            </span>
+            <span className="sr-only">{plegado ? "Atajos del teclado" : ""}</span>
+          </button>
           <button type="button" className="plegar" aria-expanded={!plegado} title={`${plegado ? "Desplegar" : "Plegar"} el menú (${atajo})`} onClick={() => setPlegado(!plegado)}>
             {plegado ? <PanelLeftOpen aria-hidden size={16} strokeWidth={1.6} /> : <PanelLeftClose aria-hidden size={16} strokeWidth={1.6} />}
             <span className="txt">Plegar el menú</span>
@@ -144,6 +172,8 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
               </Boton>
             </div>
           )}
+          {buscando && <Paleta alCerrar={() => setBuscando(false)} />}
+          {viendoAtajos && <HojaDeAtajos alCerrar={() => setViendoAtajos(false)} />}
           <DestinoBarraSuperior.Provider value={barra}>
             <DestinoAccionesBarra.Provider value={accionesBarra}>{children}</DestinoAccionesBarra.Provider>
           </DestinoBarraSuperior.Provider>

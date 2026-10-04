@@ -45,6 +45,7 @@ import { consultasDeProgramacion } from "../programacion";
 import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
 import { AvisoDeConflicto, EstadoDeGuardado } from "./Guardado";
 import { BotonMostrarVista, CorreoDeContactos, EditorConVista, Lienzo, PestanasDeVista, useVistaPrevia, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
+import { useAnotarReciente } from "./Paleta";
 
 type Cotizacion = Respuesta<"obtenerCotizacion">;
 
@@ -152,6 +153,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const notificar = useNotificar();
   const doc = useBorrador(c.version, () => inicial(c));
   const { borrador, setBorrador } = doc;
+  useAnotarReciente({ tipo: "cotizacion", id: c.id, titulo: c.numero, detalle: `${c.visita.cliente} · ${c.visita.sitio}` });
   const [confirmando, setConfirmando] = useState(false);
   const [destinatarios, setDestinatarios] = useState<string[] | null>(null);
   const contactos = useQuery(consultasDeProgramacion.cliente(c.clienteId));

@@ -1,6 +1,6 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import {
   Aviso,
@@ -101,6 +101,11 @@ export function Visitas() {
   const [vista, setVista] = usePreferencia<Vista>("visitas-pestana", "proximas", unoDe("proximas", "anteriores", "canceladas"));
   const [busqueda, setBusqueda] = useBusquedaRecordada("visitas");
   const [programando, setProgramando] = useState(false);
+  // «Programar visita» desde la búsqueda (⌘K / Ctrl + K) llega con el formulario abierto.
+  const pedido = useLocation({ select: (l) => l.state.abrir });
+  useEffect(() => {
+    if (pedido === "programar") setProgramando(true);
+  }, [pedido]);
   const [edicion, setEdicion] = useState<Edicion | null>(null);
   const [recientes, setRecientes] = useState<string[]>([]);
   const notificar = useNotificar();
