@@ -43,13 +43,13 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 35 | Qué sale en el informe (ADR-0039): oficina oculta secciones, fotos y croquis; no salen por omisión el croquis de campo ni lo «solo para la empresa» | El cliente recibía las fotos de llegada y el croquis de campo, que son para la empresa | Desplegada en el entorno de pruebas con la migración `0035` y el formato de prueba v9 (2026-10-04); falta que Kevin la pruebe |
 | Iteración 31 | Visitas con horario (ADR-0037): todo el día, de una hora a otra o hasta que el técnico la termine; solo técnicos libres al programar | Una visita ocupaba el día entero y se podía asignar a quien ya estaba ocupado | Desplegada en el entorno de pruebas con la migración `0033` y la app 12 (2026-10-02); oficina aprobada por Kevin el 2026-10-03, falta la prueba en el iPhone |
 | Iteración 36 | Usabilidad de oficina: la vista previa que se oculta, se amplía y cambia de ancho; el guardado automático; el menú plegable; lo que se recuerda de cada persona; ordenar arrastrando; atajos en Mac y Windows | Trabajo que se perdía sin «Guardar borrador», la hoja fija en la mitad, el menú siempre abierto y cada lista que volvía a empezar | Desplegada en el entorno de pruebas (2026-10-04) |
-| Iteración 37 | Buscar en todo con ⌘K / Ctrl + K (recientes, acciones, secciones y resultados por grupo) y revisar en serie con el teclado (J, K, Enter, T, R, S, Esc y «?») | Cada lista buscaba solo lo suyo y revisar varios exigía ir y volver con el ratón | Construida y verificada en local (2026-10-04); falta desplegarla |
+| Iteración 37 | Buscar en todo con ⌘K / Ctrl + K (recientes, acciones, secciones y resultados por grupo) y revisar en serie con el teclado (J, K, Enter, T, R, S, Esc y «?») | Cada lista buscaba solo lo suyo y revisar varios exigía ir y volver con el ratón | Desplegada en el entorno de pruebas (2026-10-04) |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
 
-**Iteración 37 (buscar en todo y revisar con el teclado) construida y verificada en local el 2026-10-04** (sección "Iteración 37"), sin operación nueva en el servidor. Sigue: desplegar `oficina` en el entorno de pruebas (sin migración) y que Kevin pruebe la 36 y la 37, en Mac y, si puede, en Windows.
+**Iteración 37 (buscar en todo y revisar con el teclado) construida, verificada y desplegada en el entorno de pruebas el 2026-10-04** (sección "Iteración 37"), sin operación nueva en el servidor. Sigue: que Kevin pruebe la 36 y la 37, en Mac y, si puede, en Windows.
 
 **Iteración 36 (usabilidad de oficina) construida, verificada y desplegada en el entorno de pruebas el 2026-10-04** (sección "Iteración 36"). Kevin aprobó el prototipo `prototipos/usabilidad-oficina/prototipo.html` (https://claude.ai/artifact/EQDmHRyzPDiWvDmdsQdBDw) pidiendo que los atajos se entiendan en Windows (versión 2). Sigue: que Kevin la pruebe (en Mac y, si puede, en un equipo con Windows), y la iteración 37 (⌘K / Ctrl + K y los atajos para revisar en serie, con la operación nueva `buscar`).
 
@@ -1048,7 +1048,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteración 37 · Buscar en todo y revisar con el teclado
 
-**Estado:** del mismo prototipo aprobado que la 36 (`prototipos/usabilidad-oficina`, casos «Buscar e ir» y «Revisar con el teclado», con los atajos en Mac y Windows). Kevin pidió seguir el 2026-10-04 ("Sigue"). Construida y verificada en local el mismo día; sin desplegar.
+**Estado:** del mismo prototipo aprobado que la 36 (`prototipos/usabilidad-oficina`, casos «Buscar e ir» y «Revisar con el teclado», con los atajos en Mac y Windows). Kevin pidió seguir el 2026-10-04 ("Sigue"). Construida, verificada y desplegada en el entorno de pruebas el mismo día (solo `oficina`).
 
 ### Alcance (solo oficina y `paquetes/ui`, sin servidor ni migración)
 
@@ -1070,7 +1070,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 | 2. Pruebas de paquetes | `oficina/src/busqueda.test.ts` (7, escritas antes del código): grupos y orden, varias palabras sin tildes, los levantamientos que ya vienen buscados, y las teclas sueltas sin modificadores, fuera de campos y sin diálogos. Oficina 34, dominio 116, documentos 11, protocolo 25, campo 107; servidor 214 de 215 (falla la de `informes.test.ts` que ya era inestable; no se tocó el servidor) |
 | 3. Extremo a extremo | `usabilidad.spec.ts` suma dos (buscar con el atajo, ir a un cliente, recientes y «Programar visita»; la serie J, Enter, T, R, Enter, S y Esc, y «?»): 12 de 12 en Chromium y WebKit. `revision.spec.ts`, `programacion.spec.ts`, `correcciones.spec.ts`, `cotizaciones.spec.ts` y `borradores.spec.ts`: 26 de 26 |
 | 3b. Reglas | `pnpm typecheck`, `pnpm arquitectura` sin violaciones, `pnpm licencias`, `pnpm audit` sin vulnerabilidades; presupuesto de campo 132,1 de 135 KB |
-| 4. Desplegada | PENDIENTE: `oficina` en el entorno de pruebas (sin migración) |
+| 4. Desplegada | Entorno de pruebas el 2026-10-04 desde el commit 5448f78 (subido a GitHub): `oficina` en `SUCCESS` (Kevin corrió `railway up`). Verificado: salud 200, la misma compilación que la local (`index-BgazDbpn.js`, con «Buscar en oficina» y «Atajos del teclado») y `verificar-exposicion.sh`. Falta que Kevin la pruebe |
 
 ### Decisiones tomadas al construirlo
 
