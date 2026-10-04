@@ -124,9 +124,14 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   await expect(vistaCorreo.getByLabel("Asunto del correo")).toHaveValue(/^Cotización COT-\d{4}-\d{4,} · /);
   await expect(vistaCorreo.getByText(/^Cotización COT-.* - versión 1\.pdf$/)).toBeVisible();
   await expect(o.frameLocator('iframe[title="Correo a Marta Gil"]').getByText("Hola, Marta:")).toBeVisible();
-  // Se escribe sobre el correo (ADR-0036): el asunto en su lugar; sale así al publicar.
-  await o.getByLabel("Asunto del correo").fill("Su cotización de cableado");
+  // Se escribe sobre el correo (ADR-0036): el texto dentro del correo (también en Safari, donde el marco no entrega sus
+  // eventos) y el asunto en su lugar; sale así al publicar.
+  const textoDelCorreo = o.frameLocator('iframe[title="Correo a Marta Gil"]').locator('[data-editable="texto"]');
+  await textoDelCorreo.click();
+  await o.keyboard.press("End");
+  await o.keyboard.type(" Quedo atento.");
   await expect(o.getByRole("button", { name: "Volver al texto de TEINS" })).toBeVisible();
+  await o.getByLabel("Asunto del correo").fill("Su cotización de cableado");
   await o.getByRole("tab", { name: "Cotización" }).click();
 
   // Publicar: quien recibe cotizaciones viene marcado; el PDF se genera y sale.

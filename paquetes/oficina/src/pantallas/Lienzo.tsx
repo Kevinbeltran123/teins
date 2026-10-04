@@ -162,11 +162,14 @@ function Correo({ p, mensaje, contacto, portal, edicion }: { p: Plantillas; mens
       for (const [propiedad, valor] of [["outline", "1px dashed #9AA3B2"], ["outline-offset", "6px"], ["border-radius", "4px"], ["cursor", "text"]]) bloque.style.setProperty(propiedad!, valor!);
       bloque.addEventListener("focus", () => bloque.style.setProperty("outline", "2px solid #2F5FE8"));
       bloque.addEventListener("blur", () => bloque.style.setProperty("outline", "1px dashed #9AA3B2"));
-      bloque.addEventListener("input", () => {
+      // Lo escrito se observa como cambio del bloque y no con "input": Safari no le entrega a la pantalla los eventos de
+      // un marco sin scripts, y un observador sí le llega.
+      new MutationObserver(() => {
         const texto = leerTexto(bloque);
+        if (texto === escrito.current) return;
         escrito.current = texto;
         cambiar({ asunto: vigente.current.actual.asunto, texto });
-      });
+      }).observe(bloque, { characterData: true, childList: true, subtree: true });
     },
     [],
   );

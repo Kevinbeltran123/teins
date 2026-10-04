@@ -120,7 +120,9 @@ export function HojaEnVivo({ html, ancho, titulo, estilosEnLinea = false, alPint
   function alCargar() {
     cargado.current = true;
     const doc = marco.current?.contentDocument;
-    doc?.addEventListener("load", medir, true);
+    // Una foto que termina de cargar alarga la hoja. Un observador y no el evento "load": Safari no le entrega a la
+    // pantalla los eventos de un marco sin scripts.
+    if (doc?.body) new ResizeObserver(() => medir()).observe(doc.body);
     // Si cambió mientras cargaba, se pone al día sin destello.
     const actual = vigente.current.estilosEnLinea ? sinEstilosEnLinea(vigente.current.html) : vigente.current.html;
     if (actual !== inicial.current && doc?.body) doc.body.innerHTML = cuerpoDe(actual);

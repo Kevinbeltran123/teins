@@ -1059,7 +1059,6 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 | Ocultar datos sueltos de una sección que sale | Si oficina lo pide (ADR-0039, "Cuándo revisarla") |
 | La pestaña «En el informe» de la revisión sigue mostrando el capítulo completo | Si confunde a oficina |
 | «Ocultar» sobre la hoja con el teclado: hoy se hace con los interruptores del panel, que sí lo admiten | Con la próxima revisión de accesibilidad de oficina |
-| El correo editable de la iteración 30 escribe dentro del mismo marco; en Safari el marco no entrega sus eventos (comprobado aquí con una página mínima), así que lo escrito podría no guardarse | Arreglo propuesto a Kevin: leer el texto del marco desde la pantalla, como esta capa |
 | Los formatos reales de TEINS con sus secciones «solo para la empresa» | Cuando TEINS los entregue |
 
 ### Terminado cuando
@@ -1076,6 +1075,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 - **«Ocultar» sobre la hoja funciona con una capa encima** (`elementFromPoint`) y no con eventos dentro del marco: WebKit no los entrega desde un marco sin scripts (comprobado con una página mínima), y abrir los scripts del marco quitaría su aislamiento.
 - **Al pasar el puntero se marca solo la parte más cercana**, para que no aparezcan varios «Ocultar» a la vez.
+- **Safari y la hoja en vivo (arreglado el 2026-10-04, a pedido de Kevin):** WebKit no le entrega a la pantalla los eventos de un marco sin scripts. El correo editable de la iteración 30 escuchaba "input", así que en Safari lo escrito sobre el correo no se guardaba (`cotizaciones.spec.ts` lo reprodujo en WebKit antes del arreglo); ahora un `MutationObserver` lee el bloque. La hoja volvía a medirse con el evento "load" de cada foto; ahora con un `ResizeObserver`, para que en Safari no quede cortada cuando una foto tarda.
 - **El nombre accesible de la constancia es fijo** («Constancia de visita»), no el título que cambia con el técnico.
 - **`formatoContenido` sigue en 1**: `ocultos` es opcional y las versiones anteriores se dibujan igual.
 
