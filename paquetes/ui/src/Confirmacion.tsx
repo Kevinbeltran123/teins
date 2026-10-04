@@ -2,6 +2,7 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { Aviso } from "./Aviso";
 import { Boton } from "./Boton";
 import { Dialogo } from "./Dialogo";
+import { etiquetaEnter } from "./teclas";
 import type { LucideIcon } from "./iconos";
 
 type Consecuencia = { icono: LucideIcon; texto: string; detalle?: string };
@@ -59,7 +60,7 @@ interface Props {
 /**
  * Confirmación de lo que tiene consecuencias (DESIGN.md: qué se confirma y qué se deshace). Mientras trabaja no se
  * puede cerrar. Lo que no se deshace nunca es la acción predeterminada: el foco empieza en "Cancelar". Con
- * consecuencias y sin nada que escribir, el foco empieza en la acción y en oficina se confirma con ↵ (prototipos/base-visual).
+ * consecuencias y sin nada que escribir, el foco empieza en la acción y en oficina se confirma con ↵ (Enter en Windows; prototipos/base-visual).
  */
 export function Confirmacion({ titulo, consecuencias, children, confirmar, descartar = "Cancelar", nivel, accion, validar, mensajeDeError, alCerrar, alTerminar, forma = "centrado" }: Props) {
   const [ocupado, setOcupado] = useState(false);
@@ -110,7 +111,7 @@ export function Confirmacion({ titulo, consecuencias, children, confirmar, desca
             {confirmar}
             {atajos && conEnter && (
               <span aria-hidden className="kbd">
-                ↵
+                {etiquetaEnter()}
               </span>
             )}
           </Boton>

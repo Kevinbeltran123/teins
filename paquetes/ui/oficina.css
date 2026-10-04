@@ -48,8 +48,22 @@
 .quien small { color: var(--t-texto-terciario); font-size: 12px; }
 .usuario .salir { margin-left: auto; }
 
-/* Pantallas angostas: después de las reglas del menú, para que las reemplacen */
-@media (max-width: 1100px) { .app { grid-template-columns: 60px minmax(0, 1fr); } .menu .txt, .menu .grupo, .menu .usuario .quien { display: none; } .menu a, .menu .usuario { justify-content: center; } .menu .marca { padding: 2px 0; justify-content: center; } .menu .marca img { width: 30px !important; object-fit: cover; object-position: left center; } .menu .cuenta-num { position: absolute; top: 0; right: 2px; margin: 0; min-width: 16px; padding: 0 4px; border-radius: 999px; background: var(--marca); color: var(--marca-texto); font-size: 10px; line-height: 16px; text-align: center; } }
+/* Plegar el menú (prototipos/usabilidad-oficina): a iconos, con el nombre al pasar el cursor */
+.menu .plegar { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: none; color: var(--sec); font-size: 13px; text-align: left; }
+.menu .plegar:hover { background: var(--sup2); color: var(--texto); }
+.menu .plegar .kbd { margin-left: auto; }
+.app { transition: grid-template-columns .2s var(--curva); }
+@media (prefers-reduced-motion: reduce) { .app { transition: none; } }
+/* Plegado por la persona y pantallas angostas: después de las reglas del menú, para que las reemplacen */
+.app.plegado { grid-template-columns: 60px minmax(0, 1fr); }
+.app.plegado .menu .txt, .app.plegado .menu .grupo, .app.plegado .menu .usuario .quien { display: none; }
+.app.plegado .menu a, .app.plegado .menu .usuario, .app.plegado .menu .plegar { justify-content: center; padding-inline: 0; }
+.app.plegado .menu .marca { padding: 2px 0; justify-content: center; }
+.app.plegado .menu .marca img { width: 30px !important; object-fit: cover; object-position: left center; }
+.app.plegado .menu .cuenta-num { position: absolute; top: 0; right: 2px; margin: 0; min-width: 16px; padding: 0 4px; border-radius: 999px; background: var(--marca); color: var(--marca-texto); font-size: 10px; line-height: 16px; text-align: center; }
+.app.plegado .menu .usuario { flex-direction: column; gap: 6px; }
+.app.plegado .menu .usuario .salir { margin-left: 0; }
+@media (max-width: 1100px) { .app { grid-template-columns: 60px minmax(0, 1fr); } .menu .txt, .menu .grupo, .menu .usuario .quien, .menu .plegar { display: none; } .menu a, .menu .usuario { justify-content: center; } .menu .marca { padding: 2px 0; justify-content: center; } .menu .marca img { width: 30px !important; object-fit: cover; object-position: left center; } .menu .cuenta-num { position: absolute; top: 0; right: 2px; margin: 0; min-width: 16px; padding: 0 4px; border-radius: 999px; background: var(--marca); color: var(--marca-texto); font-size: 10px; line-height: 16px; text-align: center; } }
 @media (max-width: 640px) { .app { grid-template-columns: minmax(0, 1fr); } .menu { position: static; height: auto; flex-direction: row; overflow-x: auto; padding: 8px; gap: 4px; border-right: 0; border-bottom: 1px solid var(--borde); } .menu .marca, .menu .pie, .menu hr, .menu .grupo { display: none; } .menu nav { flex-direction: row; } }
 
 /* Contenido */
@@ -459,6 +473,24 @@ mark { background: color-mix(in srgb, var(--senal) 35%, transparent); color: inh
 .texto-doc { width: 100%; background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 8px 10px; margin-left: -12px; color: var(--texto); font-size: 16px; line-height: 1.6; resize: vertical; min-height: 90px; transition: background .2s, border-color .2s; }
 .texto-doc:hover { background: var(--sup); }
 .texto-doc:focus { outline: none; background: var(--sup); border-color: var(--senal); }
+/* La fila que se abrió por última vez (prototipos/usabilidad-oficina, «Dónde quedó») */
+tr.marcada > td { background: color-mix(in srgb, var(--marca) 7%, transparent); }
+tr.marcada > td:first-child { box-shadow: inset 2px 0 0 var(--marca); }
+/* Ordenar arrastrando (prototipos/usabilidad-oficina): el asa a la izquierda; la fila tomada se levanta y las demás se corren */
+.asa { width: 24px; height: 32px; padding: 0; display: grid; place-items: center; flex: none; border: 0; border-radius: 6px; background: none; color: var(--t-texto-terciario); cursor: grab; touch-action: none; }
+.asa:hover { color: var(--texto); background: var(--sup2); }
+.asa[aria-pressed="true"] { color: var(--marca); background: color-mix(in srgb, var(--marca) 10%, transparent); }
+.asa.vacia { cursor: default; background: none; }
+.fila-ordenable { position: relative; background: var(--fondo); }
+.fila-ordenable.levantada { z-index: 3; background: var(--sup); border-radius: 8px; box-shadow: var(--sombra); cursor: grabbing; }
+.fila-ordenable.levantada .asa { cursor: grabbing; color: var(--marca); }
+.fila-ordenable.desliza { transition: transform .16s var(--curva); }
+.fila-ordenable.tomada { border-radius: 6px; box-shadow: inset 0 0 0 2px var(--marca); }
+@media (prefers-reduced-motion: reduce) { .fila-ordenable.desliza { transition: none; } }
+.capitulo-cab { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid color-mix(in srgb, var(--borde) 55%, transparent); }
+.capitulo-cab > .capitulo { flex: 1; min-width: 0; border-bottom: 0; }
+.lista-ordenable > .fila-ordenable:last-child .capitulo-cab, .lista-ordenable > .fila-ordenable:last-child > .plano-fila { border-bottom: 0; }
+.plano-fila .asa { margin-right: -8px; }
 .plano-fila { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid color-mix(in srgb, var(--borde) 55%, transparent); }
 .plano-fila .plano-nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .plano-fila .plano-nombre .ayuda, .plano-fila .plano-nombre .msj-error { padding-inline: 10px; margin: 0; }
@@ -649,6 +681,23 @@ dialog.capa-lateral input[name="precio"] { font-size: 24px; font-weight: 600; mi
 .vivo .pie-doc { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .vivo > .editor-doc { min-width: 0; overflow-y: auto; padding: 22px 26px 64px; display: flex; flex-direction: column; gap: 24px; border-right: 1px solid var(--borde); }
 .vivo.sin-lienzo { grid-template-columns: minmax(0, 1fr); }
+/* La hoja con su divisor (prototipos/usabilidad-oficina): el editor no baja de --minimo-editor ni la hoja de 360 px;
+   --vista es el ancho que eligió la persona y, si la ventana ya no lo admite, la hoja cede. */
+.vivo.con-divisor { grid-template-columns: minmax(var(--minimo-editor), 1fr) 9px max(360px, min(var(--vista, 52%), calc(100% - var(--minimo-editor) - 9px))); }
+.vivo.con-divisor > .editor-doc { border-right: 0; }
+.divisor { cursor: col-resize; touch-action: none; }
+.divisor::before { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--borde); transition: background .15s var(--curva), width .15s var(--curva), left .15s var(--curva); }
+.divisor:hover::before, .divisor:focus-visible::before, .vivo.ajustando .divisor::before { left: 3px; width: 3px; background: var(--marca); }
+.divisor:focus-visible { outline: none; }
+/* Mientras se arrastra, la hoja (un marco aparte) no se queda con el puntero ni se selecciona texto */
+.vivo.ajustando { cursor: col-resize; user-select: none; }
+.vivo.ajustando iframe { pointer-events: none; }
+.lienzo-cab .controles-l { display: flex; gap: 2px; margin-left: auto; }
+/* Ampliada: la hoja a toda la ventana, a tamaño real; Esc vuelve */
+.vivo.ampliada > .lienzo { position: fixed; inset: 0; z-index: 60; animation: aparecer-vista .18s var(--curva) both; }
+@keyframes aparecer-vista { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .vivo.ampliada > .lienzo { animation: none; } .divisor::before { transition: none; } }
+
 .vivo.sin-lienzo > .editor-doc { border-right: 0; }
 .vivo.sin-lienzo > .editor-doc > * { width: 100%; max-width: 1144px; margin-inline: auto; }
 .editor-doc .cabeza h1 { font-size: 20px; }

@@ -43,6 +43,7 @@ function abrirPrimerEnlace(evento: MouseEvent<HTMLTableRowElement>) {
 export function FilaTabla({
   children,
   resaltada = false,
+  marcada = false,
   abrir = false,
   clase = "",
   id,
@@ -51,6 +52,8 @@ export function FilaTabla({
   children: ReactNode;
   /** Recién creada o cambiada en esta pantalla: se resalta, el resaltado se desvanece y queda a la vista. */
   resaltada?: boolean;
+  /** La que se abrió por última vez: al volver a la lista queda marcada y a la vista. */
+  marcada?: boolean;
   abrir?: boolean;
   clase?: string;
   id?: string;
@@ -75,11 +78,14 @@ export function FilaTabla({
   useEffect(() => {
     if (resaltada) fila.current?.scrollIntoView({ block: "nearest", behavior: sinMovimiento() ? "auto" : "smooth" });
   }, [resaltada]);
+  useEffect(() => {
+    if (marcada) fila.current?.scrollIntoView({ block: "nearest" });
+  }, [marcada]);
   return (
     <tr
       ref={ref}
       id={id}
-      className={`${resaltada ? "resaltada" : ""} ${abrir ? "clic" : ""} ${clase}`} onClick={abrir ? abrirPrimerEnlace : undefined}>
+      className={`${resaltada ? "resaltada" : ""} ${marcada ? "marcada" : ""} ${abrir ? "clic" : ""} ${clase}`} onClick={abrir ? abrirPrimerEnlace : undefined}>
       {children}
     </tr>
   );

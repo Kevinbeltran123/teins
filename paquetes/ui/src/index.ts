@@ -55,3 +55,7 @@ export { aplicarTema, OPCIONES_DE_TEMA, temaGuardado, useTema } from "./tema";
 export type { Tema } from "./tema";
 export { conTransicion, nombreDeTransicion, sinMovimiento, useCapaQueSale, useLoNuevo, useNombreEnPantalla } from "./transicion";
 export type { Direccion } from "./transicion";
+export { esAtajo, escribiendoEn, etiquetaAtajo, etiquetaEnter, plataforma } from "./teclas";
+export type { Plataforma } from "./teclas";
+export { destinoAlArrastrar, moverEnLista } from "./orden";
+export { ListaOrdenable } from "./ListaOrdenable";
