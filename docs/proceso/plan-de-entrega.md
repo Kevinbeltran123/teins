@@ -43,10 +43,13 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 35 | Qué sale en el informe (ADR-0039): oficina oculta secciones, fotos y croquis; no salen por omisión el croquis de campo ni lo «solo para la empresa» | El cliente recibía las fotos de llegada y el croquis de campo, que son para la empresa | Desplegada en el entorno de pruebas con la migración `0035` y el formato de prueba v9 (2026-10-04); falta que Kevin la pruebe |
 | Iteración 31 | Visitas con horario (ADR-0037): todo el día, de una hora a otra o hasta que el técnico la termine; solo técnicos libres al programar | Una visita ocupaba el día entero y se podía asignar a quien ya estaba ocupado | Desplegada en el entorno de pruebas con la migración `0033` y la app 12 (2026-10-02); oficina aprobada por Kevin el 2026-10-03, falta la prueba en el iPhone |
 | Iteración 36 | Usabilidad de oficina: la vista previa que se oculta, se amplía y cambia de ancho; el guardado automático; el menú plegable; lo que se recuerda de cada persona; ordenar arrastrando; atajos en Mac y Windows | Trabajo que se perdía sin «Guardar borrador», la hoja fija en la mitad, el menú siempre abierto y cada lista que volvía a empezar | Desplegada en el entorno de pruebas (2026-10-04) |
+| Iteración 37 | Buscar en todo con ⌘K / Ctrl + K (recientes, acciones, secciones y resultados por grupo) y revisar en serie con el teclado (J, K, Enter, T, R, S, Esc y «?») | Cada lista buscaba solo lo suyo y revisar varios exigía ir y volver con el ratón | Construida y verificada en local (2026-10-04); falta desplegarla |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
+
+**Iteración 37 (buscar en todo y revisar con el teclado) construida y verificada en local el 2026-10-04** (sección "Iteración 37"), sin operación nueva en el servidor. Sigue: desplegar `oficina` en el entorno de pruebas (sin migración) y que Kevin pruebe la 36 y la 37, en Mac y, si puede, en Windows.
 
 **Iteración 36 (usabilidad de oficina) construida, verificada y desplegada en el entorno de pruebas el 2026-10-04** (sección "Iteración 36"). Kevin aprobó el prototipo `prototipos/usabilidad-oficina/prototipo.html` (https://claude.ai/artifact/EQDmHRyzPDiWvDmdsQdBDw) pidiendo que los atajos se entiendan en Windows (versión 2). Sigue: que Kevin la pruebe (en Mac y, si puede, en un equipo con Windows), y la iteración 37 (⌘K / Ctrl + K y los atajos para revisar en serie, con la operación nueva `buscar`).
 
@@ -1042,6 +1045,40 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 **Arquitectura propuesta (va al ADR):** las plantillas del informe y la cotización salen del servidor a un paquete nuevo, `paquetes/documentos`, que solo depende de `dominio` (hoy ya solo dependen de él y de una función de escape). El servidor las sigue usando para imprimir el PDF; oficina las usa para dibujar la vista en vivo sin ir al servidor en cada tecla. Así la vista previa y el PDF salen del mismo código y no se pueden separar. Los estilos de la plantilla pasan a un archivo servido por la misma superficie, para que la CSP de oficina (`style-src 'self'`) los admita en un marco `srcdoc`. Queda por decidir cómo paginar en pantalla (hojas carta fijas o continuo con marcas de salto).
 
 **Lo que ya existe y se reemplaza:** la vista previa de la cotización de la iteración 24 (documento del servidor con la versión guardada), que pasaría a ser en vivo y sin guardar.
+
+## Iteración 37 · Buscar en todo y revisar con el teclado
+
+**Estado:** del mismo prototipo aprobado que la 36 (`prototipos/usabilidad-oficina`, casos «Buscar e ir» y «Revisar con el teclado», con los atajos en Mac y Windows). Kevin pidió seguir el 2026-10-04 ("Sigue"). Construida y verificada en local el mismo día; sin desplegar.
+
+### Alcance (solo oficina y `paquetes/ui`, sin servidor ni migración)
+
+- **Buscar en todo** (`oficina/src/busqueda.ts`, `pantallas/Paleta.tsx`): ⌘K / Ctrl + K o «Buscar» en el menú; recientes (`useRecientes`, `useAnotarReciente` al abrir un levantamiento, un informe, una cotización o un cliente), acciones («Programar visita», «Nuevo cliente», «Nueva cotización» abren su formulario por el estado del enrutador `abrir`; «Tomar el más antiguo»), secciones y resultados por grupo. Una visita abre Visitas buscando ese cliente.
+- **Revisar con el teclado** (`oficina/src/atajos.ts`, `useTeclaSuelta`): J, K, ↓, ↑, Enter y «/» en la bandeja (mueven la fila marcada de la 36); T, R, S y Esc en la revisión; «?» y «Atajos del teclado» abren la lista (`pantallas/Atajos.tsx`). Cada botón con atajo muestra su tecla.
+
+### Fuera de la iteración 37
+
+| Qué | Cuándo |
+|---|---|
+| Buscar en las visitas anteriores y canceladas, y en los clientes archivados | Si oficina lo pide: la búsqueda usa las consultas de las listas, y Visitas trae las próximas |
+| Atajos en otras pantallas (cotización, informe) | Si oficina lo pide |
+
+### Terminado cuando
+
+| Criterio | Evidencia |
+|---|---|
+| 1. Como el prototipo | Capturas en Chromium a 1440 px: la búsqueda vacía con las acciones, con resultados y sin nada, la lista de atajos y la bandeja con la fila marcada |
+| 2. Pruebas de paquetes | `oficina/src/busqueda.test.ts` (7, escritas antes del código): grupos y orden, varias palabras sin tildes, los levantamientos que ya vienen buscados, y las teclas sueltas sin modificadores, fuera de campos y sin diálogos. Oficina 34, dominio 116, documentos 11, protocolo 25, campo 107; servidor 214 de 215 (falla la de `informes.test.ts` que ya era inestable; no se tocó el servidor) |
+| 3. Extremo a extremo | `usabilidad.spec.ts` suma dos (buscar con el atajo, ir a un cliente, recientes y «Programar visita»; la serie J, Enter, T, R, Enter, S y Esc, y «?»): 12 de 12 en Chromium y WebKit. `revision.spec.ts`, `programacion.spec.ts`, `correcciones.spec.ts`, `cotizaciones.spec.ts` y `borradores.spec.ts`: 26 de 26 |
+| 3b. Reglas | `pnpm typecheck`, `pnpm arquitectura` sin violaciones, `pnpm licencias`, `pnpm audit` sin vulnerabilidades; presupuesto de campo 132,1 de 135 KB |
+| 4. Desplegada | PENDIENTE: `oficina` en el entorno de pruebas (sin migración) |
+
+### Decisiones tomadas al construirlo
+
+- **Sin operación nueva en el servidor** (el prototipo proponía `buscar`): informes, cotizaciones y clientes ya llegan completos a oficina, y los levantamientos ya se buscan en el servidor (`listarLevantamientos` con `buscar` y `limite: 4`, uno por estado). La búsqueda usa esas consultas: ve lo mismo que las listas, con sus mismos permisos, y la iteración solo despliega `oficina`.
+- **Un diálogo que se está cerrando no cuenta como abierto:** su copia (`capa-saliendo`) dura 200 ms, y sin esto la primera tecla después de Esc se perdía.
+- **Enter y Espacio sobre un botón o un enlace hacen lo suyo,** no abren la fila marcada.
+- **Esc en la revisión vuelve a la bandeja** solo fuera de los campos y sin diálogos (Esc en un diálogo lo cierra).
+- **Pruebas:** el servidor de vista previa de oficina se llama `vite.js preview`; `pkill -f "vite preview"` no lo cierra y Playwright lo reutiliza con la compilación vieja (`reuseExistingServer`). Ciérrelo con `pkill -f "vite.js preview"` antes de correr el extremo a extremo.
 
 ## Iteración 36 · Usabilidad de oficina
 
