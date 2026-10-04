@@ -36,6 +36,7 @@ export {
   Globe,
   GripVertical,
   Image,
+  Keyboard,
   Inbox,
   Info,
   Maximize2,
