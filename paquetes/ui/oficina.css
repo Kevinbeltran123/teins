@@ -55,15 +55,16 @@
 .app.plegado .menu .buscar-m { justify-content: center; padding-inline: 0; }
 @media (max-width: 1100px) { .menu .buscar-m { justify-content: center; padding-inline: 0; } .menu .buscar-m .txt { display: none; } }
 /* Plegar el menú (prototipos/usabilidad-oficina): a iconos, con el nombre al pasar el cursor */
-.menu .plegar { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: none; color: var(--sec); font-size: 13px; text-align: left; }
-.menu .plegar:hover { background: var(--sup2); color: var(--texto); }
-.menu .plegar .kbd { margin-left: auto; }
+/* El botón va junto al logo; plegado, debajo del símbolo */
+.marca .plegar { margin-left: auto; color: var(--sec); }
+.app.plegado .menu .marca { flex-direction: column; gap: 10px; }
+.app.plegado .menu .marca .plegar { margin-left: 0; }
 .app { transition: grid-template-columns .2s var(--curva); }
 @media (prefers-reduced-motion: reduce) { .app { transition: none; } }
 /* Plegado por la persona y pantallas angostas: después de las reglas del menú, para que las reemplacen */
 .app.plegado { grid-template-columns: 60px minmax(0, 1fr); }
 .app.plegado .menu .txt, .app.plegado .menu .grupo, .app.plegado .menu .usuario .quien { display: none; }
-.app.plegado .menu a, .app.plegado .menu .usuario, .app.plegado .menu .plegar { justify-content: center; padding-inline: 0; }
+.app.plegado .menu a, .app.plegado .menu .usuario { justify-content: center; padding-inline: 0; }
 .app.plegado .menu .marca { padding: 2px 0; justify-content: center; }
 .app.plegado .menu .marca img { width: 30px !important; object-fit: cover; object-position: left center; }
 .app.plegado .menu .cuenta-num { position: absolute; top: 0; right: 2px; margin: 0; min-width: 16px; padding: 0 4px; border-radius: 999px; background: var(--marca); color: var(--marca-texto); font-size: 10px; line-height: 16px; text-align: center; }
@@ -961,7 +962,7 @@ dialog.paleta[open] { display: flex; flex-direction: column; }
 @media (prefers-reduced-motion: reduce) { dialog.paleta { animation: none; } }
 .entrada-p { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 16px; border-bottom: 1px solid var(--borde); color: var(--sec); flex: none; }
 .entrada-p input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font-size: 15px; color: var(--texto); }
-.resultados-p { overflow-y: auto; padding: 6px; flex: 1; min-height: 0; }
+.resultados-p { overflow-y: auto; padding: 6px; flex: 1 1 auto; min-height: 0; }
 .grupo-p { font-size: 12px; font-weight: 500; color: var(--t-texto-terciario); padding: 10px 10px 4px; }
 .item-p { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 10px; border-radius: 7px; font-size: 13.5px; cursor: pointer; }
 .item-p svg { color: var(--sec); flex: none; }
