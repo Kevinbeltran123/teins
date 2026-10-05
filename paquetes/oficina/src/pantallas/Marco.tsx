@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Boton, Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, esAtajo, etiquetaAtajo, FileText, Keyboard, Logo, LogOut, Package, PanelLeftClose, PanelLeftOpen, Receipt, RefreshCw, Search, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
+import { Boton, Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, esAtajo, etiquetaAtajo, FileText, Logo, LogOut, Package, PanelLeftClose, PanelLeftOpen, Receipt, RefreshCw, Search, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useConexion } from "../conexion";
@@ -99,6 +99,10 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
       <aside className="menu">
         <div className="marca">
           <Logo alto={30} />
+          {/* Plegar el menú: un icono junto al logo (Linear, Notion); el atajo, en la ayuda al pasar el cursor. */}
+          <button type="button" className="icono-btn limpio chico plegar" aria-label={plegado ? "Desplegar el menú" : "Plegar el menú"} aria-expanded={!plegado} title={`${plegado ? "Desplegar" : "Plegar"} el menú (${atajo})`} onClick={() => setPlegado(!plegado)}>
+            {plegado ? <PanelLeftOpen aria-hidden size={16} strokeWidth={1.6} /> : <PanelLeftClose aria-hidden size={16} strokeWidth={1.6} />}
+          </button>
         </div>
         <nav aria-label="Secciones">
           <button type="button" className="buscar-m" aria-label="Buscar" title={`Buscar (${etiquetaAtajo("K")})`} onClick={() => setBuscando(true)}>
@@ -119,22 +123,6 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
           )}
         </nav>
         <div className="pie">
-          <button type="button" className="plegar" title="Atajos del teclado (?)" onClick={() => setViendoAtajos(true)}>
-            <Keyboard aria-hidden size={16} strokeWidth={1.6} />
-            <span className="txt">Atajos del teclado</span>
-            <span className="kbd txt" aria-hidden>
-              ?
-            </span>
-            <span className="sr-only">{plegado ? "Atajos del teclado" : ""}</span>
-          </button>
-          <button type="button" className="plegar" aria-expanded={!plegado} title={`${plegado ? "Desplegar" : "Plegar"} el menú (${atajo})`} onClick={() => setPlegado(!plegado)}>
-            {plegado ? <PanelLeftOpen aria-hidden size={16} strokeWidth={1.6} /> : <PanelLeftClose aria-hidden size={16} strokeWidth={1.6} />}
-            <span className="txt">Plegar el menú</span>
-            <span className="kbd txt" aria-hidden>
-              {atajo}
-            </span>
-            <span className="sr-only">{plegado ? "Desplegar el menú" : ""}</span>
-          </button>
           <div className="usuario">
             <Link to="/cuenta" aria-label={`Mi cuenta: ${nombre}`} activeProps={{ "aria-current": "page" }} className="usuario" style={{ padding: 0, flex: 1, minWidth: 0 }}>
               <span className="avatar" aria-hidden>
@@ -172,7 +160,7 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
               </Boton>
             </div>
           )}
-          {buscando && <Paleta alCerrar={() => setBuscando(false)} />}
+          {buscando && <Paleta alCerrar={() => setBuscando(false)} alVerAtajos={() => setViendoAtajos(true)} />}
           {viendoAtajos && <HojaDeAtajos alCerrar={() => setViendoAtajos(false)} />}
           <DestinoBarraSuperior.Provider value={barra}>
             <DestinoAccionesBarra.Provider value={accionesBarra}>{children}</DestinoAccionesBarra.Provider>

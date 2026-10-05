@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Building, CalendarDays, ClipboardCheck, Clock, etiquetaEnter, FileText, Package, Receipt, Search, useModal, UserRound, type LucideIcon } from "@teins/ui";
+import { Building, CalendarDays, ClipboardCheck, Clock, etiquetaEnter, FileText, Keyboard, Package, Receipt, Search, useModal, UserRound, type LucideIcon } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { resultadosDeBusqueda, type Resultado } from "../busqueda";
 import { consultasDeCotizaciones } from "../cotizaciones";
@@ -27,6 +27,8 @@ const ACCIONES: Resultado[] = [
   { tipo: "accion", id: "nueva-cotizacion", titulo: "Nueva cotización" },
 ];
 const TOMAR: Resultado = { tipo: "accion", id: "tomar", titulo: "Tomar el más antiguo" };
+// La lista de atajos también se abre desde aquí: no ocupa una fila del menú.
+const ATAJOS: Resultado = { tipo: "accion", id: "atajos", titulo: "Atajos del teclado" };
 const SECCIONES: [string, "/" | "/visitas" | "/clientes" | "/catalogo" | "/informes" | "/cotizaciones" | "/cuenta"][] = [
   ["Levantamientos", "/"],
   ["Visitas", "/visitas"],
@@ -39,7 +41,7 @@ const SECCIONES: [string, "/" | "/visitas" | "/clientes" | "/catalogo" | "/infor
 
 const ICONO: Record<Resultado["tipo"], LucideIcon> = { accion: Clock, ir: Package, cliente: Building, visita: CalendarDays, levantamiento: ClipboardCheck, informe: FileText, cotizacion: Receipt };
 const iconoDe = (r: Resultado): LucideIcon =>
-  r.tipo === "accion" ? ({ programar: CalendarDays, "nuevo-cliente": Building, "nueva-cotizacion": Receipt, tomar: ClipboardCheck } as Record<string, LucideIcon>)[r.id] ?? Clock : r.tipo === "ir" && r.id === "/cuenta" ? UserRound : ICONO[r.tipo];
+  r.tipo === "accion" ? ({ programar: CalendarDays, "nuevo-cliente": Building, "nueva-cotizacion": Receipt, tomar: ClipboardCheck, atajos: Keyboard } as Record<string, LucideIcon>)[r.id] ?? Clock : r.tipo === "ir" ? ({ "/": ClipboardCheck, "/visitas": CalendarDays, "/clientes": Building, "/catalogo": Package, "/informes": FileText, "/cotizaciones": Receipt, "/cuenta": UserRound } as Record<string, LucideIcon>)[r.id] ?? Package : ICONO[r.tipo];
 
 const esResultado = (v: unknown): v is Resultado => typeof v === "object" && v !== null && typeof (v as Resultado).id === "string" && typeof (v as Resultado).titulo === "string";
 const esRecientes = (v: unknown): v is Resultado[] => Array.isArray(v) && v.every(esResultado);
@@ -66,7 +68,7 @@ export function useAnotarReciente(r: Resultado | null) {
   }, [clave]);
 }
 
-export function Paleta({ alCerrar }: { alCerrar: () => void }) {
+export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerAtajos: () => void }) {
   const modal = useModal(true, alCerrar);
   const navegar = useNavigate();
   const idLista = useId();
@@ -93,7 +95,7 @@ export function Paleta({ alCerrar }: { alCerrar: () => void }) {
 
   const grupos = resultadosDeBusqueda(texto, {
     recientes,
-    acciones: masAntiguo ? [...ACCIONES, TOMAR] : ACCIONES,
+    acciones: [...ACCIONES, ...(masAntiguo ? [TOMAR] : []), ATAJOS],
     secciones: SECCIONES.map(([titulo, a]) => ({ tipo: "ir", id: a, titulo })),
     clientes: (clientes.data?.clientes ?? []).map((c) => ({ tipo: "cliente", id: c.id, titulo: c.nombre, detalle: c.sitios.length === 1 ? "1 sitio" : `${c.sitios.length} sitios` })),
     visitas: (visitas.data?.visitas ?? []).map((v) => ({ tipo: "visita", id: v.id, titulo: `${v.cliente.nombre} · ${v.sitio.nombre}`, detalle: `${dia(v.programadaPara)} · ${v.motivo} · ${v.tecnicos.map((t) => t.nombre).join(", ")}` })),
@@ -139,6 +141,7 @@ export function Paleta({ alCerrar }: { alCerrar: () => void }) {
         if (r.id === "programar") return navegar({ to: "/visitas", state: { abrir: "programar" } });
         if (r.id === "nuevo-cliente") return navegar({ to: "/clientes", state: { abrir: "nuevo" } });
         if (r.id === "nueva-cotizacion") return navegar({ to: "/cotizaciones", state: { abrir: "nueva" } });
+        if (r.id === "atajos") return alVerAtajos();
         if (r.id === "tomar" && masAntiguo) {
           await tomar.mutateAsync({ id: masAntiguo.id, version: masAntiguo.version }).catch(() => undefined);
           return navegar({ to: "/levantamientos/$id", params: { id: masAntiguo.id } });

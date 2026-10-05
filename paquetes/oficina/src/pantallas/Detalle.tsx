@@ -308,11 +308,8 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
     );
     ayuda = "Tómelo para corregirlo y marcarlo revisado.";
     accion = (
-      <Boton variante="principal" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada })}>
+      <Boton variante="principal" title="Tomar para revisar · T" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada })}>
         Tomar para revisar
-        <span aria-hidden className="kbd">
-          T
-        </span>
       </Boton>
     );
   } else if (l.estado === "revisado") {
@@ -339,11 +336,8 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
     );
     ayuda = "Corrija lo que haga falta y márquelo revisado cuando esté listo.";
     accion = (
-      <Boton variante="principal" icono={Check} onClick={() => setConfirmando("revisado")}>
+      <Boton variante="principal" icono={Check} title="Marcar revisado · R" onClick={() => setConfirmando("revisado")}>
         Marcar revisado
-        <span aria-hidden className="kbd">
-          R
-        </span>
       </Boton>
     );
   } else {
@@ -441,15 +435,12 @@ function SiguienteEnSerie({ actual }: { actual: string }) {
   if (esperando.isPending) return null;
   if (!siguiente) return <span className="quedan">No queda nada esperando revisión.</span>;
   return (
-    <button type="button" className="siguiente-fila" onClick={() => void navegar({ to: "/levantamientos/$id", params: { id: siguiente.id } })}>
+    <button type="button" className="siguiente-fila" title="Siguiente · S" onClick={() => void navegar({ to: "/levantamientos/$id", params: { id: siguiente.id } })}>
       <span>
         <b>Siguiente: {siguiente.visita?.cliente ?? `Levantamiento de ${siguiente.tecnico.nombre}`}</b>
         <small>
           {siguiente.nombreFormato ?? siguiente.formato} de {siguiente.tecnico.nombre} · lleva {cuantoLleva(siguiente.recibidoEn).texto} · {quedan === 1 ? "queda 1" : `quedan ${quedan}`}
         </small>
-      </span>
-      <span aria-hidden className="kbd">
-        S
       </span>
       <ChevronRight aria-hidden size={16} />
     </button>
