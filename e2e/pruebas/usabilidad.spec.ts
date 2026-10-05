@@ -80,7 +80,8 @@ test("el menú se pliega con su botón o con el atajo, y se recuerda", async ({ 
   const esMac = await o.evaluate(() => /mac|iphone|ipad/i.test((navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform));
   await o.keyboard.press(esMac ? "Meta+b" : "Control+b");
   await expect.poll(ancho).toBeGreaterThan(200);
-  await expect(o.getByRole("button", { name: "Plegar el menú" })).toContainText(esMac ? "⌘B" : "Ctrl + B");
+  // El atajo va en la ayuda al pasar el cursor, con la tecla del sistema.
+  await expect(o.getByRole("button", { name: "Plegar el menú" })).toHaveAttribute("title", `Plegar el menú (${esMac ? "⌘B" : "Ctrl + B"})`);
   // Con la otra tecla no pasa nada: en Mac, Ctrl + B es de los campos de texto.
   await o.keyboard.press(esMac ? "Control+b" : "Meta+b");
   await o.waitForTimeout(300);
@@ -183,6 +184,14 @@ test("buscar en todo: abre con el atajo, va a un cliente, lo recuerda y lanza ac
   await expect(busqueda.getByRole("group", { name: "Recientes" }).getByRole("option").first()).toContainText(cliente);
   await o.keyboard.press("Escape");
   await expect(busqueda).toHaveCount(0);
+
+  // La lista de atajos no ocupa una fila del menú: se abre desde la búsqueda (o con «?»).
+  await o.keyboard.press(`${mod}+k`);
+  await busqueda.getByRole("combobox").fill("atajos");
+  await o.keyboard.press("Enter");
+  await expect(o.getByRole("dialog", { name: "Atajos del teclado" })).toBeVisible();
+  await o.keyboard.press("Escape");
+  await expect(o.getByRole("dialog", { name: "Atajos del teclado" })).toHaveCount(0);
 
   // Una acción: «Programar visita» abre su formulario en Visitas.
   await o.keyboard.press(`${mod}+k`);
