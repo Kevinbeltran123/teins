@@ -1078,6 +1078,8 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Un diálogo que se está cerrando no cuenta como abierto:** su copia (`capa-saliendo`) dura 200 ms, y sin esto la primera tecla después de Esc se perdía.
 - **Enter y Espacio sobre un botón o un enlace hacen lo suyo,** no abren la fila marcada.
 - **Esc en la revisión vuelve a la bandeja** solo fuera de los campos y sin diálogos (Esc en un diálogo lo cierra).
+- **Atajos a la vista, después de verlo Kevin en el entorno de pruebas** ("¿es estético que se vean los comandos? ¿esto se usa realmente en la industria?"): solo «Buscar» muestra «⌘K»; «Plegar el menú» es un icono junto al logo; «Atajos del teclado» sale del menú (queda con «?» y en la búsqueda); los botones de la revisión llevan su tecla en la ayuda al pasar el cursor. El pie del menú vuelve a ser solo la cuenta.
+- **La lista de la búsqueda se aplastaba en Safari** (`flex: 1` con base 0 en un diálogo sin alto fijo; el WebKit de Playwright no lo reprodujo): ahora `flex: 1 1 auto`.
 - **Pruebas:** el servidor de vista previa de oficina se llama `vite.js preview`; `pkill -f "vite preview"` no lo cierra y Playwright lo reutiliza con la compilación vieja (`reuseExistingServer`). Ciérrelo con `pkill -f "vite.js preview"` antes de correr el extremo a extremo.
 
 ## Iteración 36 · Usabilidad de oficina
