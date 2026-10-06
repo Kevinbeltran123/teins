@@ -59,3 +59,4 @@ export { esAtajo, escribiendoEn, etiquetaAtajo, etiquetaEnter, plataforma } from
 export type { Plataforma } from "./teclas";
 export { destinoAlArrastrar, moverEnLista } from "./orden";
 export { ListaOrdenable } from "./ListaOrdenable";
+export { useMinuto } from "./minuto";

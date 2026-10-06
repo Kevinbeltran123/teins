@@ -110,6 +110,29 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
     expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/recuperar`)).json()).toMatchObject({ codigo: "estado_invalido" });
   });
 
+  it("una visita de hoy ya atendida o terminada no cuenta como por hacer: el cliente se archiva (iteración 41)", async () => {
+    const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+    const atendido = await clienteConSitio();
+    const visitaAtendida = await programar(atendido, [org.tecnico.id], hoy);
+    const id = randomUUID();
+    const envio = await app.inject({
+      method: "POST",
+      url: "/api/sync/comandos",
+      headers: { cookie: org.tecnico.cookie, ...cabecerasSync },
+      payload: { tipo: "EnviarLevantamiento", llave: llaveDeEnvio(id), levantamiento: { id, visitaId: visitaAtendida.id, formato: "prueba-ups", versionFormato: 1, respuestas: {}, creadoEn: new Date().toISOString(), enviadoEn: new Date().toISOString() } },
+    });
+    expect(envio.statusCode, envio.body).toBe(200);
+    const archivarAtendido = await pedir(org.oficina.cookie, "POST", `/api/clientes/${atendido.id}/archivar`);
+    expect(archivarAtendido.statusCode, archivarAtendido.body).toBe(200);
+
+    // Otro técnico: el primero ya tiene una visita de todo el día hoy.
+    const otro = await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario: `tecnico.${randomUUID().slice(0, 8)}`, nombre: "Otro técnico", rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    const terminado = await clienteConSitio();
+    const visitaTerminada = await programar(terminado, [otro.id], hoy);
+    await s.propietario.pool.query("update visitas.visitas set terminada_en = now() where id = $1", [visitaTerminada.id]);
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${terminado.id}/archivar`)).statusCode).toBe(200);
+  });
+
   it("un sitio archivado no se programa; no se archiva el único sitio activo ni uno con visitas por hacer", async () => {
     const cliente = await clienteConSitio();
     const principal = cliente.sitios[0]!.id;

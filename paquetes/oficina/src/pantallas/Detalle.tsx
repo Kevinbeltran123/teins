@@ -1376,6 +1376,7 @@ const QUE_PASO: Record<string, { texto: string; icono: LucideIcon }> = {
   levantamiento_enviado: { texto: "Envió el levantamiento", icono: Send },
   revision_tomada: { texto: "Tomó la revisión", icono: UserRound },
   revision_reasignada: { texto: "Tomó la revisión", icono: UserRound },
+  revision_liberada: { texto: "Dejó la revisión sin tomar", icono: UserRound },
   campo_corregido: { texto: "Corrigió", icono: Pencil },
   levantamiento_revisado: { texto: "Marcó el levantamiento revisado", icono: Check },
   comentario_agregado: { texto: "Comentó", icono: MessageSquare },
@@ -1413,6 +1414,7 @@ function HistorialDeCambios({ l, historial }: { l: Levantamiento; historial: Ret
       );
     }
     if (e.tipo === "revision_reasignada" && revisorAnterior) return ` que tenía ${revisorAnterior}`;
+    if (e.tipo === "revision_liberada" && revisorAnterior) return ` al desactivar a ${revisorAnterior}`;
     if (e.tipo === "linea_vinculada") {
       const antes = e.anterior as { linea?: string; item?: string | null } | undefined;
       const despues = e.nuevo as { linea?: string; item?: string | null } | undefined;

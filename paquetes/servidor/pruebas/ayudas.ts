@@ -56,6 +56,7 @@ import { crearAvisos, type EnviadorDeAvisos } from "../src/modulos/avisos";
 import { crearEnvios, type Proveedores } from "../src/modulos/envios";
 import { crearFormatos } from "../src/modulos/formatos";
 import { crearIdentidad } from "../src/modulos/identidad";
+import { soltarRevisionesDe } from "../src/modulos/levantamientos";
 import { crearGeneradorPdf } from "../src/modulos/informes";
 import { crearGeneradorPdfDeCotizaciones } from "../src/modulos/cotizaciones";
 import { recuperarTrabajosAMedias } from "../src/modulos/mantenimiento";
@@ -81,7 +82,7 @@ export async function servidorDePrueba(opciones: { config?: Partial<Record<strin
   afterAll(() => conexionPortal.cerrar());
   const { app, rutas } = await construirApp({ config, bd: conexionApp.bd, bdPortal: conexionPortal.bd, almacenamiento });
   afterAll(() => app.close());
-  const identidad = crearIdentidad(conexionApp.bd, config);
+  const identidad = crearIdentidad(conexionApp.bd, config, { alDesactivar: soltarRevisionesDe });
   const archivos = crearArchivos({ bd: conexionApp.bd, almacenamiento, config });
 
   /** Organización con los formatos de prueba publicados y un técnico y una persona de oficina. */

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Activity, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
+import { Activity, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useMinuto, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
@@ -68,6 +68,8 @@ interface Contexto {
 }
 
 export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion, actualizacion }: Props) {
+  // «Hoy», «En curso» y «Terminar visita» se recalculan con el paso del tiempo, también sin señal.
+  useMinuto();
   // Al volver de una captura, el inicio empieza con lo que ya había leído: sin esqueleto (iteración 27).
   const lista = useLecturaRecordada(`lista:${usuario.id}`, () => repositorio.listar(usuario.id), [usuario.id]);
   const envios = useLecturaRecordada(`envios:${usuario.id}`, async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
@@ -401,8 +403,6 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
   const borrador = levantamientos.find((l) => l.estado === "borrador");
   const formato = borrador ? formatoDe(contexto.formatos, borrador) : undefined;
   const resumen = borrador && formato ? resumenDeRecorrido(formato, borrador) : undefined;
-  const [terminando, setTerminando] = useState(false);
-  const notificar = useNotificar();
   const abierta = enCurso(visita);
   const terminada = terminadaEn(visita);
   return (
@@ -449,11 +449,20 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
       {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} />}
       <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="principal" />
       {/* Bajo la acción principal: terminar libera al técnico, no reemplaza capturar (ADR-0037). */}
-      {abierta && !contexto.bloqueado && (
-        <Boton variante="secundaria" className="w-full" onClick={() => setTerminando(true)}>
-          Terminar visita
-        </Boton>
-      )}
+      {abierta && !contexto.bloqueado && <TerminarVisita visita={visita} contexto={contexto} />}
+    </section>
+  );
+}
+
+/** «Terminar visita» (ADR-0037), en la tarjeta principal y en cada fila: una visita en curso se termina esté donde esté. */
+function TerminarVisita({ visita, contexto }: { visita: VisitaLocal; contexto: Contexto }) {
+  const [terminando, setTerminando] = useState(false);
+  const notificar = useNotificar();
+  return (
+    <>
+      <Boton variante="secundaria" className="w-full" onClick={() => setTerminando(true)}>
+        Terminar visita
+      </Boton>
       {terminando && (
         <Confirmacion
           nivel="consecuencia"
@@ -475,7 +484,7 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
           ]}
         />
       )}
-    </section>
+    </>
   );
 }
 
@@ -508,6 +517,8 @@ function FilaVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal;
       </button>
       {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} />}
       {abierta && !visita.fueraDeAlcance && <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="secundaria" />}
+      {/* En curso aunque no sea la principal (un borrador viejo puede ocupar ese lugar): se termina aquí también. */}
+      {enCurso(visita) && !contexto.bloqueado && <TerminarVisita visita={visita} contexto={contexto} />}
     </article>
   );
 }

@@ -62,6 +62,11 @@ describe("agendaDeVisitas", () => {
     expect(ids(atendidasHoy)).toEqual(["terminada-hoy"]);
   });
 
+  it("una visita cancelada o reasignada con un borrador a medias no tapa la de hoy: va después, para terminarla y enviarla", () => {
+    const cancelada = visita("cancelada", "2026-09-20", "Zeta", { fueraDeAlcance: true, motivoSalida: "cancelada" });
+    expect(ids(agenda([hoyA, cancelada, manana], ["cancelada"]).pendientes)).toEqual(["hoy-a", "cancelada", "manana"]);
+  });
+
   it("el mismo día va por hora de inicio y las de todo el día al final, aunque el cliente vaya antes (ADR-0037)", () => {
     const tarde = visita("tarde", hoy, "Alfa", { horaInicio: "14:00", horaFin: null });
     const manana9 = visita("nueve", hoy, "Zeta", { horaInicio: "09:00", horaFin: "11:00" });

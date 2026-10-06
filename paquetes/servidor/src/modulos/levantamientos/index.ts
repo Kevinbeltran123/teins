@@ -1,4 +1,4 @@
-import { inArray, or, sql, type AnyColumn } from "drizzle-orm";
+import { and, eq, inArray, or, sql, type AnyColumn } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { bloques, rutaLegible, type EstadoRevision, type Repeticiones, type Respuestas } from "@teins/dominio";
 import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
@@ -66,6 +66,32 @@ export interface Levantamientos {
   /** Cantidades de los levantamientos revisados, para cotizar (ADR-0029). */
   cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readonly string[], recibidosDesde?: Date): Promise<LineaRevisadaDeVisita[]>;
   registrarRutas(app: FastifyInstance): void;
+}
+
+/**
+ * Al desactivar a una persona, lo que tenía en revisión queda sin responsable (en revisión, sin tomar): otra lo toma
+ * sin reasignar, y las respuestas del técnico avisan a quien escribió el comentario y no a alguien sin acceso.
+ */
+export async function soltarRevisionesDe(tx: TxOrganizacion, datos: { organizacionId: string; usuarioId: string; autorId: string; correlacion: string }): Promise<void> {
+  const soltados = await tx
+    .update(levantamientos)
+    .set({ revisorId: null, tomadoEn: null, version: sql`${levantamientos.version} + 1` })
+    .where(and(eq(levantamientos.revisorId, datos.usuarioId), eq(levantamientos.estado, "en_revision")))
+    .returning({ id: levantamientos.id, tecnicoId: levantamientos.tecnicoId });
+  if (soltados.length === 0) return;
+  await registrar(
+    tx,
+    soltados.map((l) => ({
+      organizacionId: datos.organizacionId,
+      agregadoTipo: "levantamiento" as const,
+      agregadoId: l.id,
+      tipoEvento: "revision_liberada" as const,
+      autorId: datos.autorId,
+      correlacion: datos.correlacion,
+      valorAnterior: { revisor: datos.usuarioId },
+    })),
+  );
+  await registrarCambios(tx, soltados.map((l) => ({ organizacionId: datos.organizacionId, usuarioId: l.tecnicoId, entidad: "levantamiento" as const, entidadId: l.id, operacion: "cambio" as const })));
 }
 
 interface Dependencias {

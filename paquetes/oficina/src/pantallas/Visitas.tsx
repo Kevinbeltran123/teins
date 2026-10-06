@@ -38,6 +38,7 @@ import {
   enfocarPrimerError,
   Smartphone,
   TriangleAlert,
+  useMinuto,
 } from "@teins/ui";
 import { cliente } from "../api";
 import { csvDetalle, csvResumen, descargar } from "../csv";
@@ -97,6 +98,8 @@ function tituloDia(aaaaMmDd: string, hoy: string) {
  * sitio o técnico (la lista llega completa, se busca aquí) y el avance de los levantamientos en una barra.
  */
 export function Visitas() {
+  // Abierta toda la noche, «Hoy» y «En curso» siguen al reloj (iteración 41).
+  useMinuto();
   // Dónde quedó la persona (prototipos/usabilidad-oficina): la pestaña, en el equipo; la búsqueda, mientras dure la pestaña.
   const [vista, setVista] = usePreferencia<Vista>("visitas-pestana", "proximas", unoDe("proximas", "anteriores", "canceladas"));
   const [busqueda, setBusqueda] = useBusquedaRecordada("visitas");

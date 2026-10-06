@@ -226,7 +226,8 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       return tx
         .select({ id: visitas.id, programadaPara: visitas.programadaPara, sitioId: visitas.sitioId, tecnicos: visitas.tecnicos })
         .from(visitas)
-        .where(and(eq(visitas.clienteId, clienteId), isNull(visitas.canceladaEn), gte(visitas.programadaPara, hoy)))
+        // Lo terminado o cerrado ya se hizo (ADR-0037, ADR-0041): no detiene archivar.
+        .where(and(eq(visitas.clienteId, clienteId), isNull(visitas.canceladaEn), isNull(visitas.terminadaEn), isNull(visitas.cerradaEn), gte(visitas.programadaPara, hoy)))
         .orderBy(asc(visitas.programadaPara));
     },
 

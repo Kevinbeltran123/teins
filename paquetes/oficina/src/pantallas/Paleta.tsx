@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Building, CalendarDays, ClipboardCheck, Clock, etiquetaEnter, FileText, Keyboard, Package, Receipt, Search, useModal, UserRound, type LucideIcon } from "@teins/ui";
+import { Building, CalendarDays, ClipboardCheck, Clock, etiquetaEnter, FileText, Keyboard, Package, Receipt, Search, useModal, useNotificar, UserRound, type LucideIcon } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { resultadosDeBusqueda, type Resultado } from "../busqueda";
 import { consultasDeCotizaciones } from "../cotizaciones";
 import { esTexto, unoDe, usePreferencia } from "../preferencias";
 import { consultasDeProgramacion, hoyLocal } from "../programacion";
+import { mensajeDeError } from "../mensajes";
 import { useBandeja, useTomar, type Estado } from "../revision";
 import { useRetrasado } from "../usarRetraso";
 
@@ -79,6 +80,7 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
   const [, setBusquedaVisitas] = usePreferencia("buscar-visitas", "", esTexto, "pestana");
   const [, setPestanaVisitas] = usePreferencia("visitas-pestana", "proximas", unoDe("proximas", "anteriores", "canceladas"));
   const tomar = useTomar();
+  const notificar = useNotificar();
   const masAntiguo = useBandeja("enviado").data?.pages[0]?.elementos[0];
 
   const informes = useQuery(consultas.informes());
@@ -143,7 +145,12 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
         if (r.id === "nueva-cotizacion") return navegar({ to: "/cotizaciones", state: { abrir: "nueva" } });
         if (r.id === "atajos") return alVerAtajos();
         if (r.id === "tomar" && masAntiguo) {
-          await tomar.mutateAsync({ id: masAntiguo.id, version: masAntiguo.version }).catch(() => undefined);
+          // Si otra persona lo tomó un instante antes, se dice y no se abre como si fuera propio.
+          try {
+            await tomar.mutateAsync({ id: masAntiguo.id, version: masAntiguo.version });
+          } catch (error) {
+            return notificar({ texto: `No se pudo tomar: ${mensajeDeError(error)}` });
+          }
           return navegar({ to: "/levantamientos/$id", params: { id: masAntiguo.id } });
         }
     }

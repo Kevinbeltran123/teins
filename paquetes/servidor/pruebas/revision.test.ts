@@ -36,7 +36,7 @@ async function levantamientoEnviado() {
   const usuario = `oficina.${randomBytes(4).toString("hex")}`;
   await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre: "Otra de oficina", rol: "oficina", contrasena: "contrasena-de-prueba" });
   const otra = { cookie: await iniciarSesion(app, usuario, "contrasena-de-prueba") };
-  return { ...org, id, otra };
+  return { ...org, id, otra: { ...otra, usuario } };
 }
 
 const post = (cookie: string, id: string, accion: string, payload: object) =>
@@ -162,6 +162,21 @@ describe("revisión (QA-8, I-1)", () => {
 
     // El técnico no revisa nada.
     expect((await post(tecnico.cookie, id, "tomar", { version: 3, reasignar: true })).json()).toMatchObject({ codigo: "sin_permiso" });
+  });
+
+  it("al desactivar a quien revisa, el levantamiento queda sin tomar y otra persona lo toma sin reasignar", async () => {
+    const { oficina, otra, id } = await levantamientoEnviado();
+    await post(otra.cookie, id, "tomar", { version: 1 });
+
+    expect(await s.identidad.desactivarUsuario(otra.usuario, { autorId: oficina.id, correlacion: "prueba" })).toBe("desactivado");
+    const bandeja = (await get(oficina.cookie, "/api/levantamientos?estado=en_revision")).json();
+    expect(bandeja.elementos.find((e: { id: string }) => e.id === id)).toMatchObject({ revisor: null });
+
+    expect((await post(oficina.cookie, id, "tomar", { version: 3 })).json()).toMatchObject({ estado: "en_revision", revisor: { id: oficina.id }, version: 4 });
+    const historial = (await get(oficina.cookie, `/api/levantamientos/${id}/historial`)).json();
+    expect(historial.integra).toBe(true);
+    expect(historial.eventos.map((e: { tipo: string }) => e.tipo)).toContain("revision_liberada");
+    expect(historial.eventos.find((e: { tipo: string }) => e.tipo === "revision_liberada")).toMatchObject({ autor: { id: oficina.id }, anterior: { revisor: "Otra de oficina" } });
   });
 
   it("las correcciones cumplen las reglas del formato y no tocan fotos", async () => {

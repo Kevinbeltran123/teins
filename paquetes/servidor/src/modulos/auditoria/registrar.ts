@@ -36,6 +36,7 @@ export type TipoEvento =
   | "borrado_local_confirmado"
   | "revision_tomada"
   | "revision_reasignada"
+  | "revision_liberada"
   | "campo_corregido"
   | "levantamiento_revisado"
   | "comentario_agregado"

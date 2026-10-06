@@ -91,7 +91,9 @@ export function agendaDeVisitas(
     const terminada = terminadaEn(v);
     return v.programadaPara === hoy || (terminada !== null && hoyLocal(new Date(terminada)) === hoyLocal(ahora));
   };
-  const grupo = (v: VisitaLocal) => (conBorrador.has(v.id) ? GRUPO.conBorrador : v.programadaPara === hoy ? GRUPO.hoy : v.programadaPara < hoy ? GRUPO.atrasada : GRUPO.futura);
+  // Una cancelada o reasignada con un borrador a medias no tapa el plan del día: va con las atrasadas, para enviarla.
+  const grupo = (v: VisitaLocal) =>
+    conBorrador.has(v.id) && !v.fueraDeAlcance ? GRUPO.conBorrador : v.fueraDeAlcance ? GRUPO.atrasada : v.programadaPara === hoy ? GRUPO.hoy : v.programadaPara < hoy ? GRUPO.atrasada : GRUPO.futura;
   const porCliente = (a: VisitaLocal, b: VisitaLocal) => compararPorHorario(a, b) || a.cliente.nombre.localeCompare(b.cliente.nombre, "es");
   const pendientes = visitas.filter((v) => !atendida(v)).sort((a, b) => grupo(a) - grupo(b) || porCliente(a, b));
   const atendidasHoy = visitas.filter((v) => atendida(v) && deHoy(v)).sort(porCliente);

@@ -134,7 +134,10 @@ function tokenDeSesion(cookies: readonly string[]): string | undefined {
 }
 
 /** Interfaz pública del módulo de identidad (ADR-0009). */
-export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
+/** Lo que otro módulo hace en la misma transacción al desactivar a una persona (la composición lo pasa). */
+export type AlDesactivar = (tx: TxOrganizacion, datos: { organizacionId: string; usuarioId: string; autorId: string; correlacion: string }) => Promise<void>;
+
+export function crearIdentidad(bd: BaseDeDatos, config: Config, { alDesactivar }: { alDesactivar?: AlDesactivar } = {}): Identidad {
   /** Evento de seguridad del usuario en la cadena de su organización (ADR-0008). */
   async function eventoDeUsuario(usuarioId: string, tipoEvento: "segundo_factor_activado" | "llave_de_acceso_creada" | "llave_de_acceso_quitada" | "contrasena_cambiada" | "segundo_factor_quitado") {
     const [usuario] = await bd.select({ organizacionId: usuarios.organizacionId }).from(usuarios).where(eq(usuarios.id, usuarioId));
@@ -319,6 +322,7 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
         .where(and(eq(dispositivos.usuarioId, fila.id), isNull(dispositivos.ordenDeBorradoEn)))
         .returning({ id: dispositivos.id });
       await olvidarSuscripciones(tx, fila.id);
+      await alDesactivar?.(tx, { organizacionId: fila.organizacionId, usuarioId: fila.id, autorId, correlacion });
       await registrar(tx, [
         {
           organizacionId: fila.organizacionId,

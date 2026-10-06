@@ -13,7 +13,7 @@ import { servirSuperficies, type Superficie } from "./plataforma/superficies";
 import { crearIdentidad } from "./modulos/identidad";
 import { crearArchivos } from "./modulos/archivos";
 import { crearFormatos } from "./modulos/formatos";
-import { crearLevantamientos } from "./modulos/levantamientos";
+import { crearLevantamientos, soltarRevisionesDe } from "./modulos/levantamientos";
 import { clientesYSitios, registrarRutasDeClientes } from "./modulos/clientes";
 import { crearSincronizacion } from "./modulos/sincronizacion";
 import { crearVisitas } from "./modulos/visitas";
@@ -138,7 +138,7 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
     respuesta.status(404).type(TIPO_PROBLEMA).send(problema("no_encontrado", "La ruta no existe").aProblema(solicitud.id)),
   );
 
-  const identidad = crearIdentidad(bd, config);
+  const identidad = crearIdentidad(bd, config, { alDesactivar: soltarRevisionesDe });
   app.decorate("resolverActor", identidad.resolverActor);
 
   const formatos = crearFormatos();
@@ -172,7 +172,12 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   levantamientos.registrarRutas(app);
   sincronizacion.registrarRutas(app);
   informes.registrarRutas(app);
-  registrarRutasDeClientes(app, bd, identidad, (tx, clienteId) => visitas.porHacer(tx, clienteId, new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" })));
+  // Por hacer: sin cancelar, terminar ni cerrar, y sin ningún levantamiento recibido (lo atendido ya se hizo).
+  registrarRutasDeClientes(app, bd, identidad, async (tx, clienteId) => {
+    const porHacer = await visitas.porHacer(tx, clienteId, new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" }));
+    const atendidas = await levantamientos.conteosPorVisita(tx, porHacer.map((v) => v.id));
+    return porHacer.filter((v) => !atendidas.has(v.id));
+  });
   // El rol web no envía (lo hace el worker): solo recibe los eventos firmados de los proveedores.
   crearEnvios({ bd, almacenamiento, config }).registrarRutas(app);
   crearCotizaciones({ bd, almacenamiento, config, levantamientos, visitas, catalogo, identidad }).registrarRutas(app);
