@@ -161,6 +161,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       const anteriores = new Set(actual.tecnicos);
       await tx
         .update(visitas)
+        // Una cerrada sigue cerrada: reasignar lo pasado corrige quién la hizo; para volver se reprograma (ADR-0041).
         .set({ tecnicos: [...nuevos], version: sql`${visitas.version} + 1` })
         .where(eq(visitas.id, visitaId));
       await registrar(tx, [
@@ -190,7 +191,8 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       const cambiaHorario = actual.programadaPara !== programadaPara || aHoraCorta(actual.horaInicio) !== horaInicio || aHoraCorta(actual.horaFin) !== horaFin;
       await tx
         .update(visitas)
-        .set({ programadaPara, horaInicio, horaFin, motivo: motivo.trim(), ...(cambiaHorario ? { terminadaEn: null, terminadaPor: null } : {}), version: sql`${visitas.version} + 1` })
+        // Otro día u otra hora también reabre una visita cerrada (ADR-0041).
+        .set({ programadaPara, horaInicio, horaFin, motivo: motivo.trim(), ...(cambiaHorario ? { terminadaEn: null, terminadaPor: null, cerradaEn: null } : {}), version: sql`${visitas.version} + 1` })
         .where(eq(visitas.id, visitaId));
       await registrar(tx, [
         {

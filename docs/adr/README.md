@@ -65,6 +65,7 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0039](0039-que-sale-en-el-informe.md) | Qué sale en el informe: oficina oculta partes de cada levantamiento | Aceptada |
 | [0040](0040-conversaciones-entre-oficina-y-campo.md) | Conversaciones entre oficina y campo: el técnico responde los comentarios (amplía 0003, 0014 y 0023) | Aceptada |
 | [0041](0041-visitas-atendidas-salen-del-telefono.md) | Las visitas atendidas salen del teléfono al día siguiente (amplía 0003) | Aceptada |
+| [0042](0042-reprogramar-reabre-una-visita-cerrada.md) | Reprogramar reabre una visita cerrada (amplía 0041) | Aceptada |
 
 ### Estados
 

@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
 import { llaveDeEnvio } from "@teins/protocolo";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
@@ -326,5 +327,27 @@ describe("las visitas atendidas salen del teléfono al día siguiente (ADR-0041)
     expect(visitasQueBajan((await bajar(tecnico.cookie, 0, 14)).json().cambios).sort()).toEqual([atrasada, deHoy].sort());
     // Se cierra una sola vez: la siguiente bajada no la repite.
     expect(salidas((await bajar(tecnico.cookie, bajada.puntoDeControl, 15)).json().cambios)).toEqual([]);
+  });
+
+  it("reprogramar una visita cerrada la reabre; reasignarla sin cambiar la fecha la deja cerrada", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const otro = await nuevoTecnico(organizacionId);
+    const movida = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    const pasada = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    await enviarCon(tecnico.cookie, movida);
+    await enviarCon(tecnico.cookie, pasada);
+    const cerro = (await bajar(tecnico.cookie, 0, 15)).json();
+    expect(salidas(cerro.cambios).map(([id]) => id).sort()).toEqual([movida, pasada].sort());
+
+    await enOrganizacion(s.conexionApp.bd, organizacionId, async (tx) => {
+      const [m] = await tx.execute<{ version: number }>(sql`select version from visitas.visitas where id = ${movida}`).then((r) => r.rows);
+      await visitas.reprogramar(tx, { organizacionId, ...contexto, visitaId: movida, version: m!.version, programadaPara: dia(1), motivo: "Volver a medir" });
+      await visitas.reasignar(tx, { organizacionId, ...contexto, visitaId: pasada, tecnicos: [otro.id] });
+    });
+    // Reprogramada a mañana: vuelve como trabajo por hacer.
+    const despues = (await bajar(tecnico.cookie, cerro.puntoDeControl, 15)).json();
+    expect(visitasQueBajan(despues.cambios)).toEqual([movida]);
+    // Reasignar lo pasado corrige quién la hizo: no vuelve a ningún teléfono como pendiente.
+    expect(visitasQueBajan((await bajar(otro.cookie, 0, 15)).json().cambios)).toEqual([]);
   });
 });
