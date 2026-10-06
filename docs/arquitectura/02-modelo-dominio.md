@@ -87,7 +87,7 @@ erDiagram
 | **Levantamiento** | Secciones, respuestas, líneas de cantidad, referencias a evidencias | Técnico en borrador; oficina después | Sube al enviar; su estado baja |
 | **Archivo** | Binario inmutable con huella digital | Quien lo crea | Sube |
 | **Comentario** | Texto, autor, fecha, referencia al campo y, si es respuesta, a qué comentario responde y de qué lado (ADR-0040) | Lo abre oficina; el técnico responde | Baja con sus respuestas; las del técnico suben |
-| **Visita** | Cliente, sitio, motivo, canal de origen, técnicos asignados, fecha y horario (ADR-0037) | Oficina, supervisor | Baja |
+| **Visita** | Cliente, sitio, motivo, canal de origen, técnicos asignados, fecha y horario (ADR-0037); se cierra al día siguiente de atendida (ADR-0041) | Oficina, supervisor | Baja; atendida, sale del teléfono |
 | **Formato** | Nombre, tipo de servicio, versión vigente | Administrador | No |
 | **Versión de formato** | Definición completa (ADR-0006) | Nadie tras publicarse | Baja |
 | **Ítem de catálogo** | Código, descripción, unidad por defecto, activo | Oficina, administrador | Baja |

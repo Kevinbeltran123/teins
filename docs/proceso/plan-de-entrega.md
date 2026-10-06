@@ -51,7 +51,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 ## Próximo paso
 
-**Siguiente: que Kevin pruebe las iteraciones 38 y 39 en el entorno de pruebas, la 39 también en su iPhone (campo, app 14).** Las dos están construidas, verificadas y desplegadas en el entorno de pruebas (2026-10-06); el detalle, las decisiones y la evidencia están en la sección "Iteraciones 38 y 39". Después: producción de la 29 a la 39 (`campo` primero) y lo que entregue TEINS.
+**Siguiente: que Kevin pruebe las iteraciones 38, 39 y 40 en el entorno de pruebas, la 39 y la 40 también en su iPhone (campo, app 15).** La 40 arregla que lo atendido siguiera como «Siguiente visita» (sección "Iteración 40"). Las dos están construidas, verificadas y desplegadas en el entorno de pruebas (2026-10-06); el detalle, las decisiones y la evidencia están en la sección "Iteraciones 38 y 39". Después: producción de la 29 a la 39 (`campo` primero) y lo que entregue TEINS.
 
 **Iteración 37 (buscar en todo y revisar con el teclado) construida, verificada y desplegada en el entorno de pruebas el 2026-10-04** (sección "Iteración 37"), sin operación nueva en el servidor. Sigue: que Kevin pruebe la 36 y la 37, en Mac y, si puede, en Windows.
 
@@ -1049,6 +1049,35 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 **Arquitectura propuesta (va al ADR):** las plantillas del informe y la cotización salen del servidor a un paquete nuevo, `paquetes/documentos`, que solo depende de `dominio` (hoy ya solo dependen de él y de una función de escape). El servidor las sigue usando para imprimir el PDF; oficina las usa para dibujar la vista en vivo sin ir al servidor en cada tecla. Así la vista previa y el PDF salen del mismo código y no se pueden separar. Los estilos de la plantilla pasan a un archivo servido por la misma superficie, para que la CSP de oficina (`style-src 'self'`) los admita en un marco `srcdoc`. Queda por decidir cómo paginar en pantalla (hojas carta fijas o continuo con marcas de salto).
 
 **Lo que ya existe y se reemplaza:** la vista previa de la cotización de la iteración 24 (documento del servidor con la versión guardada), que pasaría a ser en vivo y sin guardar.
+
+## Iteración 40 · Lo atendido no es la siguiente visita
+
+**Estado:** pedido de Kevin el 2026-10-06 («soluciona todo el flujo completo, empieza»). Construida y verificada el 2026-10-06 (ADR-0041, migración `0037`, app de campo 15).
+
+**El fallo:** una visita terminada, con su levantamiento enviado y revisado, seguía en el teléfono como «Siguiente visita» con «Iniciar levantamiento». Tenía dos causas:
+- en el teléfono, el orden de «Mis visitas» nunca sacaba una visita, solo la bajaba al final, y sin otra pendiente la atendida volvía a ser la primera;
+- en el servidor, una visita solo salía del teléfono si la reasignaban o la cancelaban.
+
+Además, una visita terminada sin nada enviado quedaba como «atrasada» por encima de las futuras, y lo atendido se acumulaba en el teléfono sin límite.
+
+**Parte A, en el teléfono** (`campo/src/visitas.ts`, `agendaDeVisitas`):
+- una visita atendida (algo enviado o terminada, sin borrador a medias) no es pendiente;
+- «Siguiente visita» es la primera pendiente, y sin pendientes se ve «No tienes visitas pendientes»;
+- lo atendido hoy va en «Atendidas hoy», al final, con «Iniciar levantamiento» para otro formato;
+- lo atendido de días anteriores no se muestra, y su levantamiento sigue en «Enviados»;
+- «Ver la siguiente visita» después de enviar usa la misma agenda.
+
+**Parte B, en el servidor** (ADR-0041):
+- antes de armar la bajada de un técnico, el servidor cierra sus visitas de días anteriores que están terminadas o tienen algún levantamiento recibido (`visitas.cerrada_en`);
+- les manda `fuera_de_alcance` con motivo `atendida`, solo a la app 15 o posterior, y una visita cerrada no vuelve a bajar;
+- el teléfono la quita sin aviso, salvo que tenga un borrador o un envío por salir (regla 5).
+
+**Decisiones tomadas al construirla**
+- **Se cierra al bajar, sin tarea programada:** el worker no tiene ninguna, y una por organización con su aislamiento por fila sería más pesada.
+- **Lo de hoy no se cierra**, por si hace falta otro levantamiento. Lo atrasado sin atender tampoco: oficina lo reprograma o lo cancela.
+- **A la app 14 no se le manda el motivo `atendida`:** su contrato lo rechazaría junto con toda la bajada. Ya no muestra lo atendido gracias a la parte A, y al actualizarse baja todo de nuevo sin las visitas cerradas.
+
+**Evidencia:** `visitas.test.ts` (7 casos de la agenda: el de Kevin, sin pendientes, atendida de otro día, terminada sin enviar, borrador, orden); `bajada.test.ts` (cierra lo atendido de días anteriores, no lo de hoy ni lo atrasado, la app 14 no recibe el motivo, una cerrada no vuelve a bajar y se cierra una sola vez); `motor.test.ts` (sale sin aviso, se queda con borrador o envío por salir); `envio.spec.ts` (tras enviar la única visita no hay «Siguiente visita» y sí «Atendidas hoy»); envío, bajada, programación, conversaciones y revisión de extremo a extremo en Chromium y WebKit; `pnpm typecheck`, `arquitectura` y `presupuesto` (133,4 KB).
 
 ## Iteraciones 38 y 39 · La revisión al lado y las conversaciones con campo
 
