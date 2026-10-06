@@ -101,11 +101,14 @@ const bandeja = createRoute({ getParentRoute: () => raiz, path: "/", component: 
 const detalle = createRoute({
   getParentRoute: () => raiz,
   path: "levantamientos/$id",
+  // `hilo`: un aviso de respuesta abre la conversación (ADR-0040).
+  validateSearch: (s: Record<string, unknown>): { hilo?: string } => (typeof s.hilo === "string" ? { hilo: s.hilo } : {}),
   loader: ({ params }) => antesDeAbrir(clienteDeConsultas.ensureQueryData(consultas.levantamiento(params.id))),
   component: function RutaDetalle() {
     const { id } = detalle.useParams();
+    const { hilo } = detalle.useSearch();
     // Otro levantamiento (el siguiente de la serie) empieza limpio: sin pestañas ni correcciones del anterior.
-    return <Detalle key={id} id={id} />;
+    return <Detalle key={id} id={id} hilo={hilo} />;
   },
 });
 

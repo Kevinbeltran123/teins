@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { Boton, Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, esAtajo, etiquetaAtajo, FileText, Logo, LogOut, Package, PanelLeftClose, PanelLeftOpen, Receipt, RefreshCw, Search, ShieldCheck, WifiOff, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
@@ -12,6 +12,7 @@ import { Paleta } from "./Paleta";
 import { iniciales } from "../formato";
 import { useBandeja } from "../revision";
 import { useVersionNueva } from "../version";
+import { escucharAvisos } from "../conversacion";
 
 interface Seccion {
   a: string;
@@ -53,6 +54,19 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
   const [buscando, setBuscando] = useState(false);
   const [viendoAtajos, setViendoAtajos] = useState(false);
   useTeclaSuelta("?", () => setViendoAtajos(true));
+  // Un aviso tocado con oficina abierta lleva a lo suyo sin recargar; uno silenciado pide consultar ya (ADR-0040).
+  const router = useRouter();
+  useEffect(
+    () =>
+      escucharAvisos({
+        abrir: (ruta) => router.history.push(ruta),
+        consultar: () => {
+          void consultasCliente.invalidateQueries({ queryKey: ["levantamiento"] });
+          void consultasCliente.invalidateQueries({ queryKey: ["bandeja"] });
+        },
+      }),
+    [router, consultasCliente],
+  );
 
   useEffect(() => {
     const alTeclear = (e: KeyboardEvent) => {

@@ -61,6 +61,21 @@ export function useComentar(id: string) {
   });
 }
 
+/**
+ * Quien tiene la conversación a la vista la leyó (ADR-0040): se apaga su punto en la bandeja, la pestaña y el botón del
+ * panel, y el técnico ve «Leído». Sin transición: no cambia nada en pantalla.
+ */
+export function useLeerConversacion(id: string) {
+  const consultas = useQueryClient();
+  return useMutation({
+    mutationFn: () => cliente.llamar("marcarConversacionLeida", { parametros: { id } }),
+    onSuccess: () => {
+      void consultas.invalidateQueries({ queryKey: ["levantamiento", id], exact: true });
+      void consultas.invalidateQueries({ queryKey: ["bandeja"] });
+    },
+  });
+}
+
 /** Su autor corrige un comentario (ADR-0035): lo edita, lo retira o lo restaura con "Deshacer". */
 export function useCorregirComentario(id: string) {
   const refrescar = useRefrescar();

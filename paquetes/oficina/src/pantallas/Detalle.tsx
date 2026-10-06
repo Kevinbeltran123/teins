@@ -25,6 +25,7 @@ import {
 } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
+  ArrowUp,
   Aviso,
   Boton,
   CampoMedida,
@@ -46,6 +47,7 @@ import {
   HojasDeBoceto,
   Insignia,
   Link2,
+  LockKeyhole,
   nombreDeTransicion,
   MarcaNoObtenido,
   MessageSquare,
@@ -67,10 +69,11 @@ import {
 } from "@teins/ui";
 import { consultas } from "../api";
 import { consultasDeCatalogo, useVincular } from "../catalogo";
-import { aDiaCorto, aFechaCorta, aHora, cuantoLleva } from "../formato";
+import { aDiaCorto, aFechaCorta, aHora, cuantoLleva, iniciales } from "../formato";
+import { avisarConversacionAbierta } from "../conversacion";
 import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
-import { useBandeja, useComentar, useCorregir, useCorregirComentario, useMarcarRevisado, useTomar } from "../revision";
+import { useBandeja, useComentar, useCorregir, useCorregirComentario, useLeerConversacion, useMarcarRevisado, useTomar } from "../revision";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { BotonMostrarVista, EditorConVista, Lienzo, useVistaPrevia, VistaDeDocumento } from "./Lienzo";
 import type { Plantillas } from "../documentos";
@@ -123,8 +126,13 @@ function correccionesDe(historial: Historial | undefined) {
  */
 type Pestana = "informe" | "comentarios" | "historial";
 
-export function Detalle({ id }: { id: string }) {
-  const consulta = useQuery(consultas.levantamiento(id));
+/** Con la conversación a la vista se consulta cada 15 s (ADR-0040): lo que responde el técnico llega sin aviso. */
+const CONSULTA_CONVERSACION_MS = 15_000;
+
+/** Abre la pestaña «Comentarios» en una conversación (ADR-0040). */
+const VerConversacion = createContext<((comentarioId: string) => void) | null>(null);
+
+export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined }) {
   const sesion = useQuery(consultas.sesion());
   const historial = useQuery(consultas.historial(id));
   const [comentandoEn, setComentandoEn] = useState<string | null>(null);
@@ -132,6 +140,31 @@ export function Detalle({ id }: { id: string }) {
   const [pestana, setPestana] = usePreferencia<Pestana>("revision-pestana", "informe", unoDe("informe", "comentarios", "historial"));
   const vista = useVistaPrevia("revision");
   const [lateral, setLateral] = useState(false);
+  // La conversación a la vista: la pestaña «Comentarios» con el panel mostrado (o la hoja lateral abierta).
+  const conversando = pestana === "comentarios" && (vista.alLado ? !vista.oculta : lateral);
+  const consulta = useQuery({ ...consultas.levantamiento(id), refetchInterval: conversando ? CONSULTA_CONVERSACION_MS : false });
+  // El hilo al que lleva un aviso o «Ver la conversación»: la pestaña lo muestra y lo hace destellar.
+  const [enfocado, setEnfocado] = useState<{ id: string; vez: number } | null>(hilo ? { id: hilo, vez: 1 } : null);
+  const verConversacion = (comentarioId: string) => {
+    setPestana("comentarios");
+    if (vista.alLado) vista.setOculta(false);
+    else setLateral(true);
+    setEnfocado((e) => ({ id: comentarioId, vez: (e?.vez ?? 0) + 1 }));
+  };
+  useEffect(() => {
+    if (hilo) verConversacion(hilo);
+  }, [hilo]);
+  // Lo que está a la vista se da por leído; mientras se ve, sus avisos no se muestran.
+  const leer = useLeerConversacion(id);
+  const sinLeer = consulta.data?.conversacion?.sinLeer ?? false;
+  useEffect(() => {
+    if (conversando && sinLeer && !leer.isPending) leer.mutate();
+  }, [conversando, sinLeer]);
+  useEffect(() => {
+    if (!conversando) return;
+    avisarConversacionAbierta(id);
+    return () => avisarConversacionAbierta(null);
+  }, [conversando, id]);
   // La bandeja marca la fila que se abrió al volver (prototipos/usabilidad-oficina).
   const [, setUltima] = usePreferencia("bandeja-ultima", "", esTexto, "pestana");
   useEffect(() => setUltima(id), [id, setUltima]);
@@ -202,15 +235,19 @@ export function Detalle({ id }: { id: string }) {
       enCurso={enCurso}
       organizacion={sesion.data?.organizacion.nombre ?? "[ORGANIZACIÓN]"}
       usuarioId={sesion.data?.usuario.id}
+      enfocado={enfocado}
     />
   );
-  const mostrarPanel = vista.alLado ? (
-    <BotonMostrarVista vista={vista} etiqueta="Mostrar el panel" />
-  ) : (
-    <BotonIcono icono={PanelRight} etiqueta="Mostrar el panel" onClick={() => setLateral(true)} />
+  // Con el panel oculto, el punto de «sin leer» va en el botón que lo muestra.
+  const mostrarPanel = (
+    <span className="con-punto">
+      {vista.alLado ? <BotonMostrarVista vista={vista} etiqueta="Mostrar el panel" /> : <BotonIcono icono={PanelRight} etiqueta="Mostrar el panel" onClick={() => setLateral(true)} />}
+      {sinLeer && (vista.alLado ? vista.oculta : !lateral) && <i className="punto" aria-label="Respuesta sin leer" />}
+    </span>
   );
 
   return (
+    <VerConversacion.Provider value={verConversacion}>
     <CorreccionEnCurso.Provider value={{ avisar: setEnCurso, verCapitulo: capituloVisible ? null : verCapitulo }}>
       <EditorConVista
         vista={vista}
@@ -284,6 +321,7 @@ export function Detalle({ id }: { id: string }) {
         )}
       </EditorConVista>
     </CorreccionEnCurso.Provider>
+    </VerConversacion.Provider>
   );
 }
 
@@ -298,6 +336,7 @@ function PanelDeRevision({
   enCurso,
   organizacion,
   usuarioId,
+  enfocado,
 }: {
   l: Levantamiento;
   titulo: string;
@@ -308,13 +347,15 @@ function PanelDeRevision({
   enCurso: EnCurso | null;
   organizacion: string;
   usuarioId: string | undefined;
+  enfocado: { id: string; vez: number } | null;
 }) {
   const n = vigentes(l).length;
-  const boton = (valor: Pestana, texto: string, Icono: LucideIcon, cuantos = 0) => (
+  const boton = (valor: Pestana, texto: string, Icono: LucideIcon, cuantos = 0, punto = false) => (
     <button type="button" role="tab" aria-selected={pestana === valor} onClick={() => alCambiar(valor)}>
       <Icono aria-hidden size={14} strokeWidth={1.6} />
       {texto}
       {cuantos > 0 && <span className="num-p"> {cuantos}</span>}
+      {punto && <i className="punto" aria-label="Respuesta sin leer" />}
     </button>
   );
   return (
@@ -324,7 +365,7 @@ function PanelDeRevision({
       cabecera={
         <span className="pest-p" role="tablist" aria-label="El informe, los comentarios y el historial">
           {boton("informe", "En el informe", FileText)}
-          {boton("comentarios", "Comentarios", MessageSquare, n)}
+          {boton("comentarios", "Comentarios", MessageSquare, n, l.conversacion?.sinLeer ?? false)}
           {boton("historial", "Historial", History)}
         </span>
       }
@@ -342,7 +383,7 @@ function PanelDeRevision({
       {pestana === "informe" ? (
         <CapituloEnVivo l={l} correcciones={correcciones} enCurso={enCurso} organizacion={organizacion} />
       ) : pestana === "comentarios" ? (
-        <Comentarios l={l} usuarioId={usuarioId} />
+        <Comentarios l={l} usuarioId={usuarioId} enfocado={enfocado} />
       ) : (
         <HistorialDeCambios l={l} historial={historial} />
       )}
@@ -466,6 +507,8 @@ function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Le
               texto: `${l.tecnico.nombre} lo ve como revisado en su teléfono`,
               ...(vigentes(l).length > 0 && { detalle: vigentes(l).length === 1 ? "Con el comentario de oficina" : `Con los ${vigentes(l).length} comentarios de oficina` }),
             },
+            // ADR-0040: al marcar revisado, las conversaciones se cierran.
+            ...(vigentes(l).length > 0 ? [{ icono: MessageSquare, texto: "Las conversaciones se cierran", detalle: `${l.tecnico.nombre} las sigue viendo en su teléfono, pero ya no responde` }] : []),
           ]}
           mensajeDeError={mensajeDeError}
           alCerrar={() => setConfirmando(null)}
@@ -557,6 +600,9 @@ function FilaCampo({
   const notificar = useNotificar();
   const valor = l.respuestas[seccion]?.[campo.clave];
   const hilo = vigentes(l).filter((c) => c.seccion === seccion && c.campo === campo.clave);
+  // Cuántos mensajes hay en sus conversaciones: el comentario y sus respuestas (ADR-0040).
+  const mensajes = hilo.reduce((n, c) => n + 1 + respuestasDe(l, c.id).length, 0);
+  const verConversacion = useContext(VerConversacion);
   const nombreEnFrase = campo.etiqueta.toLowerCase();
 
   if (corrigiendo) {
@@ -592,7 +638,7 @@ function FilaCampo({
             <br />
             <span className="n-com">
               <MessageSquare aria-hidden size={12} />
-              {hilo.length}
+              {mensajes}
             </span>
           </>
         )}
@@ -612,14 +658,29 @@ function FilaCampo({
       </div>
       {hilo.length > 0 && (
         <div className="hilo">
-          {hilo.map((c) => (
-            <div key={c.id} className="burbuja">
-              <small>
-                {c.autor.nombre} · {aFechaCorta(c.creadoEn)} · para el técnico{c.editadoEn ? " · Editado" : ""}
-              </small>
-              <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
-            </div>
-          ))}
+          {/* Bajo el dato, el comentario, la última respuesta y el camino a la conversación (ADR-0040). */}
+          {hilo.map((c) => {
+            const respuestas = respuestasDe(l, c.id);
+            const delTecnico = respuestas.filter((r) => r.de === "tecnico").at(-1);
+            const nueva = delTecnico && l.conversacion?.sinLeer && (!l.leidoHasta || delTecnico.creadoEn > l.leidoHasta);
+            return (
+              <button key={c.id} type="button" className="burbuja hilo-res" onClick={() => verConversacion?.(c.id)}>
+                <small>
+                  {c.autor.nombre} · {aFechaCorta(c.creadoEn)} · para el técnico{c.editadoEn ? " · Editado" : ""}
+                </small>
+                <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
+                {delTecnico && (
+                  <span className="resp-r">
+                    {nueva && <i className="punto" aria-label="Sin leer" />}
+                    <b>{delTecnico.autor.nombre}:</b> {delTecnico.texto}
+                  </span>
+                )}
+                <span className="ver-r">
+                  {respuestas.length > 0 ? `${respuestas.length === 1 ? "1 respuesta" : `${respuestas.length} respuestas`} · ` : ""}Ver la conversación
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
       {comentando && <ComentarAqui l={l} seccion={seccion} campo={campo.clave} nombre={nombreEnFrase} cerrar={dejarDeComentar} />}
@@ -912,20 +973,32 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
   );
 }
 
-/** Lo que el técnico ve: los comentarios retirados no cuentan (ADR-0035). */
-const vigentes = (l: Levantamiento) => l.comentarios.filter((c) => !c.retirado);
+/** Las conversaciones que ve el técnico: los comentarios de oficina que no están retirados (ADR-0035, ADR-0040). */
+const vigentes = (l: Levantamiento) => l.comentarios.filter((c) => !c.retirado && !c.enRespuestaA);
+/** Las respuestas de una conversación, en orden. */
+const respuestasDe = (l: Levantamiento, comentarioId: string) => l.comentarios.filter((c) => c.enRespuestaA === comentarioId);
+
+type ComentarioDeOficina = Levantamiento["comentarios"][number];
+
+/** Mensajes seguidos de la misma persona, a menos de 10 minutos: un solo nombre y una sola hora, como en Slack. */
+const MISMO_GRUPO_MS = 10 * 60_000;
 
 /**
- * Todos los comentarios; cada uno lleva a su fila. El campo de aquí es para lo general. Su autor edita o borra el
- * suyo hasta que el levantamiento está Revisado (ADR-0035): borrar no pide confirmar, queda "Comentario retirado"
- * con "Deshacer".
+ * Las conversaciones con el técnico (ADR-0040, prototipos/hilos, «Oficina · revisión»): una por comentario de oficina,
+ * separadas por una línea fina, como un hilo de Slack: el dato del que habla, el comentario, «N respuestas», lo nuevo
+ * bajo la línea «Nuevo» y el campo para responder. Se cierran al marcar revisado. Su autor edita o borra el comentario
+ * que abre la conversación hasta que está Revisado (ADR-0035): borrar no pide confirmar, queda «Comentario retirado»
+ * con «Deshacer». El campo de abajo es para un comentario general.
  */
-function Comentarios({ l, usuarioId }: { l: Levantamiento; usuarioId: string | undefined }) {
+function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: string | undefined; enfocado: { id: string; vez: number } | null }) {
   const comentar = useComentar(l.id);
   const corregir = useCorregirComentario(l.id);
   const notificar = useNotificar();
   const [editando, setEditando] = useState<{ id: string; texto: string } | null>(null);
-  const corregible = (c: Levantamiento["comentarios"][number]) => c.autor.id === usuarioId && l.estado !== "revisado";
+  // Lo leído al abrir la pestaña: la línea «Nuevo» se queda mientras se ve.
+  const [leidoAlAbrir] = useState(l.leidoHasta);
+  const revisado = l.estado === "revisado";
+  const corregible = (c: ComentarioDeOficina) => c.autor.id === usuarioId && !revisado;
   const restaurar = (comentarioId: string) => corregir.mutate({ comentarioId, accion: { tipo: "restaurar" } });
   const retirar = (comentarioId: string) =>
     corregir.mutate(
@@ -943,10 +1016,10 @@ function Comentarios({ l, usuarioId }: { l: Levantamiento; usuarioId: string | u
       // El error queda a la vista.
     }
   }
-  // Solo el comentario recién escrito entra animado; los demás no se animan otra vez al volver a la pestaña.
+  // Solo lo recién llegado entra animado; lo demás no se anima otra vez al volver a la pestaña.
   const esNuevo = useLoNuevo(l.comentarios.map((c) => c.id));
   const [texto, setTexto] = useState("");
-  const etiqueta = (seccion?: string, campo?: string) => (seccion && campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo, true) : undefined);
+  const raices = l.comentarios.filter((c) => !c.enRespuestaA);
 
   function irALaFila(seccion: string, campo: string) {
     const fila = document.getElementById(idDato(seccion, campo));
@@ -955,6 +1028,16 @@ function Comentarios({ l, usuarioId }: { l: Levantamiento; usuarioId: string | u
     void fila?.offsetWidth;
     fila?.classList.add("recien");
   }
+
+  // El hilo al que lleva un aviso o «Ver la conversación»: a la vista y destellando.
+  useEffect(() => {
+    if (!enfocado) return;
+    const hilo = document.getElementById(`hilo-${enfocado.id}`);
+    hilo?.scrollIntoView({ behavior: sinMovimiento() ? "auto" : "smooth", block: "start" });
+    hilo?.classList.remove("destella");
+    void hilo?.offsetWidth;
+    hilo?.classList.add("destella");
+  }, [enfocado?.vez]);
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -967,87 +1050,134 @@ function Comentarios({ l, usuarioId }: { l: Levantamiento; usuarioId: string | u
     }
   }
 
-  return (
-    <section aria-label="Comentarios al técnico" className="col" style={{ gap: 10 }}>
-      <div>
-        {l.comentarios.length === 0 ? (
-          <p className="ayuda">Sin comentarios. El técnico los ve en su teléfono en la siguiente sincronización.</p>
-        ) : (
-          l.comentarios.map((c) =>
-            c.retirado ? (
-              <div key={c.id} className="nota-c retirado">
-                <span>{`Comentario retirado por ${c.retirado.por.nombre} · ${aFechaCorta(c.retirado.en)}`}</span>
-                {corregible(c) && (
-                  <button type="button" className="accion-envio" onClick={() => restaurar(c.id)}>
-                    Deshacer
-                  </button>
-                )}
-              </div>
-            ) : editando?.id === c.id ? (
-              <form key={c.id} className="nota-c" onSubmit={(e) => void guardarEdicion(e)} noValidate>
-                <small>{c.autor.nombre}</small>
-                <label className="sr-only" htmlFor={`editar-${c.id}`}>
-                  Comentario
-                </label>
-                <textarea
-                  id={`editar-${c.id}`}
-                  // eslint-disable-next-line jsx-a11y/no-autofocus -- se abre con "Editar": el foco va donde se escribe
-                  autoFocus
-                  className="control"
-                  maxLength={2000}
-                  style={{ minHeight: 64 }}
-                  value={editando.texto}
-                  onChange={(e) => setEditando({ id: c.id, texto: e.target.value })}
-                />
-                <div className="fila-flex" style={{ justifyContent: "flex-end", gap: 6 }}>
-                  <Boton tamano="pequeno" onClick={() => setEditando(null)}>
-                    Cancelar
-                  </Boton>
-                  <Boton type="submit" tamano="pequeno" variante="principal" cargando={corregir.isPending} disabled={!editando.texto.trim() || editando.texto.trim() === c.texto}>
-                    Guardar
-                  </Boton>
-                </div>
-              </form>
-            ) : (
-              <div key={c.id} className={`nota-c ${esNuevo(c.id) ? "nueva" : ""}`}>
-                <small className="fila-flex entre">
-                  <span>
-                    {c.autor.nombre} · {aFechaCorta(c.creadoEn)}
-                    {c.seccion && c.campo && (
-                      <>
-                        {" · Sobre "}
-                        <button type="button" className="ir-dato" onClick={() => irALaFila(c.seccion!, c.campo!)}>
-                          {etiqueta(c.seccion, c.campo) ?? c.campo}
-                        </button>
-                      </>
-                    )}
-                  </span>
-                  {corregible(c) && (
-                    <MenuAcciones
-                      etiqueta="Más acciones para el comentario"
-                      opciones={[
-                        { texto: "Editar", alElegir: () => setEditando({ id: c.id, texto: c.texto }) },
-                        { texto: "Borrar", peligro: true, alElegir: () => retirar(c.id) },
-                      ]}
-                    />
-                  )}
-                </small>
-                <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
-                {c.editadoEn && <small>{`Editado ${aFechaCorta(c.editadoEn)}`}</small>}
-              </div>
-            ),
-          )
-        )}
-        {corregir.isError && <Aviso tono="error">{mensajeDeError(corregir.error)}</Aviso>}
+  /** Avatar, nombre y hora una vez por grupo; los textos, planos y sin globos. */
+  function mensajes(lista: ComentarioDeOficina[]) {
+    const grupos: { autor: ComentarioDeOficina["autor"]; de: ComentarioDeOficina["de"]; en: string; textos: ComentarioDeOficina[] }[] = [];
+    for (const c of lista) {
+      const ultimo = grupos.at(-1);
+      if (ultimo && ultimo.autor.id === c.autor.id && Date.parse(c.creadoEn) - Date.parse(ultimo.textos.at(-1)!.creadoEn) < MISMO_GRUPO_MS) ultimo.textos.push(c);
+      else grupos.push({ autor: c.autor, de: c.de, en: c.creadoEn, textos: [c] });
+    }
+    return grupos.map((g) => (
+      <div key={g.textos[0]!.id} className={`grupo-m ${g.textos.some((c) => esNuevo(c.id)) ? "llega" : ""}`}>
+        <span className={`av-m ${g.de === "tecnico" ? "tec" : ""}`} aria-hidden>
+          {iniciales(g.autor.nombre)}
+        </span>
+        <div>
+          <div className="cab-m">
+            <b>{g.autor.id === usuarioId ? "Usted" : g.autor.nombre}</b>
+            <span>{cuandoCorto(g.en)}</span>
+          </div>
+          {g.textos.map((c) => (
+            <p key={c.id} className="txt-m">
+              {c.texto}
+              {/* Su autor lo corrigió (ADR-0035): se dice cuándo. */}
+              {c.editadoEn && <small className="editado-m">{`Editado ${aFechaCorta(c.editadoEn)}`}</small>}
+            </p>
+          ))}
+        </div>
       </div>
-      <form className="col" style={{ gap: 8 }} onSubmit={(e) => void enviar(e)} noValidate>
+    ));
+  }
+
+  function conversacion(raiz: ComentarioDeOficina) {
+    const respuestas = respuestasDe(l, raiz.id);
+    const definicion = raiz.seccion && raiz.campo ? campoDeRuta(l.formatoDefinicion, l.repeticiones, raiz.seccion, raiz.campo) : undefined;
+    const valor = definicion && raiz.seccion ? (l.respuestas[raiz.seccion]?.[definicion.clave] as Valor | undefined) : undefined;
+    const vacio = valor === undefined || valor === null || valor === "";
+    // Lo nuevo: lo que respondió el técnico después de lo que se leyó al abrir.
+    const primeraNueva = respuestas.findIndex((r) => r.de === "tecnico" && (!leidoAlAbrir || r.creadoEn > leidoAlAbrir));
+    const antes = primeraNueva < 0 ? respuestas : respuestas.slice(0, primeraNueva);
+    const nuevas = primeraNueva < 0 ? [] : respuestas.slice(primeraNueva);
+    return (
+      <section key={raiz.id} id={`hilo-${raiz.id}`} className="hilo-o" aria-label={definicion ? `Conversación sobre ${definicion.etiqueta}` : "Conversación general"}>
+        {definicion && raiz.seccion && raiz.campo && (
+          <button type="button" className="dato-o" title="Ir al dato" onClick={() => irALaFila(raiz.seccion!, raiz.campo!)}>
+            <small>{rutaLegible(l.formatoDefinicion, l.repeticiones, raiz.seccion)}</small>
+            <span className="fila-d">
+              <b>{definicion.etiqueta}</b>
+              {vacio ? <span className="sin">Sin dato</span> : <span>{describirValor(definicion, valor)}</span>}
+            </span>
+          </button>
+        )}
+        {raiz.retirado ? (
+          <div className="nota-c retirado">
+            <span>{`Comentario retirado por ${raiz.retirado.por.nombre} · ${aFechaCorta(raiz.retirado.en)}`}</span>
+            {corregible(raiz) && (
+              <button type="button" className="accion-envio" onClick={() => restaurar(raiz.id)}>
+                Deshacer
+              </button>
+            )}
+          </div>
+        ) : editando?.id === raiz.id ? (
+          <form className="nota-c" onSubmit={(e) => void guardarEdicion(e)} noValidate>
+            <label className="sr-only" htmlFor={`editar-${raiz.id}`}>
+              Comentario
+            </label>
+            <textarea
+              id={`editar-${raiz.id}`}
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- se abre con "Editar": el foco va donde se escribe
+              autoFocus
+              className="control"
+              maxLength={1000}
+              style={{ minHeight: 64 }}
+              value={editando.texto}
+              onChange={(e) => setEditando({ id: raiz.id, texto: e.target.value })}
+            />
+            <div className="fila-flex" style={{ justifyContent: "flex-end", gap: 6 }}>
+              <Boton tamano="pequeno" onClick={() => setEditando(null)}>
+                Cancelar
+              </Boton>
+              <Boton type="submit" tamano="pequeno" variante="principal" cargando={corregir.isPending} disabled={!editando.texto.trim() || editando.texto.trim() === raiz.texto}>
+                Guardar
+              </Boton>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="raiz-m">
+              {mensajes([raiz])}
+              {corregible(raiz) && (
+                <MenuAcciones
+                  etiqueta="Más acciones para el comentario"
+                  opciones={[
+                    { texto: "Editar", alElegir: () => setEditando({ id: raiz.id, texto: raiz.texto }) },
+                    { texto: "Borrar", peligro: true, alElegir: () => retirar(raiz.id) },
+                  ]}
+                />
+              )}
+            </div>
+            {respuestas.length > 0 && <div className="n-resp">{respuestas.length === 1 ? "1 respuesta" : `${respuestas.length} respuestas`}</div>}
+            {mensajes(antes)}
+            {nuevas.length > 0 && <div className="nuevo-o">Nuevo</div>}
+            {mensajes(nuevas)}
+            {revisado ? (
+              <p className="cerrado-h">
+                <LockKeyhole aria-hidden size={14} />
+                {`Cerrada al marcar revisado. ${l.tecnico.nombre} la sigue viendo.`}
+              </p>
+            ) : (
+              <ResponderEnHilo l={l} raiz={raiz} sobre={definicion?.etiqueta} />
+            )}
+          </>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <section aria-label="Comentarios al técnico" className="hilos">
+      <p className="nota-panel">{revisado ? "Cerradas al marcar revisado." : `Lo que escriba aquí le llega a ${l.tecnico.nombre} en su teléfono.`}</p>
+      {raices.length === 0 ? <p className="ayuda">Sin comentarios. Para uno sobre un dato, use el globo de su fila.</p> : raices.map(conversacion)}
+      {corregir.isError && <Aviso tono="error">{mensajeDeError(corregir.error)}</Aviso>}
+      <form className="col general-o" style={{ gap: 8 }} onSubmit={(e) => void enviar(e)} noValidate>
         <label className="sr-only" htmlFor="comentario-general">
           Comentario general
         </label>
         <textarea
           id="comentario-general"
           className="control"
-          maxLength={2000}
+          maxLength={1000}
           placeholder="Comentario general. Para uno sobre un dato, use el globo de su fila"
           style={{ minHeight: 76 }}
           value={texto}
@@ -1061,6 +1191,50 @@ function Comentarios({ l, usuarioId }: { l: Levantamiento; usuarioId: string | u
         </div>
       </form>
     </section>
+  );
+}
+
+/** Responder en una conversación (ADR-0040): ↵ envía y ⇧↵ hace otra línea. */
+function ResponderEnHilo({ l, raiz, sobre }: { l: Levantamiento; raiz: ComentarioDeOficina; sobre: string | undefined }) {
+  const comentar = useComentar(l.id);
+  const [texto, setTexto] = useState("");
+  const vacio = !texto.trim();
+  async function enviar() {
+    if (vacio || comentar.isPending) return;
+    try {
+      await comentar.mutateAsync({ texto: texto.trim(), enRespuestaA: raiz.id });
+      setTexto("");
+    } catch {
+      // El error queda a la vista.
+    }
+  }
+  return (
+    <form
+      className="redactar-o"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void enviar();
+      }}
+    >
+      <textarea
+        rows={1}
+        maxLength={1000}
+        placeholder="Responder…"
+        aria-label={sobre ? `Responder a ${l.tecnico.nombre} sobre ${sobre}` : `Responder a ${l.tecnico.nombre}`}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            void enviar();
+          }
+        }}
+      />
+      <button type="submit" className="enviar-o" aria-label="Responder" title="Enviar · ↵ (⇧ ↵ para otra línea)" aria-disabled={vacio || comentar.isPending}>
+        <ArrowUp aria-hidden size={15} strokeWidth={2.2} />
+      </button>
+      {comentar.isError && <Aviso tono="error">{mensajeDeError(comentar.error)}</Aviso>}
+    </form>
   );
 }
 
@@ -1205,6 +1379,7 @@ const QUE_PASO: Record<string, { texto: string; icono: LucideIcon }> = {
   campo_corregido: { texto: "Corrigió", icono: Pencil },
   levantamiento_revisado: { texto: "Marcó el levantamiento revisado", icono: Check },
   comentario_agregado: { texto: "Comentó", icono: MessageSquare },
+  comentario_respondido: { texto: "Respondió", icono: MessageSquare },
   comentario_editado: { texto: "Editó su comentario", icono: Pencil },
   comentario_retirado: { texto: "Retiró su comentario", icono: MessageSquare },
   comentario_restaurado: { texto: "Restauró su comentario", icono: MessageSquare },
@@ -1244,7 +1419,7 @@ function HistorialDeCambios({ l, historial }: { l: Levantamiento; historial: Ret
       return ` “${descripcionDeLinea(e.seccion, e.campo, despues?.linea)}”: ${codigoDe(antes?.item)} → ${codigoDe(despues?.item)}`;
     }
     if (e.tipo === "comentario_editado") return `: “${(e.anterior as { texto?: string } | undefined)?.texto ?? ""}” → “${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
-    if (e.tipo === "comentario_agregado") return ` ${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
+    if (e.tipo === "comentario_agregado" || e.tipo === "comentario_respondido") return ` ${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
     return null;
   }
 

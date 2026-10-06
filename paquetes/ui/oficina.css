@@ -966,3 +966,52 @@ dialog.paleta[open] { display: flex; flex-direction: column; }
 .titulo-ampliado b { color: var(--texto); font-weight: 500; }
 .nota-panel { margin: 0 0 10px; font-size: 12px; color: var(--t-texto-terciario); text-align: center; }
 dialog.capa-lateral .lienzo.panel-revision .lienzo-cab { margin-top: -4px; }
+
+/* Conversaciones entre oficina y campo (iteración 39, ADR-0040, prototipos/hilos): un hilo por comentario, como en
+   Slack; el punto de «sin leer» en la bandeja, la pestaña y el botón del panel. */
+.punto { width: 7px; height: 7px; border-radius: 99px; background: var(--marca); display: inline-block; flex: none; }
+.pest-p button .punto { margin-left: 2px; }
+.con-punto { position: relative; display: inline-flex; }
+.con-punto > .punto { position: absolute; top: 5px; right: 5px; box-shadow: 0 0 0 2px var(--fondo); pointer-events: none; }
+.cli-b { display: inline-grid; grid-template-columns: 12px minmax(0, 1fr); gap: 6px; align-items: baseline; }
+.cli-b > .punto { align-self: center; }
+.nuevo-b { display: block; font-size: 12px; font-weight: 500; color: var(--marca); }
+.hilos { display: flex; flex-direction: column; width: 100%; max-width: 640px; margin-inline: auto; }
+.hilos > .nota-panel { text-align: left; }
+.hilo-o { padding: 16px 0 18px; border-top: 1px solid var(--borde); display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; scroll-margin: 16px; }
+.hilos > .nota-panel + .hilo-o { border-top: 0; padding-top: 10px; }
+.hilo-o.destella { animation: destello 1.4s var(--curva) both; border-radius: 8px; }
+.dato-o { align-self: stretch; display: flex; flex-direction: column; gap: 3px; border: 0; text-align: left; background: var(--sup); box-shadow: inset 0 0 0 1px var(--borde); border-radius: 8px; padding: 8px 12px; color: var(--texto); font-size: 13px; cursor: pointer; }
+.dato-o:hover { box-shadow: inset 0 0 0 1px var(--t-borde-suave); }
+.dato-o small { font-size: 11.5px; color: var(--sec); }
+.dato-o .fila-d { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: baseline; }
+.dato-o .fila-d b { font-weight: 500; }
+.dato-o .fila-d .sin { color: var(--t-texto-terciario); }
+.raiz-m { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.grupo-m { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; }
+.grupo-m.llega { animation: entra-abajo .28s var(--curva) both; }
+.av-m { width: 26px; height: 26px; border-radius: 99px; background: var(--sup3); display: grid; place-items: center; font-size: 10.5px; font-weight: 600; color: var(--sec); }
+.av-m.tec { background: color-mix(in srgb, var(--marca) 14%, transparent); color: var(--marca); }
+.cab-m { display: flex; gap: 8px; align-items: baseline; font-size: 13px; line-height: 1.3; }
+.cab-m b { font-weight: 600; }
+.cab-m span { color: var(--t-texto-terciario); font-size: 12px; }
+.txt-m { margin: 3px 0 0; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.txt-m .editado-m { color: var(--t-texto-terciario); font-size: 12px; margin-left: 6px; }
+.n-resp, .nuevo-o { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--sec); margin-left: 36px; }
+.n-resp::after, .nuevo-o::after { content: ""; flex: 1; height: 1px; background: var(--borde); }
+.nuevo-o { color: var(--marca); font-weight: 600; }
+.nuevo-o::after { background: color-mix(in srgb, var(--marca) 40%, transparent); }
+.redactar-o { margin-left: 36px; position: relative; display: flex; flex-direction: column; gap: 6px; }
+.redactar-o textarea { display: block; width: 100%; min-height: 34px; max-height: 140px; border: 0; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--t-borde-suave); background: var(--fondo); padding: 7px 40px 7px 10px; font: inherit; font-size: 13px; line-height: 1.45; resize: none; color: var(--texto); field-sizing: content; }
+.redactar-o textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--marca), 0 0 0 3px color-mix(in srgb, var(--marca) 18%, transparent); }
+.enviar-o { position: absolute; right: 4px; top: 4px; width: 26px; height: 26px; border: 0; border-radius: 6px; background: var(--marca); color: var(--marca-texto); display: grid; place-items: center; cursor: pointer; }
+.enviar-o[aria-disabled="true"] { background: transparent; color: var(--t-texto-terciario); cursor: default; }
+.cerrado-h { margin: 0 0 0 36px; font-size: 12.5px; color: var(--sec); display: flex; gap: 6px; align-items: center; }
+.general-o { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--borde); }
+.dato .burbuja.hilo-res { display: flex; flex-direction: column; gap: 3px; border: 0; text-align: left; color: var(--texto); cursor: pointer; }
+.dato .burbuja.hilo-res:hover { background: var(--sup3); }
+.hilo-res .resp-r { display: block; color: var(--texto); }
+.hilo-res .resp-r .punto { margin-right: 6px; vertical-align: middle; }
+.hilo-res .resp-r b { font-weight: 600; }
+.hilo-res .ver-r { font-size: 12px; font-weight: 500; color: var(--marca); }
+@media (prefers-reduced-motion: reduce) { .hilo-o.destella, .grupo-m.llega { animation: none; } }

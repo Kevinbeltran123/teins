@@ -134,16 +134,21 @@ export function Bandeja() {
                     {/* De qué cliente es: lo primero que oficina busca para saber qué revisar (iteración 14). */}
                     <CeldaTabla>
                       {/* Al abrirlo, este título se convierte en el del detalle (iteración 27). */}
-                      <span data-transicion={nombreDeTransicion("lev", e.id)}>
-                        <Link to="/levantamientos/$id" params={{ id: e.id }} className="enlace">
-                          {e.visita ? <Marcado texto={e.visita.cliente} busqueda={buscar} /> : "Sin visita"}
-                        </Link>
-                        {e.visita && (
-                          <span className="sec">
-                            {" · "}
-                            <Marcado texto={e.visita.sitio} busqueda={buscar} />
-                          </span>
-                        )}
+                      {/* El técnico respondió y esta persona no lo ha leído (ADR-0040): punto y quién, debajo. */}
+                      <span className="cli-b">
+                        {e.conversacion?.sinLeer ? <i className="punto" aria-label="Respuesta sin leer" /> : <span />}
+                        <span data-transicion={nombreDeTransicion("lev", e.id)}>
+                          <Link to="/levantamientos/$id" params={{ id: e.id }} className="enlace">
+                            {e.visita ? <Marcado texto={e.visita.cliente} busqueda={buscar} /> : "Sin visita"}
+                          </Link>
+                          {e.visita && (
+                            <span className="sec">
+                              {" · "}
+                              <Marcado texto={e.visita.sitio} busqueda={buscar} />
+                            </span>
+                          )}
+                          {e.conversacion?.sinLeer && <span className="nuevo-b">{`${e.conversacion.ultima.autor} respondió · ${aHora(Date.parse(e.conversacion.ultima.en))}`}</span>}
+                        </span>
                       </span>
                     </CeldaTabla>
                     <CeldaTabla>
