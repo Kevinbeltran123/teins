@@ -1086,12 +1086,13 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 - **Una tarea por hora y no una por organización al bajar:** recuperar trabajos no depende de que un técnico pregunte (ADR-0043). La ventana de 12 horas deja terminar los 10 reintentos de Graphile antes de volver a encolar.
 - **Compactar el registro en vez de cortarlo por fecha:** cortar por fecha haría que un teléfono nuevo no bajara una visita vigente programada hace meses (ADR-0044).
 - **La tarea periódica se declara como objeto** (`periodicas()` en `servidor/src/tareas.ts`, con `parsedCronItems`). La primera versión usaba el crontab de texto, que no acepta el punto de `mantenimiento.recuperar`: el worker no arrancaba. Las pruebas del servidor no lo vieron porque procesan la cola sin el crontab; lo encontró la e2e, que se quedó en «El servidor está verificando las fotos». Nunca llegó al entorno de pruebas.
+- **Fallas intermitentes de WebKit en la e2e:** venían de `conversaciones.spec.ts` (iteración 39), que dejaba abierto su contexto de oficina. La página seguía consultando y redibujando el resto de la corrida, y en WebKit cada clic de campo tardaba hasta 30 s. Fallaba una prueba distinta en cada corrida, y sola pasaba. Ahora los contextos se cierran en un `afterEach`, también si la prueba falla.
 - **Desactivar llama a `levantamientos` desde la composición** (`crearIdentidad(…, { alDesactivar })` en `app.ts` y en el comando `desactivar-usuario`), en la misma transacción: identidad no conoce las tablas de otro módulo.
 - **Sin cambio, después de revisarlos:**
   - en una visita con dos técnicos, el segundo teléfono la sigue mostrando hasta que alguno la termine, porque puede necesitar su propio levantamiento; «Terminar visita» ya les llega a todos;
   - una visita de todo el día ocupa al técnico todo el día aunque la terminen temprano: así lo decidió el ADR-0037, que lo deja como consecuencia aceptada.
 
-**Evidencia:** EVIDENCIA_41
+**Evidencia:** `pnpm typecheck`, `arquitectura` (366 módulos), `licencias` (325 paquetes), `audit` sin vulnerabilidades y `presupuesto` (133,6 KB de 135). Pruebas: dominio 116, protocolo 29, documentos 11, oficina 34, campo 128 (agenda con cancelada y borrador, reanudar al actualizar, foto rechazada, descartar el rechazado, retención de 30 días) y servidor 231. Las del servidor cubren la recuperación de trabajos a medias, la poda y compactación, la tarea periódica, «por hacer» sin lo atendido, desactivar a quien revisa, informe retirado, visita cancelada sin informe nuevo ni cotización. Extremo a extremo en Chromium y WebKit: 119 pasan, 3 omitidas y ninguna falla (24,7 min).
 
 ## Iteración 40 · Lo atendido no es la siguiente visita
 

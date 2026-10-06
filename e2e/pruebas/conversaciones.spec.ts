@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { nuevaVisita, nuevoUsuario, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
 import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
@@ -8,8 +8,18 @@ import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } fr
   señal; oficina ve el punto de «sin leer», responde en el hilo y, al marcar revisado, la conversación se cierra.
 */
 
+/**
+ * Los contextos de oficina que abre cada prueba. Se cierran al terminar, también si falla: una página que sigue viva
+ * consulta y redibuja el resto de la corrida, y en WebKit les quita tiempo a las pruebas que siguen.
+ */
+const abiertos: BrowserContext[] = [];
+test.afterEach(async () => {
+  await Promise.all(abiertos.splice(0).map((c) => c.close()));
+});
+
 async function oficina(browser: Browser, usuario: Usuario): Promise<Page> {
   const contexto = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "es-CO" });
+  abiertos.push(contexto);
   const pagina = await contexto.newPage();
   await pagina.goto(`${OFICINA}/`);
   await iniciarSesion(pagina, usuario);
