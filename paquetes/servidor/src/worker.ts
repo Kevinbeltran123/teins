@@ -6,7 +6,7 @@ import { crearAvisos, enviadorSegunConfig } from "./modulos/avisos";
 import { crearGeneradorPdfDeCotizaciones } from "./modulos/cotizaciones";
 import { crearEnvios, proveedoresSegunConfig } from "./modulos/envios";
 import { crearGeneradorPdf } from "./modulos/informes";
-import { recuperarTrabajosAMedias } from "./modulos/mantenimiento";
+import { podarVencido, recuperarTrabajosAMedias } from "./modulos/mantenimiento";
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
 import { cerrarNavegador } from "./plataforma/pdf";
@@ -34,9 +34,15 @@ const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
   registro[metodo]({ ...alcance, ...meta }, mensaje);
 });
 
+/** La tarea periódica (ADR-0043, ADR-0044): recupera lo que quedó a medias y poda lo vencido. */
+const mantener = async (bds: { negocio: typeof negocio.bd; propietario: typeof cola.bd }) => {
+  await recuperarTrabajosAMedias(bds.negocio);
+  await podarVencido(bds);
+};
+
 const corredor = await run({
   pgPool: cola.pool,
-  taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones, mantenimiento: { recuperar: () => recuperarTrabajosAMedias(negocio.bd) } }),
+  taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones, mantenimiento: { recuperar: () => mantener({ negocio: negocio.bd, propietario: cola.bd }) } }),
   concurrency: 4,
   // Las tareas periódicas (ADR-0012, regla 5) se declaran aquí; nunca en un archivo suelto. Cada hora, en el minuto
   // 17 para no coincidir con otros procesos en punto: lo que quedó a medias vuelve a la cola (ADR-0043).

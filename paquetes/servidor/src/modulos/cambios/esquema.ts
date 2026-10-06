@@ -19,7 +19,13 @@ export const registro = esquemaCambios.table(
     operacion: text("operacion").notNull(),
     registradoEn: marcaDeTiempo("registrado_en").notNull().defaultNow(),
   },
-  (t) => [index("registro_bajada_idx").on(t.organizacionId, t.secuencia), aislamientoPorOrganizacion("registro")],
+  (t) => [
+    index("registro_bajada_idx").on(t.organizacionId, t.secuencia),
+    // La bajada de un técnico lee sus cambios y los de toda la organización; compactar busca por entidad (ADR-0044).
+    index("registro_usuario_idx").on(t.organizacionId, t.usuarioId, t.secuencia),
+    index("registro_entidad_idx").on(t.organizacionId, t.entidad, t.entidadId, t.secuencia),
+    aislamientoPorOrganizacion("registro"),
+  ],
 ).enableRLS();
 
 /**

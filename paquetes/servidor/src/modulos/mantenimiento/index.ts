@@ -1,9 +1,11 @@
 import type { BaseDeDatos } from "../../plataforma/base-de-datos";
 import { enOrganizacion } from "../../plataforma/base-de-datos";
 import { recuperarArchivosAtascados } from "../archivos";
+import { compactarRegistro } from "../cambios";
 import { recuperarCotizacionesAtascados } from "../cotizaciones";
-import { idsDeOrganizaciones } from "../identidad";
+import { idsDeOrganizaciones, podarSesionesVencidas } from "../identidad";
 import { recuperarInformesAtascados } from "../informes";
+import { podarSesionesDelPortal } from "../portal";
 
 /**
  * Más que la ventana de reintentos de un trabajo (10 intentos de Graphile, unas 10 horas): antes, volver a encolar
@@ -27,4 +29,18 @@ export async function recuperarTrabajosAMedias(bd: BaseDeDatos, ahora = new Date
     });
   }
   return recuperados;
+}
+
+/** Una sesión vencida se conserva un día, por si alguien pregunta por qué lo sacó. */
+const SESION_VENCIDA_DESPUES_DE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Poda de la tarea periódica (ADR-0044): sesiones vencidas y el registro de cambios compactado. Compactar usa la
+ * conexión del dueño de la base: la aplicación no borra en el registro.
+ */
+export async function podarVencido({ negocio, propietario }: { negocio: BaseDeDatos; propietario: BaseDeDatos }, ahora = new Date()): Promise<number> {
+  const antesDe = new Date(ahora.getTime() - SESION_VENCIDA_DESPUES_DE_MS);
+  let podados = await podarSesionesVencidas(negocio, antesDe);
+  for (const organizacionId of await idsDeOrganizaciones(negocio)) podados += await enOrganizacion(negocio, organizacionId, (tx) => podarSesionesDelPortal(tx, antesDe));
+  return podados + (await compactarRegistro(propietario));
 }

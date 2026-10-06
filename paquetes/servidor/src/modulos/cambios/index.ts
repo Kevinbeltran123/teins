@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
-import type { TxOrganizacion } from "../../plataforma/base-de-datos";
+import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { epocas, registro } from "./esquema";
 
 export type Entidad = "formato" | "visita" | "levantamiento" | "item_catalogo" | "simbolo";
@@ -46,6 +46,23 @@ export async function leerCambios(tx: TxOrganizacion, usuarioId: string, desde: 
     .orderBy(asc(registro.secuencia))
     .limit(limite);
   return filas as CambioLeido[];
+}
+
+/**
+ * Compacta el registro (ADR-0044): borra cada fila que ya tiene otra más nueva para la misma entidad y el mismo
+ * destinatario. La bajada solo usa el último cambio de cada entidad, así que ningún teléfono pierde nada. La
+ * aplicación solo inserta y lee: esto lo hace la conexión del dueño de la base, desde la tarea periódica.
+ */
+export async function compactarRegistro(propietario: BaseDeDatos): Promise<number> {
+  const resultado = await propietario.execute(sql`
+    delete from cambios.registro viejo
+    using cambios.registro nuevo
+    where nuevo.organizacion_id = viejo.organizacion_id
+      and nuevo.usuario_id is not distinct from viejo.usuario_id
+      and nuevo.entidad = viejo.entidad
+      and nuevo.entidad_id = viejo.entidad_id
+      and nuevo.secuencia > viejo.secuencia`);
+  return resultado.rowCount ?? 0;
 }
 
 /** La época sin limpiezas (ADR-0038): la de toda organización hasta que alguien deja limpio su entorno. */

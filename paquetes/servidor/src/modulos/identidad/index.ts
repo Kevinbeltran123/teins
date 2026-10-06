@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Config } from "../../config";
@@ -12,7 +12,7 @@ import { registrarOperacion, registrarOperacionDeDispositivo, registrarRutaPubli
 import { registrar } from "../auditoria";
 import { olvidarSuscripciones } from "../avisos";
 import { crearAuth, type Auth, type EventosDeAuth } from "./auth";
-import { cuentas, dispositivos, llavesDeAcceso, organizaciones, segundosFactores, sesiones, usuarios } from "./esquema";
+import { cuentas, dispositivos, llavesDeAcceso, organizaciones, segundosFactores, sesiones, usuarios, verificaciones } from "./esquema";
 
 const USUARIO_VALIDO = /^[a-z0-9._-]{3,30}$/;
 
@@ -640,7 +640,14 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
             })
             .from(dispositivos)
             .innerJoin(usuarios, eq(usuarios.id, dispositivos.usuarioId))
-            .where(eq(dispositivos.organizacionId, actor.organizacionId))
+            // Lo que importa (ADR-0044): con contacto en 90 días o con una orden de borrado sin confirmar. No se borra
+            // ninguno: un teléfono olvidado que vuelve tiene que poder recibir su orden de borrado (QA-5).
+            .where(
+              and(
+                eq(dispositivos.organizacionId, actor.organizacionId),
+                or(gt(dispositivos.ultimoContacto, sql`now() - interval '90 days'`), and(isNotNull(dispositivos.ordenDeBorradoEn), isNull(dispositivos.borradoConfirmadoEn))),
+              ),
+            )
             .orderBy(desc(dispositivos.ultimoContacto));
           return {
             dispositivos: filas.map((f) => ({
@@ -719,4 +726,11 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
 /** Las organizaciones, para las tareas periódicas que recorren cada una (ADR-0043). */
 export async function idsDeOrganizaciones(bd: BaseDeDatos): Promise<string[]> {
   return (await bd.select({ id: organizaciones.id }).from(organizaciones)).map((o) => o.id);
+}
+
+/** Sesiones y verificaciones vencidas antes de `antesDe` (ADR-0044): nadie las vuelve a usar. */
+export async function podarSesionesVencidas(bd: BaseDeDatos, antesDe: Date): Promise<number> {
+  const sesionesBorradas = await bd.delete(sesiones).where(lt(sesiones.expiresAt, antesDe)).returning({ id: sesiones.id });
+  const verificacionesBorradas = await bd.delete(verificaciones).where(lt(verificaciones.expiresAt, antesDe)).returning({ id: verificaciones.id });
+  return sesionesBorradas.length + verificacionesBorradas.length;
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Config } from "../../config";
 import { claveDeObjeto, type Almacenamiento } from "../../plataforma/almacenamiento";
@@ -281,4 +281,9 @@ export function crearAccesosDeClientes(bd: BaseDeDatos) {
       return credenciales;
     },
   };
+}
+
+/** Sesiones del portal vencidas antes de `antesDe` (ADR-0044), en la organización de la transacción. */
+export async function podarSesionesDelPortal(tx: TxOrganizacion, antesDe: Date): Promise<number> {
+  return (await tx.delete(sesionesDelPortal).where(lt(sesionesDelPortal.expiraEn, antesDe)).returning({ accesoId: sesionesDelPortal.accesoId })).length;
 }

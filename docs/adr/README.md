@@ -67,6 +67,7 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0041](0041-visitas-atendidas-salen-del-telefono.md) | Las visitas atendidas salen del teléfono al día siguiente (amplía 0003) | Aceptada |
 | [0042](0042-reprogramar-reabre-una-visita-cerrada.md) | Reprogramar reabre una visita cerrada (amplía 0041) | Aceptada |
 | [0043](0043-recuperar-trabajos-a-medias.md) | Una tarea periódica recupera los trabajos que quedaron a medias (amplía 0012) | Aceptada |
+| [0044](0044-retencion-y-poda.md) | Retención en el teléfono y poda en el servidor (amplía 0003) | Aceptada |
 
 ### Estados
 

@@ -55,6 +55,11 @@ export interface AlmacenSincronizacion {
    * ya no conoce. Los borradores, lo que falta por enviar, los formatos y los símbolos se quedan (regla 5).
    */
   reiniciarPorEpoca(tecnicoId: string, epoca: string, versionApp: number): Promise<void>;
+  /**
+   * Retención (ADR-0044): lo revisado que oficina recibió hace más de 30 días sale del teléfono con sus fotos, su envío,
+   * su estado y su chat. Lo que no se ha enviado o no ha llegado nunca se toca (regla 5): sigue completo en oficina.
+   */
+  podarRevisadosAntiguos(tecnicoId: string, ahora: number): Promise<number>;
   /** Permiso recibido al iniciar sesión; no toca el punto de control. */
   renovarPermiso(tecnicoId: string, permisoLocalHasta: string, versionApp: number): Promise<void>;
   marcarSesionVencida(tecnicoId: string): Promise<void>;
@@ -91,6 +96,9 @@ function olvidarDescartesDe(tecnicoId: string) {
     // Sin almacenamiento del navegador no hay nada que olvidar.
   }
 }
+
+/** Días que lo revisado se queda en el teléfono después de que oficina lo recibió (ADR-0044). */
+export const DIAS_DE_RETENCION = 30;
 
 export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
   function borrarRegistrosDe(tecnicoId: string) {
@@ -129,6 +137,30 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
   }
 
   return {
+    async podarRevisadosAntiguos(tecnicoId, ahora) {
+      const limite = new Date(ahora - DIAS_DE_RETENCION * 86_400_000).toISOString();
+      const revisados = new Set((await db.estadosServidor.where("tecnicoId").equals(tecnicoId).filter((e) => e.estado === "revisado").primaryKeys()) as string[]);
+      if (revisados.size === 0) return 0;
+      const viejos = new Set(
+        (await db.envios.where("tecnicoId").equals(tecnicoId).filter((e) => e.estado === "recibido" && revisados.has(e.levantamientoId) && (e.recibidoEn ?? e.creadoEn) < limite).toArray()).map((e) => e.levantamientoId),
+      );
+      if (viejos.size === 0) return 0;
+      return db.transaction("rw", [db.levantamientos, db.archivos, db.envios, db.estadosServidor, db.lecturasDeChat, db.respuestasPendientes], async () => {
+        const todos = await db.levantamientos.toArray();
+        const salen = todos.filter((l) => l.tecnicoId === tecnicoId && l.estado === "enviado" && viejos.has(l.id));
+        if (salen.length === 0) return 0;
+        const ids = salen.map((l) => l.id);
+        // Un archivo se direcciona por su contenido: si otro levantamiento lo usa, se queda.
+        const enUso = new Set(todos.filter((l) => !viejos.has(l.id)).flatMap((l) => referencias(l).archivos));
+        await db.archivos.bulkDelete(salen.flatMap((l) => referencias(l).archivos).filter((h) => !enUso.has(h)));
+        await db.levantamientos.bulkDelete(ids);
+        await db.envios.bulkDelete(ids);
+        await db.estadosServidor.bulkDelete(ids);
+        await db.lecturasDeChat.bulkDelete(ids.map((id) => [tecnicoId, id] as [string, string]));
+        await db.respuestasPendientes.where("levantamientoId").anyOf(ids).delete();
+        return salen.length;
+      });
+    },
     async archivosPorSubir(tecnicoId) {
       const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
       // Las fotos suben por adelantado; los bocetos, solo del levantamiento ya enviado (ADR-0019, parte 3).

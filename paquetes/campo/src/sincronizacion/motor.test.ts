@@ -581,6 +581,33 @@ describe("terminar visita (ADR-0037)", () => {
   });
 });
 
+describe("retención (iteración 41, ADR-0044)", () => {
+  it("lo revisado que oficina recibió hace más de 30 días sale del teléfono con sus fotos; lo reciente y lo no revisado se quedan", async () => {
+    const { db, ids, reloj } = await dispositivo(3, 1);
+    const s = servidorFalso();
+    const motor = crearMotor({ versionApp: 15, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora });
+    await motor.sincronizar();
+    const [viejoRevisado, recienteRevisado, viejoSinRevisar] = ids as [string, string, string];
+    const fotos = async (id: string) => (await repositorioDexie(db).obtener(id))!.respuestas.s?.fotos as string[];
+    const fotoDelViejo = (await fotos(viejoRevisado))[0]!;
+    const hace = (dias: number) => new Date(reloj.ahora() - dias * 86_400_000).toISOString();
+    await db.envios.update(viejoRevisado, { recibidoEn: hace(31) });
+    await db.envios.update(recienteRevisado, { recibidoEn: hace(5) });
+    await db.envios.update(viejoSinRevisar, { recibidoEn: hace(31) });
+    for (const [id, estado] of [[viejoRevisado, "revisado"], [recienteRevisado, "revisado"], [viejoSinRevisar, "en_revision"]] as const) {
+      s.publicar({ tipo: "levantamiento", id, estado, recibidoEn: hace(31), comentarios: [] });
+    }
+    await motor.sincronizar({ bajar: true });
+
+    expect(await db.levantamientos.get(viejoRevisado)).toBeUndefined();
+    expect(await db.envios.get(viejoRevisado)).toBeUndefined();
+    expect(await db.estadosServidor.get(viejoRevisado)).toBeUndefined();
+    expect(await db.archivos.get(fotoDelViejo)).toBeUndefined();
+    expect(await db.levantamientos.get(recienteRevisado)).toBeDefined();
+    expect(await db.levantamientos.get(viejoSinRevisar)).toBeDefined();
+  });
+});
+
 describe("conversaciones (ADR-0040)", () => {
   const idLev = "0192f0e0-0000-7000-8000-000000000960";
   const idComentario = "0192f0e0-0000-7000-8000-000000000961";

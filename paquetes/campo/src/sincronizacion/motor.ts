@@ -323,7 +323,11 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
       }
       if (!sesionRechazada) await enviarTerminaciones(tecnicoId);
       if (!sesionRechazada) await enviarRespuestas(tecnicoId);
-      if (!sesionRechazada && (await tocaBajar(tecnicoId, bajadaPedida))) await bajar(tecnicoId);
+      if (!sesionRechazada && (await tocaBajar(tecnicoId, bajadaPedida))) {
+        await bajar(tecnicoId);
+        // Con el estado al día, lo revisado y viejo sale del teléfono (ADR-0044).
+        await almacen.podarRevisadosAntiguos(tecnicoId, reloj());
+      }
 
       if (sesionRechazada) {
         await atenderOrdenes();

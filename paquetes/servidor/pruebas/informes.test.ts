@@ -103,9 +103,10 @@ describe("estado de un plano (iteración 26, ADR-0031)", () => {
     const tres = await subir(org.oficina.cookie, await planoDePrueba(3), "application/pdf");
     const danado = await subir(org.oficina.cookie, Buffer.from(`%PDF-1.7 ${randomUUID()} sin estructura`), "application/pdf");
     const estado = (cookie: string, huella: string) => get(cookie, `/api/archivos/${huella}/plano`);
-    // La cola es compartida con otros archivos de prueba: pudo verificarse ya. Se fija el estado que se prueba y su
-    // trabajo vuelve a la cola, para no depender de quién la procesa primero.
-    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null where huella = $1 and organizacion_id = $2", [tres, org.organizacionId]);
+    // La cola es compartida con otros archivos de prueba: primero se espera a que termine lo que había (así ningún
+    // trabajo viejo pisa el estado) y después se fija el estado que se prueba, con su trabajo de nuevo en la cola.
+    await s.procesarCola();
+    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null, paginas = null where huella = $1 and organizacion_id = $2", [tres, org.organizacionId]);
     expect((await estado(org.oficina.cookie, tres)).json()).toEqual({ estado: "verificando", paginas: null });
     await s.propietario.pool.query("select cola.encolar('archivos.verificar', $1::jsonb, null, $2, 10)", [JSON.stringify({ organizacionId: org.organizacionId, huella: tres }), `archivos.verificar:${org.organizacionId}:${tres}`]);
     await s.procesarCola();
@@ -265,7 +266,7 @@ describe("informe (corte 4)", () => {
   });
 
   it("solo entran levantamientos revisados de la visita, y publicar exige alguno y planos verificados (regla 9)", async () => {
-    const { oficina, enviado, revisado, informeId } = await visitaConRevisado();
+    const { oficina, organizacionId, enviado, revisado, informeId } = await visitaConRevisado();
     const r = await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [enviado, randomUUID()], planos: [] });
     expect(r.statusCode).toBe(422);
     expect(r.json().erroresInforme.map((e: { codigo: string }) => e.codigo)).toEqual(["no_revisado", "levantamiento_desconocido"]);
@@ -274,8 +275,11 @@ describe("informe (corte 4)", () => {
       erroresInforme: [{ codigo: "sin_levantamientos" }],
     });
 
-    // Un plano que el worker todavía no verifica no entra en una versión.
+    // Un plano que el worker todavía no verifica no entra en una versión. La cola es compartida con otros archivos de
+    // prueba: se espera a que termine lo que había y se deja el plano sin verificar, para no depender de quién la procesa.
     const plano = await subir(oficina.cookie, await planoDePrueba(), "application/pdf");
+    await s.procesarCola();
+    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null, paginas = null where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
     await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [{ huella: plano, nombre: "Planta" }] });
     expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2 })).json()).toMatchObject({ codigo: "archivos_en_verificacion" });
     // Guardar con una versión vieja se rechaza.
@@ -357,11 +361,14 @@ describe("trabajos que quedaron a medias (ADR-0043)", () => {
 
     const plano = await subir(oficina.cookie, await planoDePrueba(), "application/pdf");
     const llaveArchivo = `archivos.verificar:${organizacionId}:${plano}`;
+    // La cola es compartida con otros archivos de prueba: primero termina lo que había, para que ningún trabajo viejo
+    // pise el estado; después se pierden los trabajos y se fija lo atascado.
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
     await perderTrabajo(llavePdf);
     await perderTrabajo(llaveArchivo);
-    // La cola es compartida con otros archivos de prueba: pudieron procesarlos antes de perderlos. Se fija lo atascado.
     await s.propietario.pool.query("update informes.versiones set pdf_estado = 'generando', pdf_huella = null where id = $1", [versionId]);
-    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
+    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null, paginas = null where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
 
     // Dentro de su ventana de reintentos no se tocan: podrían seguir reintentando.
     await recuperarTrabajosAMedias(s.conexionApp.bd);
@@ -370,11 +377,11 @@ describe("trabajos que quedaron a medias (ADR-0043)", () => {
 
     await s.propietario.pool.query("update informes.versiones set publicada_en = now() - interval '13 hours' where id = $1", [versionId]);
     await s.propietario.pool.query("update archivos.archivos set subido_en = now() - interval '13 hours' where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
-    await recuperarTrabajosAMedias(s.conexionApp.bd);
-    expect(await hayTrabajo(llavePdf)).toBe(true);
-    expect(await hayTrabajo(llaveArchivo)).toBe(true);
-
+    // Pasadas 12 horas vuelven a la cola. Otro archivo de pruebas puede procesarlos al instante: se mira que terminen.
+    expect(await recuperarTrabajosAMedias(s.conexionApp.bd)).toBeGreaterThanOrEqual(2);
     await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    expect((await s.propietario.pool.query("select pdf_estado from informes.versiones where id = $1", [versionId])).rows[0].pdf_estado).toBe("listo");
     const { rows } = await s.propietario.pool.query("select estado from archivos.archivos where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
     expect(rows[0].estado).toBe("verificado");
   });

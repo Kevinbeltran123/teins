@@ -267,6 +267,13 @@
       "when": 1791310359501,
       "tag": "0037_visitas_cerradas",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791314251815,
+      "tag": "0038_registro_y_poda",
+      "breakpoints": true
     }
   ]
 }
