@@ -80,6 +80,12 @@ export interface Visitas {
   asignadas(tx: TxOrganizacion, ids: readonly string[], tecnicoId: string): Promise<Map<string, VisitaAsignada>>;
   /** Cuáles de estas visitas están canceladas: la bajada le dice al teléfono por qué salen. */
   canceladas(tx: TxOrganizacion, ids: readonly string[]): Promise<Set<string>>;
+  /** Visitas del técnico que podrían cerrarse (ADR-0041): asignadas, sin cancelar ni cerrar, de un día anterior a `hoy`. */
+  porCerrar(tx: TxOrganizacion, tecnicoId: string, hoy: string): Promise<{ id: string; terminada: boolean }[]>;
+  /** Cierra estas visitas (ADR-0041): salen de los teléfonos de sus técnicos y no vuelven a bajar. */
+  cerrar(tx: TxOrganizacion, organizacionId: string, ids: readonly string[]): Promise<void>;
+  /** Cuáles de estas visitas están cerradas: salen del teléfono como atendidas. */
+  cerradas(tx: TxOrganizacion, ids: readonly string[]): Promise<Set<string>>;
   clienteDe(tx: TxOrganizacion, visitaId: string): Promise<string | undefined>;
   /** Cliente, sitio, motivo y fecha de cada visita, sin importar a quién esté asignada (oficina). */
   resumenes(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, VisitaAsignada>>;
@@ -235,6 +241,31 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       if (sitios.length === 0) return [];
       const filas = await tx.select({ id: visitas.id }).from(visitas).where(inArray(visitas.sitioId, sitios));
       return filas.map((f) => f.id);
+    },
+
+    async porCerrar(tx, tecnicoId, hoy) {
+      const filas = await tx
+        .select({ id: visitas.id, terminadaEn: visitas.terminadaEn })
+        .from(visitas)
+        .where(and(arrayContains(visitas.tecnicos, [tecnicoId]), isNull(visitas.canceladaEn), isNull(visitas.cerradaEn), lt(visitas.programadaPara, hoy)));
+      return filas.map((f) => ({ id: f.id, terminada: f.terminadaEn !== null }));
+    },
+
+    async cerrar(tx, organizacionId, ids) {
+      if (ids.length === 0) return;
+      // Solo las que nadie cerró antes: dos bajadas a la vez no registran la salida dos veces.
+      const cerradas = await tx
+        .update(visitas)
+        .set({ cerradaEn: new Date() })
+        .where(and(inArray(visitas.id, [...ids]), isNull(visitas.cerradaEn)))
+        .returning({ id: visitas.id, tecnicos: visitas.tecnicos });
+      await registrarCambios(tx, cerradas.flatMap((v) => avisar(organizacionId, v.id, v.tecnicos, "fuera_de_alcance")));
+    },
+
+    async cerradas(tx, ids) {
+      if (ids.length === 0) return new Set();
+      const filas = await tx.select({ id: visitas.id }).from(visitas).where(and(inArray(visitas.id, [...ids]), isNotNull(visitas.cerradaEn)));
+      return new Set(filas.map((f) => f.id));
     },
 
     async canceladas(tx, ids) {
@@ -425,7 +456,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
     const filas = await tx
       .select({ id: visitas.id, sitioId: visitas.sitioId, motivo: visitas.motivo, programadaPara: visitas.programadaPara, horaInicio: visitas.horaInicio, horaFin: visitas.horaFin, terminadaEn: visitas.terminadaEn })
       .from(visitas)
-      .where(and(inArray(visitas.id, [...ids]), tecnicoId ? and(arrayContains(visitas.tecnicos, [tecnicoId]), isNull(visitas.canceladaEn)) : undefined));
+      .where(and(inArray(visitas.id, [...ids]), tecnicoId ? and(arrayContains(visitas.tecnicos, [tecnicoId]), isNull(visitas.canceladaEn), isNull(visitas.cerradaEn)) : undefined));
     const sitios = await clientes.sitios(tx, filas.map((f) => f.sitioId));
     const resultado = new Map<string, VisitaAsignada>();
     for (const f of filas) {

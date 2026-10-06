@@ -221,7 +221,8 @@ export const Cambio = z
       entidad: z.enum(["visita"]),
       id: Uuid,
       /** Iteración 7, expansión (ADR-0015): una app anterior no lo lee y la trata como reasignada. */
-      motivo: z.enum(["reasignada", "cancelada"]).optional(),
+      // `atendida` (ADR-0041): solo a la app 15 o posterior; una anterior no lo conoce.
+      motivo: z.enum(["reasignada", "cancelada", "atendida"]).optional(),
     }),
   ])
   .meta({ id: "Cambio" });

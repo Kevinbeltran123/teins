@@ -324,6 +324,37 @@ describe("bajada (ADR-0003)", () => {
     expect(await visitasDe(db, "t1")).toEqual([{ ...visita(idVisita(2)), tecnicoId: "t1", fueraDeAlcance: true }]);
   });
 
+  it("una visita atendida sale del teléfono sin aviso; con un borrador o un envío por salir se queda igual (ADR-0041)", async () => {
+    const db = abrirBase(`motor-${Math.random()}`);
+    bases.push(db);
+    const s = servidorFalso();
+    const reloj = { ahora: () => Date.now() };
+    for (const n of [4, 5, 6]) s.publicar({ tipo: "visita", visita: visita(idVisita(n)) });
+    await motorDe(db, s, reloj, 15).sincronizar();
+    const repo = repositorioDexie(db);
+    // La 4 ya se envió y llegó; la 5 tiene un borrador; la 6 tiene un envío que no ha salido.
+    const enviado = "0192f0e0-0000-7000-8000-000000000994";
+    await repo.crear(crearLevantamiento(formato, enviado, new Date(), idVisita(4)), "t1");
+    expect((await repo.enviar(enviado, formato, new Date())).ok).toBe(true);
+    await motorDe(db, s, reloj, 15).sincronizar();
+    expect((await db.envios.get(enviado))?.estado).toBe("recibido");
+    await repo.crear(crearLevantamiento(formato, "0192f0e0-0000-7000-8000-000000000995", new Date(), idVisita(5)), "t1");
+    const porSalir = "0192f0e0-0000-7000-8000-000000000996";
+    await repo.crear(crearLevantamiento(formato, porSalir, new Date(), idVisita(6)), "t1");
+    expect((await repo.enviar(porSalir, formato, new Date())).ok).toBe(true);
+    // Todavía no le toca salir: sigue pendiente sin cortar la sincronización.
+    await db.envios.update(porSalir, { proximoIntentoEn: Date.now() + 3_600_000 });
+
+    for (const n of [4, 5, 6]) s.publicar({ tipo: "fuera_de_alcance", entidad: "visita", id: idVisita(n), motivo: "atendida" });
+    await motorDe(db, s, reloj, 15).sincronizar({ bajar: true });
+    const quedan = await visitasDe(db, "t1");
+    expect(quedan.map((v) => v.id).sort()).toEqual([idVisita(5), idVisita(6)]);
+    // Se quedan como estaban: no se avisa como una reasignación.
+    expect(quedan.every((v) => !v.fueraDeAlcance && !v.motivoSalida)).toBe(true);
+    // Lo enviado no se toca (regla 5).
+    expect(await repo.obtener(enviado)).toBeDefined();
+  });
+
   it("una visita cancelada con algo empezado se queda con el motivo, para avisarle al técnico (iteración 7)", async () => {
     const db = abrirBase(`motor-${Math.random()}`);
     bases.push(db);

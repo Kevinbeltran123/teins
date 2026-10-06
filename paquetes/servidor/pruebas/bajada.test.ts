@@ -20,14 +20,14 @@ const bajar = (cookie: string, desde = 0, app_ = 1, limite?: number) =>
     headers: { cookie, ...cabecerasSync },
   });
 
-async function nuevaVisita(organizacionId: string, tecnicos: string[]) {
+async function nuevaVisita(organizacionId: string, tecnicos: string[], programadaPara = "2026-09-30") {
   return enOrganizacion(s.conexionApp.bd, organizacionId, async (tx) => {
     const { clienteId, sitioId } = await clientesYSitios.crear(tx, {
       organizacionId,
       nombre: "Cliente ficticio",
       sitio: { nombre: "Sede de prueba", direccion: "Calle [N] # [N]-[N]" },
     });
-    return visitas.crear(tx, { organizacionId, ...contexto, clienteId, sitioId, motivo: "Mantenimiento", programadaPara: "2026-09-30", tecnicos });
+    return visitas.crear(tx, { organizacionId, ...contexto, clienteId, sitioId, motivo: "Mantenimiento", programadaPara, tecnicos });
   });
 }
 
@@ -284,5 +284,47 @@ describe("dispositivo y revocación (ADR-0009, ADR-0017, QA-5)", () => {
       [organizacionId, tecnico.id],
     );
     expect(rows[0].n).toBe(1);
+  });
+});
+
+describe("las visitas atendidas salen del teléfono al día siguiente (ADR-0041)", () => {
+  /** El día en Colombia, como lo cuenta el servidor, corrido `dias`. */
+  const dia = (dias: number) => new Date(Date.now() + dias * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+  async function enviarCon(cookie: string, visitaId: string) {
+    const id = randomUUID();
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/sync/comandos",
+      headers: { cookie, ...cabecerasSync },
+      payload: { tipo: "EnviarLevantamiento", llave: llaveDeEnvio(id), levantamiento: { id, visitaId, formato: "prueba-ups", versionFormato: 1, respuestas: {}, creadoEn: new Date().toISOString(), enviadoEn: new Date().toISOString() } },
+    });
+    expect(r.statusCode, r.body).toBe(200);
+  }
+  const salidas = (cambios: { tipo: string; id?: string; motivo?: string }[]) => cambios.filter((c) => c.tipo === "fuera_de_alcance").map((c) => [c.id, c.motivo]);
+  const visitasQueBajan = (cambios: { tipo: string; visita?: { id: string } }[]) => cambios.filter((c) => c.tipo === "visita").map((c) => c.visita!.id);
+
+  it("cierra lo atendido de días anteriores, no lo de hoy ni lo atrasado sin atender; la app 14 no recibe el motivo", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const enviadaAyer = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    const terminadaAyer = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    const atrasada = await nuevaVisita(organizacionId, [tecnico.id], dia(-2));
+    const deHoy = await nuevaVisita(organizacionId, [tecnico.id], dia(0));
+    await enviarCon(tecnico.cookie, enviadaAyer);
+    await enviarCon(tecnico.cookie, deHoy);
+    await s.propietario.pool.query("update visitas.visitas set terminada_en = now() - interval '1 day' where id = $1", [terminadaAyer]);
+
+    // Una app que no conoce el motivo no recibe la salida: lo tomaría por una reasignación.
+    expect(salidas((await bajar(tecnico.cookie, 0, 14)).json().cambios)).toEqual([]);
+
+    const bajada = (await bajar(tecnico.cookie, 0, 15)).json();
+    expect(salidas(bajada.cambios).sort()).toEqual([
+      [enviadaAyer, "atendida"],
+      [terminadaAyer, "atendida"],
+    ].sort());
+    // Una cerrada no vuelve a bajar, ni a la app que se actualiza y baja todo de nuevo.
+    expect(visitasQueBajan(bajada.cambios).sort()).toEqual([atrasada, deHoy].sort());
+    expect(visitasQueBajan((await bajar(tecnico.cookie, 0, 14)).json().cambios).sort()).toEqual([atrasada, deHoy].sort());
+    // Se cierra una sola vez: la siguiente bajada no la repite.
+    expect(salidas((await bajar(tecnico.cookie, bajada.puntoDeControl, 15)).json().cambios)).toEqual([]);
   });
 });

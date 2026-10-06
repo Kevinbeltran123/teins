@@ -33,6 +33,8 @@ export const visitas = esquemaVisitas.table(
     canceladaEn: marcaDeTiempo("cancelada_en"),
     canceladaPor: text("cancelada_por"),
     motivoCancelacion: text("motivo_cancelacion"),
+    /** Atendida y de un día anterior: salió de los teléfonos y no vuelve a bajar (ADR-0041). */
+    cerradaEn: marcaDeTiempo("cerrada_en"),
   },
   (t) => [
     index("visitas_programada_idx").on(t.organizacionId, t.programadaPara),

@@ -271,8 +271,13 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
               break;
             }
             case "fuera_de_alcance": {
-              const empezados = await db.levantamientos.where("tecnicoId").equals(tecnicoId).filter((l) => l.visitaId === cambio.id).count();
-              if (empezados > 0) await db.visitas.update([tecnicoId, cambio.id], { fueraDeAlcance: true, ...(cambio.motivo ? { motivoSalida: cambio.motivo } : {}) });
+              const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).filter((l) => l.visitaId === cambio.id).toArray();
+              if (cambio.motivo === "atendida") {
+                // Atendida (ADR-0041): sale sin aviso. Con un borrador o un envío que no ha llegado, se queda como está
+                // para terminarlo y enviarlo (regla 5); lo enviado no se toca.
+                const recibidos = new Set((await db.envios.bulkGet(propios.map((l) => l.id))).flatMap((e) => (e?.estado === "recibido" ? [e.levantamientoId] : [])));
+                if (!propios.some((l) => l.estado === "borrador" || !recibidos.has(l.id))) await db.visitas.delete([tecnicoId, cambio.id]);
+              } else if (propios.length > 0) await db.visitas.update([tecnicoId, cambio.id], { fueraDeAlcance: true, ...(cambio.motivo ? { motivoSalida: cambio.motivo } : {}) });
               else await db.visitas.delete([tecnicoId, cambio.id]);
               break;
             }

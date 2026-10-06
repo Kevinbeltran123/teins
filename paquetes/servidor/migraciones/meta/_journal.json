@@ -260,6 +260,13 @@
       "when": 1791302564289,
       "tag": "0036_conversaciones",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791310359501,
+      "tag": "0037_visitas_cerradas",
+      "breakpoints": true
     }
   ]
 }
