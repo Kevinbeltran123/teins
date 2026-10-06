@@ -51,7 +51,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 ## Próximo paso
 
-**Siguiente: que Kevin pruebe las iteraciones 38 y 39 en el entorno de pruebas, la 39 también en su iPhone (campo, app 14).** Las dos están construidas y verificadas (2026-10-06); el detalle, las decisiones y la evidencia están en la sección "Iteraciones 38 y 39". Después: producción de la 29 a la 39 (`campo` primero) y lo que entregue TEINS.
+**Siguiente: que Kevin pruebe las iteraciones 38 y 39 en el entorno de pruebas, la 39 también en su iPhone (campo, app 14).** Las dos están construidas, verificadas y desplegadas en el entorno de pruebas (2026-10-06); el detalle, las decisiones y la evidencia están en la sección "Iteraciones 38 y 39". Después: producción de la 29 a la 39 (`campo` primero) y lo que entregue TEINS.
 
 **Iteración 37 (buscar en todo y revisar con el teclado) construida, verificada y desplegada en el entorno de pruebas el 2026-10-04** (sección "Iteración 37"), sin operación nueva en el servidor. Sigue: que Kevin pruebe la 36 y la 37, en Mac y, si puede, en Windows.
 
@@ -1052,7 +1052,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteraciones 38 y 39 · La revisión al lado y las conversaciones con campo
 
-**Estado:** las dos aprobadas por Kevin. La 38 quedó construida, verificada y desplegada en el entorno de pruebas el 2026-10-06 (falta que Kevin la pruebe); la 39, construida y verificada el 2026-10-06 (ADR-0040, migración `0036`, app de campo 14, Dexie 7). La 39 usa el panel de la 38.
+**Estado:** las dos aprobadas por Kevin. La 38 quedó construida, verificada y desplegada en el entorno de pruebas el 2026-10-06 (falta que Kevin la pruebe); la 39, construida, verificada y desplegada en el entorno de pruebas el 2026-10-06 (ADR-0040, migración `0036`, app de campo 14, Dexie 7; `campo` primero, después `worker` y `oficina`). La 39 usa el panel de la 38.
 
 ### Iteración 38 · La revisión armada como el informe
 
