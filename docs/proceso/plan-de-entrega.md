@@ -51,7 +51,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 ## Próximo paso
 
-**Siguiente: desplegar `oficina` con la iteración 38 (construida y verificada el 2026-10-06) y construir la 39 (aprobada el 2026-10-05).** Todo está en la sección "Iteraciones 38 y 39": qué se construye, cómo debe verse, el orden de trabajo y cuándo está terminada. La 39 empieza por el ADR-0040, sin volver a preguntar lo ya aprobado.
+**Siguiente: que Kevin pruebe la iteración 38 (desplegada en el entorno de pruebas el 2026-10-06) y construir la 39 (aprobada el 2026-10-05).** Todo está en la sección "Iteraciones 38 y 39": qué se construye, cómo debe verse, el orden de trabajo y cuándo está terminada. La 39 empieza por el ADR-0040, sin volver a preguntar lo ya aprobado.
 
 **Iteración 37 (buscar en todo y revisar con el teclado) construida, verificada y desplegada en el entorno de pruebas el 2026-10-04** (sección "Iteración 37"), sin operación nueva en el servidor. Sigue: que Kevin pruebe la 36 y la 37, en Mac y, si puede, en Windows.
 
@@ -1052,7 +1052,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteraciones 38 y 39 · La revisión al lado y las conversaciones con campo
 
-**Estado:** las dos aprobadas por Kevin. La 38 quedó construida y verificada el 2026-10-06 (falta desplegar `oficina` en el entorno de pruebas y que Kevin la pruebe); la 39, por construir. La 39 usa el panel de la 38.
+**Estado:** las dos aprobadas por Kevin. La 38 quedó construida, verificada y desplegada en el entorno de pruebas el 2026-10-06 (falta que Kevin la pruebe); la 39, por construir. La 39 usa el panel de la 38.
 
 ### Iteración 38 · La revisión armada como el informe
 
