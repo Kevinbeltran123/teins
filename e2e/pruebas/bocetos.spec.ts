@@ -64,7 +64,7 @@ test("bocetos: el técnico dibuja un trazo, una línea enderezada y texto, desha
   // El PDF se genera con el boceto leído del almacenamiento (worker).
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await o.getByRole("button", { name: "Abrir el informe de la visita" }).click();
+  await o.getByRole("button", { name: "Abrir el informe" }).click();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 1" }).click();

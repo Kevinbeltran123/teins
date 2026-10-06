@@ -42,13 +42,14 @@ import {
   EsqueletoLista,
   FileText,
   Firma,
+  History,
   HojasDeBoceto,
   Insignia,
   Link2,
-  Maximize2,
   nombreDeTransicion,
   MarcaNoObtenido,
   MessageSquare,
+  PanelRight,
   Pencil,
   RefreshCw,
   Send,
@@ -66,12 +67,12 @@ import {
 } from "@teins/ui";
 import { consultas } from "../api";
 import { consultasDeCatalogo, useVincular } from "../catalogo";
-import { aFechaCorta, cuantoLleva } from "../formato";
+import { aDiaCorto, aFechaCorta, aHora, cuantoLleva } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
 import { useBandeja, useComentar, useCorregir, useCorregirComentario, useMarcarRevisado, useTomar } from "../revision";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
-import { Lienzo, VistaDeDocumento } from "./Lienzo";
+import { BotonMostrarVista, EditorConVista, Lienzo, useVistaPrevia, VistaDeDocumento } from "./Lienzo";
 import type { Plantillas } from "../documentos";
 import { esTexto, unoDe, usePreferencia } from "../preferencias";
 import { useTeclaSuelta } from "../atajos";
@@ -115,15 +116,22 @@ function correccionesDe(historial: Historial | undefined) {
 
 /**
  * Detalle de un levantamiento (prototipos/oficina): se lee como un documento, con las secciones del recorrido de
- * campo; "Corregir" y "Comentar" aparecen al pasar por cada fila y el comentario se escribe debajo del dato. A la
- * derecha, un carril fijo con la revisión y su acción, los comentarios y el historial.
+ * campo; "Corregir" y "Comentar" aparecen al pasar por cada fila y el comentario se escribe debajo del dato. Desde la
+ * iteración 38 (prototipos/revision-al-lado) se arma como el informe: los datos a la izquierda y, a la derecha, un
+ * panel a todo el alto con el capítulo como saldrá en el informe, los comentarios y el historial. El estado y su acción
+ * van en la barra.
  */
+type Pestana = "informe" | "comentarios" | "historial";
+
 export function Detalle({ id }: { id: string }) {
   const consulta = useQuery(consultas.levantamiento(id));
   const sesion = useQuery(consultas.sesion());
   const historial = useQuery(consultas.historial(id));
   const [comentandoEn, setComentandoEn] = useState<string | null>(null);
-  const [pestana, setPestana] = usePreferencia<"comentarios" | "historial" | "informe">("revision-carril", "comentarios", unoDe("comentarios", "historial", "informe"));
+  // La primera vez abre en «En el informe»: es lo que muestra cómo queda lo que se revisa.
+  const [pestana, setPestana] = usePreferencia<Pestana>("revision-pestana", "informe", unoDe("informe", "comentarios", "historial"));
+  const vista = useVistaPrevia("revision");
+  const [lateral, setLateral] = useState(false);
   // La bandeja marca la fila que se abrió al volver (prototipos/usabilidad-oficina).
   const [, setUltima] = usePreferencia("bandeja-ultima", "", esTexto, "pestana");
   useEffect(() => setUltima(id), [id, setUltima]);
@@ -164,9 +172,9 @@ export function Detalle({ id }: { id: string }) {
   const l = consulta.data;
   // Regla 4: solo quien tomó la revisión corrige, y solo mientras está en revisión.
   const mia = l.estado === "en_revision" && l.revisor?.id === sesion.data?.usuario.id;
-  const estado = ESTADOS[l.estado];
   const correcciones = correccionesDe(historial.data);
   const recargar = () => void consulta.refetch();
+  const titulo = l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : `Levantamiento de ${l.tecnico.nombre}`;
 
   // Las secciones del formato, con sus repeticiones juntas bajo el mismo título (prototipo: "Tableros").
   const todos = bloques(l.formatoDefinicion, l.repeticiones);
@@ -176,34 +184,56 @@ export function Detalle({ id }: { id: string }) {
 
   const irA = (seccion: string) => document.getElementById(`sec-${seccion}`)?.scrollIntoView({ behavior: sinMovimiento() ? "auto" : "smooth", block: "start" });
   const nombreFormato = `${l.formatoDefinicion.nombre ?? l.formato} v${l.versionFormato}`;
+  // El capítulo se ve si el panel está a la vista en «En el informe»; si no, «Ver cómo queda» lo trae.
+  const capituloVisible = pestana === "informe" && vista.alLadoVisible;
+  const verCapitulo = () => {
+    setPestana("informe");
+    if (vista.alLado) vista.setOculta(false);
+    else setLateral(true);
+  };
+  const panel = (
+    <PanelDeRevision
+      l={l}
+      titulo={titulo}
+      pestana={pestana}
+      alCambiar={setPestana}
+      historial={historial}
+      correcciones={correcciones}
+      enCurso={enCurso}
+      organizacion={sesion.data?.organizacion.nombre ?? "[ORGANIZACIÓN]"}
+      usuarioId={sesion.data?.usuario.id}
+    />
+  );
+  const mostrarPanel = vista.alLado ? (
+    <BotonMostrarVista vista={vista} etiqueta="Mostrar el panel" />
+  ) : (
+    <BotonIcono icono={PanelRight} etiqueta="Mostrar el panel" onClick={() => setLateral(true)} />
+  );
 
   return (
-    <>
-      <EncabezadoPagina
-        migas={migas}
-        titulo={l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : `Levantamiento de ${l.tecnico.nombre}`}
-        transicion={nombreDeTransicion("lev", l.id)}
-        estado={
-          // El estado cambia en su lugar al tomar o marcar revisado (iteración 27).
-          <span className="inline-flex" style={{ viewTransitionName: nombreDeTransicion("estado", l.id) }}>
-            <Insignia tono={estado.tono}>{estado.texto}</Insignia>
-          </span>
-        }
-        descripcion={
-          <>
-            <span>
-              {nombreFormato} de <b>{l.tecnico.nombre}</b>
-            </span>
-            <span>Recibido {aFechaCorta(l.recibidoEn)}</span>
-            {/* La hora del teléfono es declarativa (regla 16): la oficial es la del servidor. */}
-            <span>Enviado desde el teléfono {aFechaCorta(l.enviadoEnDispositivo)}</span>
-            {!l.visita && <span>Sin visita (capturado antes de las visitas)</span>}
-          </>
-        }
-      />
-      <CorreccionEnCurso.Provider value={{ avisar: setEnCurso, verCapitulo: pestana === "informe" ? null : () => setPestana("informe") }}>
-        <div className={`con-carril ${pestana === "informe" ? "ancho" : ""}`}>
-          <div className="principal">
+    <CorreccionEnCurso.Provider value={{ avisar: setEnCurso, verCapitulo: capituloVisible ? null : verCapitulo }}>
+      <EditorConVista
+        vista={vista}
+        hoja={panel}
+        editor={
+          <div className="editor-doc revision-doc">
+            <EstadoDeRevision l={l} mia={mia} historial={historial.data} recargar={recargar} mostrarPanel={mostrarPanel} />
+            <EncabezadoPagina
+              migas={migas}
+              titulo={titulo}
+              transicion={nombreDeTransicion("lev", l.id)}
+              descripcion={
+                <>
+                  <span>
+                    {nombreFormato} de <b>{l.tecnico.nombre}</b>
+                  </span>
+                  <span>Recibido {aFechaCorta(l.recibidoEn)}</span>
+                  {/* La hora del teléfono es declarativa (regla 16): la oficial es la del servidor. */}
+                  <span>Enviado desde el teléfono {aFechaCorta(l.enviadoEnDispositivo)}</span>
+                  {!l.visita && <span>Sin visita (capturado antes de las visitas)</span>}
+                </>
+              }
+            />
             <nav className="nav-secciones" aria-label="Secciones del levantamiento">
               {secciones.map(({ seccion, bloques: bs }) => (
                 <button key={seccion.clave} type="button" onClick={() => irA(seccion.clave)}>
@@ -245,48 +275,96 @@ export function Detalle({ id }: { id: string }) {
               ))}
             </div>
           </div>
-          <aside className="carril" aria-label="Revisión y comentarios" style={{ viewTransitionName: "carril" }}>
-            <PanelRevision l={l} mia={mia} correcciones={correcciones.size} recargar={recargar} />
-            <div className="grupo-c">
-              <div className="mini-tabs" role="tablist" aria-label="Comentarios, historial y el informe">
-                <button type="button" role="tab" aria-selected={pestana === "comentarios"} onClick={() => setPestana("comentarios")}>
-                  Comentarios{vigentes(l).length > 0 ? ` · ${vigentes(l).length}` : ""}
-                </button>
-                <button type="button" role="tab" aria-selected={pestana === "historial"} onClick={() => setPestana("historial")}>
-                  Historial
-                </button>
-                <button type="button" role="tab" aria-selected={pestana === "informe"} onClick={() => setPestana("informe")}>
-                  En el informe
-                </button>
-              </div>
-              {pestana === "comentarios" ? (
-                <Comentarios l={l} usuarioId={sesion.data?.usuario.id} />
-              ) : pestana === "historial" ? (
-                <HistorialDeCambios l={l} historial={historial} />
-              ) : (
-                <CapituloEnVivo l={l} correcciones={correcciones} enCurso={enCurso} organizacion={sesion.data?.organizacion.nombre ?? "[ORGANIZACIÓN]"} />
-              )}
-            </div>
-          </aside>
-        </div>
-      </CorreccionEnCurso.Provider>
-    </>
+        }
+      >
+        {lateral && !vista.alLado && (
+          <Dialogo forma="lateral" amplio titulo={titulo} subtitulo="El capítulo en el informe, los comentarios y el historial" alCerrar={() => setLateral(false)}>
+            {panel}
+          </Dialogo>
+        )}
+      </EditorConVista>
+    </CorreccionEnCurso.Provider>
   );
 }
 
+/** El panel de la derecha (iteración 38): sus pestañas son la cabecera del lienzo, con «Ampliar» solo sobre la hoja. */
+function PanelDeRevision({
+  l,
+  titulo,
+  pestana,
+  alCambiar,
+  historial,
+  correcciones,
+  enCurso,
+  organizacion,
+  usuarioId,
+}: {
+  l: Levantamiento;
+  titulo: string;
+  pestana: Pestana;
+  alCambiar: (p: Pestana) => void;
+  historial: ReturnType<typeof useQuery<Historial>>;
+  correcciones: ReturnType<typeof correccionesDe>;
+  enCurso: EnCurso | null;
+  organizacion: string;
+  usuarioId: string | undefined;
+}) {
+  const n = vigentes(l).length;
+  const boton = (valor: Pestana, texto: string, Icono: LucideIcon, cuantos = 0) => (
+    <button type="button" role="tab" aria-selected={pestana === valor} onClick={() => alCambiar(valor)}>
+      <Icono aria-hidden size={14} strokeWidth={1.6} />
+      {texto}
+      {cuantos > 0 && <span className="num-p"> {cuantos}</span>}
+    </button>
+  );
+  return (
+    <Lienzo
+      clase="panel-revision"
+      nota=""
+      cabecera={
+        <span className="pest-p" role="tablist" aria-label="El informe, los comentarios y el historial">
+          {boton("informe", "En el informe", FileText)}
+          {boton("comentarios", "Comentarios", MessageSquare, n)}
+          {boton("historial", "Historial", History)}
+        </span>
+      }
+      panel={{
+        etiqueta: "El informe, los comentarios y el historial",
+        ampliable: pestana === "informe",
+        cabeceraAmpliada: (
+          <span className="titulo-ampliado">
+            <b>{titulo}</b> · el capítulo como saldrá en el informe
+          </span>
+        ),
+        volver: "Volver a la revisión",
+      }}
+    >
+      {pestana === "informe" ? (
+        <CapituloEnVivo l={l} correcciones={correcciones} enCurso={enCurso} organizacion={organizacion} />
+      ) : pestana === "comentarios" ? (
+        <Comentarios l={l} usuarioId={usuarioId} />
+      ) : (
+        <HistorialDeCambios l={l} historial={historial} />
+      )}
+    </Lienzo>
+  );
+}
+
+/** "8:41 p. m." si fue hoy; si no, con el día. */
+const cuandoCorto = (iso: string) => (aDiaCorto(iso) === "hoy" ? aHora(Date.parse(iso)) : aFechaCorta(iso));
+
 /**
- * La revisión en el carril (iteración 29, prototipos/ajustes-oficina): una línea de estado (quién la tiene, o quién la
- * revisó) y, debajo, lo que ayuda a decidir. La acción de la pantalla ("Tomar para revisar", "Marcar revisado",
- * "Abrir el informe") va arriba a la derecha, en la barra, de tamaño normal: no un botón estirado en el carril.
+ * El estado de la revisión va en la barra, junto a su acción (iteración 38), como «Guardado» junto a «Publicar»:
+ * «● En revisión · la tomó usted» con «Marcar revisado». En la pantalla quedan «Siguiente», los errores y las
+ * confirmaciones.
  */
-function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; mia: boolean; correcciones: number; recargar: () => void }) {
+function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Levantamiento; mia: boolean; historial: Historial | undefined; recargar: () => void; mostrarPanel: ReactNode }) {
   const tomar = useTomar();
   const marcar = useMarcarRevisado(l.id);
   const notificar = useNotificar();
   const destino = useContext(DestinoAccionesBarra);
+  const sesion = useQuery(consultas.sesion());
   const [confirmando, setConfirmando] = useState<"revisado" | "reasignar" | null>(null);
-  // El chulo se dibuja solo cuando se acaba de marcar revisado, no cada vez que se abre uno ya revisado.
-  const revisadoAlAbrir = useRef(l.estado === "revisado");
   const tomada = () => notificar({ texto: "Revisión tomada: ya puede corregir" });
   const error = tomar.error ?? marcar.error;
   const invalidos = marcar.error instanceof ErrorApi ? (marcar.error.problema.errores ?? []) : [];
@@ -297,44 +375,34 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
   useTeclaSuelta("r", () => setConfirmando("revisado"), mia && l.estado === "en_revision");
 
   let linea: ReactNode;
-  let ayuda: ReactNode = null;
   let accion: ReactNode = null;
   if (l.estado === "enviado") {
     linea = (
       <>
-        <Insignia tono="enviado">Esperando revisión</Insignia>
-        <span>Nadie la ha tomado</span>
+        <b>Esperando revisión</b> · nadie la ha tomado
       </>
     );
-    ayuda = "Tómelo para corregirlo y marcarlo revisado.";
     accion = (
       <Boton variante="principal" title="Tomar para revisar · T" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada })}>
         Tomar para revisar
       </Boton>
     );
   } else if (l.estado === "revisado") {
+    const revisadoEn = [...(historial?.eventos ?? [])].reverse().find((e) => e.tipo === "levantamiento_revisado")?.hora;
+    const quien = l.revisor?.id === sesion.data?.usuario.id ? "usted" : (l.revisor?.nombre ?? "[Sin responsable]");
     linea = (
       <>
-        <i className="chulo-linea" aria-hidden>
-          <svg className={revisadoAlAbrir.current ? undefined : "chulo"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ "--largo": 24 } as CSSProperties}>
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        </i>
-        <span>
-          <b>Revisado</b> · por {l.revisor?.nombre ?? "[Sin responsable]"}
-        </span>
+        <b>Revisado</b> · por {quien}
+        {revisadoEn ? `, ${cuandoCorto(revisadoEn)}` : ""}
       </>
     );
-    ayuda = l.visita ? `Ya puede ir en el informe de la visita; ${l.tecnico.nombre} lo ve como revisado en su teléfono.` : "No tiene visita, así que no entra en un informe.";
     accion = l.visita ? <AbrirInforme visitaId={l.visita.id} /> : null;
   } else if (mia) {
     linea = (
       <>
-        <Insignia tono="revision">En revisión</Insignia>
-        <span>La tomó usted</span>
+        <b>En revisión</b> · la tomó usted
       </>
     );
-    ayuda = "Corrija lo que haga falta y márquelo revisado cuando esté listo.";
     accion = (
       <Boton variante="principal" icono={Check} title="Marcar revisado · R" onClick={() => setConfirmando("revisado")}>
         Marcar revisado
@@ -343,27 +411,28 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
   } else {
     linea = (
       <>
-        <Insignia tono="revision">En revisión</Insignia>
-        <span>
-          La tiene <b>{nombre}</b>
-        </span>
+        <b>En revisión</b> · la tiene {nombre}
       </>
     );
     accion = <Boton onClick={() => setConfirmando("reasignar")}>Tomar la revisión de {nombre}</Boton>;
   }
 
+  const barra = (
+    <div className="acciones" role="region" aria-label="Revisión">
+      {/* El estado cambia en su lugar al tomar o marcar revisado (iteración 27). */}
+      <span className={`estado-rev ${l.estado}`} role="status" style={{ viewTransitionName: nombreDeTransicion("estado", l.id) }}>
+        <i aria-hidden />
+        <span>{linea}</span>
+      </span>
+      {mostrarPanel}
+      {accion}
+    </div>
+  );
+
   return (
-    <section className="grupo-c" aria-label="Revisión">
-      <div className="rev-linea">{linea}</div>
-      {ayuda && <p className="ayuda">{ayuda}</p>}
+    <>
+      {destino ? createPortal(barra, destino) : barra}
       {l.estado === "revisado" && <SiguienteEnSerie actual={l.id} />}
-      {accion && (destino ? createPortal(<div className="acciones">{accion}</div>, destino) : <div className="col">{accion}</div>)}
-      {correcciones > 0 && (
-        <span className="corregido" style={{ margin: 0 }}>
-          <Pencil aria-hidden size={13} />
-          {correcciones === 1 ? "1 dato corregido" : `${correcciones} datos corregidos`}
-        </span>
-      )}
       {error && (
         <Aviso tono="error">
           <b>{mensajeDeError(error)}</b>
@@ -417,13 +486,14 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
           <p>Si tiene cambios sin guardar, los perderá. El cambio de responsable queda registrado.</p>
         </Confirmacion>
       )}
-    </section>
+    </>
   );
 }
 
 /**
  * Revisar en serie (iteración 27): al marcar revisado, el que más lleva esperando, con cuántos quedan, para seguir
- * sin volver a la lista. Es una fila del carril, no un botón relleno: la acción principal es abrir el informe.
+ * sin volver a la lista. Va encima de los datos (iteración 38), como fila y no como botón relleno: la acción principal
+ * es abrir el informe.
  */
 function SiguienteEnSerie({ actual }: { actual: string }) {
   const esperando = useBandeja("enviado");
@@ -453,7 +523,7 @@ function AbrirInforme({ visitaId }: { visitaId: string }) {
   return (
     <>
       <Boton variante="principal" icono={FileText} cargando={abrir.isPending} onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}>
-        Abrir el informe de la visita
+        Abrir el informe
       </Boton>
       {abrir.isError && <Aviso tono="error">{mensajeDeError(abrir.error)}</Aviso>}
     </>
@@ -790,7 +860,7 @@ function EditorCorreccion({
   );
 }
 
-/** El comentario sobre un dato se escribe debajo de su fila: no hay que subir al carril y volver a bajar. */
+/** El comentario sobre un dato se escribe debajo de su fila: no hay que ir al panel y volver. */
 function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento; seccion: string; campo: string; nombre: string; cerrar: () => void }) {
   const comentar = useComentar(l.id);
   const [texto, setTexto] = useState("");
@@ -1367,30 +1437,12 @@ function CapituloEnVivo({ l, correcciones, enCurso, organizacion }: { l: Levanta
   useEffect(() => {
     if (claveEnCurso) setAncla((a) => ({ selector: `tr[data-dato="${CSS.escape(claveEnCurso)}"]`, vez: (a?.vez ?? 0) + 1 }));
   }, [claveEnCurso]);
-  // "Ver en grande" (iteración 29): el capítulo a tamaño real en un diálogo ancho; en el carril se lee reducido.
-  const [enGrande, setEnGrande] = useState(false);
   const generar = (p: Plantillas) => p.plantillaInforme(contenido, { salida: { tipo: "vista" }, ...recursos });
+  // Del ancho del panel (iteración 38); «Ampliar» la muestra a tamaño real.
   return (
     <>
-      <Lienzo
-        clase="en-carril"
-        cabecera={
-          <span className="fila-flex" style={{ gap: 6 }}>
-            <span className="nota-l">El capítulo, como saldrá en el informe</span>
-            <BotonIcono icono={Maximize2} etiqueta="Ver el capítulo en grande" tamano="pequeno" onClick={() => setEnGrande(true)} />
-          </span>
-        }
-        nota="Lo azul no sale en el PDF"
-      >
-        <VistaDeDocumento ancho={740} titulo="Capítulo del informe" generar={generar} alPintar={marcar} ancla={ancla} />
-      </Lienzo>
-      {enGrande && (
-        <Dialogo forma="formulario" ancho="previa" titulo="El capítulo en el informe" subtitulo="Vista previa · lo azul es lo corregido y no sale en el PDF" alCerrar={() => setEnGrande(false)}>
-          <div className="capitulo-grande">
-            <VistaDeDocumento ancho={740} titulo="Capítulo del informe, en grande" generar={generar} alPintar={marcar} />
-          </div>
-        </Dialogo>
-      )}
+      <p className="nota-panel">El capítulo como saldrá en el informe. Lo azul es lo corregido y no sale en el PDF.</p>
+      <VistaDeDocumento titulo="Capítulo del informe" generar={generar} alPintar={marcar} ancla={ancla} />
     </>
   );
 }

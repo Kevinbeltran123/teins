@@ -18,26 +18,38 @@ type Contacto = Respuesta<"obtenerCliente">["contactos"][number];
 
 export const NOTA_APROXIMADA = "Vista previa: el PDF puede partir las páginas distinto";
 
-export function Lienzo({ cabecera, nota = NOTA_APROXIMADA, sinConexion = "", clase = "", children }: { cabecera: ReactNode; nota?: string; sinConexion?: string; clase?: string; children: ReactNode }) {
+/**
+ * El panel de la revisión (iteración 38) usa el mismo lienzo con sus pestañas por cabecera: ampliar solo cuando se ve
+ * la hoja, y al ampliarla, otra cabecera y otro camino de vuelta.
+ */
+export interface EnPanel {
+  etiqueta: string;
+  ampliable: boolean;
+  cabeceraAmpliada: ReactNode;
+  volver: string;
+}
+
+export function Lienzo({ cabecera, nota = NOTA_APROXIMADA, sinConexion = "", clase = "", panel, children }: { cabecera: ReactNode; nota?: string; sinConexion?: string; clase?: string; panel?: EnPanel | undefined; children: ReactNode }) {
   const enLinea = useConexion();
   const controles = useContext(ControlesDeVista);
+  const ampliada = controles?.ampliada ?? false;
   return (
-    <section className={`lienzo ${clase}`} aria-label="Vista previa" {...(controles?.ampliada && { role: "dialog", "aria-modal": true })}>
+    <section className={`lienzo ${clase}`} aria-label={panel?.etiqueta ?? "Vista previa"} {...(ampliada && { role: "dialog", "aria-modal": true })}>
       <div className="lienzo-cab">
-        {cabecera}
-        <span className="nota-l">{nota}</span>
+        {ampliada && panel ? panel.cabeceraAmpliada : cabecera}
+        {nota && <span className="nota-l">{nota}</span>}
         {controles &&
-          (controles.ampliada ? (
+          (ampliada ? (
             <Boton tamano="pequeno" autoFocus onClick={controles.reducir}>
-              Volver al editor
+              {panel?.volver ?? "Volver al editor"}
               <span aria-hidden className="kbd">
                 Esc
               </span>
             </Boton>
           ) : (
             <span className="controles-l">
-              <BotonIcono icono={Maximize2} tamano="pequeno" etiqueta="Ampliar la vista previa" onClick={controles.ampliar} />
-              <BotonIcono icono={X} tamano="pequeno" etiqueta="Ocultar la vista previa" onClick={controles.ocultar} />
+              {(panel?.ampliable ?? true) && <BotonIcono icono={Maximize2} tamano="pequeno" etiqueta={panel ? "Ampliar" : "Ampliar la vista previa"} onClick={controles.ampliar} />}
+              <BotonIcono icono={X} tamano="pequeno" etiqueta={panel ? "Ocultar el panel" : "Ocultar la vista previa"} onClick={controles.ocultar} />
             </span>
           ))}
       </div>
@@ -66,18 +78,18 @@ const MINIMO_HOJA = 360;
 const DIVISOR = 9;
 const esAncho = (v: unknown): v is number | null => v === null || (typeof v === "number" && Number.isFinite(v) && v >= MINIMO_HOJA);
 
-export function useVistaPrevia() {
+export function useVistaPrevia(nombre = "vista") {
   const alLado = useHojaAlLado();
-  const [oculta, setOculta] = usePreferencia("vista-oculta", false, esBooleano);
-  const [ancho, setAncho] = usePreferencia<number | null>("vista-ancho", null, esAncho);
+  const [oculta, setOculta] = usePreferencia(`${nombre}-oculta`, false, esBooleano);
+  const [ancho, setAncho] = usePreferencia<number | null>(`${nombre}-ancho`, null, esAncho);
   return { alLado, oculta, setOculta, ancho, setAncho, alLadoVisible: alLado && !oculta };
 }
 export type VistaPrevia = ReturnType<typeof useVistaPrevia>;
 
 /** «Mostrar la vista previa», en la barra, cuando la persona la ocultó. */
-export function BotonMostrarVista({ vista }: { vista: VistaPrevia }) {
+export function BotonMostrarVista({ vista, etiqueta = "Mostrar la vista previa" }: { vista: VistaPrevia; etiqueta?: string }) {
   if (!vista.alLado || !vista.oculta) return null;
-  return <BotonIcono icono={PanelRight} etiqueta="Mostrar la vista previa" onClick={() => vista.setOculta(false)} />;
+  return <BotonIcono icono={PanelRight} etiqueta={etiqueta} onClick={() => vista.setOculta(false)} />;
 }
 
 export function EditorConVista({ vista, minimoEditor = 520, editor, hoja, children }: { vista: VistaPrevia; minimoEditor?: number; editor: ReactNode; hoja: ReactNode; children?: ReactNode }) {
@@ -103,7 +115,7 @@ export function EditorConVista({ vista, minimoEditor = 520, editor, hoja, childr
     return () => {
       detras.forEach((n) => (n.inert = false));
       window.removeEventListener("keydown", alTeclear);
-      caja.current?.querySelector<HTMLButtonElement>('[aria-label="Ampliar la vista previa"]')?.focus();
+      caja.current?.querySelector<HTMLButtonElement>('.controles-l > button')?.focus();
     };
   }, [ampliada]);
 

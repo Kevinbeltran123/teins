@@ -76,7 +76,7 @@ test("oficina registra los contactos del cliente, publica con el PDF para ellos 
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await o.getByRole("button", { name: "Abrir el informe de la visita" }).click();
+  await o.getByRole("button", { name: "Abrir el informe" }).click();
   await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   await guardadoSolo(o);
@@ -141,7 +141,7 @@ test("si el PDF no se pudo generar, el envío no se ofrece otra vez: se publica 
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await o.getByRole("button", { name: "Abrir el informe de la visita" }).click();
+  await o.getByRole("button", { name: "Abrir el informe" }).click();
   await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   // Empieza como un PDF, así que se verifica, pero no se puede anexar: el PDF del informe falla.

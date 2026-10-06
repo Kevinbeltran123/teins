@@ -229,7 +229,7 @@ test("revisar en serie con el teclado: J, Enter, T, R y S; «?» muestra los ata
   const primero = o.url();
 
   await o.keyboard.press("t");
-  await expect(revision.getByText("La tomó usted")).toBeVisible();
+  await expect(revision.getByText("la tomó usted")).toBeVisible();
   await o.keyboard.press("r");
   const confirmar = o.getByRole("dialog", { name: /^¿Marcar revisado/ });
   await expect(confirmar).toBeVisible();

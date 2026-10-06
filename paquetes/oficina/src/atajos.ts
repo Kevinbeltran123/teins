@@ -12,8 +12,8 @@ export function esTeclaSuelta(e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKe
   return e.key.length === 1 ? e.key.toLowerCase() === tecla.toLowerCase() : e.key === tecla;
 }
 
-/** La copia de un diálogo que se está cerrando (`capa-saliendo`, 200 ms) no cuenta. */
-const hayDialogoAbierto = () => document.querySelector("dialog[open]:not(.capa-saliendo)") !== null;
+/** La copia de un diálogo que se está cerrando (`capa-saliendo`, 200 ms) no cuenta; la hoja ampliada sí, aunque no sea un `<dialog>`. */
+const hayDialogoAbierto = () => document.querySelector("dialog[open]:not(.capa-saliendo), [role='dialog'][aria-modal='true']") !== null;
 
 /** Una tecla suelta mientras la pantalla está a la vista. `teclas`: varias que hacen lo mismo («j» y «ArrowDown»). */
 export function useTeclaSuelta(teclas: string | readonly string[], accion: (e: KeyboardEvent) => void, activa = true) {
