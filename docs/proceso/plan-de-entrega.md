@@ -1052,7 +1052,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteración 40 · Lo atendido no es la siguiente visita
 
-**Estado:** pedido de Kevin el 2026-10-06 («soluciona todo el flujo completo, empieza»). Construida y verificada el 2026-10-06 (ADR-0041, migración `0037`, app de campo 15).
+**Estado:** pedido de Kevin el 2026-10-06 («soluciona todo el flujo completo, empieza»). Construida, verificada y desplegada en el entorno de pruebas el 2026-10-06 (ADR-0041, migración `0037`, app de campo 15).
 
 **El fallo:** una visita terminada, con su levantamiento enviado y revisado, seguía en el teléfono como «Siguiente visita» con «Iniciar levantamiento». Tenía dos causas:
 - en el teléfono, el orden de «Mis visitas» nunca sacaba una visita, solo la bajaba al final, y sin otra pendiente la atendida volvía a ser la primera;
