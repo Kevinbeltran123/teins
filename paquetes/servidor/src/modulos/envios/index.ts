@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, or } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp, type TextoPropio } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
@@ -59,6 +59,12 @@ export async function programarEnvios(tx: TxOrganizacion, p: Programacion): Prom
     if (p.pdfRuta) await encolarEnvio(tx, { organizacionId: p.organizacionId, envioId: id, pdfRuta: p.pdfRuta });
   }
   return destinatarios.length;
+}
+
+/** Versiones con envíos que llevan más de `antesDe` en cola (ADR-0043): su dueño los vuelve a lanzar si el PDF está listo. */
+export async function versionesConEnviosAtascados(tx: TxOrganizacion, antesDe: Date): Promise<string[]> {
+  const filas = await tx.selectDistinct({ versionId: envios.versionId }).from(envios).where(and(eq(envios.estado, "en_cola"), lt(envios.actualizadoEn, antesDe)));
+  return filas.map((f) => f.versionId);
 }
 
 /** El PDF de la versión quedó listo: salen sus envíos en cola, en la misma transacción que lo marca (ADR-0012). */

@@ -715,3 +715,8 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config): Identidad {
     },
   };
 }
+
+/** Las organizaciones, para las tareas periódicas que recorren cada una (ADR-0043). */
+export async function idsDeOrganizaciones(bd: BaseDeDatos): Promise<string[]> {
+  return (await bd.select({ id: organizaciones.id }).from(organizaciones)).map((o) => o.id);
+}

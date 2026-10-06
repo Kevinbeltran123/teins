@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { fileTypeFromBuffer } from "file-type";
 import { leerBoceto, LIMITES_BOCETO, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
@@ -24,6 +24,16 @@ export interface Archivos {
    */
   verificar(datos: { organizacionId: string; huella: string }, contexto: { ultimoIntento: boolean; registro?: RegistroDeTrabajo }): Promise<void>;
   registrarRutas(app: FastifyInstance): void;
+}
+
+/**
+ * Lo subido que nadie verificó en más de 12 horas vuelve a la cola, con la misma llave (ADR-0043): su trabajo se
+ * perdió o murió a medias, y sin verificar el informe que lo usa no se puede publicar.
+ */
+export async function recuperarArchivosAtascados(tx: TxOrganizacion, organizacionId: string, antesDe: Date): Promise<number> {
+  const atascados = await tx.select({ huella: archivos.huella }).from(archivos).where(and(eq(archivos.estado, "subido"), lt(archivos.subidoEn, antesDe)));
+  for (const { huella } of atascados) await encolar(tx, "archivos.verificar", { organizacionId, huella }, { llave: `archivos.verificar:${organizacionId}:${huella}` });
+  return atascados.length;
 }
 
 export interface RegistroDeTrabajo {

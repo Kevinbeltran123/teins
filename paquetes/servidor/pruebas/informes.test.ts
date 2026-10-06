@@ -7,6 +7,7 @@ import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { clientesYSitios } from "../src/modulos/clientes";
 import { crearGeneradorPdf } from "../src/modulos/informes";
 import { crearVisitas } from "../src/modulos/visitas";
+import { recuperarTrabajosAMedias } from "../src/modulos/mantenimiento";
 import { escapar, LOGO_TEINS, plantillaInforme } from "@teins/documentos";
 import { cabecerasSync, jpegDePrueba, servidorDePrueba } from "./ayudas";
 
@@ -102,7 +103,11 @@ describe("estado de un plano (iteración 26, ADR-0031)", () => {
     const tres = await subir(org.oficina.cookie, await planoDePrueba(3), "application/pdf");
     const danado = await subir(org.oficina.cookie, Buffer.from(`%PDF-1.7 ${randomUUID()} sin estructura`), "application/pdf");
     const estado = (cookie: string, huella: string) => get(cookie, `/api/archivos/${huella}/plano`);
+    // La cola es compartida con otros archivos de prueba: pudo verificarse ya. Se fija el estado que se prueba y su
+    // trabajo vuelve a la cola, para no depender de quién la procesa primero.
+    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null where huella = $1 and organizacion_id = $2", [tres, org.organizacionId]);
     expect((await estado(org.oficina.cookie, tres)).json()).toEqual({ estado: "verificando", paginas: null });
+    await s.propietario.pool.query("select cola.encolar('archivos.verificar', $1::jsonb, null, $2, 10)", [JSON.stringify({ organizacionId: org.organizacionId, huella: tres }), `archivos.verificar:${org.organizacionId}:${tres}`]);
     await s.procesarCola();
     expect((await estado(org.oficina.cookie, tres)).json()).toEqual({ estado: "listo", paginas: 3 });
     // Empieza como un PDF y pasa la verificación de siempre, pero el informe no podría anexarlo: se avisa antes de publicar.
@@ -333,5 +338,44 @@ describe("plantilla del informe", () => {
     expect(html).toContain("Sin dato");
     expect(html).toContain("Versión 3");
     expect(html).not.toContain("<b>");
+  });
+});
+
+describe("trabajos que quedaron a medias (ADR-0043)", () => {
+  /** Como si el trabajo se hubiera perdido: ya no está en la cola. */
+  const perderTrabajo = (llave: string) => s.propietario.pool.query("select graphile_worker.remove_job($1)", [llave]);
+  const hayTrabajo = async (llave: string) => (await s.propietario.pool.query("select 1 from graphile_worker.jobs where key = $1", [llave])).rowCount === 1;
+
+  it("un archivo subido sin verificar y un PDF que sigue «generando» vuelven a la cola pasadas 12 horas, y terminan", async () => {
+    const { oficina, organizacionId, informeId, revisado } = await visitaConRevisado();
+    const guardado = await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "Prueba", conclusiones: "Prueba", levantamientos: [revisado], planos: [] });
+    expect(guardado.statusCode, guardado.body).toBe(200);
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2 })).statusCode).toBe(201);
+    const { rows: versiones } = await s.propietario.pool.query("select id from informes.versiones where informe_id = $1", [informeId]);
+    const versionId = versiones[0].id as string;
+    const llavePdf = `informes.generarPdf:${versionId}`;
+
+    const plano = await subir(oficina.cookie, await planoDePrueba(), "application/pdf");
+    const llaveArchivo = `archivos.verificar:${organizacionId}:${plano}`;
+    await perderTrabajo(llavePdf);
+    await perderTrabajo(llaveArchivo);
+    // La cola es compartida con otros archivos de prueba: pudieron procesarlos antes de perderlos. Se fija lo atascado.
+    await s.propietario.pool.query("update informes.versiones set pdf_estado = 'generando', pdf_huella = null where id = $1", [versionId]);
+    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
+
+    // Dentro de su ventana de reintentos no se tocan: podrían seguir reintentando.
+    await recuperarTrabajosAMedias(s.conexionApp.bd);
+    expect(await hayTrabajo(llavePdf)).toBe(false);
+    expect(await hayTrabajo(llaveArchivo)).toBe(false);
+
+    await s.propietario.pool.query("update informes.versiones set publicada_en = now() - interval '13 hours' where id = $1", [versionId]);
+    await s.propietario.pool.query("update archivos.archivos set subido_en = now() - interval '13 hours' where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
+    await recuperarTrabajosAMedias(s.conexionApp.bd);
+    expect(await hayTrabajo(llavePdf)).toBe(true);
+    expect(await hayTrabajo(llaveArchivo)).toBe(true);
+
+    await s.esperarPdf({ informeId });
+    const { rows } = await s.propietario.pool.query("select estado from archivos.archivos where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
+    expect(rows[0].estado).toBe("verificado");
   });
 });

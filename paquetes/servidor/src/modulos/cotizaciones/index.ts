@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { nombreDelPdfDeCotizacion, piePaginaCotizacion, plantillaCotizacion } from "@teins/documentos";
 import { calcularTotales, lineasDesdeCantidades, numeroDeCotizacion, validarCotizacion, type BorradorCotizacion, type LineaDeCotizacion } from "@teins/dominio";
@@ -14,7 +14,7 @@ import type { Actor } from "../../plataforma/actor";
 import { registrarOperacion } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
 import type { Catalogo } from "../catalogo";
-import { cancelarEnvio, cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, reanudarEnvio, versionesConEnvioSinEntregar, type MensajeDeCotizacion } from "../envios";
+import { cancelarEnvio, cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, reanudarEnvio, versionesConEnvioSinEntregar, versionesConEnviosAtascados, type MensajeDeCotizacion } from "../envios";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
 import type { Visitas } from "../visitas";
@@ -496,4 +496,25 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
       registrarOperacion(app, "reanudarEnvioDeCotizacion", { politica: politicas.oficina, manejar: corregirEnvio("reanudar") });
     },
   };
+}
+
+/**
+ * Lo que quedó a medias hace más de `antesDe` (ADR-0043) vuelve a la cola con la misma llave: el PDF que sigue
+ * «generando» y, si ya está listo, los envíos que siguen «en cola». Lo retirado no se recupera.
+ */
+export async function recuperarCotizacionesAtascados(tx: TxOrganizacion, organizacionId: string, antesDe: Date): Promise<number> {
+  const generando = await tx
+    .select({ id: versionesCotizacion.id })
+    .from(versionesCotizacion)
+    .where(and(eq(versionesCotizacion.pdfEstado, "generando"), lt(versionesCotizacion.publicadaEn, antesDe), isNull(versionesCotizacion.retiradaEn)));
+  for (const { id } of generando) await encolar(tx, "cotizaciones.generarPdf", { organizacionId, versionId: id }, { cola: "pdf", llave: `cotizaciones.generarPdf:${id}` });
+  const conEnvios = await versionesConEnviosAtascados(tx, antesDe);
+  const listas = conEnvios.length
+    ? await tx
+        .select({ id: versionesCotizacion.id, huella: versionesCotizacion.pdfHuella })
+        .from(versionesCotizacion)
+        .where(and(inArray(versionesCotizacion.id, conEnvios), eq(versionesCotizacion.pdfEstado, "listo"), isNull(versionesCotizacion.retiradaEn)))
+    : [];
+  for (const { id, huella } of listas) if (huella) await enviarAlQuedarListo(tx, { organizacionId, versionId: id, pdfRuta: claveDeObjeto(organizacionId, huella) });
+  return generando.length + listas.length;
 }

@@ -8,6 +8,8 @@ export interface Trabajos {
   "avisos.enviar": { organizacionId: string; suscripcionId: string; titulo: string; cuerpo: string; etiqueta: string; ruta?: string | undefined };
   "envios.enviar": { organizacionId: string; envioId: string; pdfRuta: string };
   "cotizaciones.generarPdf": { organizacionId: string; versionId: string };
+  /** Tarea periódica (ADR-0043): sin datos; la programa el worker cada hora. */
+  "mantenimiento.recuperar": Record<string, unknown>;
 }
 export type NombreTrabajo = keyof Trabajos;
 

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { nombreDelPdfDeInforme, piePagina, plantillaInforme, type HojaDelInforme } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
@@ -14,7 +14,7 @@ import type { Actor } from "../../plataforma/actor";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Archivos } from "../archivos";
 import { registrar } from "../auditoria";
-import { cancelarEnvio, cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, reanudarEnvio, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeInforme } from "../envios";
+import { cancelarEnvio, cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, reanudarEnvio, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, versionesConEnviosAtascados, type MensajeDeInforme } from "../envios";
 import type { Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
@@ -578,4 +578,25 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
       });
     },
   };
+}
+
+/**
+ * Lo que quedó a medias hace más de `antesDe` (ADR-0043) vuelve a la cola con la misma llave: el PDF que sigue
+ * «generando» y, si ya está listo, los envíos que siguen «en cola». Lo retirado no se recupera.
+ */
+export async function recuperarInformesAtascados(tx: TxOrganizacion, organizacionId: string, antesDe: Date): Promise<number> {
+  const generando = await tx
+    .select({ id: versionesPublicadas.id })
+    .from(versionesPublicadas)
+    .where(and(eq(versionesPublicadas.pdfEstado, "generando"), lt(versionesPublicadas.publicadaEn, antesDe), isNull(versionesPublicadas.retiradaEn)));
+  for (const { id } of generando) await encolar(tx, "informes.generarPdf", { organizacionId, versionId: id }, { cola: "pdf", llave: `informes.generarPdf:${id}` });
+  const conEnvios = await versionesConEnviosAtascados(tx, antesDe);
+  const listas = conEnvios.length
+    ? await tx
+        .select({ id: versionesPublicadas.id, huella: versionesPublicadas.pdfHuella })
+        .from(versionesPublicadas)
+        .where(and(inArray(versionesPublicadas.id, conEnvios), eq(versionesPublicadas.pdfEstado, "listo"), isNull(versionesPublicadas.retiradaEn)))
+    : [];
+  for (const { id, huella } of listas) if (huella) await enviarAlQuedarListo(tx, { organizacionId, versionId: id, pdfRuta: claveDeObjeto(organizacionId, huella) });
+  return generando.length + listas.length;
 }

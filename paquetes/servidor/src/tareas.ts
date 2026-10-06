@@ -15,6 +15,8 @@ const esquemas: { [N in NombreTrabajo]: z.ZodType<Trabajos[N]> } = {
   "avisos.enviar": z.object({ organizacionId: z.uuid(), suscripcionId: z.uuid(), titulo: z.string(), cuerpo: z.string(), etiqueta: z.string(), ruta: z.string().regex(/^\/(?!\/)/).optional() }),
   "envios.enviar": z.object({ organizacionId: z.uuid(), envioId: z.uuid(), pdfRuta: z.string().min(1) }),
   "cotizaciones.generarPdf": z.object({ organizacionId: z.uuid(), versionId: z.uuid() }),
+  // Programada por el crontab: Graphile le pone sus propios datos (`_cron`), que no se usan.
+  "mantenimiento.recuperar": z.record(z.string(), z.unknown()),
 };
 
 /** `ultimoIntento`: el manejador deja visible un fallo permanente en lugar de quedar "en curso" (ADR-0012, regla 4). */
@@ -27,12 +29,15 @@ export function definirTareas({
   avisos,
   envios,
   cotizaciones,
+  mantenimiento,
 }: {
   archivos: Archivos;
   informes: GeneradorPdf;
   avisos: Pick<Avisos, "enviar">;
   envios: Pick<Envios, "enviar">;
   cotizaciones: GeneradorPdfCotizaciones;
+  /** Tarea periódica (ADR-0043). */
+  mantenimiento: { recuperar: () => Promise<unknown> };
 }): TaskList {
   const manejadores: Manejadores = {
     "archivos.verificar": (datos, contexto) => archivos.verificar(datos, contexto),
@@ -40,6 +45,9 @@ export function definirTareas({
     "avisos.enviar": (datos) => avisos.enviar(datos),
     "envios.enviar": (datos, contexto) => envios.enviar(datos, contexto),
     "cotizaciones.generarPdf": (datos, contexto) => cotizaciones.generarPdf(datos, contexto),
+    "mantenimiento.recuperar": async () => {
+      await mantenimiento.recuperar();
+    },
   };
   return Object.fromEntries(
     (Object.keys(manejadores) as NombreTrabajo[]).map((nombre) => {

@@ -58,6 +58,7 @@ import { crearFormatos } from "../src/modulos/formatos";
 import { crearIdentidad } from "../src/modulos/identidad";
 import { crearGeneradorPdf } from "../src/modulos/informes";
 import { crearGeneradorPdfDeCotizaciones } from "../src/modulos/cotizaciones";
+import { recuperarTrabajosAMedias } from "../src/modulos/mantenimiento";
 import { definirTareas } from "../src/tareas";
 import { codigoTotp } from "./totp";
 
@@ -110,7 +111,14 @@ export async function servidorDePrueba(opciones: { config?: Partial<Record<strin
   const avisos = crearAvisos({ bd: conexionApp.bd, config, enviador: opciones.enviadorDeAvisos });
   // Envíos al cliente (ADR-0028): con los proveedores que traiga la prueba.
   const envios = crearEnvios({ bd: conexionApp.bd, almacenamiento, config, proveedores: opciones.proveedoresDeEnvio ?? {} });
-  const tareas = definirTareas({ archivos, informes, avisos, envios, cotizaciones: crearGeneradorPdfDeCotizaciones({ bd: conexionApp.bd, almacenamiento, config }) });
+  const tareas = definirTareas({
+    archivos,
+    informes,
+    avisos,
+    envios,
+    cotizaciones: crearGeneradorPdfDeCotizaciones({ bd: conexionApp.bd, almacenamiento, config }),
+    mantenimiento: { recuperar: () => recuperarTrabajosAMedias(conexionApp.bd) },
+  });
   // La cola es compartida entre archivos: solo el que trae sus proveedores procesa los envíos, con los suyos.
   if (!opciones.proveedoresDeEnvio) delete tareas["envios.enviar"];
   if (!opciones.enviadorDeAvisos) delete tareas["avisos.enviar"];
