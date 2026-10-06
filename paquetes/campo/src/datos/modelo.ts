@@ -93,6 +93,8 @@ export interface EnvioLocal {
   ultimoError?: { codigo: string; mensaje: string } | undefined;
   recibidoEn?: string;
   creadoEn: string;
+  /** La versión de la app que el servidor rechazó: con otra versión, el envío vuelve a la cola (ADR-0015). */
+  versionAppRechazada?: number | undefined;
 }
 
 /** Lo que muestran las pantallas de un envío: su estado, sin el comando. */

@@ -40,6 +40,8 @@ export interface AlmacenSincronizacion {
   registrarRed(alcanzable: boolean): Promise<void>;
   /** Tras iniciar sesión o actualizar la app, lo que esperaba por eso vuelve a la cola. */
   reanudar(desde: EnvioLocal["estado"]): Promise<void>;
+  /** Lo que el servidor rechazó por versión vieja vuelve a la cola si esta app ya es otra (ADR-0015). */
+  reanudarTrasActualizar(versionApp: number): Promise<void>;
 
   /** Identidad del teléfono; se crea la primera vez que se necesita. */
   dispositivo(): Promise<DispositivoLocal>;
@@ -215,6 +217,13 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
       if (actual?.clave === "red" && actual.valor.alcanzable === alcanzable) return;
       await db.ajustes.put({ clave: "red", valor: { alcanzable, desde: new Date().toISOString() } });
     },
+    async reanudarTrasActualizar(versionApp) {
+      await db.envios
+        .where("estado")
+        .equals("requiere_actualizar")
+        .filter((e) => e.versionAppRechazada !== versionApp)
+        .modify({ estado: "pendiente", proximoIntentoEn: 0 });
+    },
     async reanudar(desde) {
       await db.envios.where("estado").equals(desde).modify({ estado: "pendiente", proximoIntentoEn: 0 });
     },
@@ -230,7 +239,9 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
     },
 
     async salud(tecnicoId, versionApp) {
-      const pendientes = (await db.envios.where("tecnicoId").equals(tecnicoId).toArray()).filter((e) => e.estado !== "recibido");
+      // Lo descartado (un envío rechazado en la papelera) no cuenta como pendiente.
+      const descartados = new Set((await db.levantamientos.where("tecnicoId").equals(tecnicoId).filter((l) => !!l.descartadoEn).primaryKeys()) as string[]);
+      const pendientes = (await db.envios.where("tecnicoId").equals(tecnicoId).toArray()).filter((e) => e.estado !== "recibido" && !descartados.has(e.levantamientoId));
       const conError = pendientes.filter((e) => e.ultimoError && e.ultimoError.codigo !== "sin_conexion").sort((a, b) => b.creadoEn.localeCompare(a.creadoEn));
       const almacenamiento = await estadoAlmacenamiento().catch(() => undefined);
       const { usoBytes, cuotaBytes } = almacenamiento ?? {};

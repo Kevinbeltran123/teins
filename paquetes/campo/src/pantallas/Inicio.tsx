@@ -109,7 +109,9 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
     if (pedirPapelera > 0) abrirCuenta("descartados");
   }, [pedirPapelera]);
 
-  const deEnvios = [...(envios?.values() ?? [])];
+  // Lo descartado (un envío que oficina rechazó, en la papelera) ya no está por enviar.
+  const sinDescartar = new Set((lista ?? []).map((l) => l.id));
+  const deEnvios = [...(envios?.values() ?? [])].filter((e) => sinDescartar.has(e.levantamientoId));
   const porEnviar = deEnvios.filter((e) => e.estado !== "recibido").length;
   const esperanSesion = deEnvios.some((e) => e.estado === "requiere_sesion") || Boolean(bajada?.sesionVencida);
   const esperanActualizacion = deEnvios.some((e) => e.estado === "requiere_actualizar");

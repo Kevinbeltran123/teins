@@ -183,6 +183,44 @@ describe("motor de sincronización", () => {
     expect(await estados(db)).toEqual(["recibido"]);
   });
 
+  it("una foto que el almacenamiento rechaza no da vueltas sin fin: espera cada vez más y termina en error, con su motivo", async () => {
+    const { db, reloj } = await dispositivo(1, 1);
+    const s = servidorFalso();
+    const [foto] = await db.archivos.toCollection().primaryKeys();
+    s.rechazarSiempre(foto as string);
+    const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+
+    await motor.sincronizar();
+    const primeras = s.llamadas.filter((l) => l === "enviarComando").length;
+    // Sin esperar, no lo vuelve a intentar: antes reintentaba en cada sincronización.
+    await motor.sincronizar();
+    expect(s.llamadas.filter((l) => l === "enviarComando").length).toBe(primeras);
+    for (let i = 0; i < 12; i++) {
+      reloj.avanzar(ESPERA_MAXIMA_MS);
+      await motor.sincronizar();
+    }
+    const [envio] = await db.envios.toArray();
+    expect(envio).toMatchObject({ estado: "error", ultimoError: { codigo: "archivos_faltantes" } });
+    expect(s.llamadas.filter((l) => l === "enviarComando").length).toBeLessThan(12);
+  });
+
+  it("rechazado por versión vieja, espera la app nueva y sale al actualizarla; con la misma versión no insiste (ADR-0015)", async () => {
+    const { db, reloj } = await dispositivo();
+    const s = servidorFalso();
+    s.programar("enviarComando", "version_no_soportada");
+    const almacen = almacenDexie(db);
+    const motorDe = (versionApp: number) => crearMotor({ versionApp, almacen, transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora });
+
+    await motorDe(14).sincronizar();
+    expect(await estados(db)).toEqual(["requiere_actualizar"]);
+    await motorDe(14).sincronizar();
+    expect(s.llamadas.filter((l) => l === "enviarComando")).toHaveLength(1);
+
+    // La app se actualizó: lo que esperaba sale solo, sin que el técnico haga nada.
+    await motorDe(15).sincronizar();
+    expect(await estados(db)).toEqual(["recibido"]);
+  });
+
   it("un envío que quedó 'enviando' porque la app se cerró en medio se retoma", async () => {
     const { db, reloj } = await dispositivo();
     await db.envios.toCollection().modify({ estado: "enviando" });

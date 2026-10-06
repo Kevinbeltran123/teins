@@ -429,6 +429,26 @@ describe("descartar un borrador (ADR-0035)", () => {
     await expect(repo.descartar(id, despues)).rejects.toThrow();
   });
 
+  it("uno enviado que oficina rechazó para siempre sí se descarta; se recupera con su envío y la papelera se lo lleva con él", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const id = "0192f0e0-0000-7000-8000-000000000515";
+    const sinObligatorios: VersionFormato = { ...formato, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "t", etiqueta: "T", tipo: "texto" }] }] };
+    await repo.crear(crearLevantamiento(sinObligatorios, id, ahora), "t1");
+    expect((await repo.enviar(id, sinObligatorios, ahora)).ok).toBe(true);
+    await db.envios.update(id, { estado: "error", ultimoError: { codigo: "conflicto", mensaje: "Ya lo envió otra persona" } });
+
+    await repo.descartar(id, ahora);
+    expect(await repo.listar("t1")).toEqual([]);
+    await repo.recuperar(id);
+    expect((await db.envios.get(id))?.estado).toBe("error");
+
+    await repo.descartar(id, ahora);
+    expect(await repo.vaciarPapelera(new Date("2026-10-25T10:00:00.000Z"))).toBe(1);
+    // Sin el levantamiento, su envío no queda huérfano contando como «por enviar».
+    expect(await db.envios.get(id)).toBeUndefined();
+  });
+
   it("si la visita ya tiene otro borrador, vuelve como suelto", async () => {
     const db = nuevaBase();
     const repo = repositorioDexie(db);

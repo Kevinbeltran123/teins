@@ -10,6 +10,8 @@ export const ESPERA_MAXIMA_MS = 5 * 60_000;
 const PASADAS_MAXIMAS = 3;
 /** Sin un motivo para bajar ya (abrir la app, recuperar señal, un envío recibido), se baja cada 5 minutos. */
 export const INTERVALO_BAJADA_MS = 5 * 60_000;
+/** Veces seguidas que pueden faltar archivos antes de decirle al técnico que una foto o un dibujo no sube. */
+const INTENTOS_CON_ARCHIVOS_FALTANTES = 6;
 /** Páginas por sincronización: un teléfono muy atrasado termina en la siguiente. */
 const PAGINAS_MAXIMAS = 20;
 
@@ -132,8 +134,18 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
       switch (codigo) {
         case "archivos_faltantes":
           await almacen.marcarPorSubir(problema.faltantes ?? []);
-          await almacen.actualizarEnvio(envio.levantamientoId, { estado: "pendiente", proximoIntentoEn: reloj(), ultimoError: { codigo, mensaje: error.message } });
-          return true;
+          // La primera vez se suben y se reintenta en la misma sincronización.
+          if (envio.ultimoError?.codigo !== "archivos_faltantes") {
+            await almacen.actualizarEnvio(envio.levantamientoId, { estado: "pendiente", proximoIntentoEn: reloj(), ultimoError: { codigo, mensaje: error.message } });
+            return true;
+          }
+          // Si siguen faltando, algo los rechaza: espera cada vez más y, al final, lo dice en lugar de dar vueltas.
+          if (envio.intentos + 1 >= INTENTOS_CON_ARCHIVOS_FALTANTES) {
+            await almacen.actualizarEnvio(envio.levantamientoId, { estado: "error", intentos: envio.intentos + 1, ultimoError: { codigo, mensaje: error.message } });
+            return false;
+          }
+          await reintentarDespues(envio, codigo, error.message);
+          return false;
         case "archivos_en_verificacion":
           await reintentarDespues(envio, codigo, error.message, (problema.reintentarEnSegundos ?? 5) * 1000);
           return false;
@@ -142,7 +154,7 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
           await almacen.actualizarEnvio(envio.levantamientoId, { estado: "requiere_sesion", ultimoError: { codigo, mensaje: error.message } });
           return false;
         case "version_protocolo_no_soportada":
-          await almacen.actualizarEnvio(envio.levantamientoId, { estado: "requiere_actualizar", ultimoError: { codigo, mensaje: error.message } });
+          await almacen.actualizarEnvio(envio.levantamientoId, { estado: "requiere_actualizar", versionAppRechazada: versionApp, ultimoError: { codigo, mensaje: error.message } });
           return false;
         default:
           if (error.reintentable) await reintentarDespues(envio, codigo, error.message);
@@ -291,6 +303,8 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
 
   async function unaVez(bajadaPedida: boolean): Promise<ResultadoSincronizacion> {
     await almacen.recuperarInterrumpidos();
+    // Lo que esperaba una app nueva sale apenas corre una versión distinta de la que el servidor rechazó.
+    await almacen.reanudarTrasActualizar(versionApp);
     sesionRechazada = false;
     huboRecibidos = false;
     try {

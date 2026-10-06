@@ -211,7 +211,7 @@ export function Captura({
           <BotonRedondo icono={ChevronLeft} etiqueta="Volver a mis visitas" onClick={volver} />
         </div>
         <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 pb-10">
-          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} estadoChat={estadoChat} />
+          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} estadoChat={estadoChat} alDescartar={alDescartar ?? volver} />
         </main>
       </div>
     );
@@ -278,11 +278,11 @@ export function Captura({
         ) : !formato ? (
           <Aviso tono="error">Falta en este teléfono el formato de este levantamiento. Conéctate para descargarlo; el levantamiento se conserva.</Aviso>
         ) : levantamiento.estado === "enviado" ? (
-          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} estadoChat={estadoChat} />
+          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} estadoChat={estadoChat} alDescartar={alDescartar ?? volver} />
         ) : bloqueado ? (
           <>
             <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>
-            <Enviado levantamiento={levantamiento} formato={formato} envio={null} servidor={null} volver={volver} estadoChat={estadoChat} />
+            <Enviado levantamiento={levantamiento} formato={formato} envio={null} servidor={null} volver={volver} estadoChat={estadoChat} alDescartar={alDescartar ?? volver} />
           </>
         ) : (
           <EsqueletoBloques etiqueta="Cargando levantamiento" altos={["alto", "medio"]} />
@@ -1575,6 +1575,7 @@ function Enviado({
   servidor,
   volver,
   estadoChat,
+  alDescartar,
 }: {
   levantamiento: LevantamientoLocal;
   formato: VersionFormato;
@@ -1583,7 +1584,10 @@ function Enviado({
   volver: () => void;
   /** El chat con oficina (ADR-0040): lo guarda Captura, porque esta vista se vuelve a montar al cambiar el estado. */
   estadoChat: { abierto: boolean; abrir: (abierto: boolean) => void };
+  /** Descartó un envío que oficina rechazó para siempre: quien abrió la captura vuelve al inicio y lo dice. */
+  alDescartar: () => void;
 }) {
+  const [descartando, setDescartando] = useState(false);
   const enLinea = useServidorAlcanzable();
   const { abierto: chatAbierto, abrir: setChatAbierto } = estadoChat;
   const loEnviado = useRef<HTMLDetailsElement>(null);
@@ -1660,6 +1664,28 @@ function Enviado({
               <Boton cargando={reintentando} onClick={() => void reintentar()}>
                 Reintentar envío
               </Boton>
+              {/* Si oficina no lo va a aceptar nunca (otro ya lo envió, el formato se retiró), aquí sale del inicio. */}
+              <Boton variante="fantasma" icono={Trash} onClick={() => setDescartando(true)}>
+                Descartar levantamiento
+              </Boton>
+              {descartando && (
+                <Confirmacion
+                  nivel="irreversible"
+                  forma="inferior"
+                  titulo="¿Descartar este levantamiento?"
+                  confirmar="Descartar"
+                  descartar="Volver"
+                  accion={() => repositorio.descartar(levantamiento.id, new Date())}
+                  mensajeDeError={() => "No se pudo descartar. Intenta de nuevo."}
+                  alCerrar={() => setDescartando(false)}
+                  alTerminar={alDescartar}
+                  consecuencias={[
+                    { icono: Smartphone, texto: "Deja de esperar a oficina y sale de Mis visitas" },
+                    { icono: Trash, texto: "Queda 30 días en Descartados, en tu cuenta", detalle: "De ahí lo recuperas con todo lo que tenía" },
+                    { icono: TriangleAlert, texto: "Después se borra del teléfono con sus fotos", detalle: "Oficina nunca lo recibió: no queda otra copia" },
+                  ]}
+                />
+              )}
             </>
           ) : (
             !recibido && estado && <p className="-mt-2 text-center text-ayuda text-texto-secundario">{estado.texto}</p>

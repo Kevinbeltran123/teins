@@ -151,9 +151,12 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
     },
     descartar(id, ahora) {
       return escribir(id, async (actual) => {
-        // Solo un borrador nunca enviado: lo enviado ya es de oficina.
-        if (actual.estado !== "borrador") throw new Error("Solo se descarta un borrador");
-        if (await db.envios.get(id)) throw new Error("Este levantamiento ya se envió");
+        // Un borrador nunca enviado, o uno que oficina rechazó para siempre (el envío quedó en error y nunca entró):
+        // lo que oficina recibió ya es suyo y no se descarta.
+        const envio = await db.envios.get(id);
+        const rechazado = actual.estado === "enviado" && envio?.estado === "error";
+        if (actual.estado !== "borrador" && !rechazado) throw new Error("Solo se descarta un borrador o un envío rechazado");
+        if (envio && !rechazado) throw new Error("Este levantamiento ya se envió");
         return { resultado: undefined, levantamiento: { ...actual, descartadoEn: ahora.toISOString() } };
       });
     },
@@ -169,7 +172,7 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
     },
     async vaciarPapelera(ahora) {
       const limite = new Date(ahora.getTime() - DIAS_EN_LA_PAPELERA * 24 * 60 * 60 * 1000).toISOString();
-      return db.transaction("rw", [db.levantamientos, db.archivos], async () => {
+      return db.transaction("rw", [db.levantamientos, db.archivos, db.envios], async () => {
         const vencidos = await db.levantamientos.filter((g) => !!g.descartadoEn && g.descartadoEn < limite).toArray();
         if (vencidos.length === 0) return 0;
         const quedan = await db.levantamientos.filter((g) => !vencidos.some((v) => v.id === g.id)).toArray();
@@ -178,6 +181,8 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
         const huellas = [...new Set(vencidos.flatMap((g) => referencias(g).archivos))].filter((h) => !enUso.has(h));
         await db.archivos.bulkDelete(huellas);
         await db.levantamientos.bulkDelete(vencidos.map((g) => g.id));
+        // Un envío rechazado se descarta con su levantamiento: sin él, quedaría contando como «por enviar».
+        await db.envios.bulkDelete(vencidos.map((g) => g.id));
         return vencidos.length;
       });
     },

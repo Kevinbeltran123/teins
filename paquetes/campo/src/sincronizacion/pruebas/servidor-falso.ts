@@ -12,7 +12,9 @@ export type Falla =
   /** El servidor procesa y confirma, pero la respuesta se pierde (ADR-0018, nivel 3). */
   | "red_despues"
   | "error_500"
-  | "sesion_vencida";
+  | "sesion_vencida"
+  /** El servidor ya no acepta esta versión del protocolo (ADR-0015). */
+  | "version_no_soportada";
 
 type Operacion = keyof Transporte;
 
@@ -50,6 +52,8 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
   const respuestas = new Map<string, { id: string; texto: string; veces: number }>();
   /** Levantamientos revisados: su conversación está cerrada. */
   const revisados = new Set<string>();
+  /** Archivos que el almacenamiento rechaza siempre. */
+  const rechazadas = new Set<string>();
 
   function aplicarFalla<T>(op: Operacion, ejecutar: () => T): T {
     llamadas.push(op);
@@ -58,6 +62,7 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     if (revocados.size > 0 && op !== "subir" && op !== "consultarOrdenes") throw error("no_autenticado", 401);
     if (falla === "error_500") throw error("error_interno", 500);
     if (falla === "sesion_vencida") throw error("no_autenticado", 401);
+    if (falla === "version_no_soportada") throw error("version_protocolo_no_soportada", 426);
     const resultado = ejecutar();
     if (falla === "red_despues") throw new ErrorDeRed(new TypeError("Network connection was lost"));
     return resultado;
@@ -76,6 +81,8 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     async subir(url, _cabeceras, datos) {
       return aplicarFalla("subir", () => {
         const huella = url.split("/").at(-1)!;
+        // Un archivo que el almacenamiento rechaza siempre (por ejemplo, demasiado grande).
+        if (rechazadas.has(huella)) throw new ErrorDeSubida(413);
         const contenido = Buffer.from(datos);
         // Como el almacenamiento real: rechaza un contenido que no corresponde a la huella firmada.
         if (createHash("sha256").update(contenido).digest("hex") !== huella) throw new ErrorDeSubida(400);
@@ -171,6 +178,9 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     respuestas,
     marcarRevisado(levantamientoId: string) {
       revisados.add(levantamientoId);
+    },
+    rechazarSiempre(huella: string) {
+      rechazadas.add(huella);
     },
     cancelar(visitaId: string) {
       canceladas.add(visitaId);

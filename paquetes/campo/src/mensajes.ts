@@ -60,6 +60,8 @@ export function porQueNoEntro(codigo: string | undefined): string {
     case "respuestas_invalidas":
     case "entrada_invalida":
       return "Oficina no pudo aceptar algunos datos.";
+    case "archivos_faltantes":
+      return "Una foto o un dibujo no se pudo subir.";
     default:
       return "Oficina no pudo recibirlo.";
   }
