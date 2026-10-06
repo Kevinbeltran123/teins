@@ -63,43 +63,37 @@ export function compararPorHorario(a: Pick<VisitaLocal, "programadaPara" | "hora
   return a.programadaPara.localeCompare(b.programadaPara) || (a.horaInicio ?? "99:99").localeCompare(b.horaInicio ?? "99:99");
 }
 
-/** Grupos de "Mis visitas", en el orden en que se muestran. */
-const GRUPO = { conBorrador: 0, hoy: 1, atrasada: 2, futura: 3, atendida: 4 } as const;
+/** Grupos de las visitas pendientes, en el orden en que se muestran. */
+const GRUPO = { conBorrador: 0, hoy: 1, atrasada: 2, futura: 3 } as const;
 
 /**
- * Orden de "Mis visitas". La primera es el punto focal de la pantalla (DESIGN.md): va en el bloque
- * azul con la acción principal.
+ * La agenda de "Mis visitas" (iteración 40). Una visita está atendida si tiene algo enviado o el técnico la terminó, y
+ * no tiene un borrador a medias: ya no es la siguiente, ni atrasada.
  *
- * 1. Con un borrador a medias, aunque sea de otro día: es trabajo que solo existe en este teléfono.
- * 2. Las de hoy sin atender: el plan del día.
- * 3. Las atrasadas sin atender: siguen asignadas, oficina las espera, pero no tapan las de hoy.
- * 4. Las futuras.
- * 5. Las atendidas (algo enviado y nada a medias): al terminar una visita, el foco pasa a la siguiente.
- *
- * Dentro de cada grupo, por fecha (la más antigua primero; las atendidas, la más reciente primero), en el mismo
- * día por hora de inicio con las de todo el día al final (`compararPorHorario`), y después por cliente, para que el
- * orden no dependa del servidor.
+ * - `pendientes`: lo que falta, en orden. La primera es el punto focal de la pantalla (DESIGN.md): «Siguiente visita»,
+ *   con la acción principal. Si no hay ninguna, no hay siguiente visita.
+ *   1. Con un borrador a medias, aunque sea de otro día: es trabajo que solo existe en este teléfono.
+ *   2. Las de hoy. 3. Las atrasadas: siguen asignadas y oficina las espera, pero no tapan las de hoy. 4. Las futuras.
+ *   Dentro de cada grupo, por fecha; el mismo día por hora de inicio con las de todo el día al final
+ *   (`compararPorHorario`) y después por cliente, para que el orden no dependa del servidor.
+ * - `atendidasHoy`: las atendidas de hoy, aparte y al final, por si hace falta otro levantamiento (otro formato). Las
+ *   de días anteriores no se muestran: su levantamiento sigue en «Enviados».
  */
-export function ordenarVisitas(
+export function agendaDeVisitas(
   visitas: readonly VisitaLocal[],
   hoy: string,
   conBorrador: ReadonlySet<string>,
   conEnviados: ReadonlySet<string>,
-): VisitaLocal[] {
-  const grupo = (v: VisitaLocal) =>
-    conBorrador.has(v.id)
-      ? GRUPO.conBorrador
-      : conEnviados.has(v.id)
-        ? GRUPO.atendida
-        : v.programadaPara === hoy
-          ? GRUPO.hoy
-          : v.programadaPara < hoy
-            ? GRUPO.atrasada
-            : GRUPO.futura;
-  return [...visitas].sort((a, b) => {
-    const [ga, gb] = [grupo(a), grupo(b)];
-    if (ga !== gb) return ga - gb;
-    const porFecha = ga === GRUPO.atendida ? b.programadaPara.localeCompare(a.programadaPara) : 0;
-    return porFecha || compararPorHorario(a, b) || a.cliente.nombre.localeCompare(b.cliente.nombre, "es");
-  });
+  ahora = new Date(),
+): { pendientes: VisitaLocal[]; atendidasHoy: VisitaLocal[] } {
+  const atendida = (v: VisitaLocal) => !conBorrador.has(v.id) && (conEnviados.has(v.id) || terminadaEn(v) !== null);
+  const deHoy = (v: VisitaLocal) => {
+    const terminada = terminadaEn(v);
+    return v.programadaPara === hoy || (terminada !== null && hoyLocal(new Date(terminada)) === hoyLocal(ahora));
+  };
+  const grupo = (v: VisitaLocal) => (conBorrador.has(v.id) ? GRUPO.conBorrador : v.programadaPara === hoy ? GRUPO.hoy : v.programadaPara < hoy ? GRUPO.atrasada : GRUPO.futura);
+  const porCliente = (a: VisitaLocal, b: VisitaLocal) => compararPorHorario(a, b) || a.cliente.nombre.localeCompare(b.cliente.nombre, "es");
+  const pendientes = visitas.filter((v) => !atendida(v)).sort((a, b) => grupo(a) - grupo(b) || porCliente(a, b));
+  const atendidasHoy = visitas.filter((v) => atendida(v) && deHoy(v)).sort(porCliente);
+  return { pendientes, atendidasHoy };
 }

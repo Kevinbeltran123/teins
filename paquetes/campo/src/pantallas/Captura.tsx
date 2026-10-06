@@ -108,7 +108,7 @@ import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion, p
 import { useBotonAtras } from "../dispositivo/atras";
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
-import { compararPorHorario, terminadaEn } from "../visitas";
+import { agendaDeVisitas, hoyLocal } from "../visitas";
 import { armarChat, horaDelChat, sinLeer } from "../conversacion";
 import { leidoHasta, pendientesDe } from "../datos/conversacion";
 import { Chat } from "./Chat";
@@ -1607,10 +1607,11 @@ function Enviado({
   // La siguiente visita, si hay otra: el botón lleva a ella.
   const siguienteVisita = useLiveQuery(async () => {
     if (!levantamiento.tecnicoId) return null;
-    const hoy = new Date().toLocaleDateString("en-CA");
-    // Una ya terminada no es la siguiente; en el mismo día, por hora de inicio (ADR-0037).
-    const otras = (await visitasDe(db, levantamiento.tecnicoId)).filter((v) => v.id !== levantamiento.visitaId && !v.fueraDeAlcance && v.programadaPara >= hoy && !terminadaEn(v));
-    return otras.sort(compararPorHorario)[0] ?? null;
+    // La misma agenda del inicio (iteración 40): lo atendido o terminado no es la siguiente; las atrasadas sí lo son.
+    const propios = await repositorio.listar(levantamiento.tecnicoId);
+    const con = (estado: LevantamientoLocal["estado"]) => new Set(propios.filter((l) => l.estado === estado && l.visitaId).map((l) => l.visitaId!));
+    const visitas = (await visitasDe(db, levantamiento.tecnicoId)).filter((v) => v.id !== levantamiento.visitaId && !v.fueraDeAlcance);
+    return agendaDeVisitas(visitas, hoyLocal(), con("borrador"), con("enviado")).pendientes[0] ?? null;
   }, [levantamiento.tecnicoId, levantamiento.visitaId]);
   // Lo que dijo el servidor en la bajada manda sobre el estado de envío del teléfono.
   const estado = servidor ? estadoSegunServidor(servidor) : envio ? estadoDeEnvio(envio, enLinea) : null;

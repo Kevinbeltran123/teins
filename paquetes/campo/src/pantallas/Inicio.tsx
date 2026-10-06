@@ -16,7 +16,7 @@ import { claseDeTono, estadoCorto } from "../mensajes";
 import { armarChat, horaDelChat, sinLeer } from "../conversacion";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
-import { enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, ordenarVisitas, terminadaEn } from "../visitas";
+import { agendaDeVisitas, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, terminadaEn } from "../visitas";
 import { VERSION_APP } from "../version";
 import { AvisoDeAlmacenamiento, Diagnostico } from "./Diagnostico";
 
@@ -133,14 +133,15 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
   // Visitas con sus levantamientos; una reasignada solo se muestra si el técnico ya empezó algo en ella (regla 17).
   const porVisita = Map.groupBy(lista ?? [], (l) => l.visitaId ?? "");
   const visitasCon = (estado: LevantamientoLocal["estado"]) => new Set((lista ?? []).filter((l) => l.estado === estado && l.visitaId).map((l) => l.visitaId!));
-  const mostradas = ordenarVisitas(
+  // Lo atendido no es la siguiente visita (iteración 40): sin nada pendiente, no hay siguiente.
+  const { pendientes, atendidasHoy } = agendaDeVisitas(
     (visitas ?? []).filter((v) => !v.fueraDeAlcance || porVisita.has(v.id)),
     hoyLocal(),
     visitasCon("borrador"),
     visitasCon("enviado"),
   );
-  const [siguiente, ...otras] = mostradas;
-  const idsMostradas = new Set(mostradas.map((v) => v.id));
+  const [siguiente, ...otras] = pendientes;
+  const idsMostradas = new Set([...pendientes, ...atendidasHoy].map((v) => v.id));
   const sueltos = (lista ?? []).filter((l) => !l.visitaId || !idsMostradas.has(l.visitaId));
 
   // Lo que no entró va aparte y arriba: es lo único de la lista que pide hacer algo (iteración 32).
@@ -211,8 +212,8 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
           <>
             {siguiente && <VisitaFocal visita={siguiente} levantamientos={porVisita.get(siguiente.id) ?? []} contexto={contexto} />}
 
-            {mostradas.length === 0 && (
-              <EstadoVacio icono={CalendarDays} titulo="Sin visitas asignadas">
+            {pendientes.length === 0 && (
+              <EstadoVacio icono={CalendarDays} titulo={atendidasHoy.length > 0 ? "No tienes visitas pendientes" : "Sin visitas asignadas"}>
                 {!bajada?.ultimaEn && !alcanzable ? (
                   "Conéctate para descargar tus visitas y los formatos."
                 ) : !bajada?.ultimaEn ? (
@@ -243,6 +244,18 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
                   Después
                 </h2>
                 {otras.map((v) => (
+                  <FilaVisita key={v.id} visita={v} levantamientos={porVisita.get(v.id) ?? []} contexto={contexto} />
+                ))}
+              </section>
+            )}
+
+            {/* Lo atendido hoy, aparte y al final: por si hace falta otro levantamiento en la misma visita. */}
+            {atendidasHoy.length > 0 && (
+              <section aria-labelledby="titulo-atendidas" className="flex flex-col gap-2.5">
+                <h2 id="titulo-atendidas" className="pt-2 text-ayuda font-extrabold text-texto-secundario">
+                  Atendidas hoy
+                </h2>
+                {atendidasHoy.map((v) => (
                   <FilaVisita key={v.id} visita={v} levantamientos={porVisita.get(v.id) ?? []} contexto={contexto} />
                 ))}
               </section>

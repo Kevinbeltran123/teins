@@ -58,6 +58,10 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   // En la lista, el estado que dio el servidor en la bajada.
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
   await expect(page.getByRole("region", { name: "Enviados" }).getByText("Recibido", { exact: true })).toBeVisible();
+  // Era su única visita: ya no es la siguiente (iteración 40). Queda en «Atendidas hoy», por si hace falta otro formato.
+  await expect(page.getByRole("region", { name: "Siguiente visita" })).toHaveCount(0);
+  await expect(page.getByText("No tienes visitas pendientes")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Atendidas hoy" }).getByText(cliente, { exact: false })).toBeVisible();
 
   // Oficina, en su propio navegador de escritorio.
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });
