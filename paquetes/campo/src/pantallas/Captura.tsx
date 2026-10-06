@@ -36,6 +36,8 @@ import {
 import {
   Aviso,
   BarraDePaso,
+  Building,
+  WifiOff,
   Boton,
   BotonAgregar,
   BotonRedondo,
@@ -107,6 +109,12 @@ import { useBotonAtras } from "../dispositivo/atras";
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 import { compararPorHorario, terminadaEn } from "../visitas";
+import { armarChat, horaDelChat, sinLeer } from "../conversacion";
+import { leidoHasta, pendientesDe } from "../datos/conversacion";
+import { Chat } from "./Chat";
+
+/** Id del dato en «Ver lo que enviaste», para ir a él desde el chat. */
+const idDeDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`.replace(/[^a-zA-Z0-9_-]/g, "");
 
 // El editor de bocetos pesa (perfect-freehand y la lógica del lienzo): se carga solo al dibujar (ADR-0011).
 const EditorBoceto = lazy(() => import("./EditorBoceto"));
@@ -135,9 +143,12 @@ export function Captura({
   volver,
   alMostrar,
   alDescartar,
+  conversacion = false,
 }: {
   id: string;
   volver: () => void;
+  /** Abrir de una vez el chat con oficina: lo pidió un aviso (ADR-0040). */
+  conversacion?: boolean;
   /** Ya se ve lo del levantamiento (no el esqueleto): la tarjeta del inicio puede convertirse en la cabecera. */
   alMostrar?: () => void;
   /** Se descartó el borrador (ADR-0035): quien abrió la captura vuelve al inicio y lo dice. */
@@ -148,6 +159,8 @@ export function Captura({
   const envio = useLiveQuery(async () => (await db.envios.get(id)) ?? null, [id]);
   const servidor = useLiveQuery(() => estadoDe(db, id), [id]);
   const formatos = useFormatos();
+  const [chatAbierto, setChatAbierto] = useState(conversacion);
+  const estadoChat = { abierto: chatAbierto, abrir: setChatAbierto };
   // El botón atrás del teléfono hace lo que la flecha de la pantalla (iteración 24c): el borrador dice cuál es.
   const atrasDelBorrador = useRef<(() => void) | null>(null);
   useBotonAtras(() => (atrasDelBorrador.current ?? volver)());
@@ -198,7 +211,7 @@ export function Captura({
           <BotonRedondo icono={ChevronLeft} etiqueta="Volver a mis visitas" onClick={volver} />
         </div>
         <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 pb-10">
-          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} />
+          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} estadoChat={estadoChat} />
         </main>
       </div>
     );
@@ -265,11 +278,11 @@ export function Captura({
         ) : !formato ? (
           <Aviso tono="error">Falta en este teléfono el formato de este levantamiento. Conéctate para descargarlo; el levantamiento se conserva.</Aviso>
         ) : levantamiento.estado === "enviado" ? (
-          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} />
+          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} estadoChat={estadoChat} />
         ) : bloqueado ? (
           <>
             <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>
-            <Enviado levantamiento={levantamiento} formato={formato} envio={null} servidor={null} volver={volver} />
+            <Enviado levantamiento={levantamiento} formato={formato} envio={null} servidor={null} volver={volver} estadoChat={estadoChat} />
           </>
         ) : (
           <EsqueletoBloques etiqueta="Cargando levantamiento" altos={["alto", "medio"]} />
@@ -1561,14 +1574,26 @@ function Enviado({
   envio,
   servidor,
   volver,
+  estadoChat,
 }: {
   levantamiento: LevantamientoLocal;
   formato: VersionFormato;
   envio: EstadoDeEnvio | null;
   servidor: EstadoServidor | null;
   volver: () => void;
+  /** El chat con oficina (ADR-0040): lo guarda Captura, porque esta vista se vuelve a montar al cambiar el estado. */
+  estadoChat: { abierto: boolean; abrir: (abierto: boolean) => void };
 }) {
   const enLinea = useServidorAlcanzable();
+  const { abierto: chatAbierto, abrir: setChatAbierto } = estadoChat;
+  const loEnviado = useRef<HTMLDetailsElement>(null);
+  const tecnicoId = levantamiento.tecnicoId;
+  const pendientes = useLiveQuery(async () => (tecnicoId ? pendientesDe(db, tecnicoId, levantamiento.id) : []), [tecnicoId, levantamiento.id]);
+  const leido = useLiveQuery(async () => (tecnicoId ? leidoHasta(db, tecnicoId, levantamiento.id) : null), [tecnicoId, levantamiento.id]);
+  const sitio = useLiveQuery(async () => {
+    const v = levantamiento.visitaId && tecnicoId ? await visitaDe(db, tecnicoId, levantamiento.visitaId) : null;
+    return v ? `${v.cliente.nombre} · ${v.sitio.nombre}` : "";
+  }, [levantamiento.visitaId, tecnicoId]);
   const [reintentar, reintentando] = useSinRepetir(async () => {
     await repositorio.reintentarEnvio(levantamiento.id);
     sincronizarEnSegundoPlano();
@@ -1590,9 +1615,17 @@ function Enviado({
   // Lo que dijo el servidor en la bajada manda sobre el estado de envío del teléfono.
   const estado = servidor ? estadoSegunServidor(servidor) : envio ? estadoDeEnvio(envio, enLinea) : null;
   const comentarios = servidor?.comentarios ?? [];
-  // En una repetición, el comentario dice en cuál (iteración 9).
-  const sobre = (c: { seccion?: string | undefined; campo?: string | undefined }) =>
-    c.seccion && c.campo ? nombreDeDato(formato, levantamiento.repeticiones ?? {}, c.seccion, c.campo, true) : undefined;
+  const chat = armarChat(comentarios, pendientes ?? []);
+  const ultimo = chat.at(-1);
+  const nuevos = leido === undefined ? 0 : sinLeer(chat, leido);
+  const enCola = chat.filter((m) => m.estado === "cola").length;
+  // «Ver lo que enviaste» abierto en el dato del que habla la conversación.
+  function verDato(seccion: string, campo: string) {
+    setChatAbierto(false);
+    if (loEnviado.current) loEnviado.current.open = true;
+    requestAnimationFrame(() => document.getElementById(idDeDato(seccion, campo))?.scrollIntoView({ block: "center", behavior: sinMovimiento() ? "auto" : "smooth" }));
+  }
+  if (chatAbierto && tecnicoId) return <Chat levantamiento={levantamiento} formato={formato} servidor={servidor} sitio={sitio ?? ""} volver={() => setChatAbierto(false)} verDato={verDato} />;
   return (
     <>
       {levantamiento.estado === "enviado" ? (
@@ -1650,27 +1683,46 @@ function Enviado({
           </div>
         )
       )}
-      {comentarios.length > 0 && (
-        <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-4">
-          <h2 id="titulo-comentarios" className="text-subtitulo font-extrabold">
+      {comentarios.length > 0 && ultimo && (
+        <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-2">
+          {/* Sin señal y con respuestas en cola: quedan en el teléfono y salen solas (ADR-0040). */}
+          {!enLinea && enCola > 0 && (
+            <div className="flex gap-2.5 rounded-panel bg-alerta-fondo px-3.5 py-3 text-[14.5px] leading-snug" role="status">
+              <WifiOff aria-hidden className="mt-0.5 size-[18px] flex-none text-alerta-texto" />
+              <span>
+                <b className="block font-semibold">Sin señal</b>
+                {enCola === 1 ? "Tu mensaje está guardado en el teléfono y se envía solo" : "Tus mensajes están guardados en el teléfono y se envían solos"} cuando vuelva.
+              </span>
+            </div>
+          )}
+          <h2 id="titulo-comentarios" className="px-1 text-ayuda font-bold text-texto-secundario">
             Comentarios de oficina
           </h2>
-          <ul className="flex flex-col divide-y divide-division">
-            {comentarios.map((c) => (
-              <li key={c.id} className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0">
-                <p className="text-ayuda text-texto-secundario">
-                  {c.autor} · {fechaHora(c.creadoEn)}
-                  {sobre(c) && ` · Sobre ${sobre(c)}`}
-                  {/* Oficina lo corrigió (ADR-0035): se ve la última versión. */}
-                  {c.editadoEn && " · Editado"}
-                </p>
-                <p className="text-cuerpo whitespace-pre-line">{c.texto}</p>
-              </li>
-            ))}
-          </ul>
+          <button
+            type="button"
+            onClick={() => setChatAbierto(true)}
+            className="grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-px rounded-panel border border-division bg-panel px-3.5 py-3 text-left focus-visible:outline-3 focus-visible:outline-foco"
+          >
+            <span className="row-span-2 grid size-11 place-items-center rounded-full bg-acento/12 text-acento">
+              <Building aria-hidden className="size-[21px]" />
+            </span>
+            <b className="text-[16px] font-semibold">Oficina</b>
+            <span className={`justify-self-end text-[13px] ${nuevos > 0 ? "font-semibold text-acento" : "text-texto-secundario"}`}>{horaDelChat(ultimo.en)}</span>
+            <span className="min-w-0 truncate text-[14.5px] text-texto-secundario">
+              {ultimo.de === "tecnico" ? "Tú: " : ""}
+              {ultimo.texto}
+            </span>
+            {nuevos > 0 ? (
+              <span className="inline-grid h-[22px] min-w-[22px] place-items-center justify-self-end rounded-full bg-acento px-[7px] text-[12.5px] font-semibold text-sobre-acento" aria-label={nuevos === 1 ? "1 sin leer" : `${nuevos} sin leer`}>
+                {nuevos}
+              </span>
+            ) : (
+              <span />
+            )}
+          </button>
         </section>
       )}
-      <details open={levantamiento.estado !== "enviado" || undefined} className="group flex flex-col rounded-panel border border-division bg-panel [&[open]>summary]:mb-1">
+      <details ref={loEnviado} open={levantamiento.estado !== "enviado" || undefined} className="group flex flex-col rounded-panel border border-division bg-panel [&[open]>summary]:mb-1">
         <summary className="flex min-h-tactil cursor-pointer items-center justify-between gap-3 rounded-panel px-4 text-cuerpo font-bold focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&::-webkit-details-marker]:hidden">
           Ver lo que enviaste
           <ChevronDown aria-hidden className="size-5 shrink-0 text-texto-secundario transition-transform duration-200 motion-reduce:transition-none group-open:rotate-180" />
@@ -1682,7 +1734,8 @@ function Enviado({
             {g === 0 && todos.length > 1 && <h2 className="text-subtitulo font-extrabold">{titulo}</h2>}
             {grupo.map((campo) => {
               const valor = levantamiento.respuestas[clave]?.[campo.clave];
-              return campo.tipo === "foto" && !esNoObtenido(valor) ? (
+              // Cada dato con su id: el chat lleva al dato del que habla (ADR-0040).
+              return <div key={campo.clave} id={idDeDato(clave, campo.clave)} className="scroll-mt-4">{campo.tipo === "foto" && !esNoObtenido(valor) ? (
                 <FotosLeidas key={campo.clave} etiqueta={campo.etiqueta} ids={Array.isArray(valor) ? (valor as string[]) : []} />
               ) : campo.tipo === "cantidades" && esCantidades(valor) ? (
                 <TablaCantidades key={campo.clave} etiqueta={campo.etiqueta} lineas={valor} />
@@ -1694,7 +1747,7 @@ function Enviado({
                 <ValorLeido key={campo.clave} etiqueta={campo.etiqueta}>
                   {describirValor(campo, valor)}
                 </ValorLeido>
-              );
+              )}</div>;
             })}
           </div>
         )),

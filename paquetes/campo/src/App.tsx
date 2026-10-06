@@ -6,7 +6,8 @@ import { olvidarLecturas } from "./datos/lecturaRecordada";
 import { debeGuiarInstalacion } from "./dispositivo/instalacion";
 import { Inicio } from "./pantallas/Inicio";
 import { useUsuario } from "./sesion/usuario";
-import { programarSincronizacion } from "./sincronizacion/disparar";
+import { programarSincronizacion, sincronizarEnSegundoPlano } from "./sincronizacion/disparar";
+import { conversacionPedida, escucharAvisos } from "./dispositivo/conversacion";
 
 // Solo hace falta la primera vez o cuando la sesión vence: se carga aparte.
 const IniciarSesion = lazy(() => import("./pantallas/IniciarSesion").then((m) => ({ default: m.IniciarSesion })));
@@ -15,7 +16,7 @@ const InstalarApp = lazy(() => import("./pantallas/InstalarApp"));
 // La captura no hace falta para abrir la app: se carga aparte, apenas se abre el inicio, para que abrir una visita no
 // pase por una pantalla de carga (iteración 27). El service worker la guarda con todo lo demás, así que abre igual
 // sin conexión (ADR-0011).
-type PropsCaptura = { id: string; volver: () => void; alMostrar?: () => void; alDescartar?: () => void };
+type PropsCaptura = { id: string; volver: () => void; alMostrar?: () => void; alDescartar?: () => void; conversacion?: boolean };
 let moduloCaptura: Promise<ComponentType<PropsCaptura>> | undefined;
 const cargarCaptura = () => (moduloCaptura ??= import("./pantallas/Captura").then((m) => m.Captura));
 /** Lo más que se espera a que la captura lea el levantamiento antes de mostrarse (si tarda, abre con su esqueleto). */
@@ -52,6 +53,8 @@ class ErrorDeLectura extends Component<{ children: ReactNode }, { fallo: boolean
 export function App() {
   const usuario = useUsuario();
   const [abierto, setAbierto] = useState<string>();
+  // Abierto desde un aviso de oficina: con el chat a la vista (ADR-0040).
+  const [conChat, setConChat] = useState(false);
   const [Captura, setCaptura] = useState<ComponentType<PropsCaptura>>();
   // El levantamiento que se acaba de cerrar: el inicio lo resalta en su lista (lo enviado baja a "Enviados").
   const [recien, setRecien] = useState<string>();
@@ -87,7 +90,7 @@ export function App() {
    * Abrir un levantamiento (iteración 27): la tarjeta de la visita se convierte en la cabecera de la captura. La
    * transición espera a que la captura lea lo suyo, para no mostrar un esqueleto en el medio.
    */
-  const abrir = (id: string) =>
+  const abrir = (id: string, chat = false) =>
     void conTransicion(async () => {
       const componente = await cargarCaptura();
       await new Promise<void>((listo) => {
@@ -95,6 +98,7 @@ export function App() {
         setTimeout(listo, ESPERA_CAPTURA_MS);
         setCaptura(() => componente);
         setRecien(undefined);
+        setConChat(chat);
         setAbierto(id);
       });
       mostrada.current = null;
@@ -105,6 +109,24 @@ export function App() {
       setAbierto(undefined);
       window.scrollTo(0, 0);
     }, "fundido");
+  // Un aviso de oficina abre su chat (ADR-0040): al abrir la app desde él, o con la app ya abierta.
+  const abrirRef = useRef(abrir);
+  abrirRef.current = abrir;
+  useEffect(() => {
+    if (!conSesion) return;
+    const pedida = conversacionPedida(location.href);
+    if (pedida) {
+      history.replaceState(history.state, "", "/");
+      abrirRef.current(pedida, true);
+    }
+    return escucharAvisos({
+      abrir: (direccion) => {
+        const id = conversacionPedida(direccion);
+        if (id) abrirRef.current(id, true);
+      },
+      consultar: () => sincronizarEnSegundoPlano({ bajar: true }),
+    });
+  }, [conSesion]);
   // Con el permiso ya dado, la suscripción se renueva al abrir: sin preguntar nada (ADR-0023).
   useEffect(() => {
     if (conSesion) void import("./dispositivo/avisos").then((m) => m.renovarSuscripcion()).catch(() => undefined);
@@ -118,7 +140,9 @@ export function App() {
   else if (abierto && Captura)
     pantalla = (
       <Captura
+        key={`${abierto}:${conChat}`}
         id={abierto}
+        conversacion={conChat}
         volver={volver}
         alMostrar={() => mostrada.current?.()}
         alDescartar={() => {

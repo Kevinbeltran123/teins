@@ -109,8 +109,6 @@ export function estadoCorto(envio: EstadoDeEnvio | undefined, servidor: EstadoSe
   }
 }
 
-export const comentariosDeOficina = (n: number) => (n === 1 ? "1 comentario de oficina" : `${n} comentarios de oficina`);
-
 export const claseDeTono: Record<Tono, string> = {
   ok: "text-sync-ok",
   pendiente: "text-sync-pendiente",

@@ -11,9 +11,9 @@ import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal, UsuarioLocal, V
 import { estaInstalada } from "../dispositivo/almacenamiento";
 import { plataforma } from "../dispositivo/instalacion";
 import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/useConexion";
-import { fechaHora } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos, vigentes } from "../formatos";
-import { claseDeTono, comentariosDeOficina, estadoCorto } from "../mensajes";
+import { claseDeTono, estadoCorto } from "../mensajes";
+import { armarChat, horaDelChat, sinLeer } from "../conversacion";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 import { enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, ordenarVisitas, terminadaEn } from "../visitas";
@@ -55,6 +55,8 @@ interface Contexto {
   formatos: VersionFormato[];
   envios: Map<string, EstadoDeEnvio>;
   servidor: Map<string, EstadoServidor>;
+  /** Por levantamiento: hasta dónde leyó el técnico su chat y cuántas respuestas esperan señal (ADR-0040). */
+  chats: { leido: Map<string, string>; enCola: Map<string, number> };
   enLinea: boolean;
   /** Para nombrar un levantamiento por su cliente y sitio en las listas (iteración 32). */
   visitas: ReadonlyMap<string, VisitaLocal>;
@@ -71,6 +73,17 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
   const envios = useLecturaRecordada(`envios:${usuario.id}`, async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
   const servidor = useLecturaRecordada(`servidor:${usuario.id}`, async () => new Map((await estadosDe(db, usuario.id)).map((e) => [e.id, e])), [usuario.id]);
   const visitas = useLecturaRecordada(`visitas:${usuario.id}`, () => visitasDe(db, usuario.id), [usuario.id]);
+  // Sin abrir lo sellado: lo leído no lleva contenido y la cola se cuenta por lo que está a la vista.
+  const chats = useLecturaRecordada(
+    `chats:${usuario.id}`,
+    async () => {
+      const leido = new Map((await db.lecturasDeChat.where("tecnicoId").equals(usuario.id).toArray()).map((l) => [l.levantamientoId, l.leidoHasta]));
+      const enCola = new Map<string, number>();
+      for (const r of await db.respuestasPendientes.where("tecnicoId").equals(usuario.id).toArray()) if (!r.enviada && !r.rechazo) enCola.set(r.levantamientoId, (enCola.get(r.levantamientoId) ?? 0) + 1);
+      return { leido, enCola };
+    },
+    [usuario.id],
+  );
   const bajada = useLecturaRecordada(`bajada:${usuario.id}`, async () => (await db.bajadas.get(usuario.id)) ?? null, [usuario.id]);
   const formatos = useFormatos();
   const deOtros = useLecturaRecordada(`deOtros:${usuario.id}`, () => repositorio.contarDeOtros(usuario.id), [usuario.id]);
@@ -115,7 +128,7 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
   });
 
   const cargando = lista === undefined || envios === undefined || servidor === undefined || visitas === undefined || bajada === undefined || formatos === undefined;
-  const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, visitas: new Map(visitas.map((v) => [v.id, v])), enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar, recien };
+  const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, chats: chats ?? { leido: new Map(), enCola: new Map() }, visitas: new Map(visitas.map((v) => [v.id, v])), enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar, recien };
 
   // Visitas con sus levantamientos; una reasignada solo se muestra si el técnico ya empezó algo en ella (regla 17).
   const porVisita = Map.groupBy(lista ?? [], (l) => l.visitaId ?? "");
@@ -573,7 +586,9 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
   const envio = contexto.envios.get(l.id);
   const servidor = contexto.servidor.get(l.id);
   const estado = l.estado === "borrador" ? { texto: "Borrador", tono: "pendiente" as const } : estadoCorto(envio, servidor, contexto.enLinea);
-  const comentarios = servidor?.comentarios?.length ?? 0;
+  // El chat con oficina (ADR-0040): lo nuevo de oficina, o lo que el técnico respondió y espera señal.
+  const nuevos = servidor?.comentarios?.length ? sinLeer(armarChat(servidor.comentarios, []), contexto.chats.leido.get(l.id) ?? null) : 0;
+  const enCola = contexto.chats.enCola.get(l.id) ?? 0;
   const visita = l.visitaId ? contexto.visitas.get(l.visitaId) : undefined;
   const formato = nombreDeFormato(contexto.formatos, l.formato);
   const Icono = estado ? (l.estado === "borrador" ? Pencil : ICONO_DE_TONO[estado.tono]) : undefined;
@@ -587,7 +602,10 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
       className={`grid min-h-tactil w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-3 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco ${contexto.recien === l.id ? "animate-resaltar" : ""}`}
     >
       <strong className="truncate text-cuerpo font-semibold">{visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : formato}</strong>
-      <span className="text-ayuda text-texto-secundario">{diaCorto(l.creadoEn)}</span>
+      <span className="inline-flex items-center gap-1.5 text-ayuda text-texto-secundario">
+        {nuevos > 0 && <i className="size-2 rounded-full bg-acento" aria-label="Sin leer" />}
+        {diaCorto(l.creadoEn)}
+      </span>
       <span className="col-span-2 flex min-w-0 items-center gap-1.5 text-ayuda text-texto-secundario">
         {estado && Icono && (
           <span className={`inline-flex shrink-0 items-center gap-1.5 font-medium ${CLASE_DE_TONO[estado.tono]} [&_svg]:size-4`}>
@@ -595,8 +613,18 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
             {estado.texto}
           </span>
         )}
-        <span className="truncate">{[visita ? formato : fotos(contarFotos(l)), comentarios > 0 ? comentariosDeOficina(comentarios) : ""].filter(Boolean).map((t) => `· ${t}`).join(" ")}</span>
+        <span className="truncate">· {visita ? formato : fotos(contarFotos(l))}</span>
       </span>
+      {nuevos > 0 ? (
+        <span className="col-span-2 text-cuerpo font-semibold text-acento">Oficina te escribió</span>
+      ) : (
+        enCola > 0 && (
+          <span className="col-span-2 inline-flex items-center gap-1.5 text-cuerpo font-medium text-alerta-texto">
+            <Clock aria-hidden className="size-4" />
+            {enCola === 1 ? "1 respuesta por enviar" : `${enCola} respuestas por enviar`}
+          </span>
+        )
+      )}
     </button>
   );
 }
@@ -605,7 +633,7 @@ const diaCorto = (iso: string) => {
   const fecha = new Date(iso);
   const hoy = new Date();
   const ayer = new Date(hoy.getTime() - 86_400_000);
-  if (fecha.toDateString() === hoy.toDateString()) return fechaHora(iso).split(" ").slice(-2).join(" ");
+  if (fecha.toDateString() === hoy.toDateString()) return horaDelChat(iso);
   if (fecha.toDateString() === ayer.toDateString()) return "Ayer";
   return new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" }).format(fecha);
 };
