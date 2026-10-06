@@ -46,6 +46,10 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
   const terminadas = new Map<string, { en: string; llamadas: Map<string, number> }>();
   /** Visitas canceladas: terminarlas responde "estado inválido". */
   const canceladas = new Set<string>();
+  /** Respuestas a oficina por llave, con cuántas llamadas llegaron (ADR-0040). */
+  const respuestas = new Map<string, { id: string; texto: string; veces: number }>();
+  /** Levantamientos revisados: su conversación está cerrada. */
+  const revisados = new Set<string>();
 
   function aplicarFalla<T>(op: Operacion, ejecutar: () => T): T {
     llamadas.push(op);
@@ -139,6 +143,17 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
         return { terminada: { en: previa.en } };
       });
     },
+    async responderComentario(levantamientoId, _comentarioId, { llave, texto }) {
+      return aplicarFalla("responderComentario", () => {
+        // Como el real: un reintento con la misma llave devuelve el mismo mensaje, aunque ya esté revisado.
+        const previa = respuestas.get(llave);
+        if (!previa && revisados.has(levantamientoId)) throw error("estado_invalido", 409);
+        const mensaje = previa ?? { id: crypto.randomUUID(), texto, veces: 0 };
+        mensaje.veces++;
+        respuestas.set(llave, mensaje);
+        return { id: mensaje.id, texto, de: "tecnico" as const, autor: "Técnico", creadoEn: new Date(reloj).toISOString(), llave, leido: false };
+      });
+    },
   };
 
   return {
@@ -153,6 +168,10 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     },
     recibidos,
     terminadas,
+    respuestas,
+    marcarRevisado(levantamientoId: string) {
+      revisados.add(levantamientoId);
+    },
     cancelar(visitaId: string) {
       canceladas.add(visitaId);
     },

@@ -71,6 +71,7 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
     informarDispositivo: conRed(base.informarDispositivo),
     consultarOrdenes: conRed(base.consultarOrdenes),
     terminarVisita: conRed(base.terminarVisita),
+    responderComentario: conRed(base.responderComentario),
   };
 
   /** Alguna llamada respondió "no autenticado" en esta sincronización: puede ser una revocación. */
@@ -184,6 +185,41 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
     }
   }
 
+  /**
+   * Respuestas a oficina (ADR-0040), con la misma espera que los envíos. Sin red siguen en la cola; un rechazo sin
+   * remedio (ya revisado, el comentario ya no existe) las deja en el teléfono con su motivo y no se reintentan.
+   */
+  async function enviarRespuestas(tecnicoId: string) {
+    const detenidos = new Set<string>();
+    for (const r of await almacen.respuestasListas(reloj(), tecnicoId)) {
+      // Una que falló detiene las siguientes del mismo chat: llegan en el orden en que se escribieron.
+      if (detenidos.has(r.levantamientoId)) continue;
+      const intentos = r.intentos + 1;
+      const despues = async () => {
+        detenidos.add(r.levantamientoId);
+        await almacen.reintentarRespuesta(r.llave, { intentos, proximoIntentoEn: reloj() + espera(intentos, aleatorio) });
+      };
+      try {
+        const mensaje = await transporte.responderComentario(r.levantamientoId, r.comentarioId, { llave: r.llave, texto: r.texto });
+        await almacen.resolverRespuesta(r.llave, { enviada: { id: mensaje.id, creadoEn: mensaje.creadoEn } });
+        // La conversación con su mensaje baja en la misma sincronización.
+        huboRecibidos = true;
+      } catch (error) {
+        if (error instanceof ErrorDeRed) {
+          await despues();
+          throw new SinConexion();
+        }
+        if (!(error instanceof ErrorApi)) throw error;
+        if (error.codigo === "no_autenticado") {
+          sesionRechazada = true;
+          return;
+        }
+        if (error.reintentable || error.codigo === "version_protocolo_no_soportada") await despues();
+        else await almacen.resolverRespuesta(r.llave, { rechazo: error.codigo === "estado_invalido" ? "revisado" : error.codigo === "no_encontrado" ? "no_existe" : "invalida" });
+      }
+    }
+  }
+
   /** Fuera del outbox: la red corta la sincronización; una sesión rechazada se revisa al final; lo demás espera al próximo ciclo. */
   function tolerar(error: unknown): void {
     if (error instanceof ErrorDeRed) throw new SinConexion();
@@ -272,6 +308,7 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
         if (!otraPasada) break;
       }
       if (!sesionRechazada) await enviarTerminaciones(tecnicoId);
+      if (!sesionRechazada) await enviarRespuestas(tecnicoId);
       if (!sesionRechazada && (await tocaBajar(tecnicoId, bajadaPedida))) await bajar(tecnicoId);
 
       if (sesionRechazada) {

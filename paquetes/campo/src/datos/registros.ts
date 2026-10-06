@@ -12,6 +12,8 @@ import type {
   EstadoServidorGuardado,
   LevantamientoGuardado,
   LevantamientoLocal,
+  RespuestaGuardada,
+  RespuestaPendiente,
   VisitaGuardada,
   VisitaLocal,
 } from "./modelo";
@@ -108,6 +110,19 @@ export async function abrirEstado(db: BaseCampo, g: EstadoServidorGuardado): Pro
 export async function sellarEstado(db: BaseCampo, e: EstadoServidor): Promise<EstadoServidorGuardado> {
   const { comentarios, ...resto } = e;
   return { ...resto, sellado: await sellarJson(db, e.tecnicoId, contexto.estado(e.id), comentarios ?? []) };
+}
+
+type ContenidoRespuesta = Pick<RespuestaPendiente, "comentarioId" | "texto" | "creadaEn">;
+
+/** Lo que respondió el técnico (ADR-0040): nace sellado, porque ya se sabe de quién es. */
+export async function sellarRespuesta(db: BaseCampo, r: RespuestaPendiente): Promise<RespuestaGuardada> {
+  const { comentarioId, texto, creadaEn, ...resto } = r;
+  return { ...resto, sellado: await sellarJson(db, r.tecnicoId, contexto.respuesta(r.llave), { comentarioId, texto, creadaEn } satisfies ContenidoRespuesta) };
+}
+
+export async function abrirRespuesta(db: BaseCampo, g: RespuestaGuardada): Promise<RespuestaPendiente> {
+  const { sellado, ...resto } = g;
+  return { ...resto, ...(await abrirJson<ContenidoRespuesta>(db, g.tecnicoId, contexto.respuesta(g.llave), sellado)) };
 }
 
 /**

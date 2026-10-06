@@ -173,6 +173,19 @@ type AlaVistaDeVisita = "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida" |
 /** Como se guarda: cliente, sitio, dirección, motivo y horario van sellados. */
 export type VisitaGuardada = Pick<VisitaLocal, AlaVistaDeVisita> & Partial<Omit<VisitaLocal, AlaVistaDeVisita>> & { sellado?: Sellado | undefined };
 
+/** Un mensaje de la conversación de un comentario (ADR-0040), como lo dejó el servidor. */
+export interface MensajeDeConversacion {
+  id: string;
+  texto: string;
+  de: "oficina" | "tecnico";
+  autor: string;
+  creadoEn: string;
+  /** Los del técnico: la llave con que salió de este u otro teléfono. */
+  llave?: string | undefined;
+  /** Los del técnico: alguien de oficina lo leyó («Leído»). */
+  leido?: boolean | undefined;
+}
+
 /** Nota de oficina sobre un levantamiento enviado (corte 3). No modifica datos. */
 export interface ComentarioDeOficina {
   id: string;
@@ -183,6 +196,38 @@ export interface ComentarioDeOficina {
   creadoEn: string;
   /** Oficina lo corrigió (ADR-0035). */
   editadoEn?: string | undefined;
+  /** La conversación que abre (ADR-0040). Va sellada con el resto del estado. */
+  respuestas?: MensajeDeConversacion[] | undefined;
+}
+
+/**
+ * Lo que el técnico respondió y todavía no está en la bajada (ADR-0040). Sale solo cuando hay señal, con la espera de
+ * los envíos; recibido, queda como enviado hasta que la bajada lo trae. Un rechazo sin remedio (ya revisado) lo deja
+ * en el teléfono con su motivo: nunca se borra (regla 5).
+ */
+export interface RespuestaPendiente {
+  llave: string;
+  tecnicoId: string;
+  levantamientoId: string;
+  comentarioId: string;
+  texto: string;
+  /** Hora del teléfono al escribirlo: ordena el chat mientras no llega la del servidor. */
+  creadaEn: string;
+  intentos: number;
+  proximoIntentoEn: number;
+  enviada?: { id: string; creadoEn: string } | undefined;
+  rechazo?: "revisado" | "no_existe" | "invalida" | undefined;
+}
+
+/** Lo que va a la vista; el texto, el comentario y la hora van sellados (ADR-0022). */
+type AlaVistaDeRespuesta = "llave" | "tecnicoId" | "levantamientoId" | "intentos" | "proximoIntentoEn" | "enviada" | "rechazo";
+export type RespuestaGuardada = Pick<RespuestaPendiente, AlaVistaDeRespuesta> & { sellado: Sellado };
+
+/** Hasta cuándo leyó el técnico el chat de un levantamiento (ADR-0040). Sin contenido: no se sella. */
+export interface LecturaDeChat {
+  tecnicoId: string;
+  levantamientoId: string;
+  leidoHasta: string;
 }
 
 /** Estado de negocio de un levantamiento propio según el servidor. Distinto del estado de envío. */

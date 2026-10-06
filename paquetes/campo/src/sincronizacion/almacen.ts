@@ -1,8 +1,8 @@
 import type { Bajada, SaludDispositivo } from "@teins/protocolo";
 import type { BaseCampo } from "../datos/base";
-import type { ArchivoLocal, BajadaLocal, DispositivoLocal, EnvioLocal, EstadoServidorGuardado, TerminacionPendiente, VisitaGuardada } from "../datos/modelo";
+import type { ArchivoLocal, BajadaLocal, DispositivoLocal, EnvioLocal, EstadoServidorGuardado, RespuestaPendiente, TerminacionPendiente, VisitaGuardada } from "../datos/modelo";
 import { enBorrado } from "../datos/cofre";
-import { abrirArchivo, abrirEnvio, abrirVisita, referencias, sellarArchivo, sellarEstado, sellarVisita } from "../datos/registros";
+import { abrirArchivo, abrirEnvio, abrirRespuesta, abrirVisita, referencias, sellarArchivo, sellarEstado, sellarVisita } from "../datos/registros";
 import { estadoAlmacenamiento } from "../dispositivo/almacenamiento";
 
 /** Operaciones del motor sobre la base local. */
@@ -22,7 +22,15 @@ export interface AlmacenSincronizacion {
    * la terminación local y la visita vuelve a lo que dice el servidor.
    */
   resolverTerminacion(tecnicoId: string, visitaId: string, llave: string, terminada: { en: string } | null): Promise<void>;
-  /** Cuándo toca el próximo intento pendiente de este técnico (envíos y terminaciones), o null si no hay nada que esperar. */
+  /**
+   * Respuestas a oficina que ya toca enviar (ADR-0040), en el orden en que se escribieron. Una que espera detiene las
+   * siguientes de su levantamiento: el chat no se desordena en el servidor.
+   */
+  respuestasListas(ahora: number, tecnicoId: string): Promise<RespuestaPendiente[]>;
+  reintentarRespuesta(llave: string, cambios: Pick<RespuestaPendiente, "intentos" | "proximoIntentoEn">): Promise<void>;
+  /** El servidor la recibió (queda como enviada hasta que la trae la bajada) o la rechazó sin remedio (queda con su motivo). */
+  resolverRespuesta(llave: string, resultado: Pick<RespuestaPendiente, "enviada"> | Pick<RespuestaPendiente, "rechazo">): Promise<void>;
+  /** Cuándo toca el próximo intento pendiente de este técnico (envíos, terminaciones y respuestas), o null si no hay nada que esperar. */
   proximoIntento(tecnicoId: string): Promise<number | null>;
   /** Estado, intentos y errores: el comando es inmutable y va sellado. */
   actualizarEnvio(levantamientoId: string, cambios: Partial<Omit<EnvioLocal, "comando">>): Promise<void>;
@@ -85,7 +93,7 @@ function olvidarDescartesDe(tecnicoId: string) {
 export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
   function borrarRegistrosDe(tecnicoId: string) {
     olvidarDescartesDe(tecnicoId);
-    const tablas = [db.levantamientos, db.archivos, db.envios, db.visitas, db.estadosServidor, db.bajadas];
+    const tablas = [db.levantamientos, db.archivos, db.envios, db.visitas, db.estadosServidor, db.bajadas, db.respuestasPendientes, db.lecturasDeChat];
     return db.transaction("rw", tablas, async () => {
       const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
       const deOtros = await db.levantamientos.filter((l) => l.tecnicoId !== tecnicoId).toArray();
@@ -97,6 +105,8 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
       await db.visitas.where("tecnicoId").equals(tecnicoId).delete();
       await db.estadosServidor.where("tecnicoId").equals(tecnicoId).delete();
       await db.bajadas.delete(tecnicoId);
+      await db.respuestasPendientes.where("tecnicoId").equals(tecnicoId).delete();
+      await db.lecturasDeChat.where("tecnicoId").equals(tecnicoId).delete();
     });
   }
 
@@ -165,10 +175,33 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
         else if (!nueva) await db.visitas.update([tecnicoId, visitaId], { terminacionPendiente: undefined });
       });
     },
+    async respuestasListas(ahora, tecnicoId) {
+      const porEnviar = await db.respuestasPendientes.where("tecnicoId").equals(tecnicoId).filter((r) => !r.enviada && !r.rechazo).toArray();
+      const abiertas = (await Promise.all(porEnviar.map((g) => abrirRespuesta(db, g)))).sort((a, b) => a.creadaEn.localeCompare(b.creadaEn));
+      const detenidos = new Set<string>();
+      return abiertas.filter((r) => {
+        if (detenidos.has(r.levantamientoId)) return false;
+        if (r.proximoIntentoEn <= ahora) return true;
+        detenidos.add(r.levantamientoId);
+        return false;
+      });
+    },
+    async reintentarRespuesta(llave, cambios) {
+      await db.respuestasPendientes.update(llave, cambios);
+    },
+    async resolverRespuesta(llave, resultado) {
+      await db.respuestasPendientes.update(llave, resultado);
+    },
     async proximoIntento(tecnicoId) {
       const pendientes = await db.envios.where("estado").equals("pendiente").filter((e) => e.tecnicoId === tecnicoId).toArray();
       const terminaciones = (await db.visitas.where("tecnicoId").equals(tecnicoId).toArray()).flatMap((v) => (v.terminacionPendiente ? [v.terminacionPendiente.proximoIntentoEn] : []));
-      const momentos = [...pendientes.map((e) => e.proximoIntentoEn), ...terminaciones];
+      // Un chat espera a su primera respuesta detenida: las que van detrás no salen antes (`respuestasListas`).
+      const porChat = new Map<string, number>();
+      for (const r of await db.respuestasPendientes.where("tecnicoId").equals(tecnicoId).toArray()) {
+        if (!r.enviada && !r.rechazo) porChat.set(r.levantamientoId, Math.max(porChat.get(r.levantamientoId) ?? 0, r.proximoIntentoEn));
+      }
+      const respuestas = [...porChat.values()];
+      const momentos = [...pendientes.map((e) => e.proximoIntentoEn), ...terminaciones, ...respuestas];
       return momentos.length === 0 ? null : Math.min(...momentos);
     },
     async actualizarEnvio(levantamientoId, cambios) {
@@ -225,7 +258,7 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
           sellados.set(i, await sellarEstado(db, { id: cambio.id, tecnicoId, estado: cambio.estado, recibidoEn: cambio.recibidoEn, comentarios: cambio.comentarios }));
         }
       }
-      return db.transaction("rw", [db.formatos, db.visitas, db.estadosServidor, db.bajadas, db.levantamientos, db.catalogo, db.simbolos, db.archivos, db.envios], async () => {
+      return db.transaction("rw", [db.formatos, db.visitas, db.estadosServidor, db.bajadas, db.levantamientos, db.catalogo, db.simbolos, db.archivos, db.envios, db.respuestasPendientes], async () => {
         for (const [i, cambio] of bajada.cambios.entries()) {
           switch (cambio.tipo) {
             case "formato":
@@ -243,9 +276,13 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
               else await db.visitas.delete([tecnicoId, cambio.id]);
               break;
             }
-            case "levantamiento":
+            case "levantamiento": {
               await db.estadosServidor.put(sellados.get(i) as EstadoServidorGuardado);
+              // Lo que el servidor ya devuelve en la conversación sale de la cola (ADR-0040): se ve el suyo.
+              const llegadas = (cambio.comentarios ?? []).flatMap((c) => (c.respuestas ?? []).flatMap((r) => (r.llave ? [r.llave] : [])));
+              if (llegadas.length > 0) await db.respuestasPendientes.bulkDelete(llegadas);
               break;
+            }
             case "item_catalogo":
               await db.catalogo.put(cambio.item);
               break;

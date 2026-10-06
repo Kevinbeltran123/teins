@@ -332,7 +332,7 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
 
     const v2 = abrirBase(nombre);
     bases.push(v2);
-    expect(v2.verno).toBe(6);
+    expect(v2.verno).toBe(7);
     expect(await v2.levantamientos.get("l1")).toEqual(borrador);
     const archivos = await v2.archivos.toArray();
     expect(archivos.map((a) => [a.id, a.subida, new Uint8Array(a.datos)[0]])).toEqual([
@@ -357,13 +357,45 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
 
     const v3 = abrirBase(nombre);
     bases.push(v3);
-    expect(v3.verno).toBe(6);
+    expect(v3.verno).toBe(7);
     expect(await v3.levantamientos.get("l1")).toEqual(borrador);
     expect(await v3.envios.get("l2")).toEqual(envio);
     expect((await v3.formatos.toArray()).map((f) => `${f.formato}@${f.version}`)).toEqual(["prueba-ups@1", "prueba-ups@2"]);
     const bajada = await v3.bajadas.get("t1");
     expect(bajada).toMatchObject({ puntoDeControl: 0 });
     expect(Date.parse(bajada!.permisoLocalHasta) - Date.now()).toBeGreaterThan(6.9 * 86_400_000);
+  });
+
+  it("la versión 7 solo agrega las tablas del chat: lo de la 6 sigue igual (iteración 39)", async () => {
+    const nombre = nombreNuevo();
+    const borrador = { ...crearLevantamiento(formato, "l1", ahora), tecnicoId: "t1" };
+    const envio = { levantamientoId: "l2", tecnicoId: "t1", estado: "pendiente" as const, intentos: 1, proximoIntentoEn: 0, creadoEn: ahora.toISOString() };
+    // La base de la app 13: la misma definición sin la versión 7.
+    const anterior = new Dexie(nombre);
+    anterior.version(6).stores({
+      levantamientos: "id, estado, actualizadoEn, tecnicoId",
+      archivos: "id, subida, cifrado",
+      envios: "levantamientoId, estado, tecnicoId",
+      ajustes: "clave",
+      formatos: "[formato+version], formato",
+      visitas: "[tecnicoId+id], tecnicoId",
+      estadosServidor: "id, tecnicoId",
+      bajadas: "tecnicoId",
+      claves: "tecnicoId",
+      catalogo: "id",
+      simbolos: "id",
+    });
+    await anterior.table("levantamientos").add(borrador);
+    await anterior.table("envios").add(envio);
+    anterior.close();
+
+    const v7 = abrirBase(nombre);
+    bases.push(v7);
+    expect(v7.verno).toBe(7);
+    expect(await v7.levantamientos.get("l1")).toEqual(borrador);
+    expect(await v7.envios.get("l2")).toEqual(envio);
+    expect(await v7.respuestasPendientes.count()).toBe(0);
+    expect(await v7.lecturasDeChat.count()).toBe(0);
   });
 });
 

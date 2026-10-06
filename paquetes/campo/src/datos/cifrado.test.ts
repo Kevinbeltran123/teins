@@ -9,6 +9,7 @@ import { DatoIlegible } from "./cofre";
 import { abrirBase, repositorioDexie } from "./dexie";
 import { estadoDe, visitaDe } from "./lecturas";
 import { contarPorSellar, sellarPendientes } from "./registros";
+import { pendientesDe, responder } from "./conversacion";
 
 // Formato y datos ficticios (R5). "SECRETO" marca lo que nunca debe leerse en la base.
 const formato: VersionFormato = {
@@ -50,6 +51,13 @@ const visita = { id: id(900), cliente: { nombre: "Cliente SECRETO" }, sitio: { n
 const comentario = { id: id(901), texto: "Revisa el SECRETO", autor: "Oficina", creadoEn: ahora.toISOString() };
 
 describe("cifrado local (iteración 12, ADR-0022)", () => {
+  it("lo que el técnico responde a oficina se guarda cifrado y se lee igual (ADR-0040)", async () => {
+    const db = nuevaBase();
+    await responder(db, "t1", { levantamientoId: id(1), comentarioId: id(2), texto: "Nadie me recibió SECRETO" }, ahora);
+    expect(await contenidoCrudo(db)).not.toContain("SECRETO");
+    expect(await pendientesDe(db, "t1", id(1))).toMatchObject([{ texto: "Nadie me recibió SECRETO", comentarioId: id(2), creadaEn: ahora.toISOString() }]);
+  });
+
   it("respuestas, fotos, comando, visitas y comentarios se guardan cifrados y se leen iguales", async () => {
     const db = nuevaBase();
     const repo = repositorioDexie(db);
@@ -140,7 +148,7 @@ describe("cifrado local (iteración 12, ADR-0022)", () => {
 
     const db = nuevaBase(nombre);
     const repo = repositorioDexie(db);
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     expect(await contarPorSellar(db)).toBe(6);
     await sellarPendientes(db);
     expect(await contarPorSellar(db)).toBe(0);
