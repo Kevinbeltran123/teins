@@ -24,7 +24,7 @@ interface Dependencias {
   bd: BaseDeDatos;
   almacenamiento: Almacenamiento;
   levantamientos: Pick<Levantamientos, "cantidadesRevisadas">;
-  visitas: Pick<Visitas, "resumenes" | "clienteDe">;
+  visitas: Pick<Visitas, "resumenes" | "clienteDe" | "canceladas">;
   catalogo: Pick<Catalogo, "items" | "preciosVigentes">;
   identidad: Pick<Identidad, "nombres" | "nombreDeOrganizacion">;
 }
@@ -244,12 +244,14 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
             const porVisita = await lineasPorVisita(tx, undefined, new Date(Date.now() - DIAS_PARA_COTIZAR * 24 * 60 * 60 * 1000));
             if (porVisita.size === 0) return { visitas: [] };
             const resumenes = await visitas.resumenes(tx, [...porVisita.keys()]);
+            // Una visita cancelada no se cotiza; la cotización que ya tenga sigue en Cotizaciones.
+            const canceladas = await visitas.canceladas(tx, [...porVisita.keys()]);
             const existentes = await tx.select({ visitaId: cotizaciones.visitaId, numero: cotizaciones.numero }).from(cotizaciones).where(inArray(cotizaciones.visitaId, [...porVisita.keys()]));
             return {
               visitas: [...porVisita]
                 .flatMap(([visitaId, { lineas, levantamientos: revisados }]) => {
                   const v = resumenes.get(visitaId);
-                  return v
+                  return v && !canceladas.has(visitaId)
                     ? [
                         {
                           visitaId,

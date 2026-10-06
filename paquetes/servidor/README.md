@@ -39,6 +39,9 @@ src/
     envios/          Informe al cliente por correo (Resend) y WhatsApp (Cloud API de Meta), ADR-0028:
                      un envío por contacto y canal, que sale al quedar listo el PDF; eventos firmados
                      de los proveedores y proveedores simulados (ENVIOS_SIMULADOS).
+    mantenimiento/   La tarea periódica `mantenimiento.recuperar` (cada hora, `crontab` del worker): vuelve a
+                     encolar lo que lleva más de 12 horas a medias (ADR-0043), borra sesiones vencidas y
+                     compacta el registro de cambios con la conexión del dueño (ADR-0044).
   app.ts        Composición del rol web.
   web.ts        Punto de entrada del rol web.
   worker.ts     Punto de entrada del rol worker.
@@ -81,7 +84,7 @@ Comandos de administración (uso en el encabezado de cada archivo de `src/cli/`)
 | Comando | Qué hace |
 |---|---|
 | `crear-usuario`, `restablecer-contrasena` | Usuarios internos y recuperación de acceso |
-| `desactivar-usuario` | Revoca: cierra sus sesiones, no vuelve a entrar y sus teléfonos borran sus datos al conectarse |
+| `desactivar-usuario` | Revoca: cierra sus sesiones, no vuelve a entrar y sus teléfonos borran sus datos al conectarse; lo que tenía en revisión queda sin tomar |
 | `crear-organizacion` | Crea la organización de un entorno que no se siembra (producción); si ya existe, no la toca |
 | `generar-claves-avisos` | Imprime un par de claves VAPID para `AVISOS_VAPID_PUBLICA` y `AVISOS_VAPID_PRIVADA` (ADR-0023). La privada es un secreto: va a las variables del entorno, nunca al repositorio. Sin claves, los avisos quedan apagados |
 | `verificar-integridad` | Verifica todas las cadenas de la auditoría de una base con la conexión del dueño (`DATABASE_URL`); lo usa el simulacro de restauración (`docs/proceso/produccion.md`) |

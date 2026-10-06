@@ -10,7 +10,7 @@ import { podarVencido, recuperarTrabajosAMedias } from "./modulos/mantenimiento"
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
 import { cerrarNavegador } from "./plataforma/pdf";
-import { definirTareas } from "./tareas";
+import { definirTareas, periodicas } from "./tareas";
 
 /**
  * Rol worker (ADR-0001, ADR-0012). La cola usa la conexión del dueño (sus funciones lo exigen);
@@ -44,9 +44,7 @@ const corredor = await run({
   pgPool: cola.pool,
   taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones, mantenimiento: { recuperar: () => mantener({ negocio: negocio.bd, propietario: cola.bd }) } }),
   concurrency: 4,
-  // Las tareas periódicas (ADR-0012, regla 5) se declaran aquí; nunca en un archivo suelto. Cada hora, en el minuto
-  // 17 para no coincidir con otros procesos en punto: lo que quedó a medias vuelve a la cola (ADR-0043).
-  crontab: "17 * * * * mantenimiento.recuperar",
+  parsedCronItems: periodicas(),
   noHandleSignals: true,
   logger,
 });

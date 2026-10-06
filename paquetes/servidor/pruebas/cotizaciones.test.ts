@@ -198,6 +198,13 @@ describe("cotización desde las cantidades revisadas (ADR-0029, parte 2)", () =>
     expect((await e.oficina("GET", "/api/cotizaciones/visitas")).json().visitas).toEqual([]);
   });
 
+  it("una visita cancelada no aparece para cotizar", async () => {
+    const e = await escenario();
+    await e.revisado([linea("a0000001", "Canaleta", "4")]);
+    await s.propietario.pool.query("update visitas.visitas set cancelada_en = now() where id = $1", [e.visitaId]);
+    expect((await e.oficina("GET", "/api/cotizaciones/visitas")).json().visitas).toEqual([]);
+  });
+
   it("una visita sin levantamientos revisados no se cotiza, y el técnico no ve cotizaciones", async () => {
     const e = await escenario();
     expect((await e.oficina("POST", "/api/cotizaciones", { visitaId: e.visitaId })).json().codigo).toBe("estado_invalido");

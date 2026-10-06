@@ -115,10 +115,12 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
   const sinDescartar = new Set((lista ?? []).map((l) => l.id));
   const deEnvios = [...(envios?.values() ?? [])].filter((e) => sinDescartar.has(e.levantamientoId));
   const porEnviar = deEnvios.filter((e) => e.estado !== "recibido").length;
+  // Un envío con error permanente no sube solo (se muestra en Enviados): no cuenta como «subiendo».
+  const porSubir = deEnvios.filter((e) => e.estado !== "recibido" && e.estado !== "error").length;
   const esperanSesion = deEnvios.some((e) => e.estado === "requiere_sesion") || Boolean(bajada?.sesionVencida);
   const esperanActualizacion = deEnvios.some((e) => e.estado === "requiere_actualizar");
   const permisoVencido = bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
-  const sinConexion = !enLinea || (!alcanzable && porEnviar > 0);
+  const sinConexion = !enLinea || (!alcanzable && porSubir > 0);
 
   // Un doble toque crea uno solo. Creado, no se suelta: entre abrirlo y que la captura reemplace esta pantalla,
   // un segundo toque crearía otro.
@@ -174,7 +176,7 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
       </header>
 
       <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 pt-1 pb-10">
-        <FranjaSincronizacion enLinea={!sinConexion} porSubir={porEnviar} />
+        <FranjaSincronizacion enLinea={!sinConexion} porSubir={porSubir} />
         <div className="flex flex-col gap-3 empty:hidden">
           {permisoVencido && <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>}
           {esperanSesion && (
@@ -327,7 +329,7 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
                     <strong className="truncate text-[18px] font-semibold">{usuario.nombre}</strong>
                     <span className="flex items-center gap-2 text-ayuda text-texto-secundario">
                       <span aria-hidden className={`size-2 rounded-full ${sinConexion ? "bg-sync-pendiente" : "bg-sync-ok"}`} />
-                      {sinConexion ? "Sin señal · lo capturado queda aquí" : porEnviar > 0 ? "Conectado · enviando lo pendiente" : "Conectado · todo enviado"}
+                      {sinConexion ? "Sin señal · lo capturado queda aquí" : porSubir > 0 ? "Conectado · enviando lo pendiente" : "Conectado · todo enviado"}
                     </span>
                   </span>
                 </div>

@@ -3,10 +3,18 @@ import { describe, expect, it } from "vitest";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { registrarCambios } from "../src/modulos/cambios";
 import { podarVencido } from "../src/modulos/mantenimiento";
+import { periodicas } from "../src/tareas";
 import { cabecerasSync, ORIGEN, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
+
+describe("tareas periódicas (ADR-0043)", () => {
+  it("se declaran como objetos que el worker acepta", () => {
+    // El crontab de texto rechazaba «mantenimiento.recuperar» por el punto, y el worker no arrancaba.
+    expect(periodicas()).toEqual([expect.objectContaining({ task: "mantenimiento.recuperar" })]);
+  });
+});
 
 describe("poda en el servidor (ADR-0044)", () => {
   it("compacta el registro: queda lo último de cada cosa para cada quien, y la bajada desde cero da lo mismo", async () => {

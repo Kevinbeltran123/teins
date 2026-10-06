@@ -598,7 +598,8 @@ function Dispositivos() {
     <Tabla etiqueta="Teléfonos de campo y su estado" columnas={[{ titulo: "Técnico" }, { titulo: "Último contacto" }, { titulo: "Sin enviar" }, { titulo: "Almacenamiento" }, { titulo: "Estado" }]}>
       {lista.map((d) => {
         const s = d.salud;
-        const atrasado = s?.pendienteMasAntiguo ? ahora - new Date(s.pendienteMasAntiguo).getTime() > DIA_MS : false;
+        // Con orden de borrado, lo que no alcanzó a enviar ya no se acepta: no hay a quién llamar (P36).
+        const atrasado = !d.ordenDeBorradoEn && s?.pendienteMasAntiguo ? ahora - new Date(s.pendienteMasAntiguo).getTime() > DIA_MS : false;
         return (
           <FilaTabla key={`${d.id}:${d.usuario.id}`}>
             <CeldaTabla principal>{d.usuario.nombre}</CeldaTabla>
@@ -607,9 +608,9 @@ function Dispositivos() {
               <span className="sub">{`App versión ${s?.versionApp ?? "[N]"}`}</span>
             </CeldaTabla>
             <CeldaTabla>
-              {s ? (s.pendientes === 0 ? "Nada" : `${s.pendientes}`) : "[N]"}
+              {d.borradoConfirmadoEn ? "Nada" : s ? (s.pendientes === 0 ? "Nada" : `${s.pendientes}`) : "[N]"}
               {atrasado && <span className="sub" style={{ color: "var(--alerta)", fontWeight: 700 }}>{`El más antiguo espera desde ${aFechaHora(s!.pendienteMasAntiguo!)}. Llame al técnico.`}</span>}
-              {s?.ultimoError && <span className="sub">{`Último error: ${s.ultimoError}`}</span>}
+              {!d.borradoConfirmadoEn && s?.ultimoError && <span className="sub">{`Último error: ${s.ultimoError}`}</span>}
             </CeldaTabla>
             <CeldaTabla>
               {s?.persistente === false ? <span style={{ color: "var(--alerta)", fontWeight: 700 }}>No persistente: el sistema puede borrar los datos</span> : s?.persistente ? "Persistente" : "Sin dato"}

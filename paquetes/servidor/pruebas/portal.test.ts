@@ -263,6 +263,9 @@ describe("portal del cliente (ADR-0009, parte 4)", () => {
 
     const detalle = (await app.inject({ method: "GET", url: `/api/informes/${f.informeId}`, headers: { cookie: org.oficina.cookie } })).json();
     expect(detalle.versiones.map((v: { retirada: unknown }) => v.retirada !== null)).toEqual([true, true]);
+    // En la lista de oficina no pasa por borrador: se ve que se retiró.
+    const lista = (await app.inject({ method: "GET", url: "/api/informes", headers: { cookie: org.oficina.cookie } })).json();
+    expect(lista.elementos.find((i: { id: string }) => i.id === f.informeId)).toMatchObject({ vigente: null, todasRetiradas: true });
     const { rows } = await s.propietario.pool.query("select motivo from auditoria.registros where tipo_evento = 'version_retirada' and agregado_id = $1", [f.informeId]);
     expect(rows).toHaveLength(2);
 

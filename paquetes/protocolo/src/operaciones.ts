@@ -457,6 +457,8 @@ export const PaginaInformes = z
         visita: VisitaDelInforme,
         /** Número de la versión vigente; null mientras no se publica ninguna. */
         vigente: z.int().positive().nullable(),
+        /** Se publicó y se retiraron todas sus versiones: el cliente no ve nada. */
+        todasRetiradas: z.boolean().default(false),
         pdf: EstadoPdf.nullable(),
         /** La versión vigente tiene una copia que no llegó y no se ha vuelto a enviar (ADR-0028). */
         envioSinEntregar: z.boolean().default(false),
@@ -1045,11 +1047,11 @@ export const operaciones = {
   abrirInformeDeVisita: {
     metodo: "POST",
     ruta: "/api/informes",
-    resumen: "Informe de una visita; lo crea en borrador si no existe (uno por visita)",
+    resumen: "Informe de una visita; lo crea en borrador si no existe (uno por visita) y la visita no está cancelada",
     cuerpo: z.object({ visitaId: Uuid }),
     estadoExito: 200,
     respuesta: z.object({ id: Uuid }),
-    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
   },
   obtenerInforme: {
     metodo: "GET",

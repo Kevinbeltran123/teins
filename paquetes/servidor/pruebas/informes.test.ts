@@ -176,6 +176,14 @@ describe("PDF que no se puede generar", () => {
 });
 
 describe("informe (corte 4)", () => {
+  it("una visita cancelada conserva su informe, pero no abre uno nuevo", async () => {
+    const { oficina, visitaId, informeId } = await visitaConRevisado();
+    await s.propietario.pool.query("update visitas.visitas set cancelada_en = now() where id = $1", [visitaId]);
+    expect((await post(oficina.cookie, "/api/informes", { visitaId })).json()).toEqual({ id: informeId });
+    await s.propietario.pool.query("delete from informes.informes where id = $1", [informeId]);
+    expect((await post(oficina.cookie, "/api/informes", { visitaId })).json()).toMatchObject({ codigo: "estado_invalido" });
+  });
+
   it("compone, publica y genera en segundo plano un PDF con los datos y el plano anexo, que no se vuelve a generar (QA-17)", async () => {
     const { oficina, visitaId, revisado, enviado, informeId } = await visitaConRevisado();
     // Abrir otra vez devuelve el mismo informe: uno por visita.

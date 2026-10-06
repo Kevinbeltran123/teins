@@ -28,7 +28,7 @@ interface Dependencias {
   config: Config;
   archivos: Pick<Archivos, "estados">;
   levantamientos: Pick<Levantamientos, "deVisita">;
-  visitas: Pick<Visitas, "existe" | "resumenes" | "clienteDe">;
+  visitas: Pick<Visitas, "existe" | "resumenes" | "clienteDe" | "canceladas">;
   identidad: Pick<Identidad, "nombres" | "nombreDeOrganizacion">;
   formatos: Pick<Formatos, "obtener">;
 }
@@ -233,6 +233,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               .from(versionesPublicadas)
               .where(isNull(versionesPublicadas.retiradaEn))
               .orderBy(desc(versionesPublicadas.numero));
+            const conVersiones = new Set((await tx.selectDistinct({ informeId: versionesPublicadas.informeId }).from(versionesPublicadas)).map((v) => v.informeId));
             const vigentes = new Map<string, { id: string; numero: number; pdf: EstadoPdf }>();
             for (const v of publicadas) if (!vigentes.has(v.informeId)) vigentes.set(v.informeId, v);
             const sinEntregar = await versionesConEnvioSinEntregar(tx, [...vigentes.values()].map((v) => v.id));
@@ -247,6 +248,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
                           id: f.id,
                           visita: { cliente: v.cliente.nombre, sitio: v.sitio.nombre, direccion: v.sitio.direccion, motivo: v.motivo, programadaPara: v.programadaPara },
                           vigente: vigentes.get(f.id)?.numero ?? null,
+                          todasRetiradas: !vigentes.has(f.id) && conVersiones.has(f.id),
                           pdf: vigentes.get(f.id)?.pdf ?? null,
                           envioSinEntregar: sinEntregar.has(vigentes.get(f.id)?.id ?? ""),
                         },
@@ -263,15 +265,19 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
         manejar: async ({ cuerpo: { visitaId }, actor }) =>
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
             if (!(await visitas.existe(tx, visitaId))) throw problema("no_encontrado", "La visita no existe");
-            // Uno por visita (P26, supuesto): abrir dos veces devuelve el mismo.
+            // Uno por visita (P26, supuesto): abrir dos veces devuelve el mismo. El de una visita cancelada se sigue
+            // consultando, pero una cancelada no abre uno nuevo.
+            const [existente] = await tx.select({ id: informes.id }).from(informes).where(eq(informes.visitaId, visitaId));
+            if (existente) return existente;
+            if ((await visitas.canceladas(tx, [visitaId])).has(visitaId)) throw problema("estado_invalido", "La visita está cancelada: no se abre un informe nuevo");
             const [creado] = await tx
               .insert(informes)
               .values({ id: randomUUID(), organizacionId: actor.organizacionId, visitaId })
               .onConflictDoNothing()
               .returning({ id: informes.id });
             if (creado) return creado;
-            const [existente] = await tx.select({ id: informes.id }).from(informes).where(eq(informes.visitaId, visitaId));
-            return existente!;
+            const [otro] = await tx.select({ id: informes.id }).from(informes).where(eq(informes.visitaId, visitaId));
+            return otro!;
           }),
       });
 

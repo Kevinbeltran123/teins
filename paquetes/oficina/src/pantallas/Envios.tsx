@@ -189,6 +189,8 @@ export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, r
   const esperando = envios.some((e) => e.estado === "en_cola");
   // Sin PDF no hay qué enviar: la versión lo dice arriba y el servidor no lo acepta. Se publica una nueva.
   const sePuedeEnviar = version.pdf !== "fallido";
+  const yaLaTiene = (contactoId: string, canal: Envio["canal"]) =>
+    version.envios.some((e) => e.contacto.id === contactoId && e.canal === canal && (e.estado === "en_cola" || e.estado === "enviado" || e.estado === "entregado"));
 
   async function volverAEnviar(e: Envio) {
     setReenviando(e.id);
@@ -287,8 +289,10 @@ export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, r
         <EnviarAContactos
           cliente={c}
           numero={version.numero}
-          // A otro contacto: quien ya la tiene (o la tiene en camino) no se vuelve a ofrecer (iteración 29).
-          contactos={contactos.filter((x) => !version.envios.some((e) => e.contacto.id === x.id && (e.estado === "en_cola" || e.estado === "enviado" || e.estado === "entregado")))}
+          // A otro contacto: el canal por el que ya la tiene (o la tiene en camino) no se vuelve a ofrecer (iteración 29); el otro sí.
+          contactos={contactos
+            .map((x) => ({ ...x, recibeCorreo: x.recibeCorreo && !yaLaTiene(x.id, "correo"), recibeWhatsapp: x.recibeWhatsapp && !yaLaTiene(x.id, "whatsapp") }))
+            .filter((x) => !version.envios.some((e) => e.contacto.id === x.id) || x.recibeCorreo || x.recibeWhatsapp)}
           mensaje={mensaje}
           enviar={enviar}
           alCerrar={() => setEligiendo(false)}
@@ -371,7 +375,7 @@ function EnviarAContactos({
     setError(null);
     try {
       await enviar(
-        elegidos.map((contactoId) => ({ contactoId })),
+        destinos.map((d) => ({ contactoId: d.contacto.id, canal: d.canal })),
         llave,
         propio ?? undefined,
       );

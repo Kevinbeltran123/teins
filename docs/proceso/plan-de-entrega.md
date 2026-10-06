@@ -44,8 +44,10 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 31 | Visitas con horario (ADR-0037): todo el día, de una hora a otra o hasta que el técnico la termine; solo técnicos libres al programar | Una visita ocupaba el día entero y se podía asignar a quien ya estaba ocupado | Desplegada en el entorno de pruebas con la migración `0033` y la app 12 (2026-10-02); oficina aprobada por Kevin el 2026-10-03, falta la prueba en el iPhone |
 | Iteración 36 | Usabilidad de oficina: la vista previa que se oculta, se amplía y cambia de ancho; el guardado automático; el menú plegable; lo que se recuerda de cada persona; ordenar arrastrando; atajos en Mac y Windows | Trabajo que se perdía sin «Guardar borrador», la hoja fija en la mitad, el menú siempre abierto y cada lista que volvía a empezar | Desplegada en el entorno de pruebas (2026-10-04) |
 | Iteración 37 | Buscar en todo con ⌘K / Ctrl + K (recientes, acciones, secciones y resultados por grupo) y revisar en serie con el teclado (J, K, Enter, T, R, S, Esc y «?») | Cada lista buscaba solo lo suyo y revisar varios exigía ir y volver con el ratón | Desplegada en el entorno de pruebas (2026-10-04) |
-| Iteración 38 | La revisión armada como el informe: datos a la izquierda; a la derecha, un panel a todo el alto con «En el informe», «Comentarios» e «Historial»; el estado en la barra | El capítulo en una caja de 520 px dentro de un carril de tarjetas | Aprobada (2026-10-04), por construir |
-| Iteración 39 | Conversaciones entre oficina y campo: el técnico responde los comentarios desde un chat en el teléfono, con o sin señal; oficina responde en hilos; «sin leer», avisos y «Leído» (ADR-0040) | El técnico no podía contestar un comentario; las aclaraciones iban por llamada o WhatsApp y no quedaban en el levantamiento | Aprobada (2026-10-05), por construir |
+| Iteración 38 | La revisión armada como el informe: datos a la izquierda; a la derecha, un panel a todo el alto con «En el informe», «Comentarios» e «Historial»; el estado en la barra | El capítulo en una caja de 520 px dentro de un carril de tarjetas | Desplegada en el entorno de pruebas (2026-10-06); falta que Kevin la pruebe |
+| Iteración 39 | Conversaciones entre oficina y campo: el técnico responde los comentarios desde un chat en el teléfono, con o sin señal; oficina responde en hilos; «sin leer», avisos y «Leído» (ADR-0040) | El técnico no podía contestar un comentario; las aclaraciones iban por llamada o WhatsApp y no quedaban en el levantamiento | Desplegada en el entorno de pruebas con la migración `0036` y la app 14 (2026-10-06); falta que Kevin la pruebe en su iPhone |
+| Iteración 40 | Lo atendido no es la siguiente visita (ADR-0041 y ADR-0042) | Una visita ya hecha seguía como «Siguiente visita» y se acumulaba en el teléfono | Desplegada en el entorno de pruebas con la migración `0037` y la app 15 (2026-10-06) |
+| Iteración 41 | Nada queda a medias ni crece sin fin (ADR-0043 y ADR-0044): lo que espera la app nueva, la foto rechazada, el envío sin salida, los trabajos a medias, la retención de 30 días, la poda del servidor y el estado que no se actualizaba | Trabajo atascado para siempre, un teléfono que se llena y pantallas que no se enteran del paso del tiempo | Construida y verificada (2026-10-06); se despliega junta al final |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
@@ -1049,6 +1051,47 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 **Arquitectura propuesta (va al ADR):** las plantillas del informe y la cotización salen del servidor a un paquete nuevo, `paquetes/documentos`, que solo depende de `dominio` (hoy ya solo dependen de él y de una función de escape). El servidor las sigue usando para imprimir el PDF; oficina las usa para dibujar la vista en vivo sin ir al servidor en cada tecla. Así la vista previa y el PDF salen del mismo código y no se pueden separar. Los estilos de la plantilla pasan a un archivo servido por la misma superficie, para que la CSP de oficina (`style-src 'self'`) los admita en un marco `srcdoc`. Queda por decidir cómo paginar en pantalla (hojas carta fijas o continuo con marcas de salto).
 
 **Lo que ya existe y se reemplaza:** la vista previa de la cotización de la iteración 24 (documento del servidor con la versión guardada), que pasaría a ser en vivo y sin guardar.
+
+## Iteración 41 · Nada queda a medias ni crece sin fin
+
+**Estado:** pedido de Kevin el 2026-10-06, después del fallo de la 40 («Que otro fallo de ese estilo puede haber? revisa»). Una revisión encontró fallos de la misma familia: estados que nadie actualiza, trabajo que se atasca para siempre y datos que nunca se borran. Kevin aprobó arreglarlos en cuatro tandas y desplegar una sola vez al final («despliega cuando ya termines todas las mejoras, con eso nos ahorramos algo de costos»). Aceptó 30 días de retención en el teléfono. Construida y verificada el 2026-10-06 (ADR-0043 y ADR-0044, migración `0038`).
+
+**Tanda 1 · Trabajo atascado para siempre**
+- **Lo que espera la app nueva sale al actualizar.** Un envío en «requiere actualizar» no se reanudaba nunca y la pantalla decía «Enviando a oficina…» para siempre. Ahora, al abrir una versión nueva de la app, vuelve a la cola (`reanudarTrasActualizar`).
+- **Una foto que el almacenamiento rechaza** ya no se reintenta cada 30 segundos sin fin: espera cada vez más y, al agotar los intentos, pasa a error con un mensaje para el técnico.
+- **Un envío rechazado se puede descartar** desde su pantalla, a la papelera de 30 días (ADR-0035). Antes no tenía salida e inflaba para siempre lo «por enviar».
+- **Los trabajos del worker que quedaron a medias se recuperan** (ADR-0043): una tarea cada hora (`mantenimiento.recuperar`, la primera periódica del proyecto) vuelve a encolar, con la misma llave, lo que lleva más de 12 horas a medias: PDF «generando», envíos «en cola» y archivos «subidos» sin verificar.
+
+**Tanda 2 · Lo que crecía sin fin** (ADR-0044)
+- **En el teléfono:** un levantamiento revisado que oficina recibió hace más de 30 días sale después de cada bajada, con sus fotos, su envío, su estado y su chat. Nunca sale lo que no se ha enviado ni revisado (regla 5).
+- **En el servidor:** la tarea periódica borra las sesiones vencidas y compacta el registro de cambios (deja el último cambio de cada entidad por destinatario). La lista de teléfonos de Administración muestra los que tuvieron contacto en los últimos 90 días y los que tienen un borrado pendiente. Los teléfonos no se borran: la orden de borrado de un usuario revocado tiene que poder llegar.
+
+**Tanda 3 · Estado que no se actualizaba**
+- **Una visita ya atendida hoy no bloquea archivar el cliente** («primero cancele o reprograme»): «por hacer» excluye las terminadas, las cerradas y las que tienen levantamientos.
+- **Campo y oficina se enteran del paso del tiempo** con la app abierta (`useMinuto` en `paquetes/ui`): cada minuto y al volver a la app, una visita pasa a «En curso», aparece «Terminar visita» y, después de medianoche, «Hoy» cambia.
+- **«Terminar visita» también está en la fila** de una visita en curso, no solo en la tarjeta principal.
+- **Una visita cancelada o reasignada con un borrador a medias** ya no sale como «Siguiente visita» encima de la de hoy: va con las atrasadas.
+- **Al desactivar a quien revisa**, lo que tenía en revisión queda sin tomar (`revision_liberada` en el historial). Otra persona lo toma sin reasignar, y las respuestas del técnico le llegan a quien escribió el comentario, no a alguien sin acceso.
+- **«Tomar el más antiguo» desde la búsqueda (⌘K)** avisa si otra persona lo tomó primero, en lugar de llevarlo como si fuera suyo.
+
+**Tanda 4 · Menores**
+- Un informe con todas sus versiones retiradas dice «Retirado del portal» en la lista de Informes, no «Borrador» (`todasRetiradas`, como en Cotizaciones).
+- «Enviar a otro contacto» ofrece el canal por el que el contacto todavía no la recibió (correo o WhatsApp), y manda el canal explícito.
+- En Administración, un teléfono con orden de borrado ya no dice «Llame al técnico»; uno ya borrado no muestra lo que tenía pendiente ni su último error.
+- Una visita cancelada no aparece en «Visitas para cotizar», y no abre un informe nuevo (`estado_invalido`); el que ya tenía se sigue consultando.
+- Mientras el PDF de la vigente se genera, o si falló, oficina dice qué versión ve el cliente («Mientras, el cliente ve la versión 2»).
+- La franja de campo ya no cuenta como «subiendo» un envío con error permanente; la pregunta al cerrar sesión sí lo cuenta, porque sigue sin enviar.
+
+**Decisiones tomadas al construirla**
+- **Una tarea por hora y no una por organización al bajar:** recuperar trabajos no depende de que un técnico pregunte (ADR-0043). La ventana de 12 horas deja terminar los 10 reintentos de Graphile antes de volver a encolar.
+- **Compactar el registro en vez de cortarlo por fecha:** cortar por fecha haría que un teléfono nuevo no bajara una visita vigente programada hace meses (ADR-0044).
+- **La tarea periódica se declara como objeto** (`periodicas()` en `servidor/src/tareas.ts`, con `parsedCronItems`). La primera versión usaba el crontab de texto, que no acepta el punto de `mantenimiento.recuperar`: el worker no arrancaba. Las pruebas del servidor no lo vieron porque procesan la cola sin el crontab; lo encontró la e2e, que se quedó en «El servidor está verificando las fotos». Nunca llegó al entorno de pruebas.
+- **Desactivar llama a `levantamientos` desde la composición** (`crearIdentidad(…, { alDesactivar })` en `app.ts` y en el comando `desactivar-usuario`), en la misma transacción: identidad no conoce las tablas de otro módulo.
+- **Sin cambio, después de revisarlos:**
+  - en una visita con dos técnicos, el segundo teléfono la sigue mostrando hasta que alguno la termine, porque puede necesitar su propio levantamiento; «Terminar visita» ya les llega a todos;
+  - una visita de todo el día ocupa al técnico todo el día aunque la terminen temprano: así lo decidió el ADR-0037, que lo deja como consecuencia aceptada.
+
+**Evidencia:** EVIDENCIA_41
 
 ## Iteración 40 · Lo atendido no es la siguiente visita
 

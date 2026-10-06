@@ -63,6 +63,10 @@ interface Borrador {
 const ESTADO_LEVANTAMIENTO = { enviado: "Enviado: falta revisarlo", en_revision: "En revisión", revisado: "Revisado" } as const;
 /** La que ve el cliente: la más reciente sin retirar (regla 10). */
 const vigenteDe = (informe: Informe) => informe.versiones.find((v) => v.retirada === null);
+/** Lo que ve el cliente: la más reciente sin retirar con el PDF listo. Mientras el de la vigente se genera, o si falló, es otra. */
+const enElPortalDe = (informe: Informe) => informe.versiones.find((v) => v.retirada === null && v.pdf === "listo")?.numero;
+/** Qué ve el cliente mientras la vigente no tiene PDF. */
+const loQueVeElCliente = (numero: number | undefined) => (numero ? `Mientras, el cliente ve la versión ${numero}` : "Mientras, el cliente no ve ninguna");
 
 const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
 
@@ -337,6 +341,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           <AvancePublicacion
             informeId={informe.id}
             version={informe.versiones.find((v) => v.numero === publicadaAqui)!}
+            enElPortal={enElPortalDe(informe)}
             recargar={recargar}
             corregirEnvio={(envio, accion) => cliente.llamar(accion === "cancelar" ? "cancelarEnvio" : "reanudarEnvio", { parametros: { id: informe.id, numero: publicadaAqui, envio } })}
           />
@@ -596,11 +601,13 @@ const ESTADO_DEL_ENVIO = { en_cola: "En cola", enviado: "Enviado", entregado: "E
 function AvancePublicacion({
   informeId,
   version: v,
+  enElPortal,
   recargar,
   corregirEnvio,
 }: {
   informeId: string;
   version: Informe["versiones"][number];
+  enElPortal: number | undefined;
   recargar: () => void;
   corregirEnvio: (envioId: string, accion: "cancelar" | "reanudar") => Promise<unknown>;
 }) {
@@ -648,7 +655,7 @@ function AvancePublicacion({
         <li>
           <MarcaDePaso hecho={pdfListo} trabajando={false} nueva={nueva("portal")} />
           <span>
-            En el portal<small>{pdfListo ? "El cliente ya lo puede descargar" : "Aparece cuando el PDF esté listo"}</small>
+            En el portal<small>{pdfListo ? "El cliente ya lo puede descargar" : v.pdf === "fallido" ? `Sin PDF no aparece. ${loQueVeElCliente(enElPortal)}` : `Aparece cuando el PDF esté listo. ${loQueVeElCliente(enElPortal)}`}</small>
           </span>
           <span />
         </li>
@@ -694,6 +701,7 @@ function Versiones({ informe, recargar, envios }: { informe: Informe; recargar: 
   useEffect(() => setErrorDescarga(false), [informe.versiones.length]);
   const administrador = useQuery(consultas.sesion()).data?.usuario.administrador ?? false;
   const vigente = vigenteDe(informe)?.numero;
+  const enElPortal = enElPortalDe(informe);
 
   return (
     <section aria-labelledby="titulo-versiones">
@@ -722,6 +730,7 @@ function Versiones({ informe, recargar, envios }: { informe: Informe; recargar: 
               </div>
               <span className="meta">{`Publicada ${aFechaCorta(v.publicadaEn)} por ${v.publicadaPor.nombre}${v.envios.length > 0 ? ` · ${v.envios.length === 1 ? "1 envío" : `${v.envios.length} envíos`}` : ""}`}</span>
               {v.retirada && <span className="meta">{`Retirada ${aFechaCorta(v.retirada.en)} por ${v.retirada.por.nombre}: ${v.retirada.motivo}`}</span>}
+              {v.numero === vigente && v.pdf !== "listo" && <span className="meta">{`${loQueVeElCliente(enElPortal)}.`}</span>}
               {v.numero === vigente
                 ? envios && (
                     <PanelConRetiro envios={envios} retirar={administrador && !v.retirada ? () => setRetirando(v.numero) : undefined} numero={v.numero} />

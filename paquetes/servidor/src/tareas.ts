@@ -1,4 +1,4 @@
-import type { Task, TaskList } from "graphile-worker";
+import { parseCronItems, type ParsedCronItem, type Task, type TaskList } from "graphile-worker";
 import { z } from "zod";
 import type { Archivos, RegistroDeTrabajo } from "./modulos/archivos";
 import type { Avisos } from "./modulos/avisos";
@@ -18,6 +18,12 @@ const esquemas: { [N in NombreTrabajo]: z.ZodType<Trabajos[N]> } = {
   // Programada por el crontab: Graphile le pone sus propios datos (`_cron`), que no se usan.
   "mantenimiento.recuperar": z.record(z.string(), z.unknown()),
 };
+
+/**
+ * Tareas periódicas (ADR-0012, regla 5; ADR-0043). Cada hora, en el minuto 17 para no coincidir con otros procesos en
+ * punto. Van como objetos: el crontab de texto no acepta el punto de los nombres y el worker no arrancaría.
+ */
+export const periodicas = (): ParsedCronItem[] => parseCronItems([{ task: "mantenimiento.recuperar" satisfies NombreTrabajo, match: "17 * * * *" }]);
 
 /** `ultimoIntento`: el manejador deja visible un fallo permanente en lugar de quedar "en curso" (ADR-0012, regla 4). */
 type Manejadores = { [N in NombreTrabajo]: (datos: Trabajos[N], contexto: { ultimoIntento: boolean; registro: RegistroDeTrabajo }) => Promise<void> };

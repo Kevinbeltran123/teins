@@ -15,7 +15,7 @@ export function Informes() {
   const [busqueda, setBusqueda] = useBusquedaRecordada("informes");
   const elementos = consulta.data?.elementos ?? [];
   const lista = elementos.filter((i) => coincide(busqueda, i.visita.cliente, i.visita.sitio));
-  const borradores = elementos.filter((i) => !i.vigente).length;
+  const borradores = elementos.filter((i) => !i.vigente && !i.todasRetiradas).length;
   const sinEntregar = elementos.filter((i) => i.envioSinEntregar).length;
 
   return (
@@ -70,7 +70,7 @@ export function Informes() {
               <CeldaTabla>{aDiaCorto(`${i.visita.programadaPara}T12:00:00-05:00`)}</CeldaTabla>
               <CeldaTabla>
                 <span className="fila-flex" style={{ gap: 6 }}>
-                  {i.vigente ? <Insignia tono="publicado">{`Versión ${i.vigente}`}</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}
+                  {i.vigente ? <Insignia tono="publicado">{`Versión ${i.vigente}`}</Insignia> : i.todasRetiradas ? <Insignia tono="anulado">Retirado del portal</Insignia> : <Insignia tono="borrador">Borrador</Insignia>}
                   {/* Hasta que se vuelva a enviar (ADR-0028): lo que no llegó no se pierde de vista. */}
                   {i.envioSinEntregar && <Insignia tono="peligro">Envío sin entregar</Insignia>}
                 </span>
