@@ -182,10 +182,13 @@ export async function verLoEnviado(page: Page) {
 /** Desde Administración: crea un usuario y devuelve la contraseña temporal que se entrega una vez. */
 export async function crearUsuarioDesdeAdministracion(page: Page, u: { usuario: string; nombre: string }, rol: "Técnico (campo)" | "Oficina"): Promise<string> {
   await page.getByRole("button", { name: "Nuevo usuario" }).click();
-  await page.getByLabel("Nombre completo").fill(u.nombre);
-  await page.getByLabel("Usuario para iniciar sesión").fill(u.usuario);
-  await page.getByRole("radio", { name: rol }).check();
-  await page.getByRole("button", { name: "Crear usuario" }).click();
+  // Dentro de la hoja: buscar por etiqueta en toda la página recorre la tabla de usuarios, que en una base de pruebas
+  // larga tiene cientos de filas y en WebKit tarda decenas de segundos.
+  const hoja = page.getByRole("dialog", { name: "Nuevo usuario" });
+  await hoja.getByLabel("Nombre completo").fill(u.nombre);
+  await hoja.getByLabel("Usuario para iniciar sesión").fill(u.usuario);
+  await hoja.getByRole("radio", { name: rol }).check();
+  await hoja.getByRole("button", { name: "Crear usuario" }).click();
   const entrega = page.getByRole("dialog", { name: "Usuario creado" });
   const temporal = (await entrega.locator("dt:has-text('Contraseña temporal') + dd code").textContent())!;
   await entrega.getByRole("button", { name: "Ya la entregué" }).click();
