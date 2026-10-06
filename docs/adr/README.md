@@ -63,6 +63,7 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0037](0037-visitas-con-horario.md) | Visitas con horario: todo el día, de una hora a otra o hasta que el técnico la termine | Aceptada |
 | [0038](0038-epoca-de-la-bajada.md) | Época de la bajada: el teléfono se entera de que el servidor se dejó limpio | Aceptada |
 | [0039](0039-que-sale-en-el-informe.md) | Qué sale en el informe: oficina oculta partes de cada levantamiento | Aceptada |
+| [0040](0040-conversaciones-entre-oficina-y-campo.md) | Conversaciones entre oficina y campo: el técnico responde los comentarios (amplía 0003, 0014 y 0023) | Aceptada |
 
 ### Estados
 

@@ -22,7 +22,7 @@ Método: patrones estratégicos y tácticos de Domain-Driven Design, adaptados a
 | **Boceto** | Dibujo a mano alzada hecho en campo sobre cuadrícula | No es un plano de ingeniería |
 | **Línea de cantidad** | Material o trabajo con descripción, cantidad, unidad y observación | No incluye precio |
 | **Ítem de catálogo** | Material estandarizado de la lista de TEINS | — |
-| **Comentario** | Nota de oficina dirigida al técnico | No modifica datos |
+| **Comentario** | Nota de oficina dirigida al técnico; abre una conversación que el técnico responde desde el teléfono (ADR-0040) | No modifica datos; se cierra al marcar revisado |
 | **Informe** | Composición de oficina a partir de levantamientos revisados, con planos y textos propios | No es el PDF |
 | **Versión publicada** | Copia congelada de un informe, con su PDF, entregada al cliente | Nunca se edita |
 | **Acceso de cliente** | Credencial (QR y clave) con la que un cliente consulta sus informes | No es un usuario interno |
@@ -86,7 +86,7 @@ erDiagram
 |---|---|---|---|
 | **Levantamiento** | Secciones, respuestas, líneas de cantidad, referencias a evidencias | Técnico en borrador; oficina después | Sube al enviar; su estado baja |
 | **Archivo** | Binario inmutable con huella digital | Quien lo crea | Sube |
-| **Comentario** | Texto, autor, fecha, referencia al campo | Oficina | Baja |
+| **Comentario** | Texto, autor, fecha, referencia al campo y, si es respuesta, a qué comentario responde y de qué lado (ADR-0040) | Lo abre oficina; el técnico responde | Baja con sus respuestas; las del técnico suben |
 | **Visita** | Cliente, sitio, motivo, canal de origen, técnicos asignados, fecha y horario (ADR-0037) | Oficina, supervisor | Baja |
 | **Formato** | Nombre, tipo de servicio, versión vigente | Administrador | No |
 | **Versión de formato** | Definición completa (ADR-0006) | Nadie tras publicarse | Baja |
