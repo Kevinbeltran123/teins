@@ -257,3 +257,91 @@ async function bajarSync(cookie: string, appVersion: number) {
   expect(r.statusCode, r.body).toBe(200);
   return (r.json() as { cambios: { tipo: string }[] }).cambios.filter((c) => c.tipo === "levantamiento") as Record<string, unknown>[];
 }
+
+describe("conversaciones (ADR-0040)", () => {
+  const responder = (cookie: string, id: string, comentarioId: string, payload: object) =>
+    app.inject({ method: "POST", url: `/api/levantamientos/${id}/comentarios/${comentarioId}/respuestas`, headers: { cookie }, payload });
+  const comentarios = async (cookie: string, id: string) => (await get(cookie, `/api/levantamientos/${id}`)).json().comentarios as Record<string, unknown>[];
+  const conversacionEnBandeja = async (cookie: string, id: string, estado = "enviado") =>
+    ((await get(cookie, `/api/levantamientos?estado=${estado}`)).json().elementos as { id: string; conversacion: unknown }[]).find((e) => e.id === id)?.conversacion;
+
+  async function conComentario() {
+    const datos = await levantamientoEnviado();
+    const raiz = (await post(datos.oficina.cookie, datos.id, "comentarios", { texto: "¿Quién te recibe?", seccion: "cuarto_tecnico", campo: "descripcion" })).json() as { id: string };
+    return { ...datos, raiz };
+  }
+
+  it("el técnico responde una vez por llave; oficina la ve en el hilo y queda en el historial", async () => {
+    const { oficina, tecnico, id, raiz } = await conComentario();
+    const llave = randomUUID();
+    const primera = await responder(tecnico.cookie, id, raiz.id, { llave, texto: "  Nadie, estaba cerrado  " });
+    expect(primera.statusCode, primera.body).toBe(201);
+    expect(primera.json()).toMatchObject({ texto: "Nadie, estaba cerrado", de: "tecnico", autor: "Técnico de prueba", llave, leido: false });
+    // El teléfono reintenta con la misma llave (regla 4): mismo mensaje, ninguno nuevo.
+    const otraVez = await responder(tecnico.cookie, id, raiz.id, { llave, texto: "Nadie, estaba cerrado" });
+    expect(otraVez.statusCode).toBe(201);
+    expect(otraVez.json().id).toBe(primera.json().id);
+
+    const hilo = await comentarios(oficina.cookie, id);
+    expect(hilo).toHaveLength(2);
+    expect(hilo[1]).toMatchObject({ texto: "Nadie, estaba cerrado", de: "tecnico", enRespuestaA: raiz.id, autor: { id: tecnico.id, nombre: "Técnico de prueba" } });
+    const historial = (await get(oficina.cookie, `/api/levantamientos/${id}/historial`)).json();
+    expect(historial.eventos.at(-1)).toMatchObject({ tipo: "comentario_respondido", autor: { nombre: "Técnico de prueba" }, seccion: "cuarto_tecnico", campo: "descripcion" });
+    expect(historial.integra).toBe(true);
+
+    // Oficina responde en el mismo hilo y el técnico ve las dos respuestas dentro del comentario.
+    expect((await post(oficina.cookie, id, "comentarios", { texto: "Gracias", enRespuestaA: raiz.id })).statusCode).toBe(201);
+    const [cambio] = (await bajarSync(tecnico.cookie, 14)).filter((c) => c.id === id);
+    expect(cambio).toMatchObject({
+      comentarios: [{ id: raiz.id, respuestas: [{ texto: "Nadie, estaba cerrado", de: "tecnico", llave, leido: false }, { texto: "Gracias", de: "oficina", autor: "Oficina de prueba" }] }],
+    });
+    expect((cambio!.comentarios as unknown[]).length).toBe(1);
+  });
+
+  it("solo el técnico del levantamiento responde, solo a un comentario de oficina vigente y hasta 1000 caracteres", async () => {
+    const { oficina, tecnico, organizacionId, id, raiz } = await conComentario();
+    const usuario = `tecnico.${randomBytes(4).toString("hex")}`;
+    await s.identidad.crearUsuario({ organizacionId, usuario, nombre: "Otro técnico", rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    const otro = await iniciarSesion(app, usuario, "contrasena-de-prueba");
+    expect((await responder(otro, id, raiz.id, { llave: randomUUID(), texto: "Hola" })).json()).toMatchObject({ codigo: "no_encontrado" });
+    expect((await responder(oficina.cookie, id, raiz.id, { llave: randomUUID(), texto: "Hola" })).json()).toMatchObject({ codigo: "sin_permiso" });
+    expect((await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "a".repeat(1001) })).json()).toMatchObject({ codigo: "entrada_invalida" });
+    // A una respuesta no se responde: la conversación cuelga del comentario de oficina.
+    const respuesta = (await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "Nadie" })).json() as { id: string };
+    expect((await responder(tecnico.cookie, id, respuesta.id, { llave: randomUUID(), texto: "Hola" })).json()).toMatchObject({ codigo: "no_encontrado" });
+    expect((await post(oficina.cookie, id, "comentarios", { texto: "x", enRespuestaA: respuesta.id })).json()).toMatchObject({ codigo: "no_encontrado" });
+    // Un comentario retirado (ADR-0035) ya no se responde.
+    await app.inject({ method: "POST", url: `/api/levantamientos/${id}/comentarios/${raiz.id}/retirar`, headers: { cookie: oficina.cookie } });
+    expect((await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "Hola" })).json()).toMatchObject({ codigo: "no_encontrado" });
+  });
+
+  it("al marcar revisado la conversación se cierra para los dos lados", async () => {
+    const { oficina, tecnico, id, raiz } = await conComentario();
+    await post(oficina.cookie, id, "tomar", { version: 1 });
+    await post(oficina.cookie, id, "marcar-revisado", { version: 2 });
+    expect((await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "Tarde" })).json()).toMatchObject({ codigo: "estado_invalido" });
+    expect((await post(oficina.cookie, id, "comentarios", { texto: "Tarde", enRespuestaA: raiz.id })).json()).toMatchObject({ codigo: "estado_invalido" });
+  });
+
+  it("el punto de «sin leer» es de quien revisa o, si nadie lo ha tomado, de quien comentó; al leer se apaga y el técnico ve «Leído»", async () => {
+    const { oficina, otra, tecnico, id, raiz } = await conComentario();
+    expect(await conversacionEnBandeja(oficina.cookie, id)).toBeNull();
+    await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "Nadie" });
+    // Nadie lo ha tomado: es de quien escribió el comentario.
+    expect(await conversacionEnBandeja(oficina.cookie, id)).toMatchObject({ sinLeer: true, ultima: { autor: "Técnico de prueba", en: expect.any(String) } });
+    expect(await conversacionEnBandeja(otra.cookie, id)).toMatchObject({ sinLeer: false });
+
+    // La toma otra persona: ahora el punto es suyo.
+    await post(otra.cookie, id, "tomar", { version: 1 });
+    expect(await conversacionEnBandeja(otra.cookie, id, "en_revision")).toMatchObject({ sinLeer: true });
+    expect(await conversacionEnBandeja(oficina.cookie, id, "en_revision")).toMatchObject({ sinLeer: false });
+    expect((await get(otra.cookie, `/api/levantamientos/${id}`)).json().leidoHasta).toBeNull();
+
+    const leida = await post(otra.cookie, id, "lectura", {});
+    expect(leida.statusCode, leida.body).toBe(200);
+    expect(await conversacionEnBandeja(otra.cookie, id, "en_revision")).toMatchObject({ sinLeer: false });
+    expect((await get(otra.cookie, `/api/levantamientos/${id}`)).json().leidoHasta).toBe(leida.json().leidoHasta);
+    const [cambio] = (await bajarSync(tecnico.cookie, 14)).filter((c) => c.id === id);
+    expect(cambio).toMatchObject({ comentarios: [{ respuestas: [{ texto: "Nadie", leido: true }] }] });
+  });
+});

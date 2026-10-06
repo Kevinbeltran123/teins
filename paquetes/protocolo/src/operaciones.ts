@@ -116,6 +116,27 @@ const EstadoLevantamiento = z.enum(["enviado", "en_revision", "revisado"]);
 
 const Persona = z.object({ id: z.string(), nombre: z.string() });
 
+/** Largo máximo de un mensaje de una conversación, en los dos lados (ADR-0040). */
+const TextoDeMensaje = z.string().trim().min(1).max(1000);
+
+/** Quién escribió un mensaje de una conversación (ADR-0040): oficina la abre y el técnico responde. */
+export const LadoDelMensaje = z.enum(["oficina", "tecnico"]);
+
+/** Una respuesta dentro de la conversación de un comentario, como la ve el técnico (ADR-0040). */
+export const MensajeParaTecnico = z
+  .object({
+    id: Uuid,
+    texto: z.string(),
+    de: LadoDelMensaje,
+    autor: z.string(),
+    creadoEn: Fecha,
+    /** Solo en los del técnico: la llave con que lo mandó el teléfono, para sacarlo de su cola. */
+    llave: Uuid.optional(),
+    /** Solo en los del técnico: alguien de oficina ya lo leyó («Leído»). */
+    leido: z.boolean().optional(),
+  })
+  .meta({ id: "MensajeParaTecnico" });
+
 /** Nota de oficina al técnico, opcionalmente sobre un campo. No modifica datos. */
 const ComentarioParaTecnico = z.object({
   id: Uuid,
@@ -126,6 +147,8 @@ const ComentarioParaTecnico = z.object({
   creadoEn: Fecha,
   /** Su autor lo corrigió (ADR-0035): el teléfono muestra "Editado". Ausente en la versión anterior del contrato. */
   editadoEn: Fecha.optional(),
+  /** La conversación (ADR-0040), en orden. Opcional: la app 13 no la conoce y la descarta al validar. */
+  respuestas: z.array(MensajeParaTecnico).optional(),
 });
 
 // Bajada (ADR-0003): cambios del alcance del usuario desde un punto de control.
@@ -274,6 +297,11 @@ const ResumenLevantamiento = z.object({
   visita: z.object({ id: Uuid, cliente: z.string(), sitio: z.string() }).nullable(),
   /** Concurrencia optimista (ADR-0005): cada guardado lleva la versión que la persona tenía abierta. */
   version: z.int().positive(),
+  /**
+   * La última respuesta del técnico (ADR-0040) y si quien la debe leer (quien revisa o, si nadie lo ha tomado, quien
+   * escribió el comentario) no la ha leído. Nulo si el técnico no ha respondido.
+   */
+  conversacion: z.object({ sinLeer: z.boolean(), ultima: z.object({ autor: z.string(), en: Fecha }) }).nullable().default(null),
 });
 
 export const Comentario = z
@@ -288,6 +316,9 @@ export const Comentario = z
     editadoEn: Fecha.nullable().default(null),
     /** Retirado (anulado) por su autor: el técnico deja de verlo; se restaura con "Deshacer". */
     retirado: z.object({ en: Fecha, por: Persona }).nullable().default(null),
+    /** El comentario que abre la conversación de la que esta es una respuesta (ADR-0040); nulo si la abre. */
+    enRespuestaA: Uuid.nullable().default(null),
+    de: LadoDelMensaje.default("oficina"),
   })
   .meta({ id: "Comentario" });
 
@@ -319,6 +350,8 @@ export const DetalleLevantamiento = ResumenLevantamiento.extend({
     .object({ id: Uuid, cliente: z.string(), sitio: z.string(), direccion: z.string(), motivo: z.string(), programadaPara: z.iso.date() })
     .nullable(),
   comentarios: z.array(Comentario),
+  /** Hasta cuándo leyó quien consulta las conversaciones (ADR-0040): lo posterior va bajo la línea «Nuevo». */
+  leidoHasta: Fecha.nullable().default(null),
 }).meta({ id: "DetalleLevantamiento" });
 
 const EstadoDeRevision = z.object({ estado: EstadoLevantamiento, revisor: Persona.nullable(), version: z.int().positive() }).meta({ id: "EstadoDeRevision" });
@@ -938,17 +971,37 @@ export const operaciones = {
     ruta: "/api/levantamientos/{id}/comentarios",
     resumen: "Comentario de oficina al técnico; llega en la siguiente bajada",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object({ texto: z.string().trim().min(1).max(2000), seccion: z.string().max(80).optional(), campo: z.string().max(64).optional() }),
+    // `enRespuestaA`: oficina responde en una conversación (ADR-0040); se cierra al marcar revisado.
+    cuerpo: z.object({ texto: TextoDeMensaje, seccion: z.string().max(80).optional(), campo: z.string().max(64).optional(), enRespuestaA: Uuid.optional() }),
     estadoExito: 201,
     respuesta: Comentario,
-    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
+  },
+  responderComentario: {
+    metodo: "POST",
+    ruta: "/api/levantamientos/{id}/comentarios/{comentarioId}/respuestas",
+    resumen: "El técnico responde la conversación de un comentario de oficina; idempotente por su llave (ADR-0040)",
+    parametros: z.object({ id: Uuid, comentarioId: Uuid }),
+    cuerpo: z.object({ llave: Uuid, texto: TextoDeMensaje }),
+    estadoExito: 201,
+    respuesta: MensajeParaTecnico,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
+  },
+  marcarConversacionLeida: {
+    metodo: "POST",
+    ruta: "/api/levantamientos/{id}/lectura",
+    resumen: "Quien consulta leyó las conversaciones del levantamiento hasta ahora (ADR-0040)",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: z.object({ leidoHasta: Fecha }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
   },
   editarComentario: {
     metodo: "POST",
     ruta: "/api/levantamientos/{id}/comentarios/{comentarioId}",
     resumen: "Su autor corrige un comentario mientras el levantamiento no esté revisado (ADR-0035)",
     parametros: z.object({ id: Uuid, comentarioId: Uuid }),
-    cuerpo: z.object({ texto: z.string().trim().min(1).max(2000) }),
+    cuerpo: z.object({ texto: TextoDeMensaje }),
     estadoExito: 200,
     respuesta: Comentario,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],

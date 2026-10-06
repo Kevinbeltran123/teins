@@ -39,6 +39,7 @@ export type TipoEvento =
   | "campo_corregido"
   | "levantamiento_revisado"
   | "comentario_agregado"
+  | "comentario_respondido"
   | "informe_publicado"
   | "version_retirada"
   | "informe_enviado"

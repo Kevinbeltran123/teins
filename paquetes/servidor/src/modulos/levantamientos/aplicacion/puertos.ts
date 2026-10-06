@@ -69,6 +69,8 @@ export interface LevantamientoEnRevision {
   repeticiones: Repeticiones;
   /** Como el técnico lo reconoce en su teléfono: por el día en que lo creó. */
   creadoEnDispositivo: Date;
+  /** Para decir de qué cliente es en los avisos de una conversación (ADR-0040). */
+  visitaId: string | null;
 }
 
 export interface CambiosDeRevision {
@@ -88,6 +90,10 @@ export interface NuevoComentario {
   seccion: string | null;
   campo: string | null;
   creadoEn: Date;
+  /** Conversaciones (ADR-0040): a qué comentario de oficina responde, de qué lado y, si es del técnico, su llave. */
+  enRespuestaA?: string | null;
+  de?: "oficina" | "tecnico";
+  llave?: string | null;
 }
 
 export interface ComentarioGuardado extends NuevoComentario {
@@ -104,6 +110,11 @@ export interface RepositorioRevision extends ProyeccionDeCantidades {
    */
   actualizar(tx: TxOrganizacion, id: string, versionEsperada: number, cambios: CambiosDeRevision): Promise<boolean>;
   agregarComentario(tx: TxOrganizacion, comentario: NuevoComentario): Promise<void>;
+  /** Guarda la respuesta del técnico si su llave no se usó (regla 4); devuelve false si ya estaba. */
+  agregarRespuesta(tx: TxOrganizacion, respuesta: NuevoComentario & { llave: string }): Promise<boolean>;
+  comentarioPorLlave(tx: TxOrganizacion, llave: string): Promise<ComentarioGuardado | undefined>;
+  /** Quien consulta leyó las conversaciones hasta `en` (ADR-0040). */
+  leer(tx: TxOrganizacion, datos: { organizacionId: string; usuarioId: string; levantamientoId: string; en: Date }): Promise<void>;
   /** El comentario de este levantamiento, con su fila bloqueada para corregirlo (ADR-0035). */
   comentario(tx: TxOrganizacion, levantamientoId: string, comentarioId: string): Promise<ComentarioGuardado | undefined>;
   corregirComentario(tx: TxOrganizacion, comentarioId: string, cambios: Partial<Pick<ComentarioGuardado, "texto" | "editadoEn" | "retiradoEn" | "retiradoPor">>): Promise<void>;

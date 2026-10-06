@@ -14,18 +14,30 @@ import { suscripciones } from "./esquema";
 export type Aviso =
   | { tipo: "visita_asignada" | "visita_cancelada" | "visita_retirada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; programadaPara: string; horaInicio?: string | null }
   | { tipo: "visita_reprogramada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; antes: string; despues: string; horaAntes?: string | null; horaDespues?: string | null }
-  | { tipo: "comentario" | "levantamiento_revisado"; organizacionId: string; tecnicoId: string; levantamientoId: string; creadoEn: Date }
+  | { tipo: "levantamiento_revisado"; organizacionId: string; tecnicoId: string; levantamientoId: string; creadoEn: Date }
+  /** Oficina escribió en una conversación (ADR-0040): con el cliente y el texto, por decisión de Kevin. */
+  | { tipo: "mensaje_de_oficina"; organizacionId: string; tecnicoId: string; levantamientoId: string; cliente: string | null; texto: string }
+  /** El técnico respondió (ADR-0040): solo a quien revisa o, si nadie lo ha tomado, a quien escribió el comentario. */
+  | { tipo: "respuesta_del_tecnico"; organizacionId: string; usuarioId: string; levantamientoId: string; comentarioId: string; tecnico: string; cliente: string | null; sobre: string | null }
   | { tipo: "levantamiento_enviado"; organizacionId: string; levantamientoId: string; tecnico: string }
   /** A quien publicó o pidió el envío: una copia del informe no llegó al cliente (ADR-0028). */
   | { tipo: "envio_fallido"; organizacionId: string; usuarioId: string; versionId: string; documento: "informe" | "cotizacion" };
 
-/** Lo que se ve en el aviso. Nunca lleva datos del cliente: se lee con el teléfono bloqueado (R5). */
+/**
+ * Lo que se ve en el aviso. No lleva datos del cliente: se lee con el teléfono bloqueado (R5). La excepción son las
+ * conversaciones (ADR-0040): el cliente y el texto, por decisión de Kevin.
+ */
 export interface Contenido {
   titulo: string;
   cuerpo: string;
   /** Agrupa por entidad: un aviso nuevo de la misma visita reemplaza al anterior. */
   etiqueta: string;
+  /** A dónde lleva al tocarlo, dentro de la superficie; sin ella, al inicio. */
+  ruta?: string | undefined;
 }
+
+/** Un aviso muestra pocas líneas: el texto largo se corta. */
+const recortar = (texto: string, largo = 160) => (texto.length > largo ? `${texto.slice(0, largo - 1).trimEnd()}…` : texto);
 
 const ZONA = "America/Bogota";
 const formatoDia = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
@@ -53,8 +65,15 @@ export function contenidoDe(aviso: Aviso): Contenido {
       return { titulo: "Visita cancelada", cuerpo: `Oficina canceló la visita del ${dia(aviso.programadaPara)}.`, etiqueta: `visita:${aviso.visitaId}` };
     case "visita_retirada":
       return { titulo: "Visita asignada a otra persona", cuerpo: `Ya no tienes la visita del ${dia(aviso.programadaPara)}.`, etiqueta: `visita:${aviso.visitaId}` };
-    case "comentario":
-      return { titulo: "Comentario de oficina", cuerpo: `En tu levantamiento del ${diaDe(aviso.creadoEn)}.`, etiqueta: `levantamiento:${aviso.levantamientoId}` };
+    case "mensaje_de_oficina":
+      return { titulo: aviso.cliente ? `Oficina · ${aviso.cliente}` : "Oficina", cuerpo: recortar(aviso.texto), etiqueta: `conversacion:${aviso.levantamientoId}`, ruta: `/?conversacion=${aviso.levantamientoId}` };
+    case "respuesta_del_tecnico":
+      return {
+        titulo: `${aviso.tecnico} respondió`,
+        cuerpo: [aviso.cliente, aviso.sobre ? `sobre ${aviso.sobre}` : null].filter(Boolean).join(" · ") || "Abra la conversación para leer su respuesta.",
+        etiqueta: `conversacion:${aviso.levantamientoId}`,
+        ruta: `/levantamientos/${aviso.levantamientoId}?hilo=${aviso.comentarioId}`,
+      };
     case "levantamiento_revisado":
       return { titulo: "Levantamiento revisado", cuerpo: `Oficina revisó tu levantamiento del ${diaDe(aviso.creadoEn)}.`, etiqueta: `levantamiento:${aviso.levantamientoId}` };
     case "levantamiento_enviado":
@@ -71,8 +90,9 @@ function destinatarios(aviso: Aviso) {
     case "levantamiento_enviado":
       return eq(suscripciones.superficie, "oficina");
     case "envio_fallido":
+    case "respuesta_del_tecnico":
       return and(eq(suscripciones.superficie, "oficina"), eq(suscripciones.usuarioId, aviso.usuarioId));
-    case "comentario":
+    case "mensaje_de_oficina":
     case "levantamiento_revisado":
       return and(eq(suscripciones.superficie, "campo"), eq(suscripciones.usuarioId, aviso.tecnicoId));
     default:
@@ -104,7 +124,7 @@ export async function olvidarSuscripciones(tx: TxOrganizacion, usuarioId: string
 export const cargaDeclarativa = (contenido: Contenido, origen: string) =>
   JSON.stringify({
     web_push: 8030,
-    notification: { title: contenido.titulo, body: contenido.cuerpo, navigate: new URL("/", origen).href, tag: contenido.etiqueta, lang: "es-CO", dir: "ltr", silent: false },
+    notification: { title: contenido.titulo, body: contenido.cuerpo, navigate: new URL(contenido.ruta ?? "/", origen).href, tag: contenido.etiqueta, lang: "es-CO", dir: "ltr", silent: false },
   });
 
 /** Un aviso que no llega en un día ya no sirve: la bajada trae el estado de todos modos. */

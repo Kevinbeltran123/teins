@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, jsonb, pgSchema, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, jsonb, pgSchema, primaryKey, text, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import type { Repeticiones, Respuestas } from "@teins/dominio";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
@@ -63,7 +63,9 @@ export const comandosProcesados = esquemaLevantamientos.table(
 /**
  * Comentarios de oficina al técnico (modelo de dominio: no modifican datos). Bajan al técnico con el estado de
  * su levantamiento. Su autor los edita o los retira mientras no esté Revisado (ADR-0035): retirar es anular,
- * la fila se conserva; la base solo deja cambiar esas columnas.
+ * la fila se conserva; la base solo deja cambiar esas columnas. Un comentario de oficina abre una conversación
+ * (ADR-0040): las respuestas de las dos partes son filas con `en_respuesta_a`; las del técnico llevan la llave
+ * con que las mandó el teléfono.
  */
 export const comentarios = esquemaLevantamientos.table(
   "comentarios",
@@ -81,8 +83,32 @@ export const comentarios = esquemaLevantamientos.table(
     editadoEn: marcaDeTiempo("editado_en"),
     retiradoEn: marcaDeTiempo("retirado_en"),
     retiradoPor: text("retirado_por"),
+    enRespuestaA: uuid("en_respuesta_a").references((): AnyPgColumn => comentarios.id),
+    de: text("de").notNull().default("oficina"),
+    llave: uuid("llave").unique(),
   },
-  (t) => [index("comentarios_levantamiento_idx").on(t.levantamientoId, t.creadoEn), aislamientoPorOrganizacion("comentarios")],
+  (t) => [
+    index("comentarios_levantamiento_idx").on(t.levantamientoId, t.creadoEn),
+    check("comentarios_de_valido", sql`${t.de} in ('oficina', 'tecnico')`),
+    aislamientoPorOrganizacion("comentarios"),
+  ],
+).enableRLS();
+
+/**
+ * Hasta cuándo leyó cada persona de oficina las conversaciones de un levantamiento (ADR-0040): apaga su punto de
+ * «sin leer» y le dice al técnico «Leído».
+ */
+export const lecturas = esquemaLevantamientos.table(
+  "lecturas",
+  {
+    organizacionId: organizacionId(),
+    usuarioId: text("usuario_id").notNull(),
+    levantamientoId: uuid("levantamiento_id")
+      .notNull()
+      .references(() => levantamientos.id),
+    leidoHasta: marcaDeTiempo("leido_hasta").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.usuarioId, t.levantamientoId] }), index("lecturas_levantamiento_idx").on(t.levantamientoId), aislamientoPorOrganizacion("lecturas")],
 ).enableRLS();
 
 /**

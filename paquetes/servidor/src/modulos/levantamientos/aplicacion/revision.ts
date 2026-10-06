@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { bloqueDe, corregir, marcarRevisado, puedeEditar, tomarRevision, type EstadoRevision, type Valor } from "@teins/dominio";
+import { bloqueDe, corregir, marcarRevisado, nombreDeDato, puedeEditar, tomarRevision, type EstadoRevision, type Valor } from "@teins/dominio";
 import type { Actor } from "../../../plataforma/actor";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../../plataforma/base-de-datos";
 import { problema } from "../../../plataforma/errores";
@@ -15,6 +15,8 @@ export interface DependenciasRevision {
   catalogo: PuertoCatalogo;
   /** Para decir quién tiene la revisión cuando otra persona intenta tomarla. */
   nombres: (organizacionId: string, ids: readonly string[], en?: TxOrganizacion) => Promise<Map<string, string>>;
+  /** El cliente de la visita, para los avisos de una conversación (ADR-0040). */
+  clienteDe: (tx: TxOrganizacion, visitaId: string | null) => Promise<string | null>;
   reloj?: () => Date;
 }
 
@@ -164,6 +166,7 @@ export interface ComentarioCreado {
   seccion: string | null;
   campo: string | null;
   creadoEn: Date;
+  enRespuestaA: string | null;
 }
 
 /**
@@ -213,19 +216,36 @@ export function corregirComentario(
   });
 }
 
-/** Cualquier persona de oficina comenta; el comentario no modifica datos ni la versión. */
+/**
+ * El comentario de oficina que abre una conversación (ADR-0040): de este levantamiento, de oficina, no es respuesta y
+ * no está retirado. Lo retirado ya no lo ve el técnico, así que tampoco se responde.
+ */
+async function raizDeConversacion(deps: DependenciasRevision, tx: TxOrganizacion, id: string, comentarioId: string) {
+  const raiz = await deps.repositorio.comentario(tx, id, comentarioId);
+  if (!raiz || raiz.de === "tecnico" || raiz.enRespuestaA || raiz.retiradoEn) throw problema("no_encontrado", "El comentario no existe");
+  return raiz;
+}
+
+const cerrada = () => problema("estado_invalido", "El levantamiento ya está revisado: la conversación quedó cerrada");
+
+/**
+ * Cualquier persona de oficina comenta; el comentario no modifica datos ni la versión. Con `enRespuestaA` responde
+ * en una conversación (ADR-0040), que se cierra al marcar revisado.
+ */
 export function comentar(
   deps: DependenciasRevision,
   actor: Actor,
   id: string,
-  datos: { texto: string; seccion?: string | undefined; campo?: string | undefined },
+  datos: { texto: string; seccion?: string | undefined; campo?: string | undefined; enRespuestaA?: string | undefined },
   correlacion: string,
 ): Promise<ComentarioCreado> {
   return enOrganizacion(deps.bd, actor.organizacionId, async (tx) => {
     const actual = await deps.repositorio.obtener(tx, id);
     if (!actual) throw problema("no_encontrado");
-    if (datos.campo && !datos.seccion) throw problema("entrada_invalida", "Un comentario sobre un campo necesita su sección");
-    if (datos.seccion) {
+    const raiz = datos.enRespuestaA ? await raizDeConversacion(deps, tx, id, datos.enRespuestaA) : undefined;
+    if (raiz && actual.estado === "revisado") throw cerrada();
+    if (!raiz && datos.campo && !datos.seccion) throw problema("entrada_invalida", "Un comentario sobre un campo necesita su sección");
+    if (!raiz && datos.seccion) {
       const formato = await deps.formatos.obtener(tx, actual.formato, actual.versionFormato);
       // También una repetición de una sección repetible (`tableros~id`), si existe en este levantamiento.
       const seccion = formato && bloqueDe(formato, actual.repeticiones, datos.seccion)?.seccion;
@@ -233,28 +253,108 @@ export function comentar(
         throw problema("entrada_invalida", "El comentario apunta a un campo que no está en el formato");
       }
     }
+    // Una respuesta es del dato de su conversación: la sección y el campo van en el comentario que la abre.
     const comentario = {
       id: randomUUID(),
       organizacionId: actor.organizacionId,
       levantamientoId: id,
       autorId: actor.usuarioId,
       texto: datos.texto,
-      seccion: datos.seccion ?? null,
-      campo: datos.campo ?? null,
+      seccion: raiz ? null : (datos.seccion ?? null),
+      campo: raiz ? null : (datos.campo ?? null),
       creadoEn: ahora(deps),
+      enRespuestaA: raiz?.id ?? null,
     };
     await deps.repositorio.agregarComentario(tx, comentario);
+    const donde = raiz ?? comentario;
     await deps.registrarAuditoria(tx, [
       {
         ...comun(actor, id, correlacion),
         tipoEvento: "comentario_agregado",
-        ...(datos.seccion ? { rutaCampo: datos.campo ? `${datos.seccion}.${datos.campo}` : datos.seccion } : {}),
-        valorNuevo: { texto: datos.texto },
+        ...(donde.seccion ? { rutaCampo: donde.campo ? `${donde.seccion}.${donde.campo}` : donde.seccion } : {}),
+        valorNuevo: raiz ? { texto: datos.texto, enRespuestaA: raiz.id } : { texto: datos.texto },
       },
     ]);
-    await deps.avisar(tx, { tipo: "comentario", organizacionId: actor.organizacionId, tecnicoId: actual.tecnicoId, levantamientoId: id, creadoEn: actual.creadoEnDispositivo });
+    await deps.avisar(tx, { tipo: "mensaje_de_oficina", organizacionId: actor.organizacionId, tecnicoId: actual.tecnicoId, levantamientoId: id, cliente: await deps.clienteDe(tx, actual.visitaId), texto: datos.texto });
     await avisarAlTecnico(deps, tx, actor, actual);
     return comentario;
+  });
+}
+
+/**
+ * El técnico responde la conversación de un comentario de oficina (ADR-0040). Idempotente por la llave que crea el
+ * teléfono (regla 4): un reintento devuelve el mensaje guardado, aunque ya esté revisado. El aviso va a quien revisa
+ * o, si nadie lo ha tomado, a quien escribió el comentario.
+ */
+export function responderComentario(
+  deps: DependenciasRevision,
+  actor: Actor,
+  id: string,
+  comentarioId: string,
+  datos: { llave: string; texto: string },
+  correlacion: string,
+): Promise<ComentarioGuardado> {
+  return enOrganizacion(deps.bd, actor.organizacionId, async (tx) => {
+    const actual = await deps.repositorio.obtener(tx, id);
+    // El levantamiento de otro técnico no existe para este (regla 9).
+    if (!actual || actual.tecnicoId !== actor.usuarioId) throw problema("no_encontrado");
+    const previa = await deps.repositorio.comentarioPorLlave(tx, datos.llave);
+    if (previa) {
+      if (previa.levantamientoId !== id || previa.autorId !== actor.usuarioId) throw problema("entrada_invalida", "La llave ya se usó en otro mensaje");
+      return previa;
+    }
+    const raiz = await raizDeConversacion(deps, tx, id, comentarioId);
+    if (actual.estado === "revisado") throw cerrada();
+    const respuesta = {
+      id: randomUUID(),
+      organizacionId: actor.organizacionId,
+      levantamientoId: id,
+      autorId: actor.usuarioId,
+      texto: datos.texto,
+      seccion: null,
+      campo: null,
+      creadoEn: ahora(deps),
+      enRespuestaA: raiz.id,
+      de: "tecnico" as const,
+      llave: datos.llave,
+    };
+    // Otro reintento con la misma llave se adelantó: se devuelve el suyo.
+    if (!(await deps.repositorio.agregarRespuesta(tx, respuesta))) return (await deps.repositorio.comentarioPorLlave(tx, datos.llave))!;
+    await deps.registrarAuditoria(tx, [
+      {
+        ...comun(actor, id, correlacion),
+        tipoEvento: "comentario_respondido",
+        ...(raiz.seccion ? { rutaCampo: raiz.campo ? `${raiz.seccion}.${raiz.campo}` : raiz.seccion } : {}),
+        valorNuevo: { id: respuesta.id, texto: datos.texto, enRespuestaA: raiz.id, llave: datos.llave },
+      },
+    ]);
+    const formato = raiz.seccion && raiz.campo ? await deps.formatos.obtener(tx, actual.formato, actual.versionFormato) : undefined;
+    const tecnico = (await deps.nombres(actor.organizacionId, [actor.usuarioId], tx)).get(actor.usuarioId) ?? "El técnico";
+    await deps.avisar(tx, {
+      tipo: "respuesta_del_tecnico",
+      organizacionId: actor.organizacionId,
+      usuarioId: actual.revisorId ?? raiz.autorId,
+      levantamientoId: id,
+      comentarioId: raiz.id,
+      tecnico,
+      cliente: await deps.clienteDe(tx, actual.visitaId),
+      sobre: formato && raiz.seccion && raiz.campo ? nombreDeDato(formato, actual.repeticiones, raiz.seccion, raiz.campo) : null,
+    });
+    // Su propio mensaje le llega en la siguiente bajada a sus otros teléfonos.
+    await avisarAlTecnico(deps, tx, actor, actual);
+    return { ...respuesta, editadoEn: null, retiradoEn: null, retiradoPor: null };
+  });
+}
+
+/** Quien consulta leyó las conversaciones hasta ahora (ADR-0040); el técnico ve «Leído» en la siguiente bajada. */
+export function leerConversacion(deps: DependenciasRevision, actor: Actor, id: string): Promise<Date> {
+  return enOrganizacion(deps.bd, actor.organizacionId, async (tx) => {
+    const actual = await deps.repositorio.obtener(tx, id);
+    if (!actual) throw problema("no_encontrado");
+    const en = ahora(deps);
+    await deps.repositorio.leer(tx, { organizacionId: actor.organizacionId, usuarioId: actor.usuarioId, levantamientoId: id, en });
+    await avisarAlTecnico(deps, tx, actor, actual);
+    return en;
   });
 }
 

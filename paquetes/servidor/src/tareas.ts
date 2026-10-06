@@ -11,7 +11,8 @@ import type { NombreTrabajo, Trabajos } from "./plataforma/cola";
 const esquemas: { [N in NombreTrabajo]: z.ZodType<Trabajos[N]> } = {
   "archivos.verificar": z.object({ organizacionId: z.uuid(), huella: z.string().regex(/^[0-9a-f]{64}$/) }),
   "informes.generarPdf": z.object({ organizacionId: z.uuid(), versionId: z.uuid() }),
-  "avisos.enviar": z.object({ organizacionId: z.uuid(), suscripcionId: z.uuid(), titulo: z.string(), cuerpo: z.string(), etiqueta: z.string() }),
+  // `ruta`: dentro de la superficie (ADR-0040); siempre relativa, para que el aviso nunca lleve a otro sitio.
+  "avisos.enviar": z.object({ organizacionId: z.uuid(), suscripcionId: z.uuid(), titulo: z.string(), cuerpo: z.string(), etiqueta: z.string(), ruta: z.string().regex(/^\/(?!\/)/).optional() }),
   "envios.enviar": z.object({ organizacionId: z.uuid(), envioId: z.uuid(), pdfRuta: z.string().min(1) }),
   "cotizaciones.generarPdf": z.object({ organizacionId: z.uuid(), versionId: z.uuid() }),
 };

@@ -17,8 +17,8 @@ import type { Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Visitas } from "../visitas";
 import { recibirEnvio, type DependenciasEnvio } from "./aplicacion/recibir-envio";
-import { comentar, corregirCampos, corregirComentario, marcar, tomar, vincular, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
-import { cantidadesRevisadas, comentariosDe, conteosPorVisita, detalle, deVisita, estadosDe, lineasDeVisita, paginaPorEstado, vinculosDe, type ConteoDeVisita, type LineaRevisadaDeVisita } from "./consultas";
+import { comentar, corregirCampos, corregirComentario, leerConversacion, marcar, responderComentario, tomar, vincular, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
+import { cantidadesRevisadas, comentariosDe, conteosPorVisita, conversacionesDe, detalle, deVisita, estadosDe, leidoHastaDe, lineasDeVisita, paginaPorEstado, vinculosDe, type ConteoDeVisita, type LineaRevisadaDeVisita } from "./consultas";
 
 export type { LineaRevisadaDeVisita } from "./consultas";
 import { levantamientos } from "./esquema";
@@ -32,6 +32,8 @@ export interface ComentarioParaElTecnico {
   campo: string | null;
   creadoEn: Date;
   editadoEn: Date | null;
+  /** La conversación que abre (ADR-0040), en orden; `leido` solo en lo del técnico. */
+  respuestas: { id: string; autorId: string; texto: string; de: "oficina" | "tecnico"; creadoEn: Date; llave: string | null; leido: boolean | undefined }[];
 }
 
 export interface EstadoParaElTecnico {
@@ -83,7 +85,8 @@ const inArrayONada = (columna: AnyColumn, ids: string[]) => (ids.length ? inArra
 /** Interfaz pública del módulo de levantamientos: núcleo del sistema. */
 export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad, catalogo }: Dependencias): Levantamientos {
   const envio: DependenciasEnvio = { bd, repositorio: repositorioDrizzle, formatos, archivos, visitas, registrarAuditoria: registrar, registrarCambios, avisar, catalogo, nombres: identidad.nombres };
-  const revision: DependenciasRevision = { bd, repositorio: repositorioRevision, formatos, registrarAuditoria: registrar, registrarCambios, avisar, nombres: identidad.nombres, catalogo };
+  const clienteDe = async (tx: TxOrganizacion, visitaId: string | null) => (visitaId ? ((await visitas.resumenes(tx, [visitaId])).get(visitaId)?.cliente.nombre ?? null) : null);
+  const revision: DependenciasRevision = { bd, repositorio: repositorioRevision, formatos, registrarAuditoria: registrar, registrarCambios, avisar, nombres: identidad.nombres, catalogo, clienteDe };
 
   async function personas(organizacionId: string, ids: readonly (string | null)[]) {
     const nombres = await identidad.nombres(organizacionId, [...new Set(ids.filter((i): i is string => i !== null))]);
@@ -110,7 +113,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
       registrarOperacion(app, "listarLevantamientos", {
         politica: politicas.oficina,
         manejar: async ({ consulta, actor }) => {
-          const { filas, siguienteCursor, total, visitasDe, nombresFormato } = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+          const { filas, siguienteCursor, total, visitasDe, nombresFormato, conversaciones } = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
             // Búsqueda: clave del formato aquí y su nombre por la interfaz de formatos; cliente y sitio por la
             // de visitas; técnico por la de identidad.
             const texto = consulta.buscar?.trim();
@@ -128,9 +131,9 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             // Nombre de cada formato de la página: se ve "Levantamiento UPS", no su clave.
             const pares = [...new Map(pagina.filas.map((f) => [`${f.formato}@${f.versionFormato}`, f])).values()];
             const nombresFormato = new Map(await Promise.all(pares.map(async (f) => [`${f.formato}@${f.versionFormato}`, (await formatos.obtener(tx, f.formato, f.versionFormato))?.nombre] as const)));
-            return { ...pagina, visitasDe: await visitas.resumenes(tx, ids), nombresFormato };
+            return { ...pagina, visitasDe: await visitas.resumenes(tx, ids), nombresFormato, conversaciones: await conversacionesDe(tx, pagina.filas, actor.usuarioId) };
           });
-          const persona = await personas(actor.organizacionId, filas.flatMap((f) => [f.tecnicoId, f.revisorId]));
+          const persona = await personas(actor.organizacionId, [...filas.flatMap((f) => [f.tecnicoId, f.revisorId]), ...[...conversaciones.values()].map((c) => c.ultima.autorId)]);
           return {
             elementos: filas.map((f) => ({
               id: f.id,
@@ -147,6 +150,10 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
                 return v ? { id: v.id, cliente: v.cliente.nombre, sitio: v.sitio.nombre } : null;
               })(),
               version: f.version,
+              conversacion: (() => {
+                const c = conversaciones.get(f.id);
+                return c ? { sinLeer: c.sinLeer, ultima: { autor: persona(c.ultima.autorId)!.nombre, en: c.ultima.en.toISOString() } } : null;
+              })(),
             })),
             siguienteCursor,
             total,
@@ -171,10 +178,11 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
               const elegidoEnCampo = v.vinculadaPor === fila.tecnicoId;
               return item ? [{ seccion: v.seccion, campo: v.campo, linea: v.linea, item: { id: item.id, codigo: item.codigo, descripcion: item.descripcion, unidad: item.unidad }, elegidoEnCampo }] : [];
             });
-            return { fila, definicion, visita, comentarios: await comentariosDe(tx, [fila.id]), vinculos };
+            const conversacion = (await conversacionesDe(tx, [fila], actor.usuarioId)).get(fila.id);
+            return { fila, definicion, visita, comentarios: await comentariosDe(tx, [fila.id]), vinculos, conversacion, leidoHasta: await leidoHastaDe(tx, fila.id, actor.usuarioId) };
           });
           if (!resultado) throw problema("no_encontrado");
-          const { fila, definicion, visita, comentarios, vinculos } = resultado;
+          const { fila, definicion, visita, comentarios, vinculos, conversacion, leidoHasta } = resultado;
           const persona = await personas(actor.organizacionId, [fila.tecnicoId, fila.revisorId, ...comentarios.flatMap((c) => [c.autorId, ...(c.retiradoPor ? [c.retiradoPor] : [])])]);
           return {
             id: fila.id,
@@ -204,7 +212,11 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
               creadoEn: c.creadoEn.toISOString(),
               editadoEn: c.editadoEn?.toISOString() ?? null,
               retirado: c.retiradoEn ? { en: c.retiradoEn.toISOString(), por: persona(c.retiradoPor)! } : null,
+              enRespuestaA: c.enRespuestaA,
+              de: c.de as "oficina" | "tecnico",
             })),
+            leidoHasta: leidoHasta?.toISOString() ?? null,
+            conversacion: conversacion ? { sinLeer: conversacion.sinLeer, ultima: { autor: persona(conversacion.ultima.autorId)!.nombre, en: conversacion.ultima.en.toISOString() } } : null,
           };
         },
       });
@@ -296,8 +308,24 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             ...(c.campo ? { campo: c.campo } : {}),
             autor: persona(actor.usuarioId)!,
             creadoEn: c.creadoEn.toISOString(),
+            enRespuestaA: c.enRespuestaA,
           };
         },
+      });
+
+      registrarOperacion(app, "responderComentario", {
+        politica: politicas.tecnico,
+        manejar: async ({ parametros: { id, comentarioId }, cuerpo, actor, correlacion }) => {
+          const r = await responderComentario(revision, actor, id, comentarioId, cuerpo, correlacion);
+          const persona = await personas(actor.organizacionId, [r.autorId]);
+          // Recién escrito nadie lo ha leído; un reintento tampoco cambia lo que ya vio el teléfono.
+          return { id: r.id, texto: r.texto, de: "tecnico" as const, autor: persona(r.autorId)!.nombre, creadoEn: r.creadoEn.toISOString(), llave: r.llave ?? cuerpo.llave, leido: false };
+        },
+      });
+
+      registrarOperacion(app, "marcarConversacionLeida", {
+        politica: politicas.oficina,
+        manejar: async ({ parametros: { id }, actor }) => ({ leidoHasta: (await leerConversacion(revision, actor, id)).toISOString() }),
       });
 
       const corregir = (accion: "editar" | "retirar" | "restaurar") =>
@@ -313,6 +341,8 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             creadoEn: c.creadoEn.toISOString(),
             editadoEn: c.editadoEn?.toISOString() ?? null,
             retirado: c.retiradoEn ? { en: c.retiradoEn.toISOString(), por: persona(c.retiradoPor)! } : null,
+            enRespuestaA: c.enRespuestaA ?? null,
+            de: c.de ?? "oficina",
           };
         };
       registrarOperacion(app, "editarComentario", { politica: politicas.oficina, manejar: corregir("editar") });

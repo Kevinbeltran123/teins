@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { LIMITES } from "@teins/dominio";
 import { documentoOpenApi } from "./openapi";
 import { Bajada, DatosContacto, EnviarLevantamiento, llaveDeEnvio, operaciones } from "./operaciones";
@@ -151,5 +152,43 @@ describe("correcciones de la revisión de código", () => {
     expect(cuerpo.safeParse({ endpoint: "http://push.example.com/x" }).success).toBe(false);
     expect(cuerpo.safeParse({ endpoint: `https://push.example.com/${"a".repeat(2048)}` }).success).toBe(false);
     expect(cuerpo.safeParse({ endpoint: "https://push.example.com/x" }).success).toBe(true);
+  });
+});
+
+describe("conversaciones (ADR-0040)", () => {
+  const otro = "01927a3e-7c1b-7e2a-9f00-123456789abd";
+  const comentario = { id, texto: "¿Quién te recibe?", seccion: "llegada", campo: "recibe", autor: "Oficina", creadoEn: "2026-10-05T20:26:00.000Z" };
+  const respuestas = [
+    { id: otro, texto: "Nadie, estaba cerrado", de: "tecnico", autor: "María Gómez", creadoEn: "2026-10-05T20:40:00.000Z", llave: otro, leido: true },
+    { id, texto: "Gracias", de: "oficina", autor: "Oficina", creadoEn: "2026-10-05T20:44:00.000Z" },
+  ];
+  const bajada = (comentarios: object[]) =>
+    Bajada.safeParse({ cambios: [{ tipo: "levantamiento", id, estado: "en_revision", recibidoEn: "2026-10-05T20:26:00.000Z", comentarios }], puntoDeControl: 1, hayMas: false, permisoLocalHasta: "2026-10-12T00:00:00.000Z" });
+
+  it("la bajada lleva las respuestas dentro de su comentario, como campo opcional", () => {
+    expect(bajada([{ ...comentario, respuestas }]).success).toBe(true);
+    expect(bajada([comentario]).success).toBe(true);
+    expect(bajada([{ ...comentario, respuestas: [{ ...respuestas[0], de: "cliente" }] }]).success).toBe(false);
+  });
+
+  it("la app 13, que no conoce las respuestas, las descarta al validar", () => {
+    // El esquema de la app 13 es el comentario sin `respuestas`: zod quita lo que no conoce.
+    const app13 = z.object({ id: z.string(), texto: z.string(), autor: z.string(), creadoEn: z.string() });
+    expect(app13.parse({ ...comentario, respuestas })).not.toHaveProperty("respuestas");
+  });
+
+  it("responder exige una llave uuid y hasta 1000 caracteres", () => {
+    const cuerpo = operaciones.responderComentario.cuerpo;
+    expect(cuerpo.parse({ llave: otro, texto: "  Nadie me recibió  " })).toEqual({ llave: otro, texto: "Nadie me recibió" });
+    expect(cuerpo.safeParse({ llave: "x", texto: "Hola" }).success).toBe(false);
+    expect(cuerpo.safeParse({ llave: otro, texto: "   " }).success).toBe(false);
+    expect(cuerpo.safeParse({ llave: otro, texto: "a".repeat(1001) }).success).toBe(false);
+  });
+
+  it("oficina responde en el hilo con enRespuestaA, también hasta 1000 caracteres", () => {
+    const cuerpo = operaciones.comentarLevantamiento.cuerpo;
+    expect(cuerpo.safeParse({ texto: "Gracias", enRespuestaA: id }).success).toBe(true);
+    expect(cuerpo.safeParse({ texto: "a".repeat(1001) }).success).toBe(false);
+    expect(operaciones.editarComentario.cuerpo.safeParse({ texto: "a".repeat(1001) }).success).toBe(false);
   });
 });

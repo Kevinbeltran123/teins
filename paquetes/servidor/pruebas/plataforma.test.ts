@@ -62,10 +62,10 @@ describe("permisos del rol de la aplicación", () => {
     }
   });
 
-  it("la auditoría, los formatos, el registro de cambios y los comentarios no se pueden modificar desde la aplicación", async () => {
+  it("la auditoría, los formatos, el registro de cambios, los comentarios y lo leído no se pueden modificar desde la aplicación", async () => {
     const { rows } = await propietario.pool.query<{ tabla: string; actualizar: boolean }>(`
       select t as tabla, has_table_privilege('teins_app', t, 'UPDATE') as actualizar
-      from unnest(array['auditoria.registros', 'formatos.versiones', 'cambios.registro', 'levantamientos.comentarios']) as t`);
+      from unnest(array['auditoria.registros', 'formatos.versiones', 'cambios.registro', 'levantamientos.comentarios', 'levantamientos.lecturas']) as t`);
     expect(rows.every((r) => !r.actualizar)).toBe(true);
   });
 });

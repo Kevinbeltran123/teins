@@ -74,7 +74,7 @@ export async function armarBajada(tx: TxOrganizacion, deps: Omit<Dependencias, "
     // N-1 (ADR-0015): su contrato solo conoce "enviado" y no trae comentarios.
     for (const l of estados) cambios.push({ tipo: "levantamiento", id: l.id, estado: "enviado", recibidoEn: l.recibidoEn.toISOString() });
   } else {
-    const nombres = await deps.identidad.nombres(organizacionId, [...new Set(estados.flatMap((l) => l.comentarios.map((c) => c.autorId)))], tx);
+    const nombres = await deps.identidad.nombres(organizacionId, [...new Set(estados.flatMap((l) => l.comentarios.flatMap((c) => [c.autorId, ...c.respuestas.map((r) => r.autorId)])))], tx);
     for (const l of estados) {
       cambios.push({
         tipo: "levantamiento",
@@ -89,6 +89,20 @@ export async function armarBajada(tx: TxOrganizacion, deps: Omit<Dependencias, "
           autor: nombres.get(c.autorId) ?? "Oficina",
           creadoEn: c.creadoEn.toISOString(),
           ...(c.editadoEn ? { editadoEn: c.editadoEn.toISOString() } : {}),
+          // La conversación (ADR-0040): la app 13 no la conoce y la descarta al validar.
+          ...(c.respuestas.length > 0
+            ? {
+                respuestas: c.respuestas.map((r) => ({
+                  id: r.id,
+                  texto: r.texto,
+                  de: r.de,
+                  autor: nombres.get(r.autorId) ?? (r.de === "oficina" ? "Oficina" : "Técnico"),
+                  creadoEn: r.creadoEn.toISOString(),
+                  ...(r.llave ? { llave: r.llave } : {}),
+                  ...(r.leido !== undefined ? { leido: r.leido } : {}),
+                })),
+              }
+            : {}),
         })),
       });
     }
