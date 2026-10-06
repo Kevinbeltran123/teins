@@ -1195,6 +1195,7 @@ Pedido de Kevin el 2026-10-04: «una especie de chat» para que el técnico resp
 - **En campo**, la fila de «Enviados» ya no dice «N comentarios de oficina»: dice «Oficina te escribió» o «N respuestas por enviar», como el prototipo. Se arregló de paso la hora de la fila, que salía como «a. m.» sola.
 - **En oficina** se conserva el campo de comentario general bajo los hilos y la edición del comentario propio (ADR-0035) con «Editado <hora>».
 - `source-map-js` forzado a 1.2.2 o posterior (aviso alto nuevo, por `better-auth`, ajeno a la iteración).
+- **Fallos de WebKit en administración y cuenta resueltos** (venían de antes de la 38): eran tiempos agotados, no errores. Buscar por etiqueta o rol en toda la página recorría la tabla de Administración, que en la base local tenía cientos de usuarios de corridas anteriores (33 s por campo en WebKit). Las pruebas ahora buscan dentro de la hoja o la fila; además se limpió la base local, a pedido de Kevin. Administración pasó de agotar los 90 s a 11 s.
 
 **Evidencia:** pruebas nuevas de protocolo (4), servidor (5 de revisión, 1 de avisos, lecturas en plataforma) y campo (6 del motor, 4 del chat, cifrado y migración a Dexie 7); `conversaciones.spec.ts` en Chromium y WebKit; `revision.spec.ts` y `usabilidad.spec.ts` siguen pasando; capturas de campo a 390 × 844 (lista, detalle, chat, sin señal, oscuro) y de oficina a 1440 px (comentarios, punto, cerrada, oscuro) comparadas con `prototipos/hilos`; `pnpm typecheck`, `arquitectura`, `licencias`, `audit` y `presupuesto` (campo 133,3 KB de 135).
 
