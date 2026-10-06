@@ -86,7 +86,7 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await expect(comentarios.getByText(/^Editado /)).toBeVisible();
   await a.getByRole("textbox", { name: "Comentario general" }).fill("Comentario equivocado (E2E)");
   await comentarios.getByRole("button", { name: "Enviar comentario" }).click();
-  await comentarios.locator(".nota-c").filter({ hasText: "Comentario equivocado (E2E)" }).getByRole("button", { name: "Más acciones para el comentario" }).click();
+  await comentarios.getByRole("region", { name: "Conversación general" }).filter({ hasText: "Comentario equivocado (E2E)" }).getByRole("button", { name: "Más acciones para el comentario" }).click();
   await a.getByRole("menuitem", { name: "Borrar" }).click();
   await expect(comentarios.getByText(`Comentario retirado por ${ana.nombre}`, { exact: false })).toBeVisible();
   await expect(a.getByRole("tab", { name: "Comentarios 1" })).toBeVisible();
@@ -122,10 +122,15 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   const esta = page.getByRole("region", { name: "Enviados" });
   await expect(esta.getByText("Revisado", { exact: true })).toBeVisible({ timeout: 30_000 });
-  await expect(esta.getByText("1 comentario de oficina")).toBeVisible();
+  // El comentario abre el chat con oficina (ADR-0040): la fila dice que oficina escribió.
+  await expect(esta.getByText("Oficina te escribió")).toBeVisible();
   await esta.getByRole("button").first().click();
   await expect(page.getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();
-  await expect(page.getByText("Sobre potencia nominal", { exact: false })).toBeVisible();
+  // En el chat, el comentario lleva el dato del que habla; revisado, la conversación está cerrada (ADR-0040).
+  await page.getByRole("button", { name: /^Oficina/ }).click();
+  const chat = page.getByRole("dialog", { name: "Chat con oficina" });
+  await expect(chat.getByRole("button", { name: /Tu respuesta · Cuarto técnico.*Potencia nominal/ })).toBeVisible();
+  await expect(chat.getByText("La conversación quedó cerrada")).toBeVisible();
 
   await a.context().close();
   await b.context().close();
