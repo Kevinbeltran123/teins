@@ -51,7 +51,7 @@ Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones po
 
 ## Próximo paso
 
-**Siguiente: que Kevin pruebe la iteración 38 (desplegada en el entorno de pruebas el 2026-10-06) y construir la 39 (aprobada el 2026-10-05).** Todo está en la sección "Iteraciones 38 y 39": qué se construye, cómo debe verse, el orden de trabajo y cuándo está terminada. La 39 empieza por el ADR-0040, sin volver a preguntar lo ya aprobado.
+**Siguiente: que Kevin pruebe las iteraciones 38 y 39 en el entorno de pruebas, la 39 también en su iPhone (campo, app 14).** Las dos están construidas y verificadas (2026-10-06); el detalle, las decisiones y la evidencia están en la sección "Iteraciones 38 y 39". Después: producción de la 29 a la 39 (`campo` primero) y lo que entregue TEINS.
 
 **Iteración 37 (buscar en todo y revisar con el teclado) construida, verificada y desplegada en el entorno de pruebas el 2026-10-04** (sección "Iteración 37"), sin operación nueva en el servidor. Sigue: que Kevin pruebe la 36 y la 37, en Mac y, si puede, en Windows.
 
@@ -1052,7 +1052,7 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 
 ## Iteraciones 38 y 39 · La revisión al lado y las conversaciones con campo
 
-**Estado:** las dos aprobadas por Kevin. La 38 quedó construida, verificada y desplegada en el entorno de pruebas el 2026-10-06 (falta que Kevin la pruebe); la 39, por construir. La 39 usa el panel de la 38.
+**Estado:** las dos aprobadas por Kevin. La 38 quedó construida, verificada y desplegada en el entorno de pruebas el 2026-10-06 (falta que Kevin la pruebe); la 39, construida y verificada el 2026-10-06 (ADR-0040, migración `0036`, app de campo 14, Dexie 7). La 39 usa el panel de la 38.
 
 ### Iteración 38 · La revisión armada como el informe
 
@@ -1183,6 +1183,20 @@ Pedido de Kevin el 2026-10-04: «una especie de chat» para que el técnico resp
    - sin señal queda en cola y sale al volver;
    - revisado, se cierra.
 6. **Despliegue:** `campo` primero, por la migración; después `servidor` y `oficina`.
+
+**Decisiones tomadas al construirla (2026-10-06)**
+- **Avisos con el cliente y el texto:** chocaban con la regla 3 del ADR-0023 (sin datos del cliente). Kevin eligió el 2026-10-06 mantener lo aprobado; el ADR-0040 lo deja como excepción solo para las conversaciones. El aviso dice el cliente («Oficina · Hotel Plaza Real»), no el sitio.
+- **Las respuestas son comentarios** con `en_respuesta_a`, `de` y `llave` (única): la idempotencia va en la misma fila (`ON CONFLICT DO NOTHING`) y no en `comandos_procesados`. Un reintento con la misma llave devuelve el mensaje guardado aunque ya esté revisado. Las respuestas no llevan sección ni campo: son del dato de su conversación.
+- **Códigos:** revisado → `estado_invalido`; comentario retirado, respuesta a una respuesta o levantamiento de otro técnico → `no_encontrado`. El teléfono guarda el motivo (`revisado`, `no_existe`, `invalida`) y no reintenta.
+- **Lo leído en oficina** es por persona y por levantamiento (`levantamientos.lecturas`, solo avanza). «Leído» en el teléfono: alguien de oficina leyó después del mensaje.
+- **La cola del teléfono** guarda lo enviado como «enviado» hasta que la bajada lo trae, para que no desaparezca de la pantalla entre las dos cosas; un mensaje que espera detiene los siguientes del mismo chat para no desordenarlo.
+- **Con la conversación abierta no hay aviso:** la pantalla le dice al service worker qué conversación ve (mensaje, no la dirección); el aviso se muestra en silencio y se cierra. Limitación: Safari 18.4 o posterior puede mostrar el formato declarativo sin pasar por el service worker, así que en iPhone el aviso puede verse igual.
+- **Aviso tocado con la app abierta:** el service worker le pide a la ventana abrir lo suyo (`/?conversacion=` en campo, `/levantamientos/<id>?hilo=` en oficina) sin recargarla.
+- **En campo**, la fila de «Enviados» ya no dice «N comentarios de oficina»: dice «Oficina te escribió» o «N respuestas por enviar», como el prototipo. Se arregló de paso la hora de la fila, que salía como «a. m.» sola.
+- **En oficina** se conserva el campo de comentario general bajo los hilos y la edición del comentario propio (ADR-0035) con «Editado <hora>».
+- `source-map-js` forzado a 1.2.2 o posterior (aviso alto nuevo, por `better-auth`, ajeno a la iteración).
+
+**Evidencia:** pruebas nuevas de protocolo (4), servidor (5 de revisión, 1 de avisos, lecturas en plataforma) y campo (6 del motor, 4 del chat, cifrado y migración a Dexie 7); `conversaciones.spec.ts` en Chromium y WebKit; `revision.spec.ts` y `usabilidad.spec.ts` siguen pasando; capturas de campo a 390 × 844 (lista, detalle, chat, sin señal, oscuro) y de oficina a 1440 px (comentarios, punto, cerrada, oscuro) comparadas con `prototipos/hilos`; `pnpm typecheck`, `arquitectura`, `licencias`, `audit` y `presupuesto` (campo 133,3 KB de 135).
 
 ### Terminado cuando
 
