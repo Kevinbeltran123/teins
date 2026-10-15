@@ -1,9 +1,39 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { leerClave } from "@teins/dominio";
 import type { CuerpoEntrada } from "@teins/protocolo";
 import { conTransicion } from "@teins/ui";
 import { cliente, REFRESCO_BANDEJA_MS } from "./api";
 
 export type Estado = "enviado" | "en_revision" | "revisado";
+
+/**
+ * Lo escrito en la revisión que todavía no se guarda ni se envía: una corrección abierta, un comentario sobre un dato o
+ * general, una respuesta en una conversación, o la edición de un comentario.
+ */
+export type Escrito =
+  | { tipo: "correccion" | "comentario"; seccion: string; campo: string }
+  | { tipo: "general" }
+  | { tipo: "respuesta"; comentarioId: string }
+  | { tipo: "edicion" };
+
+/** Hay algo: un texto con letras, una corrección escrita, un comentario en edición. */
+const hayAlgo = (valor: unknown) => (typeof valor === "string" ? valor.trim() !== "" : Boolean(valor));
+
+/**
+ * Qué pasa con lo escrito al marcar revisado: las correcciones ya no se guardan, y las respuestas y la edición de un
+ * comentario tampoco, porque las conversaciones se cierran (ADR-0040). Un comentario nuevo todavía se envía, pero el
+ * técnico ya no lo puede responder.
+ */
+export function alMarcarRevisado<E extends { que: Escrito; valor: unknown }>(escritos: Iterable<E>): { sePierden: E[]; sinRespuesta: E[] } {
+  const vivos = [...escritos].filter((e) => hayAlgo(e.valor));
+  return {
+    sePierden: vivos.filter((e) => e.que.tipo === "correccion" || e.que.tipo === "respuesta" || e.que.tipo === "edicion"),
+    sinRespuesta: vivos.filter((e) => e.que.tipo === "comentario" || e.que.tipo === "general"),
+  };
+}
+
+/** La sección tiene correcciones: en ella o en sus repeticiones («tableros~id»), no en otra que empieza igual. */
+export const seccionCorregida = (claves: Iterable<string>, seccion: string) => [...claves].some((k) => leerClave(k).seccion === seccion);
 
 /** Una pestaña de la bandeja: levantamientos de un estado, del que más lleva esperando al más reciente. */
 /** `buscar`: cliente, sitio, técnico o formato; la busca el servidor, porque la bandeja llega por páginas. */

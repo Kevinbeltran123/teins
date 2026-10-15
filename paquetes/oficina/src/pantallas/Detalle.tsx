@@ -73,8 +73,9 @@ import { aDiaCorto, aFechaCorta, aHora, cuantoLleva, iniciales } from "../format
 import { avisarConversacionAbierta } from "../conversacion";
 import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
-import { useBandeja, useComentar, useCorregir, useCorregirComentario, useLeerConversacion, useMarcarRevisado, useTomar } from "../revision";
+import { alMarcarRevisado, useBandeja, useComentar, useCorregir, useCorregirComentario, useLeerConversacion, useMarcarRevisado, useTomar, type Escrito } from "../revision";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
+import { enLista } from "./Envios";
 import { BotonMostrarVista, EditorConVista, Lienzo, useVistaPrevia, VistaDeDocumento } from "./Lienzo";
 import type { Plantillas } from "../documentos";
 import { esTexto, unoDe, usePreferencia } from "../preferencias";
@@ -104,6 +105,26 @@ const idDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`.re
 /** La corrección que se está escribiendo: el capítulo del informe la muestra antes de guardarla (iteración 26). */
 type EnCurso = { seccion: string; campo: string; valor: Valor | undefined };
 const CorreccionEnCurso = createContext<{ avisar: (c: EnCurso | null) => void; verCapitulo: (() => void) | null } | null>(null);
+
+type Pendiente = { que: Escrito; valor: unknown };
+/**
+ * Lo escrito y no enviado en la revisión, por destino. Vive en el detalle y no en cada campo: cambiar de pestaña del
+ * panel, ocultarlo, cerrar la hoja lateral o abrir el globo de otra fila no lo borra, y «Marcar revisado» dice qué se
+ * pierde.
+ */
+const SinEnviar = createContext<Map<string, Pendiente> | null>(null);
+
+/** Un texto de la revisión que sigue ahí si su campo se desmonta y vuelve a montarse. */
+function useSinEnviar<T>(que: Escrito, inicial: T): [T, (valor: T) => void] {
+  const pendientes = useContext(SinEnviar);
+  const clave = JSON.stringify(que);
+  const [valor, setValor] = useState<T>(() => (pendientes?.has(clave) ? (pendientes.get(clave)!.valor as T) : inicial));
+  const poner = (nuevo: T) => {
+    setValor(nuevo);
+    pendientes?.set(clave, { que, valor: nuevo });
+  };
+  return [valor, poner];
+}
 
 /** La última corrección de cada dato y su valor original, para mostrar antes y después en la fila. */
 function correccionesDe(historial: Historial | undefined) {
@@ -174,6 +195,7 @@ export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined })
   const volver = useNavigate();
   useTeclaSuelta("Escape", () => void volver({ to: "/" }));
   const [enCurso, setEnCurso] = useState<EnCurso | null>(null);
+  const [sinEnviar] = useState(() => new Map<string, Pendiente>());
 
   if (consulta.isPending) {
     return (
@@ -248,6 +270,7 @@ export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined })
   );
 
   return (
+    <SinEnviar.Provider value={sinEnviar}>
     <VerConversacion.Provider value={verConversacion}>
     <CorreccionEnCurso.Provider value={{ avisar: setEnCurso, verCapitulo: capituloVisible ? null : verCapitulo }}>
       <EditorConVista
@@ -323,6 +346,7 @@ export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined })
       </EditorConVista>
     </CorreccionEnCurso.Provider>
     </VerConversacion.Provider>
+    </SinEnviar.Provider>
   );
 }
 
@@ -395,6 +419,51 @@ function PanelDeRevision({
 /** "8:41 p. m." si fue hoy; si no, con el día. */
 const cuandoCorto = (iso: string) => (aDiaCorto(iso) === "hoy" ? aHora(Date.parse(iso)) : aFechaCorta(iso));
 
+type Consecuencia = { icono: LucideIcon; texto: string; detalle?: string };
+
+/**
+ * Lo escrito que «Marcar revisado» deja atrás, como consecuencias de su confirmación (DESIGN.md, tabla de confirmar o
+ * deshacer): lo que se pierde, y los comentarios sin enviar, que el técnico ya no podrá responder.
+ */
+function loEscritoAlMarcar(l: Levantamiento, pendientes: Iterable<Pendiente>): Consecuencia[] {
+  const { sePierden, sinRespuesta } = alMarcarRevisado(pendientes);
+  const dato = (seccion: string, campo: string) => `«${nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo)}»`;
+  const enConversacion = (id: string | undefined) => {
+    const raiz = l.comentarios.find((c) => c.id === id);
+    return raiz?.seccion && raiz.campo ? `sobre ${dato(raiz.seccion, raiz.campo)}` : "en la conversación general";
+  };
+  const describir = ({ que, valor }: Pendiente): string => {
+    switch (que.tipo) {
+      case "correccion":
+        return `la corrección sin guardar de ${dato(que.seccion, que.campo)}`;
+      case "respuesta":
+        return `la respuesta sin enviar ${enConversacion(que.comentarioId)}`;
+      case "edicion":
+        return `la edición sin guardar de su comentario ${enConversacion((valor as { id?: string }).id)}`;
+      case "comentario":
+        return `el comentario sin enviar sobre ${dato(que.seccion, que.campo)}`;
+      case "general":
+        return "el comentario general sin enviar";
+    }
+  };
+  const corrige = sePierden.some((e) => e.que.tipo === "correccion");
+  const conversa = sePierden.some((e) => e.que.tipo !== "correccion");
+  return [
+    ...(sePierden.length > 0
+      ? [
+          {
+            icono: TriangleAlert,
+            texto: `Se ${sePierden.length === 1 ? "pierde" : "pierden"} ${enLista(sePierden.map(describir))}`,
+            detalle: corrige && conversa ? "Ya no se corrige y las conversaciones se cierran" : corrige ? "Después ya no se corrige: guarde antes lo que necesite" : "Las conversaciones se cierran: envíe antes lo que necesite",
+          },
+        ]
+      : []),
+    ...(sinRespuesta.length > 0
+      ? [{ icono: MessageSquare, texto: `${l.tecnico.nombre} no podrá responder ${enLista(sinRespuesta.map(describir))}`, detalle: sinRespuesta.length === 1 ? "Envíelo antes si espera respuesta" : "Envíelos antes si espera respuesta" }]
+      : []),
+  ];
+}
+
 /**
  * El estado de la revisión va en la barra, junto a su acción (iteración 38), como «Guardado» junto a «Publicar»:
  * «● En revisión · la tomó usted» con «Marcar revisado». En la pantalla quedan «Siguiente», los errores y las
@@ -412,9 +481,16 @@ function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Le
   const invalidos = marcar.error instanceof ErrorApi ? (marcar.error.problema.errores ?? []) : [];
   const etiqueta = (seccion: string, campo?: string) => (campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo) : rutaLegible(l.formatoDefinicion, l.repeticiones, seccion));
   const nombre = l.revisor?.nombre ?? "otra persona";
+  // Lo escrito y sin guardar ni enviar, al abrir la confirmación: sus consecuencias van primero.
+  const pendientes = useContext(SinEnviar);
+  const [loEscrito, setLoEscrito] = useState<Consecuencia[]>([]);
+  const confirmarRevisado = () => {
+    setLoEscrito(loEscritoAlMarcar(l, pendientes?.values() ?? []));
+    setConfirmando("revisado");
+  };
   // Revisar con el teclado (iteración 37): T toma y R marca revisado, con la confirmación de siempre.
   useTeclaSuelta("t", () => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada }), l.estado === "enviado" && !tomar.isPending);
-  useTeclaSuelta("r", () => setConfirmando("revisado"), mia && l.estado === "en_revision");
+  useTeclaSuelta("r", confirmarRevisado, mia && l.estado === "en_revision");
 
   let linea: ReactNode;
   let accion: ReactNode = null;
@@ -446,7 +522,7 @@ function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Le
       </>
     );
     accion = (
-      <Boton variante="principal" icono={Check} title="Marcar revisado · R" onClick={() => setConfirmando("revisado")}>
+      <Boton variante="principal" icono={Check} title="Marcar revisado · R" onClick={confirmarRevisado}>
         Marcar revisado
       </Boton>
     );
@@ -502,6 +578,7 @@ function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Le
           titulo={`¿Marcar revisado el levantamiento de ${l.tecnico.nombre}?`}
           confirmar="Marcar revisado"
           consecuencias={[
+            ...loEscrito,
             { icono: FileText, texto: l.visita ? "Queda listo para el informe de la visita" : "Queda listo para el informe", detalle: "Ya no se corrige desde la revisión" },
             {
               icono: Smartphone,
@@ -606,7 +683,8 @@ function FilaCampo({
   const verConversacion = useContext(VerConversacion);
   const nombreEnFrase = campo.etiqueta.toLowerCase();
 
-  if (corrigiendo) {
+  // Marcado revisado, la corrección abierta ya no se puede guardar: se pierde, como dijo la confirmación.
+  if (corrigiendo && l.estado !== "revisado") {
     return (
       <div className="dato editando" id={idDato(seccion, campo.clave)}>
         <span className="nombre">{campo.etiqueta}</span>
@@ -795,6 +873,15 @@ function EditorCorreccion({
   const enCurso = useContext(CorreccionEnCurso);
   useEffect(() => enCurso?.avisar({ seccion, campo: campo.clave, valor: nuevo }), [nuevo]);
   useEffect(() => () => enCurso?.avisar(null), []);
+  // Escrita y sin guardar: «Marcar revisado» dice que se pierde.
+  const pendientes = useContext(SinEnviar);
+  const escrita = motivo.trim() !== "" || JSON.stringify(nuevo ?? null) !== JSON.stringify(valor ?? null);
+  useEffect(() => {
+    const que: Escrito = { tipo: "correccion", seccion, campo: campo.clave };
+    const clave = JSON.stringify(que);
+    if (escrita) pendientes?.set(clave, { que, valor: true });
+    return () => void pendientes?.delete(clave);
+  }, [escrita]);
 
   async function guardar(evento: FormEvent) {
     evento.preventDefault();
@@ -925,8 +1012,13 @@ function EditorCorreccion({
 /** El comentario sobre un dato se escribe debajo de su fila: no hay que ir al panel y volver. */
 function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento; seccion: string; campo: string; nombre: string; cerrar: () => void }) {
   const comentar = useComentar(l.id);
-  const [texto, setTexto] = useState("");
+  // Abrir el globo de otra fila no lo borra: al volver a este, sigue lo escrito.
+  const [texto, setTexto] = useSinEnviar({ tipo: "comentario", seccion, campo }, "");
   const [vacio, setVacio] = useState(false);
+  const descartar = () => {
+    setTexto("");
+    cerrar();
+  };
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -936,7 +1028,7 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
     }
     try {
       await comentar.mutateAsync({ texto: texto.trim(), seccion, campo });
-      cerrar();
+      descartar();
     } catch {
       // El error queda a la vista.
     }
@@ -963,7 +1055,7 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
       />
       {comentar.isError && <Aviso tono="error">{mensajeDeError(comentar.error)}</Aviso>}
       <div className="fila-botones">
-        <Boton tamano="pequeno" onClick={cerrar}>
+        <Boton tamano="pequeno" onClick={descartar}>
           Cancelar
         </Boton>
         <Boton type="submit" tamano="pequeno" variante="principal" icono={Send} cargando={comentar.isPending}>
@@ -995,7 +1087,8 @@ function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: 
   const comentar = useComentar(l.id);
   const corregir = useCorregirComentario(l.id);
   const notificar = useNotificar();
-  const [editando, setEditando] = useState<{ id: string; texto: string } | null>(null);
+  // Lo que se escribe aquí sigue ahí al cambiar de pestaña, ocultar el panel o cerrar la hoja lateral.
+  const [editando, setEditando] = useSinEnviar<{ id: string; texto: string } | null>({ tipo: "edicion" }, null);
   // Lo leído al abrir la pestaña: la línea «Nuevo» se queda mientras se ve.
   const [leidoAlAbrir] = useState(l.leidoHasta);
   const revisado = l.estado === "revisado";
@@ -1028,7 +1121,7 @@ function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: 
   }
   // Solo lo recién llegado entra animado; lo demás no se anima otra vez al volver a la pestaña.
   const esNuevo = useLoNuevo(l.comentarios.map((c) => c.id));
-  const [texto, setTexto] = useState("");
+  const [texto, setTexto] = useSinEnviar({ tipo: "general" }, "");
   const raices = l.comentarios.filter((c) => !c.enRespuestaA);
 
   function irALaFila(seccion: string, campo: string) {
@@ -1207,7 +1300,8 @@ function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: 
 /** Responder en una conversación (ADR-0040): ↵ envía y ⇧↵ hace otra línea. */
 function ResponderEnHilo({ l, raiz, sobre }: { l: Levantamiento; raiz: ComentarioDeOficina; sobre: string | undefined }) {
   const comentar = useComentar(l.id);
-  const [texto, setTexto] = useState("");
+  // La respuesta a medias sigue ahí al cambiar de pestaña, ocultar el panel o cerrar la hoja lateral.
+  const [texto, setTexto] = useSinEnviar({ tipo: "respuesta", comentarioId: raiz.id }, "");
   const vacio = !texto.trim();
   async function enviar() {
     if (vacio || comentar.isPending) return;
