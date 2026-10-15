@@ -297,6 +297,40 @@ describe("archivos (ADR-0007)", () => {
     expect(await almacenamiento.existe(`${organizacionId}/${huella}`)).toBe(true);
   });
 
+  it("una foto guardada cuya fila se perdió (base restaurada, entorno limpio) se adopta tal como está y el envío que la usa entra", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const foto = await fotoVerificada(tecnico.cookie);
+    await s.propietario.pool.query("delete from archivos.archivos where organizacion_id = $1 and huella = $2", [organizacionId, foto.huella]);
+    expect((await enviar(tecnico.cookie, comando(randomUUID(), completo([foto.huella])))).json()).toMatchObject({ codigo: "archivos_faltantes", faltantes: [foto.huella] });
+
+    // El teléfono pide subirla otra vez: ya está guardada e idéntica, así que no se escribe nada encima.
+    const autorizacion = await app.inject({ method: "POST", url: "/api/archivos/subidas", headers: { cookie: tecnico.cookie, ...cabecerasSync }, payload: { huella: foto.huella, bytes: foto.datos.length, tipo: "image/jpeg" } });
+    expect(autorizacion.json()).toEqual({ estado: "existente", archivo: "subido" });
+    // El worker la verifica como cualquier subida, sin borrarla, y el envío entra.
+    await s.procesarCola();
+    const { rows } = await s.propietario.pool.query("select estado, tipo, creado_por from archivos.archivos where organizacion_id = $1 and huella = $2", [organizacionId, foto.huella]);
+    expect(rows).toEqual([{ estado: "verificado", tipo: "image/jpeg", creado_por: tecnico.id }]);
+    expect(await almacenamiento.existe(`${organizacionId}/${foto.huella}`)).toBe(true);
+    expect((await enviar(tecnico.cookie, comando(randomUUID(), completo([foto.huella])))).json()).toMatchObject({ resultado: "aceptado" });
+  });
+
+  it("lo guardado que no es lo declarado no se adopta: un PDF generado sigue intacto aunque declaren su huella y su tamaño exactos", async () => {
+    const { tecnico, oficina, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const generado = Buffer.from(`%PDF-1.7 generado ${randomUUID()}`);
+    const huella = createHash("sha256").update(generado).digest("hex");
+    const clave = `${organizacionId}/${huella}`;
+    await almacenamiento.guardar(clave, generado, "application/pdf");
+    const autorizar = (cookie: string, tipo: string) =>
+      app.inject({ method: "POST", url: "/api/archivos/subidas", headers: { cookie, ...cabecerasSync }, payload: { huella, bytes: generado.length, tipo } });
+    // Como foto o boceto no es lo que dice ser; como PDF no se adopta nunca: un plano no se distingue de un informe.
+    expect((await autorizar(tecnico.cookie, "image/jpeg")).json()).toMatchObject({ codigo: "estado_invalido" });
+    expect((await autorizar(tecnico.cookie, TIPO_ARCHIVO_BOCETO)).json()).toMatchObject({ codigo: "estado_invalido" });
+    expect((await autorizar(oficina.cookie, "application/pdf")).json()).toMatchObject({ codigo: "estado_invalido" });
+    await s.procesarCola();
+    expect(await almacenamiento.existe(clave)).toBe(true);
+    expect((await s.propietario.pool.query("select 1 from archivos.archivos where organizacion_id = $1 and huella = $2", [organizacionId, huella])).rows).toEqual([]);
+  });
+
   it("si la verificación agota sus intentos, el archivo queda rechazado y se puede volver a subir", async () => {
     const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
     const foto = jpegDePrueba();

@@ -57,16 +57,19 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
     );
   }
 
-  async function verificarContenido(fila: typeof archivos.$inferSelect, registro: RegistroDeTrabajo | undefined) {
-    const { organizacionId, huella } = fila;
+  /**
+   * Lee lo guardado y dice por qué no es lo declarado (tamaño, huella, firma interna o, en un boceto, su estructura), o
+   * null si lo es. De un plano cuenta además las páginas que anexa al informe (iteración 26).
+   */
+  async function examinar(organizacionId: string, huella: string, declarado: { tipo: string; bytes: number }): Promise<{ motivo: string | null; paginas?: number }> {
     const hash = createHash("sha256");
     let bytes = 0;
     const partes: Buffer[] = [];
     let cabecera = 0;
     // Un boceto no tiene firma de tipo: se lee completo (es pequeño) para validar su estructura. Un plano también,
-    // para contar las páginas que anexa al informe (iteración 26).
-    const esBoceto = fila.tipo === TIPO_ARCHIVO_BOCETO;
-    const esPlano = fila.tipo === "application/pdf";
+    // para contar sus páginas.
+    const esBoceto = declarado.tipo === TIPO_ARCHIVO_BOCETO;
+    const esPlano = declarado.tipo === "application/pdf";
     for await (const trozo of await almacenamiento.leer(claveDeObjeto(organizacionId, huella))) {
       const b = trozo as Buffer;
       bytes += b.length;
@@ -81,21 +84,26 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
     const contenido = Buffer.concat(partes);
     const tipoValido = esBoceto
       ? contenido.length <= LIMITES_BOCETO.bytes && leerBoceto(contenido.toString("utf8")) !== null
-      : (await fileTypeFromBuffer(contenido.subarray(0, BYTES_PARA_DETECTAR_TIPO)))?.mime === fila.tipo;
+      : (await fileTypeFromBuffer(contenido.subarray(0, BYTES_PARA_DETECTAR_TIPO)))?.mime === declarado.tipo;
 
     const motivo =
       bytes > config.BYTES_MAXIMOS_ARCHIVO
         ? "supera el tamaño permitido"
-        : bytes !== fila.bytes
+        : bytes !== declarado.bytes
           ? "el tamaño no coincide con el declarado"
           : hash.digest("hex") !== huella
             ? "la huella no coincide con el contenido"
             : !tipoValido
-              ? `el contenido no es ${esBoceto ? "un boceto válido" : fila.tipo}`
+              ? `el contenido no es ${esBoceto ? "un boceto válido" : declarado.tipo}`
               : null;
+    return motivo === null && esPlano ? { motivo, paginas: await paginasDePlano(contenido) } : { motivo };
+  }
 
+  async function verificarContenido(fila: typeof archivos.$inferSelect, registro: RegistroDeTrabajo | undefined) {
+    const { organizacionId, huella } = fila;
+    const { motivo, paginas } = await examinar(organizacionId, huella, fila);
     if (motivo === null) {
-      await marcar(organizacionId, huella, "subido", { estado: "verificado", verificadoEn: new Date(), ...(esPlano ? { paginas: await paginasDePlano(contenido) } : {}) });
+      await marcar(organizacionId, huella, "subido", { estado: "verificado", verificadoEn: new Date(), ...(paginas !== undefined ? { paginas } : {}) });
       return;
     }
     // Un contenido que no pasa la verificación nunca fue aceptado por ningún envío: se elimina. Primero el
@@ -135,10 +143,25 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
           if (cuerpo.bytes > config.BYTES_MAXIMOS_ARCHIVO) throw problema("archivo_demasiado_grande");
           if (cuerpo.tipo === TIPO_ARCHIVO_BOCETO && cuerpo.bytes > LIMITES_BOCETO.bytes) throw problema("archivo_demasiado_grande");
           if (!TIPOS_POR_ROL[actor.rol].includes(cuerpo.tipo)) throw problema("tipo_de_archivo_no_permitido");
-          // Una clave ocupada sin fila es de un PDF generado (informe o cotización): nunca se autoriza encima,
-          // o el rechazo de la verificación lo borraría (regla 7). Fuera de la transacción: no retiene conexión.
+          // Una clave ocupada sin fila es de un PDF generado (informe o cotización), o de un archivo cuya fila se perdió
+          // al restaurar la base o dejar limpio el entorno. Nunca se autoriza escribir encima: el rechazo de la
+          // verificación lo borraría (regla 7). Una foto o un boceto idéntico a lo declarado (el mismo examen del worker)
+          // se adopta sin subirlo otra vez; un PDF no, porque un plano no se distingue de un documento generado.
+          // Fuera de la transacción: no retiene conexión mientras lee el almacenamiento.
           if (!(await leerFila(actor.organizacionId, cuerpo.huella)) && (await almacenamiento.existe(claveDeObjeto(actor.organizacionId, cuerpo.huella)))) {
-            throw problema("estado_invalido", "Ese contenido ya está guardado como documento generado");
+            if (cuerpo.tipo === "application/pdf" || (await examinar(actor.organizacionId, cuerpo.huella, cuerpo)).motivo !== null) {
+              throw problema("estado_invalido", "Ese contenido ya está guardado como documento generado");
+            }
+            // Queda subido y lo verifica el worker, como cualquier subida (ADR-0007). Ya pasó el mismo examen, así que no lo
+            // rechaza ni lo borra, tampoco si la recuperación de atascados lo vuelve a encolar (ADR-0043).
+            await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+              const adoptado = await tx
+                .insert(archivos)
+                .values({ organizacionId: actor.organizacionId, huella: cuerpo.huella, tipo: cuerpo.tipo, bytes: cuerpo.bytes, estado: "subido", creadoPor: actor.usuarioId, subidoEn: new Date() })
+                .onConflictDoNothing()
+                .returning({ huella: archivos.huella });
+              if (adoptado.length > 0) await encolar(tx, "archivos.verificar", { organizacionId: actor.organizacionId, huella: cuerpo.huella }, { llave: `archivos.verificar:${actor.organizacionId}:${cuerpo.huella}` });
+            });
           }
           const existente = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const [fila] = await tx.select().from(archivos).where(eq(archivos.huella, cuerpo.huella));
