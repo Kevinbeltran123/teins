@@ -43,7 +43,8 @@ export function mensajeDeProgramacion(error: unknown): string {
     case "conflicto_de_version":
       return "Otra persona cambió esta visita mientras usted la tenía abierta. La lista ya muestra lo último: revise y vuelva a intentar.";
     case "estado_invalido":
-      return "La visita ya está cancelada.";
+      // Cancelada, o el cliente o el sitio se archivó con el diálogo abierto: el servidor dice cuál.
+      return error.problema.detail ?? "La visita ya está cancelada.";
     case "no_autenticado":
       return "Su sesión venció. Inicie sesión de nuevo.";
     // Alguien programó al mismo técnico a esa hora mientras el diálogo estaba abierto (ADR-0037).

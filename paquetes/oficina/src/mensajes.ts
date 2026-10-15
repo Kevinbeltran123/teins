@@ -105,7 +105,8 @@ export function mensajeDeError(error: unknown): string {
     case "no_tomado":
       return "Ya no tiene la revisión de este levantamiento: otra persona la tomó.";
     case "estado_invalido":
-      return "El levantamiento cambió de estado. Recargue para ver cómo quedó.";
+      // Si el servidor sabe qué pasó («La visita está cancelada…»), lo dice: recargar no lo cambiaría.
+      return error.problema.detail ?? "El levantamiento cambió de estado. Recargue para ver cómo quedó.";
     case "respuestas_invalidas":
       return "Hay datos que no cumplen el formato. Revise los campos marcados.";
     case "no_autenticado":

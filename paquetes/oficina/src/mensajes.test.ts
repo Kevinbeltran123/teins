@@ -4,6 +4,18 @@ import { errorDelCampo, mensajeDeError, textoDelServidor } from "./mensajes";
 
 const entradaInvalida = (campos?: { ruta: string; mensaje: string }[], detail = "Revise cuerpo") =>
   new ErrorApi({ type: tipoDeProblema("entrada_invalida"), title: "Entrada inválida", status: 400, codigo: "entrada_invalida", detail, ...(campos ? { campos } : {}) });
+const estadoInvalido = (detail?: string) =>
+  new ErrorApi({ type: tipoDeProblema("estado_invalido"), title: "La acción no aplica en el estado actual", status: 409, codigo: "estado_invalido", ...(detail ? { detail } : {}) });
+
+describe("un estado que cambió dice qué pasó, si el servidor lo sabe", () => {
+  it("abrir el informe de una visita cancelada lo dice, en vez de pedir recargar", () => {
+    expect(mensajeDeError(estadoInvalido("La visita está cancelada: no se abre un informe nuevo"))).toBe("La visita está cancelada: no se abre un informe nuevo");
+  });
+
+  it("sin detalle del servidor, se recarga para ver cómo quedó", () => {
+    expect(mensajeDeError(estadoInvalido())).toBe("El levantamiento cambió de estado. Recargue para ver cómo quedó.");
+  });
+});
 
 describe("errores de entrada del servidor en palabras de oficina (iteración 24)", () => {
   it("nombra los datos que el servidor rechazó, en vez de «Revise cuerpo»", () => {
