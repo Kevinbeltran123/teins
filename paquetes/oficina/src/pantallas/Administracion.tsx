@@ -43,6 +43,7 @@ import {
 import { cliente, consultas } from "../api";
 import { consultasDeAdministracion, credencialConQr, mensajeDeAdministracion, useAccion } from "../administracion";
 import { aFechaHora, haceCuanto } from "../formato";
+import { sinError } from "../mensajes";
 
 type Sesion = Respuesta<"obtenerSesion">;
 type Usuario = Respuesta<"listarUsuarios">["usuarios"][number];
@@ -568,8 +569,8 @@ function NuevoUsuario({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (r
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <CampoTexto etiqueta="Nombre completo" nombre="nombre" valorInicial="" onCambio={setNombre} error={errores.nombre} />
-        <CampoTexto etiqueta="Usuario para iniciar sesión" nombre="nuevo-usuario" valorInicial="" onCambio={setUsuario} error={errores.usuario} />
+        <CampoTexto etiqueta="Nombre completo" nombre="nombre" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
+        <CampoTexto etiqueta="Usuario para iniciar sesión" nombre="nuevo-usuario" valorInicial="" onCambio={(t) => (setUsuario(t), setErrores((e) => sinError(e, "usuario")))} error={errores.usuario} />
         <GrupoDeOpciones etiqueta="Rol" valor={rol} onCambio={setRol} opciones={[{ valor: "tecnico", texto: "Técnico (campo)" }, { valor: "oficina", texto: "Oficina" }]} />
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>

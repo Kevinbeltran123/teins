@@ -29,6 +29,7 @@ import {
 } from "@teins/ui";
 import { cliente } from "../api";
 import { aFechaCorta } from "../formato";
+import { sinError } from "../mensajes";
 import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
 import { useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
@@ -281,13 +282,13 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
         <fieldset className="bloque-form">
           <legend>Cliente</legend>
-          <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" ejemplo="Como sale en el informe" valorInicial="" onCambio={setNombre} error={errores.nombre} />
+          <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" ejemplo="Como sale en el informe" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
         </fieldset>
         <fieldset className="bloque-form">
           <legend>Primer sitio</legend>
           <div className="fila-campos">
-            <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" ejemplo="Por ejemplo: Torre A" valorInicial="" onCambio={setSitio} error={errores.sitio} />
-            <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={setDireccion} error={errores.direccion} />
+            <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" ejemplo="Por ejemplo: Torre A" valorInicial="" onCambio={(t) => (setSitio(t), setErrores((e) => sinError(e, "sitio")))} error={errores.sitio} />
+            <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={(t) => (setDireccion(t), setErrores((e) => sinError(e, "direccion")))} error={errores.direccion} />
           </div>
         </fieldset>
         <fieldset className="bloque-form">
@@ -346,8 +347,8 @@ export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nomb
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
-        <CampoTexto etiqueta="Nombre del sitio" valorInicial="" onCambio={setNombre} error={errores.nombre} />
-        <CampoTexto etiqueta="Dirección" valorInicial="" onCambio={setDireccion} error={errores.direccion} />
+        <CampoTexto etiqueta="Nombre del sitio" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
+        <CampoTexto etiqueta="Dirección" valorInicial="" onCambio={(t) => (setDireccion(t), setErrores((e) => sinError(e, "direccion")))} error={errores.direccion} />
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>

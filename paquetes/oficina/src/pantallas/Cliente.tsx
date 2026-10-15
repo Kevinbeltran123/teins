@@ -36,6 +36,7 @@ import {
 } from "@teins/ui";
 import { cliente } from "../api";
 import { aFechaHora } from "../formato";
+import { sinError } from "../mensajes";
 import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
 import { AgregarSitio } from "./Clientes";
 import { celularLegible, useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
@@ -485,7 +486,7 @@ function EditarCliente({ detalle, alCerrar, alGuardar }: { detalle: Detalle; alC
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
-        <CampoTexto etiqueta="Nombre del cliente" valorInicial={detalle.nombre} onCambio={setNombre} error={falta} />
+        <CampoTexto etiqueta="Nombre del cliente" valorInicial={detalle.nombre} onCambio={(t) => (setNombre(t), setFalta(undefined))} error={falta} />
         <p className="ayuda">Queda registrado quién lo cambió y cuándo. Los informes y cotizaciones publicados no cambian: son copias.</p>
         {guardar.isError && <Aviso tono="error">{mensajeDeCliente(guardar.error)}</Aviso>}
       </form>
@@ -532,8 +533,8 @@ function EditarSitio({ clienteId, sitio, alCerrar, alGuardar }: { clienteId: str
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
-        <CampoTexto etiqueta="Nombre del sitio" valorInicial={sitio.nombre} onCambio={setNombre} error={errores.nombre} />
-        <CampoTexto etiqueta="Dirección" valorInicial={sitio.direccion} onCambio={setDireccion} error={errores.direccion} />
+        <CampoTexto etiqueta="Nombre del sitio" valorInicial={sitio.nombre} onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
+        <CampoTexto etiqueta="Dirección" valorInicial={sitio.direccion} onCambio={(t) => (setDireccion(t), setErrores((e) => sinError(e, "direccion")))} error={errores.direccion} />
         {guardar.isError && <Aviso tono="error">{mensajeDeCliente(guardar.error)}</Aviso>}
       </form>
     </Dialogo>

@@ -73,7 +73,7 @@ import { aDiaCorto, aFechaCorta, aHora, cuantoLleva, iniciales } from "../format
 import { avisarConversacionAbierta } from "../conversacion";
 import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
-import { alMarcarRevisado, useBandeja, useComentar, useCorregir, useCorregirComentario, useLeerConversacion, useMarcarRevisado, useTomar, type Escrito } from "../revision";
+import { alMarcarRevisado, seccionCorregida, useBandeja, useComentar, useCorregir, useCorregirComentario, useLeerConversacion, useMarcarRevisado, useTomar, type Escrito } from "../revision";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
 import { enLista } from "./Envios";
 import { BotonMostrarVista, EditorConVista, Lienzo, useVistaPrevia, VistaDeDocumento } from "./Lienzo";
@@ -235,7 +235,8 @@ export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined })
   // Las secciones del formato, con sus repeticiones juntas bajo el mismo título (prototipo: "Tableros").
   const todos = bloques(l.formatoDefinicion, l.repeticiones);
   const secciones = l.formatoDefinicion.secciones.map((s) => ({ seccion: s, bloques: todos.filter((b) => b.seccion.clave === s.clave) }));
-  const conCambios = (clave: string) => [...correcciones.keys()].some((k) => k.split("|")[0]!.startsWith(clave));
+  const corregidas = [...correcciones.keys()].map((k) => k.split("|")[0]!);
+  const conCambios = (clave: string) => seccionCorregida(corregidas, clave);
   const conFaltantes = (bs: typeof todos) => bs.some((b) => b.seccion.campos.some((c) => esNoObtenido(l.respuestas[b.clave]?.[c.clave])));
 
   const irA = (seccion: string) => document.getElementById(`sec-${seccion}`)?.scrollIntoView({ behavior: sinMovimiento() ? "auto" : "smooth", block: "start" });
@@ -488,13 +489,28 @@ function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Le
     setLoEscrito(loEscritoAlMarcar(l, pendientes?.values() ?? []));
     setConfirmando("revisado");
   };
+  // Sin responsable: en revisión, pero quien la tenía fue desactivado. La toma quien llegue, sin quitársela a nadie.
+  const sinResponsable = l.estado === "en_revision" && !l.revisor;
   // Revisar con el teclado (iteración 37): T toma y R marca revisado, con la confirmación de siempre.
-  useTeclaSuelta("t", () => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada }), l.estado === "enviado" && !tomar.isPending);
+  useTeclaSuelta("t", () => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada }), (l.estado === "enviado" || sinResponsable) && !tomar.isPending);
   useTeclaSuelta("r", confirmarRevisado, mia && l.estado === "en_revision");
 
   let linea: ReactNode;
   let accion: ReactNode = null;
-  if (l.estado === "enviado") {
+  if (sinResponsable) {
+    const soltada = [...(historial?.eventos ?? [])].reverse().find((e) => e.tipo === "revision_liberada");
+    const quienLaTenia = (soltada?.anterior as { revisor?: string } | undefined)?.revisor;
+    linea = (
+      <>
+        <b>En revisión</b> · nadie la tiene{quienLaTenia ? ` desde que se desactivó a ${quienLaTenia}` : ""}
+      </>
+    );
+    accion = (
+      <Boton variante="principal" title="Tomar para revisar · T" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada })}>
+        Tomar para revisar
+      </Boton>
+    );
+  } else if (l.estado === "enviado") {
     linea = (
       <>
         <b>Esperando revisión</b> · nadie la ha tomado

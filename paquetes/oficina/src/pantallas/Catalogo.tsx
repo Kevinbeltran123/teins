@@ -35,7 +35,7 @@ import { mensajeDeAdministracion } from "../administracion";
 import { aFecha, aFechaHora, leerPesos, pesos } from "../formato";
 import { consultasDeCatalogo, useAccionDeCatalogo } from "../catalogo";
 import { leerCatalogo, type CatalogoLeido } from "../csv";
-import { mensajeDeError } from "../mensajes";
+import { mensajeDeError, sinError } from "../mensajes";
 
 type Item = Respuesta<"listarCatalogo">["items"][number];
 
@@ -294,14 +294,14 @@ function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: 
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
-        <CampoTexto etiqueta="Descripción" ejemplo="Como sale en la cotización" valorInicial={descripcion} onCambio={setDescripcion} error={errores.descripcion} />
+        <CampoTexto etiqueta="Descripción" ejemplo="Como sale en la cotización" valorInicial={descripcion} onCambio={(t) => (setDescripcion(t), setErrores((e) => sinError(e, "descripcion")))} error={errores.descripcion} />
         <div className="fila-campos">
           {item ? (
             <CampoTexto etiqueta="Código" valorInicial={item.codigo} onCambio={() => undefined} deshabilitado />
           ) : (
-            <CampoTexto etiqueta="Código" ejemplo="Por ejemplo: UTP-6A" valorInicial="" onCambio={setCodigo} error={errores.codigo} />
+            <CampoTexto etiqueta="Código" ejemplo="Por ejemplo: UTP-6A" valorInicial="" onCambio={(t) => (setCodigo(t), setErrores((e) => sinError(e, "codigo")))} error={errores.codigo} />
           )}
-          <CampoTexto etiqueta="Unidad" valorInicial={unidad} onCambio={setUnidad} error={errores.unidad} sugerencias={usadas} />
+          <CampoTexto etiqueta="Unidad" valorInicial={unidad} onCambio={(t) => (setUnidad(t), setErrores((e) => sinError(e, "unidad")))} error={errores.unidad} sugerencias={usadas} />
         </div>
         {item && (
           <p className="nota-capa">
@@ -357,7 +357,7 @@ function CambiarPrecio({ item, alCerrar, alGuardar }: { item: Item; alCerrar: ()
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <CampoTexto etiqueta="Precio unitario sin IVA" nombre="precio" valorInicial={texto} onCambio={setTexto} error={errorCampo} />
+        <CampoTexto etiqueta="Precio unitario sin IVA" nombre="precio" valorInicial={texto} onCambio={(t) => (setTexto(t), setErrorCampo(undefined))} error={errorCampo} />
         <p className="nota-capa">
           <Info aria-hidden />
           Rige desde hoy para las cotizaciones nuevas y los borradores; lo publicado no cambia.

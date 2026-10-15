@@ -160,7 +160,11 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   };
   // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
   // Lo que no se pudo guardar por las reglas del informe; sin red y el conflicto los dicen el estado y su aviso.
-  const error = errorPlano ?? (auto.estado === "error" && !esSesionVencida(auto.error) ? auto.error : null);
+  // Un plano que no subió se dice junto a los planos: aquí tapaba el error de guardado.
+  const error = auto.estado === "error" && !esSesionVencida(auto.error) ? auto.error : null;
+  // Cuando la persona sigue con los planos (quita, renombra, mueve o sube otro), el error de subida ya no la describe.
+  const planosEscritos = borrador.planos.map((p) => `${p.huella}|${p.nombre}`).join("\n");
+  useEffect(() => setErrorPlano(null), [planosEscritos]);
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
   const vigente = vigenteDe(informe);
   const quienesReciben = contactos.data ? contactos.data.contactos.filter((c) => receptores(contactos.data, "informes").includes(c.id)) : [];
@@ -425,6 +429,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
             )}
             </ListaOrdenable>
             <SelectorDeArchivo fila etiqueta={subiendo ? "Subiendo…" : "Agregar planos en PDF"} aceptar="application/pdf" deshabilitado={subiendo} onElegir={(a) => void agregarPlanos(a)} />
+            {errorPlano !== null && <Aviso tono="error">{mensajeDeInforme(errorPlano, nombreDe).join(" ")}</Aviso>}
           </section>
           {/* El costado es la hoja: las versiones y sus envíos van al final del editor (prototipos/vista-en-vivo). */}
           <Versiones

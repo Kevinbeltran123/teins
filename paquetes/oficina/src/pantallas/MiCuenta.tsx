@@ -36,7 +36,7 @@ import { cliente, consultas } from "../api";
 import { activarAvisos, desactivarAvisos, estadoAvisos, type EstadoAvisos } from "../avisos";
 import { errorDeCuenta } from "../cuenta";
 import { aFechaHora } from "../formato";
-import { mensajeDeError } from "../mensajes";
+import { mensajeDeError, sinError } from "../mensajes";
 
 const consultaDeLlaves = { queryKey: ["llaves"], queryFn: () => cliente.llaves() };
 
@@ -377,12 +377,13 @@ function CambiarContrasena({ nombre, alCerrar, alCambiar }: { nombre: string; al
       }
     >
       <form id={formulario} onSubmit={guardar} noValidate className="flex flex-col gap-4">
-        <CampoTexto etiqueta="Contraseña actual" nombre="actual" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setActual} error={errores.actual} />
+        <CampoTexto etiqueta="Contraseña actual" nombre="actual" tipo="password" autoComplete="current-password" valorInicial="" onCambio={(t) => (setActual(t), setErrores((e) => sinError(e, "actual")))} error={errores.actual} />
         <div className="flex flex-col gap-1.5">
-          <CampoTexto etiqueta="Contraseña nueva" nombre="nueva" tipo="password" autoComplete="new-password" valorInicial="" onCambio={setNueva} error={errores.nueva} />
+          {/* «No coincide con la nueva» también es de la nueva: cambiarla lo quita. */}
+          <CampoTexto etiqueta="Contraseña nueva" nombre="nueva" tipo="password" autoComplete="new-password" valorInicial="" onCambio={(t) => (setNueva(t), setErrores((e) => sinError(e, "nueva", "repetir")))} error={errores.nueva} />
           <RequisitosDeContrasena actual={actual} nueva={nueva} repetir={repetir} />
         </div>
-        <CampoTexto etiqueta="Repita la contraseña nueva" nombre="repetir" tipo="password" autoComplete="new-password" valorInicial="" onCambio={setRepetir} error={errores.repetir} />
+        <CampoTexto etiqueta="Repita la contraseña nueva" nombre="repetir" tipo="password" autoComplete="new-password" valorInicial="" onCambio={(t) => (setRepetir(t), setErrores((e) => sinError(e, "repetir")))} error={errores.repetir} />
         <p className="nota-capa">
           <Info aria-hidden />
           Se cierran sus sesiones en los demás equipos; esta sigue abierta. El segundo factor y las llaves no cambian.
@@ -451,8 +452,8 @@ function QuitarSegundoFactor({ alCerrar, alQuitar }: { alCerrar: () => void; alQ
             { icono: LogOut, texto: "Se cierran sus sesiones en los demás equipos" },
           ]}
         />
-        <CampoTexto etiqueta="Su contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valorInicial="" onCambio={setContrasena} error={errores.contrasena} />
-        <CampoTexto etiqueta="Código de su app autenticadora" nombre="codigo" autoComplete="one-time-code" modoEntrada="numeric" valorInicial="" onCambio={setCodigo} error={errores.codigo} />
+        <CampoTexto etiqueta="Su contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valorInicial="" onCambio={(t) => (setContrasena(t), setErrores((e) => sinError(e, "contrasena")))} error={errores.contrasena} />
+        <CampoTexto etiqueta="Código de su app autenticadora" nombre="codigo" autoComplete="one-time-code" modoEntrada="numeric" valorInicial="" onCambio={(t) => (setCodigo(t), setErrores((e) => sinError(e, "codigo")))} error={errores.codigo} />
         {general && <Aviso tono="error">{general}</Aviso>}
       </form>
     </Dialogo>

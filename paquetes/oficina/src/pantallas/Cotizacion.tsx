@@ -194,8 +194,9 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   // Un cliente archivado no recibe envíos (ADR-0035): se publica sin enviar a nadie.
   const elegidos = contactos.data?.archivado ? [] : (destinatarios ?? (contactos.data ? receptores(contactos.data, "cotizaciones") : []));
   // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
-  // Sin red y el conflicto los dicen el estado y su aviso.
-  const error = [auto.estado === "error" ? auto.error : null, publicar.error].find((e) => e && !esSesionVencida(e)) ?? null;
+  // Sin red y el conflicto los dicen el estado y su aviso. Lo que no se pudo publicar lo dice su confirmación: aquí,
+  // después de cancelarla, quedaba como un error que ya no describe nada.
+  const error = auto.estado === "error" && !esSesionVencida(auto.error) ? auto.error : null;
   const siguiente = (c.versiones[0]?.numero ?? 0) + 1;
   // La vigente es la más reciente sin retirar (ADR-0034).
   const vigente = c.versiones.find((v) => !v.retirada);
@@ -361,7 +362,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
             </>
           }
         />
-        {error && (
+        {error !== null && error !== undefined && (
           <Aviso tono="error">
             <b>{mensajeDeCotizacion(error)}</b>
           </Aviso>
