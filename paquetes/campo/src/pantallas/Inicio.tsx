@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
-import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
+import { crearLevantamiento, fotosReferenciadas, sinRespuestasHuerfanas, type VersionFormato } from "@teins/dominio";
 import { Activity, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useMinuto, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
@@ -35,6 +35,8 @@ interface Props {
   recien?: string | undefined;
   /** Cambia cuando se pide abrir la papelera desde fuera ("Ver en Descartados" al descartar). */
   pedirPapelera?: number | undefined;
+  /** Ya se abrió: el pedido no se repite cada vez que se vuelve al inicio (iteración 42). */
+  papeleraAbierta?: () => void;
   pedirSesion: () => void;
   actualizacion: { disponible: boolean; aplicar: () => void };
 }
@@ -42,11 +44,8 @@ interface Props {
 const fotos = (n: number) => (n === 1 ? "1 foto" : `${n} fotos`);
 const levantamientos = (n: number) => (n === 1 ? "1 levantamiento" : `${n} levantamientos`);
 
-function contarFotos(l: LevantamientoLocal): number {
-  return Object.values(l.respuestas)
-    .flatMap((seccion) => Object.values(seccion))
-    .reduce<number>((total, valor) => total + (Array.isArray(valor) ? valor.length : 0), 0);
-}
+/** Solo las fotos: las líneas de materiales también son una lista y no se cuentan (iteración 42). */
+const contarFotos = (l: LevantamientoLocal) => fotosReferenciadas(sinRespuestasHuerfanas(l).respuestas).length;
 
 const cerrarSesion = () => import("../sesion/sesion").then((m) => m.cerrarSesion());
 
@@ -67,7 +66,7 @@ interface Contexto {
   recien: string | undefined;
 }
 
-export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion, actualizacion }: Props) {
+export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbierta, pedirSesion, actualizacion }: Props) {
   // «Hoy», «En curso» y «Terminar visita» se recalculan con el paso del tiempo, también sin señal.
   useMinuto();
   // Al volver de una captura, el inicio empieza con lo que ya había leído: sin esqueleto (iteración 27).
@@ -108,7 +107,9 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
   };
   const descartados = useLecturaRecordada(`descartados:${usuario.id}`, async () => (await repositorio.descartados(usuario.id)).length, [usuario.id]);
   useEffect(() => {
-    if (pedirPapelera > 0) abrirCuenta("descartados");
+    if (pedirPapelera === 0) return;
+    abrirCuenta("descartados");
+    papeleraAbierta?.();
   }, [pedirPapelera]);
 
   // Lo descartado (un envío que oficina rechazó, en la papelera) ya no está por enviar.
@@ -128,7 +129,9 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, pedirSesion,
   const [iniciar] = useSinRepetir(async (visitaId: string, formato: VersionFormato) => {
     if (iniciado.current) return;
     const levantamiento = crearLevantamiento(formato, uuidv7(), new Date(), visitaId, nuevoIdDeRepeticion);
-    await repositorio.crear(levantamiento, usuario.id);
+    // Lo nombra aunque la visita salga del teléfono cuando ya esté atendida (iteración 42).
+    const visita = visitas?.find((v) => v.id === visitaId);
+    await repositorio.crear(levantamiento, usuario.id, visita ? { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre } : undefined);
     iniciado.current = true;
     abrir(levantamiento.id);
   });
@@ -618,6 +621,8 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
   const nuevos = servidor?.comentarios?.length ? sinLeer(armarChat(servidor.comentarios, []), contexto.chats.leido.get(l.id) ?? null) : 0;
   const enCola = contexto.chats.enCola.get(l.id) ?? 0;
   const visita = l.visitaId ? contexto.visitas.get(l.visitaId) : undefined;
+  // La visita atendida sale del teléfono al día siguiente (ADR-0041): lo enviado sigue diciendo dónde fue (iteración 42).
+  const lugar = visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : l.lugar ? `${l.lugar.cliente} · ${l.lugar.sitio}` : undefined;
   const formato = nombreDeFormato(contexto.formatos, l.formato);
   const Icono = estado ? (l.estado === "borrador" ? Pencil : ICONO_DE_TONO[estado.tono]) : undefined;
   const enPantalla = useNombreEnPantalla<HTMLButtonElement>(nombreDeTransicion("lev", l.id));
@@ -629,7 +634,7 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
       ref={enPantalla}
       className={`grid min-h-tactil w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-3 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco ${contexto.recien === l.id ? "animate-resaltar" : ""}`}
     >
-      <strong className="truncate text-cuerpo font-semibold">{visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : formato}</strong>
+      <strong className="truncate text-cuerpo font-semibold">{lugar ?? formato}</strong>
       <span className="inline-flex items-center gap-1.5 text-ayuda text-texto-secundario">
         {nuevos > 0 && <i className="size-2 rounded-full bg-acento" aria-label="Sin leer" />}
         {diaCorto(l.creadoEn)}
@@ -641,7 +646,7 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
             {estado.texto}
           </span>
         )}
-        <span className="truncate">· {visita ? formato : fotos(contarFotos(l))}</span>
+        <span className="truncate">· {lugar ? formato : fotos(contarFotos(l))}</span>
       </span>
       {nuevos > 0 ? (
         <span className="col-span-2 text-cuerpo font-semibold text-acento">Oficina te escribió</span>

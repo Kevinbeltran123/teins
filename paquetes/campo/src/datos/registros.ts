@@ -12,6 +12,7 @@ import type {
   EstadoServidorGuardado,
   LevantamientoGuardado,
   LevantamientoLocal,
+  LugarDeVisita,
   RespuestaGuardada,
   RespuestaPendiente,
   VisitaGuardada,
@@ -26,6 +27,8 @@ import type {
 interface ContenidoLevantamiento {
   respuestas: Respuestas;
   repeticiones: Repeticiones | null;
+  /** Desde la iteración 42; los sellados antes no lo traen. */
+  lugar?: LugarDeVisita | null;
 }
 
 /** Huellas de los archivos del levantamiento, sin abrir el sellado. */
@@ -36,18 +39,18 @@ export function referencias(g: LevantamientoGuardado): { archivos: string[]; fot
 }
 
 export async function abrirLevantamiento(db: BaseCampo, g: LevantamientoGuardado): Promise<LevantamientoLocal> {
-  const { sellado, archivos: _a, fotos: _f, rev: _r, respuestas, repeticiones, ...resto } = g;
-  if (!sellado) return { ...resto, respuestas: respuestas ?? {}, ...(repeticiones ? { repeticiones } : {}) };
+  const { sellado, archivos: _a, fotos: _f, rev: _r, respuestas, repeticiones, lugar, ...resto } = g;
+  if (!sellado) return { ...resto, respuestas: respuestas ?? {}, ...(repeticiones ? { repeticiones } : {}), ...(lugar ? { lugar } : {}) };
   const contenido = await abrirJson<ContenidoLevantamiento>(db, g.tecnicoId!, contexto.levantamiento(g.id), sellado);
-  return { ...resto, respuestas: contenido.respuestas, ...(contenido.repeticiones ? { repeticiones: contenido.repeticiones } : {}) };
+  return { ...resto, respuestas: contenido.respuestas, ...(contenido.repeticiones ? { repeticiones: contenido.repeticiones } : {}), ...(contenido.lugar ? { lugar: contenido.lugar } : {}) };
 }
 
 /** Sin responsable todavía (borradores del corte 0) no hay clave: queda a la vista hasta conocerlo. */
 export async function sellarLevantamiento(db: BaseCampo, l: LevantamientoLocal, rev: number): Promise<LevantamientoGuardado> {
-  const { respuestas, repeticiones, ...resto } = l;
+  const { respuestas, repeticiones, lugar, ...resto } = l;
   const huellas = { archivos: archivosReferenciados(respuestas), fotos: fotosReferenciadas(respuestas) };
   if (!l.tecnicoId) return { ...l, ...huellas, rev };
-  const contenido: ContenidoLevantamiento = { respuestas, repeticiones: repeticiones ?? null };
+  const contenido: ContenidoLevantamiento = { respuestas, repeticiones: repeticiones ?? null, ...(lugar ? { lugar } : {}) };
   return { ...resto, ...huellas, rev, sellado: await sellarJson(db, l.tecnicoId, contexto.levantamiento(l.id), contenido) };
 }
 

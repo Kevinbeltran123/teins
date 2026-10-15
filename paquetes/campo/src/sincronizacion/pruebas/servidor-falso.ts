@@ -14,7 +14,9 @@ export type Falla =
   | "error_500"
   | "sesion_vencida"
   /** El servidor ya no acepta esta versión del protocolo (ADR-0015). */
-  | "version_no_soportada";
+  | "version_no_soportada"
+  /** La sesión existe pero debe cambiar la contraseña temporal: 403 a todo lo demás. */
+  | "cambio_de_contrasena";
 
 type Operacion = keyof Transporte;
 
@@ -63,6 +65,7 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     if (falla === "error_500") throw error("error_interno", 500);
     if (falla === "sesion_vencida") throw error("no_autenticado", 401);
     if (falla === "version_no_soportada") throw error("version_protocolo_no_soportada", 426);
+    if (falla === "cambio_de_contrasena") throw error("cambio_de_contrasena_requerido", 403);
     const resultado = ejecutar();
     if (falla === "red_despues") throw new ErrorDeRed(new TypeError("Network connection was lost"));
     return resultado;

@@ -15,7 +15,7 @@ export const LineaCantidad = z
   .object({
     id: z.string().regex(ID_LINEA),
     descripcion: z.string().max(LIMITES_CANTIDADES.descripcion),
-    cantidad: z.string().max(40),
+    cantidad: z.string().max(LIMITES.decimal),
     unidad: z.string().max(20),
     observacion: z.string().max(LIMITES_CANTIDADES.observacion).optional(),
     /** Ítem del catálogo que eligió el técnico (iteración 17, ADR-0025). */
@@ -27,7 +27,7 @@ export const LineaCantidad = z
 export const Valor = z
   .union([
     z.string().max(LIMITES.texto),
-    z.object({ valor: z.string().regex(DECIMAL_CANONICO).max(40), unidad: z.string().min(1).max(20) }).strict(),
+    z.object({ valor: z.string().regex(DECIMAL_CANONICO).max(LIMITES.decimal), unidad: z.string().min(1).max(20) }).strict(),
     z.array(Huella).max(LIMITES.fotosPorCampo).readonly(),
     /** Boceto (iteración 10): la huella de su archivo. */
     z.object({ boceto: Huella }).strict(),

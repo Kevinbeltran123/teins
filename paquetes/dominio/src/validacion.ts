@@ -33,7 +33,9 @@ export type CodigoErrorValidacion =
   /** Una firma sin sus trazos, sin el nombre de quien firmó, sin fecha o sin la constancia (ADR-0024). */
   | "firma_invalida"
   /** Oficina no corrige este tipo de campo (hoy, fotos). */
-  | "no_corregible";
+  | "no_corregible"
+  /** El archivo de un boceto o una firma pesa más de lo que recibe el servidor: lo mide el teléfono antes de enviar (iteración 42). */
+  | "archivo_muy_grande";
 
 export interface ErrorValidacion {
   seccion: string;
@@ -133,7 +135,7 @@ export function validarCampo(campo: DefinicionCampo, valor: unknown): CodigoErro
     case "medida": {
       if (valor === undefined) return campo.obligatorio ? "campo_obligatorio" : null;
       if (typeof valor !== "object" || valor === null || !("valor" in valor) || !("unidad" in valor)) return "tipo_invalido";
-      if (typeof valor.valor !== "string" || !DECIMAL_CANONICO.test(valor.valor)) return "medida_invalida";
+      if (typeof valor.valor !== "string" || valor.valor.length > LIMITES.decimal || !DECIMAL_CANONICO.test(valor.valor)) return "medida_invalida";
       if (typeof valor.unidad !== "string" || !campo.unidades.includes(valor.unidad)) return "unidad_no_permitida";
       return null;
     }

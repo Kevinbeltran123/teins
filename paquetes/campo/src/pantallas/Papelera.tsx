@@ -48,7 +48,7 @@ export default function Papelera({ usuarioId, formatos }: { usuarioId: string; f
               <li key={l.id} className="flex flex-col gap-1.5 rounded-panel border border-division bg-panel px-4 py-3">
                 <strong className="text-cuerpo font-medium">{nombreDeFormato(formatos, l.formato)}</strong>
                 <span className="text-ayuda text-texto-secundario">
-                  {[visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : "Levantamiento suelto", fotos(fotosReferenciadas(l.respuestas).length), `descartado ${cuando(l.descartadoEn!)}`].join(" · ")}
+                  {[visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : l.lugar ? `${l.lugar.cliente} · ${l.lugar.sitio}` : "Levantamiento suelto", fotos(fotosReferenciadas(l.respuestas).length), `descartado ${cuando(l.descartadoEn!)}`].join(" · ")}
                 </span>
                 <span className="flex items-center justify-between gap-3">
                   <span className="text-ayuda font-bold text-alerta-texto">{`Se borra el ${dia.format(borra)}`}</span>

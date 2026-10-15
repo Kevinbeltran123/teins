@@ -21,6 +21,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   boceto_invalido: "El boceto no tiene la forma esperada",
   cantidades_invalidas: "Cada línea necesita descripción, una cantidad mayor que cero y una unidad permitida",
   firma_invalida: "La firma no tiene sus trazos, el nombre de quien firmó, la fecha o la constancia",
+  archivo_muy_grande: "El archivo pesa más de lo que se puede recibir.",
 };
 
 /** Los datos que envían las pantallas de oficina, como se nombran en ellas (las claves de los esquemas de protocolo). */

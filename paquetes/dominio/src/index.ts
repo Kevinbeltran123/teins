@@ -40,7 +40,7 @@ export type { DefinicionSimbolo } from "./simbolos";
 export { esTrazadoValido, GROSOR_SIMBOLO, validarBiblioteca, validarSimbolo, VERSION_APP_SIMBOLOS } from "./simbolos";
 export type { FilaDeResumen, LineaCantidad, LineaParaResumir, ValorCantidades } from "./cantidades";
 export { aDecimalColombiano, esCantidades, ID_LINEA, lineasValidas, resumirCantidades, sumarDecimales, VERSION_APP_CANTIDADES, VERSION_APP_CATALOGO } from "./cantidades";
-export { agregarFoto, agregarRepeticion, crearLevantamiento, esBoceto, esFirma, esNoObtenido, LevantamientoNoEditable, quitarRepeticion, restaurarRepeticion, renombrarRepeticion, responder } from "./levantamiento";
+export { agregarFoto, agregarRepeticion, crearLevantamiento, esBoceto, esFirma, esNoObtenido, LevantamientoNoEditable, quitarRepeticion, restaurarRepeticion, renombrarRepeticion, responder, sinRespuestasHuerfanas } from "./levantamiento";
 export { crearMedida, normalizarDecimal } from "./medida";
 export type { CodigoErrorValidacion, ErrorValidacion } from "./validacion";
 export { archivosReferenciados, bocetosReferenciados, campoDeRuta, DECIMAL_CANONICO, fotosReferenciadas, HUELLA_SHA256, LIMITES, validarCampo, validarRespuestas } from "./validacion";

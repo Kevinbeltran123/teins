@@ -9,7 +9,8 @@ import { abrirRespuesta, sellarRespuesta } from "./registros";
 
 /** Responde la conversación de un comentario de oficina. La llave la crea el teléfono: el servidor la ve una sola vez. */
 export async function responder(db: BaseCampo, tecnicoId: string, datos: Pick<RespuestaPendiente, "levantamientoId" | "comentarioId" | "texto">, ahora: Date): Promise<RespuestaPendiente> {
-  const respuesta: RespuestaPendiente = { ...datos, llave: crypto.randomUUID(), tecnicoId, creadaEn: ahora.toISOString(), intentos: 0, proximoIntentoEn: 0 };
+  // El servidor no guarda el carácter nulo y rechazaría la respuesta para siempre (iteración 42).
+  const respuesta: RespuestaPendiente = { ...datos, texto: datos.texto.replaceAll("\u0000", ""), llave: crypto.randomUUID(), tecnicoId, creadaEn: ahora.toISOString(), intentos: 0, proximoIntentoEn: 0 };
   // WebCrypto no cabe en una transacción de Dexie (ADR-0022): se sella antes.
   await db.respuestasPendientes.add(await sellarRespuesta(db, respuesta));
   return respuesta;

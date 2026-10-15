@@ -1,5 +1,5 @@
 import type { DocumentoBoceto, Levantamiento, ResultadoEnvio, Valor, VersionFormato } from "@teins/dominio";
-import type { ArchivoLocal, LevantamientoLocal } from "./modelo";
+import type { ArchivoLocal, LevantamientoLocal, LugarDeVisita } from "./modelo";
 
 export type { ArchivoLocal, LevantamientoLocal } from "./modelo";
 
@@ -15,7 +15,8 @@ export type ArchivoNuevo = Omit<ArchivoLocal, "subida" | "ultimoErrorDeSubida">;
 
 /** Puerto de ADR-0004: la lógica de captura no conoce Dexie. */
 export interface RepositorioLevantamientos {
-  crear(levantamiento: Levantamiento, tecnicoId: string): Promise<void>;
+  /** Con el cliente y el sitio de su visita, que lo nombran aunque la visita salga del teléfono (iteración 42). */
+  crear(levantamiento: Levantamiento, tecnicoId: string, lugar?: LugarDeVisita): Promise<void>;
   obtener(id: string): Promise<LevantamientoLocal | undefined>;
   /** Levantamientos de un técnico, del más reciente al más antiguo, sin los descartados. */
   listar(tecnicoId: string): Promise<LevantamientoLocal[]>;
@@ -30,6 +31,11 @@ export interface RepositorioLevantamientos {
   recuperar(id: string): Promise<{ suelto: boolean }>;
   /** Borra lo que lleva más de 30 días en la papelera, con las fotos y dibujos que nada más usa. Devuelve cuántos. */
   vaciarPapelera(ahora: Date): Promise<number>;
+  /**
+   * Borra los archivos que ningún levantamiento usa: las fotos de un tablero quitado o las que reemplazó «No se pudo
+   * obtener» (iteración 42). Corre al abrir la app, nunca mientras un «Deshacer» las puede devolver. Devuelve cuántos.
+   */
+  limpiarArchivosSinUso(): Promise<number>;
   /** Cuántos levantamientos del teléfono son de otras personas: se conservan, no se muestran. */
   contarDeOtros(tecnicoId: string): Promise<number>;
   /** Los levantamientos del corte 0 no tenían responsable: pasan a quien inicia sesión primero. */
@@ -69,9 +75,15 @@ export interface RepositorioLevantamientos {
   todosLosArchivos(): Promise<ArchivoLocal[]>;
   /**
    * Borrador → Enviado y comando al outbox, en una transacción: si la app se cierra en medio,
-   * o queda todo o no queda nada (ADR-0018, nivel 3: cierre entre guardar y encolar).
+   * o queda todo o no queda nada (ADR-0018, nivel 3: cierre entre guardar y encolar). Antes de validar quita lo que el
+   * servidor rechazaría sin remedio (respuestas de tableros quitados, caracteres nulos) y mide bocetos y firmas.
    */
   enviar(id: string, formato: VersionFormato, ahora: Date): Promise<ResultadoEnvio>;
   /** Un envío con error permanente vuelve a la cola cuando el técnico lo pide. */
   reintentarEnvio(id: string): Promise<void>;
+  /**
+   * Un envío que oficina rechazó para siempre vuelve a borrador para corregirlo y enviarlo otra vez (ADR-0045): oficina
+   * nunca lo recibió, así que no hay otro editor. Sale de la cola en la misma transacción.
+   */
+  volverABorrador(id: string): Promise<void>;
 }

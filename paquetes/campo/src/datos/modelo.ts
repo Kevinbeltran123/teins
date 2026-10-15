@@ -25,19 +25,30 @@ export type LevantamientoLocal = Levantamiento & {
    * durante 30 días; después se borra con sus fotos. A la vista, sin sellar: la papelera no necesita abrirlo.
    */
   descartadoEn?: string | undefined;
+  /**
+   * Cliente y sitio de su visita, copiados al crearlo o al enviarlo (iteración 42): la visita atendida sale del teléfono
+   * al día siguiente (ADR-0041) y lo enviado sigue diciendo dónde fue. Va sellado con las respuestas.
+   */
+  lugar?: LugarDeVisita | undefined;
 };
+
+export interface LugarDeVisita {
+  cliente: string;
+  sitio: string;
+}
 
 /** Días que un levantamiento descartado se puede recuperar antes de borrarse del teléfono (ADR-0035). */
 export const DIAS_EN_LA_PAPELERA = 30;
 
 /**
- * Como se guarda (ADR-0022): respuestas y repeticiones van selladas; a la vista queda lo que necesitan
+ * Como se guarda (ADR-0022): respuestas, repeticiones y lugar van sellados; a la vista queda lo que necesitan
  * los índices y las transacciones (ids, estado, fechas, responsable y las huellas de sus archivos).
  * Sin `sellado`, es un registro de antes del cifrado o sin responsable todavía: se sella al conocerlo.
  */
-export type LevantamientoGuardado = Omit<LevantamientoLocal, "respuestas" | "repeticiones"> & {
+export type LevantamientoGuardado = Omit<LevantamientoLocal, "respuestas" | "repeticiones" | "lugar"> & {
   respuestas?: Respuestas | undefined;
   repeticiones?: Repeticiones | undefined;
+  lugar?: LugarDeVisita | undefined;
   sellado?: Sellado | undefined;
   /** Huellas de todos sus archivos y solo de sus fotos: para subir y borrar sin abrir el sellado. */
   archivos?: string[] | undefined;

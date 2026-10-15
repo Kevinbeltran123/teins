@@ -1,6 +1,6 @@
 import type { VersionFormato } from "./formato";
 import type { ValorCantidades } from "./cantidades";
-import { claveDeRepeticion, nombrePorDefecto, type Repeticiones } from "./repeticiones";
+import { claveDeRepeticion, leerClave, nombrePorDefecto, type Repeticiones } from "./repeticiones";
 import { LIMITES } from "./limites";
 
 /** Medida: el número va como texto decimal para no introducir errores de coma flotante (ADR-0006). */
@@ -100,9 +100,18 @@ export class LevantamientoNoEditable extends Error {
   }
 }
 
+/** ¿Es la clave de respuestas de una repetición que este levantamiento ya no tiene? */
+function deRepeticionQuitada(levantamiento: Levantamiento, seccion: string): boolean {
+  const { seccion: clave, repeticion } = leerClave(seccion);
+  return repeticion !== undefined && !(levantamiento.repeticiones?.[clave] ?? []).some((r) => r.id === repeticion);
+}
+
 function editar(levantamiento: Levantamiento, seccion: string, ahora: Date, cambio: (valores: Record<string, Valor>) => void) {
   // Regla 4: después del envío el técnico no edita.
   if (levantamiento.estado !== "borrador") throw new LevantamientoNoEditable(levantamiento.id);
+  // Lo que llega tarde a una repetición quitada (un «Deshacer», una foto que terminaba de procesarse) no la revive:
+  // no tendría dónde verse y el envío la rechazaría para siempre (iteración 42).
+  if (deRepeticionQuitada(levantamiento, seccion)) return levantamiento;
   const valores = { ...levantamiento.respuestas[seccion] };
   cambio(valores);
   return {
@@ -195,4 +204,13 @@ export function restaurarRepeticion(
   });
   if (!respuestas) return conLaRepeticion;
   return { ...conLaRepeticion, respuestas: { ...conLaRepeticion.respuestas, [claveDeRepeticion(seccion, repeticion.id)]: respuestas } };
+}
+
+/**
+ * Sin las respuestas de repeticiones que ya no existen. Solo las dejaba una escritura tardía antes de la iteración 42:
+ * son de algo que el técnico quitó, y el envío las rechaza (`seccion_desconocida`) sin que la pantalla pueda arreglarlo.
+ */
+export function sinRespuestasHuerfanas<L extends Levantamiento>(levantamiento: L): L {
+  if (!Object.keys(levantamiento.respuestas).some((s) => deRepeticionQuitada(levantamiento, s))) return levantamiento;
+  return { ...levantamiento, respuestas: Object.fromEntries(Object.entries(levantamiento.respuestas).filter(([s]) => !deRepeticionQuitada(levantamiento, s))) };
 }

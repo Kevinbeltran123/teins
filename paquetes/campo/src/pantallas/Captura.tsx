@@ -21,6 +21,7 @@ import {
   fotosReferenciadas,
   nombreDeDato,
   rutaLegible,
+  sinRespuestasHuerfanas,
   validarRespuestas,
   type CodigoErrorValidacion,
   type DefinicionCampo,
@@ -228,7 +229,7 @@ export function Captura({
           inicial={inicial}
           actual={levantamiento}
           nombre={formatos ? nombreDeFormato(formatos, levantamiento.formato) : "Levantamiento"}
-          contexto={visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : "Levantamiento suelto"}
+          contexto={visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : levantamiento.lugar ? `${levantamiento.lugar.cliente} · ${levantamiento.lugar.sitio}` : "Levantamiento suelto"}
             volver={volver}
             atras={atrasDelBorrador}
             retener={() => setRetenido(true)}
@@ -309,7 +310,9 @@ function agrupar(campos: readonly DefinicionCampo[]): DefinicionCampo[][] {
  * pueda decir "listo" cuando el envío diría que no.
  */
 function progreso(formato: VersionFormato, l: LevantamientoLocal) {
-  const errores = validarRespuestas(formato, l.respuestas, l.repeticiones);
+  // Las respuestas de un tablero quitado no se pueden completar ni salen al enviar (iteración 42).
+  const limpio = sinRespuestasHuerfanas(l);
+  const errores = validarRespuestas(formato, limpio.respuestas, limpio.repeticiones);
   const conError = new Set(errores.map((e) => claveDeError(e.seccion, e.campo ?? "")));
   let obligatorios = 0;
   let completos = 0;
@@ -424,7 +427,11 @@ function Borrador({
   const cabecera = useContext(CabeceraDeLaVisita);
   const enLinea = useServidorAlcanzable();
   const porSubir = useLiveQuery(() => db.envios.filter((e) => e.estado !== "recibido").count(), []);
-  const [errores, setErrores] = useState<readonly ErrorValidacion[] | null>(null);
+  // Qué datos ya se le señalaron al técnico (al tocar «Siguiente» o «Enviar»): lo que se muestra sale siempre de la
+  // validación de ahora, así un tablero quitado o una foto devuelta con «Deshacer» dejan de pedirse (iteración 42).
+  const [senalados, setSenalados] = useState<ReadonlySet<string> | null>(null);
+  // Lo que rechazó el envío y la validación no ve (un croquis que pesa demasiado): se va al volver a guardar ese dato.
+  const [delEnvio, setDelEnvio] = useState<readonly ErrorValidacion[]>([]);
   const [confirmando, setConfirmando] = useState(false);
   const [descartando, setDescartando] = useState(false);
   const [faltantesDelPaso, setFaltantesDelPaso] = useState<{ pasoId: string; lista: readonly ErrorValidacion[] } | null>(null);
@@ -449,8 +456,10 @@ function Borrador({
         setNoGuardo(true);
       },
     );
+  const { errores: validacion, obligatorios, completos } = progreso(formato, actual);
+  const pendientes = [...validacion, ...delEnvio];
+  const errores = senalados ? pendientes.filter((e) => senalados.has(claveDeError(e.seccion, e.campo ?? ""))) : null;
   const porClave: ReadonlyMap<string, CodigoErrorValidacion> = new Map((errores ?? []).map((e) => [claveDeError(e.seccion, e.campo ?? ""), e.codigo]));
-  const { errores: pendientes, obligatorios, completos } = progreso(formato, actual);
   const avance = obligatorios > 0 ? completos / obligatorios : pendientes.length === 0 ? 1 : 0;
   const repeticiones = actual.repeticiones ?? {};
 
@@ -538,7 +547,7 @@ function Borrador({
   const avanzarDesde = (pasoId: string, aunQueFalte = false) => {
     const lista = pendientes.filter((e) => pasoDeError(e)?.id === pasoId);
     if (lista.length > 0 && !aunQueFalte) {
-      setErrores((previos) => [...(previos ?? []).filter((e) => !lista.some((l) => claveDeError(l.seccion, l.campo ?? "") === claveDeError(e.seccion, e.campo ?? ""))), ...lista]);
+      setSenalados((previos) => new Set([...(previos ?? []), ...lista.map((e) => claveDeError(e.seccion, e.campo ?? ""))]));
       setFaltantesDelPaso({ pasoId, lista });
       return;
     }
@@ -548,12 +557,22 @@ function Borrador({
   };
   const datoFaltante = (e: ErrorValidacion, alIr: () => void): DatoFaltante => {
     const ruta = (e.campo ? nombreDeDato(formato, repeticiones, e.seccion, e.campo) : rutaLegible(formato, repeticiones, e.seccion)).split(" · ");
-    return { clave: `${claveDeError(e.seccion, e.campo ?? "")}:${e.codigo}`, titulo: ruta.at(-1)!, donde: ruta.slice(0, -1).join(" · ") || undefined, ir: alIr };
+    // No falta: pesa demasiado. El dato dice por qué, porque el croquis abre su editor sin espacio para el aviso.
+    const donde = e.codigo === "archivo_muy_grande" ? mensajeDeValidacion.archivo_muy_grande : ruta.slice(0, -1).join(" · ") || undefined;
+    return { clave: `${claveDeError(e.seccion, e.campo ?? "")}:${e.codigo}`, titulo: ruta.at(-1)!, donde, ir: alIr };
   };
 
   // Al corregir, el error de ese campo se va: la validación completa se repite al enviar.
   const alGuardar = (seccion: string, campo: string) => {
-    if (porClave.has(claveDeError(seccion, campo))) setErrores((lista) => (lista ?? []).filter((e) => claveDeError(e.seccion, e.campo ?? "") !== claveDeError(seccion, campo)));
+    const clave = claveDeError(seccion, campo);
+    if (senalados?.has(clave)) {
+      setSenalados((previos) => {
+        const siguen = new Set(previos);
+        siguen.delete(clave);
+        return siguen;
+      });
+    }
+    if (delEnvio.some((e) => claveDeError(e.seccion, e.campo ?? "") === clave)) setDelEnvio((lista) => lista.filter((e) => claveDeError(e.seccion, e.campo ?? "") !== clave));
   };
 
   /** Del resumen de errores al dato: abre su paso (o su repetición) y lo enfoca. */
@@ -565,7 +584,9 @@ function Borrador({
   }
 
   function mostrarErrores(lista: readonly ErrorValidacion[]) {
-    setErrores(lista);
+    setSenalados(new Set(lista.map((e) => claveDeError(e.seccion, e.campo ?? ""))));
+    const deLaValidacion = new Set(validacion.map((e) => `${claveDeError(e.seccion, e.campo ?? "")}:${e.codigo}`));
+    setDelEnvio(lista.filter((e) => !deLaValidacion.has(`${claveDeError(e.seccion, e.campo ?? "")}:${e.codigo}`)));
     setSacudir((n) => n + 1);
     if (vista.tipo !== "revisar") ir({ tipo: "revisar" });
     requestAnimationFrame(() => {
@@ -597,20 +618,21 @@ function Borrador({
   const campos = (lista: readonly DefinicionCampo[], clave: string) =>
     lista.map((campo) => (
       <Campo
-        key={campo.clave}
+        // Con la sección: dos pasos seguidos con un campo de la misma clave no comparten lo escrito (iteración 42).
+        key={`${clave}.${campo.clave}`}
         id={id}
         seccion={clave}
         campo={campo}
-        // Un tablero se abre en su propia pantalla, que se monta cada vez: parte de lo guardado, así uno devuelto con
-        // "Deshacer" (o agregado después de abrir el borrador) se ve con lo que tiene.
-        inicial={(leerClave(clave).repeticion ? actual : inicial).respuestas[clave]?.[campo.clave]}
+        // Cada paso y cada tablero montan sus campos al abrirse: parten de lo guardado, no de lo que había al abrir el
+        // borrador. Si no, volver a un paso lo mostraba vacío y agregar un material borraba los demás (iteración 42).
+        inicial={actual.respuestas[clave]?.[campo.clave]}
         actual={actual.respuestas[clave]?.[campo.clave]}
         error={porClave.get(claveDeError(clave, campo.clave))}
         alGuardar={() => alGuardar(clave, campo.clave)}
       />
     ));
   const total = pasos.length + 1;
-  const fotosDelBorrador = fotosReferenciadas(actual.respuestas).length;
+  const fotosDelBorrador = fotosReferenciadas(sinRespuestasHuerfanas(actual).respuestas).length;
   const contador = `${hechos}/${pasos.length}`;
 
   let pantalla: ReactNode;
@@ -1323,7 +1345,8 @@ function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: str
         <p className="text-ayuda text-texto-secundario">Todavía no hay boceto.</p>
       )}
       {error && <MensajeError id={`error-${seccion}-${campo.clave}`}>{error}</MensajeError>}
-      <Boton icono={Pencil} onClick={() => setEditando(0)}>
+      {/* Mientras se lee lo guardado no se abre: el editor partiría de una hoja vacía y la reemplazaría (iteración 42). */}
+      <Boton icono={Pencil} disabled={documento === undefined} onClick={() => setEditando(0)}>
         {hayDibujo ? "Editar boceto" : "Dibujar boceto"}
       </Boton>
       {editando !== null && (
@@ -1509,21 +1532,24 @@ function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: string; secc
   async function agregar(originales: File[]) {
     setProcesando(true);
     setFallo(null);
-    try {
-      for (const original of originales) {
+    // Una que falla no detiene las demás del lote, y el aviso dice cuántas faltan (iteración 42).
+    let fallidas = 0;
+    for (const original of originales) {
+      try {
         const archivo = await procesarFoto(original, new Date());
         await repositorio.agregarFoto(id, seccion, campo.clave, archivo, new Date());
         alGuardar();
+      } catch (error) {
+        // El técnico ve un mensaje simple; soporte necesita la causa (ADR-0017).
+        console.error("No se pudo guardar la foto", error);
+        fallidas++;
       }
-      // Las fotos suben por adelantado cuando hay señal (ADR-0003).
-      sincronizarEnSegundoPlano();
-    } catch (error) {
-      // El técnico ve un mensaje simple; soporte necesita la causa (ADR-0017).
-      console.error("No se pudo guardar la foto", error);
-      setFallo("No se pudo guardar la foto. Tómala de nuevo.");
-    } finally {
-      setProcesando(false);
     }
+    // Las fotos suben por adelantado cuando hay señal (ADR-0003).
+    if (fallidas < originales.length) sincronizarEnSegundoPlano();
+    if (fallidas === 1 && originales.length === 1) setFallo("No se pudo guardar la foto. Tómala de nuevo.");
+    else if (fallidas > 0) setFallo(`No se ${fallidas === 1 ? "pudo guardar 1 foto" : `pudieron guardar ${fallidas} fotos`} de ${originales.length}. Tómalas de nuevo.`);
+    setProcesando(false);
   }
 
   /** Quitar es inmediato y se deshace desde la notificación (DESIGN.md: qué se confirma y qué se deshace). */
@@ -1588,6 +1614,7 @@ function Enviado({
   alDescartar: () => void;
 }) {
   const [descartando, setDescartando] = useState(false);
+  const [corrigiendo, setCorrigiendo] = useState(false);
   const enLinea = useServidorAlcanzable();
   const { abierto: chatAbierto, abrir: setChatAbierto } = estadoChat;
   const loEnviado = useRef<HTMLDetailsElement>(null);
@@ -1596,8 +1623,9 @@ function Enviado({
   const leido = useLiveQuery(async () => (tecnicoId ? leidoHasta(db, tecnicoId, levantamiento.id) : null), [tecnicoId, levantamiento.id]);
   const sitio = useLiveQuery(async () => {
     const v = levantamiento.visitaId && tecnicoId ? await visitaDe(db, tecnicoId, levantamiento.visitaId) : null;
-    return v ? `${v.cliente.nombre} · ${v.sitio.nombre}` : "";
-  }, [levantamiento.visitaId, tecnicoId]);
+    // La visita atendida sale del teléfono al día siguiente (ADR-0041): el levantamiento guarda dónde fue (iteración 42).
+    return v ? `${v.cliente.nombre} · ${v.sitio.nombre}` : levantamiento.lugar ? `${levantamiento.lugar.cliente} · ${levantamiento.lugar.sitio}` : "";
+  }, [levantamiento.visitaId, tecnicoId, levantamiento.lugar?.cliente, levantamiento.lugar?.sitio]);
   const [reintentar, reintentando] = useSinRepetir(async () => {
     await repositorio.reintentarEnvio(levantamiento.id);
     sincronizarEnSegundoPlano();
@@ -1664,6 +1692,25 @@ function Enviado({
               <Boton cargando={reintentando} onClick={() => void reintentar()}>
                 Reintentar envío
               </Boton>
+              {/* Oficina nunca lo recibió: si hay algo que corregir, vuelve a ser borrador (ADR-0045). */}
+              <Boton variante="fantasma" icono={Pencil} onClick={() => setCorrigiendo(true)}>
+                Volver a borrador para corregir
+              </Boton>
+              {corrigiendo && (
+                <Confirmacion
+                  nivel="consecuencia"
+                  forma="inferior"
+                  titulo="¿Volver a borrador?"
+                  confirmar="Volver a borrador"
+                  accion={() => repositorio.volverABorrador(levantamiento.id)}
+                  mensajeDeError={() => "No se pudo volver a borrador. Intenta de nuevo."}
+                  alCerrar={() => setCorrigiendo(false)}
+                  consecuencias={[
+                    { icono: Pencil, texto: "Lo vuelves a editar en este teléfono", detalle: "Oficina nunca lo recibió: no hay otra copia que cambie" },
+                    { icono: Send, texto: "Cuando lo envíes, sale otra vez a oficina" },
+                  ]}
+                />
+              )}
               {/* Si oficina no lo va a aceptar nunca (otro ya lo envió, el formato se retiró), aquí sale del inicio. */}
               <Boton variante="fantasma" icono={Trash} onClick={() => setDescartando(true)}>
                 Descartar levantamiento
@@ -1751,7 +1798,7 @@ function Enviado({
       )}
       <details ref={loEnviado} open={levantamiento.estado !== "enviado" || undefined} className="group flex flex-col rounded-panel border border-division bg-panel [&[open]>summary]:mb-1">
         <summary className="flex min-h-tactil cursor-pointer items-center justify-between gap-3 rounded-panel px-4 text-cuerpo font-bold focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&::-webkit-details-marker]:hidden">
-          Ver lo que enviaste
+          {levantamiento.estado === "enviado" ? "Ver lo que enviaste" : "Ver lo capturado"}
           <ChevronDown aria-hidden className="size-5 shrink-0 text-texto-secundario transition-transform duration-200 motion-reduce:transition-none group-open:rotate-180" />
         </summary>
         <div className="flex flex-col gap-4 px-2 pb-2 motion-safe:animate-aparecer">

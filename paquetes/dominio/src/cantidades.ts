@@ -3,7 +3,7 @@
  * texto libre (ADR-0025). Oficina confirma o completa el vínculo al catálogo, las suma por visita y las exporta. La cantidad es un decimal en texto,
  * como la medida (ADR-0006): nada de coma flotante en lo que después se cotiza.
  */
-import { LIMITES_CANTIDADES } from "./limites";
+import { LIMITES, LIMITES_CANTIDADES } from "./limites";
 import { DECIMAL_CANONICO, ID_CORTO, UUID } from "./patrones";
 
 export interface LineaCantidad {
@@ -44,7 +44,7 @@ export function lineasValidas(lineas: readonly unknown[], unidades: readonly str
     if (typeof id !== "string" || !ID_LINEA.test(id) || ids.has(id)) return false;
     ids.add(id);
     if (typeof descripcion !== "string" || descripcion.trim() === "" || descripcion.length > LIMITES_CANTIDADES.descripcion) return false;
-    if (typeof cantidad !== "string" || !DECIMAL_CANONICO.test(cantidad) || /^0(\.0+)?$/.test(cantidad)) return false;
+    if (typeof cantidad !== "string" || cantidad.length > LIMITES.decimal || !DECIMAL_CANONICO.test(cantidad) || /^0(\.0+)?$/.test(cantidad)) return false;
     if (typeof unidad !== "string" || !unidades.includes(unidad)) return false;
     if (observacion !== undefined && (typeof observacion !== "string" || observacion.length > LIMITES_CANTIDADES.observacion)) return false;
     if (item !== undefined && (typeof item !== "string" || !UUID.test(item))) return false;

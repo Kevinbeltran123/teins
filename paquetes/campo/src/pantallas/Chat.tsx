@@ -83,21 +83,41 @@ export function Chat({
     return () => clearInterval(intervalo);
   }, [enLinea]);
 
-  // A quién se responde: lo que tocó el técnico o, si no tocó nada, la última pregunta de oficina.
+  // A quién se responde: lo que tocó el técnico o, si no tocó nada, la última pregunta de oficina. Al empezar a escribir
+  // queda fija: una pregunta nueva que llega mientras escribe no cambia el destino (iteración 42). Una que oficina retiró
+  // deja de serlo, y se vuelve a la última que sigue.
   const [elegido, setElegido] = useState<{ comentarioId: string; vez: number } | null>(null);
-  const objetivo = elegido?.comentarioId ?? chat.filter((m) => m.de === "oficina").at(-1)?.comentarioId;
+  const [fijado, setFijado] = useState<string | null>(null);
+  const sigue = (comentarioId: string | null | undefined): comentarioId is string => Boolean(comentarioId) && chat.some((m) => m.de === "oficina" && m.comentarioId === comentarioId);
+  const ultima = chat.filter((m) => m.de === "oficina").at(-1)?.comentarioId;
+  const objetivo = [elegido?.comentarioId, fijado].find(sigue) ?? ultima;
   const pregunta = chat.filter((m) => m.de === "oficina" && m.comentarioId === objetivo).at(-1)?.texto;
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [noSeGuardo, setNoSeGuardo] = useState(false);
+  // Con la sesión vencida, lo que espera en la cola no sale hasta volver a iniciar sesión (desde el inicio).
+  const sesionVencida = useLiveQuery(async () => Boolean((await db.bajadas.get(tecnicoId))?.sesionVencida), [tecnicoId]);
+
+  function escribir(nuevo: string) {
+    if (texto.trim() === "" && nuevo.trim() !== "") setFijado(objetivo ?? null);
+    if (nuevo.trim() === "") setFijado(null);
+    setTexto(nuevo);
+  }
 
   async function enviar() {
     const limpio = texto.trim();
     if (!limpio || !objetivo || enviando) return;
     setEnviando(true);
+    setNoSeGuardo(false);
     try {
       await responder(db, tecnicoId, { levantamientoId: levantamiento.id, comentarioId: objetivo, texto: limpio }, new Date());
       setTexto("");
+      setFijado(null);
       sincronizarEnSegundoPlano();
+    } catch (error) {
+      // Lo escrito se queda en el campo; soporte necesita la causa (ADR-0017).
+      console.error("No se pudo guardar la respuesta", error);
+      setNoSeGuardo(true);
     } finally {
       setEnviando(false);
     }
@@ -143,7 +163,12 @@ export function Chat({
       return <span className="mx-1 mt-1 max-w-[78%] self-end text-right text-[12px] text-peligro">{RECHAZOS[motivo]}</span>;
     }
     if (m.estado === "cola")
-      return enLinea ? (
+      return sesionVencida ? (
+        <span className="mx-1 mt-1 inline-flex items-center gap-1 self-end text-[12px] text-alerta-texto">
+          <Clock aria-hidden className="size-[13px]" />
+          Se envía cuando vuelvas a iniciar sesión
+        </span>
+      ) : enLinea ? (
         <span className="mx-1 mt-1 self-end text-[12px] text-texto-secundario">Enviando…</span>
       ) : (
         <span className="mx-1 mt-1 inline-flex items-center gap-1 self-end text-[12px] text-alerta-texto">
@@ -272,6 +297,8 @@ export function Chat({
               </span>
             </div>
           )}
+          {noSeGuardo && <p className="px-1 text-[13px] text-peligro">No se pudo guardar tu mensaje en el teléfono. Revisa que tenga espacio e intenta de nuevo.</p>}
+          {!objetivo && <p className="px-1 text-[13px] text-texto-secundario">Cuando oficina te pregunte algo, lo respondes aquí.</p>}
           <div className="relative">
             <textarea
               rows={1}
@@ -279,13 +306,13 @@ export function Chat({
               placeholder="Mensaje"
               aria-label="Respuesta para oficina"
               value={texto}
-              onChange={(e) => setTexto(e.target.value)}
+              onChange={(e) => escribir(e.target.value)}
               className="block max-h-[120px] min-h-10 w-full resize-none rounded-[20px] border-0 bg-panel py-[9px] pl-4 pr-[46px] text-[16px] leading-[1.4] text-texto shadow-[inset_0_0_0_1px_var(--color-borde-control)] [field-sizing:content] placeholder:text-texto-terciario focus:shadow-[inset_0_0_0_1.5px_var(--color-acento)] focus:outline-none"
             />
             <button
               type="submit"
               aria-label="Enviar"
-              aria-disabled={!texto.trim() || enviando}
+              aria-disabled={!texto.trim() || enviando || !objetivo}
               className="absolute bottom-[5px] right-[5px] grid size-[30px] place-items-center rounded-full bg-acento text-sobre-acento aria-disabled:bg-superficie-pista aria-disabled:text-texto-terciario"
             >
               <ArrowUp aria-hidden className="size-[17px]" strokeWidth={2.4} />

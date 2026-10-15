@@ -18,7 +18,14 @@ const InstalarApp = lazy(() => import("./pantallas/InstalarApp"));
 // sin conexión (ADR-0011).
 type PropsCaptura = { id: string; volver: () => void; alMostrar?: () => void; alDescartar?: () => void; conversacion?: boolean };
 let moduloCaptura: Promise<ComponentType<PropsCaptura>> | undefined;
-const cargarCaptura = () => (moduloCaptura ??= import("./pantallas/Captura").then((m) => m.Captura));
+// Si la carga falla (sin red y sin la versión en caché), se olvida: el siguiente toque la intenta de nuevo (iteración 42).
+const cargarCaptura = () =>
+  (moduloCaptura ??= import("./pantallas/Captura")
+    .then((m) => m.Captura)
+    .catch((error: unknown) => {
+      moduloCaptura = undefined;
+      throw error;
+    }));
 /** Lo más que se espera a que la captura lea el levantamiento antes de mostrarse (si tarda, abre con su esqueleto). */
 const ESPERA_CAPTURA_MS = 500;
 
@@ -63,6 +70,8 @@ export function App() {
   const [pedirPapelera, setPedirPapelera] = useState(0);
   const notificar = useNotificar();
   const [pidiendoSesion, setPidiendoSesion] = useState(false);
+  // Tocar una visita no abrió nada (la captura no se pudo cargar): se dice en el inicio en vez de no hacer nada.
+  const [noAbrio, setNoAbrio] = useState(false);
   const [guiarInstalacion, setGuiarInstalacion] = useState(debeGuiarInstalacion);
   const {
     needRefresh: [actualizacionDisponible],
@@ -78,9 +87,13 @@ export function App() {
   useEffect(() => (conSesion ? programarSincronizacion() : undefined), [conSesion]);
   useEffect(() => {
     if (conSesion) {
-      void cargarCaptura().then((c) => setCaptura(() => c));
-      // Lo que lleva más de 30 días en la papelera se borra del teléfono con sus fotos (ADR-0035).
-      void repositorio.vaciarPapelera(new Date()).catch(() => undefined);
+      void cargarCaptura().then((c) => setCaptura(() => c), () => undefined);
+      // Lo que lleva más de 30 días en la papelera se borra del teléfono con sus fotos (ADR-0035). Después, los archivos
+      // que nada usa (fotos de un tablero quitado): al abrir, ningún «Deshacer» los puede devolver (iteración 42).
+      void repositorio
+        .vaciarPapelera(new Date())
+        .then(() => repositorio.limpiarArchivosSinUso())
+        .catch(() => undefined);
     }
     // Sin sesión no queda nada de la persona anterior en memoria.
     else olvidarLecturas();
@@ -92,7 +105,15 @@ export function App() {
    */
   const abrir = (id: string, chat = false) =>
     void conTransicion(async () => {
-      const componente = await cargarCaptura();
+      let componente: ComponentType<PropsCaptura>;
+      try {
+        componente = await cargarCaptura();
+      } catch (error) {
+        console.error("No se pudo cargar la captura", error);
+        setNoAbrio(true);
+        return;
+      }
+      setNoAbrio(false);
       await new Promise<void>((listo) => {
         mostrada.current = listo;
         setTimeout(listo, ESPERA_CAPTURA_MS);
@@ -163,6 +184,7 @@ export function App() {
         abrir={abrir}
         recien={recien}
         pedirPapelera={pedirPapelera}
+        papeleraAbierta={() => setPedirPapelera(0)}
         pedirSesion={() => setPidiendoSesion(true)}
         actualizacion={{ disponible: actualizacionDisponible, aplicar: () => void updateServiceWorker(true) }}
       />
@@ -171,6 +193,12 @@ export function App() {
   return (
     <ErrorDeLectura>
       <Suspense fallback={<Abriendo />}>{pantalla}</Suspense>
+      {/* Fijo arriba: quien tocó la visita puede estar lejos del principio de la lista. */}
+      {noAbrio && !abierto && (
+        <div className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-40 mx-auto max-w-xl shadow-menu">
+          <Aviso tono="error">No se pudo abrir el levantamiento. Conéctate un momento y vuelve a tocarlo; no se borró nada.</Aviso>
+        </div>
+      )}
     </ErrorDeLectura>
   );
 }

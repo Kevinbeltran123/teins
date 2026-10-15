@@ -21,6 +21,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   boceto_invalido: "El boceto está dañado. Vuelve a dibujarlo.",
   cantidades_invalidas: "Revisa las líneas: cada una necesita descripción, una cantidad mayor que cero y una unidad.",
   firma_invalida: "La firma quedó incompleta. Pide que vuelvan a firmar.",
+  archivo_muy_grande: "El dibujo pesa demasiado para enviarlo. Borra los trazos que sobren y vuelve a intentarlo.",
 };
 
 export type Tono = "ok" | "pendiente" | "error";
@@ -67,9 +68,9 @@ export function porQueNoEntro(codigo: string | undefined): string {
   }
 }
 
-/** Qué hacer con un rechazo: nada se perdió, oficina ya lo ve y se reintenta cuando lo resuelva. */
+/** Qué hacer con un rechazo: nada se perdió, oficina ya lo ve y se reintenta cuando lo resuelva, o se corrige (ADR-0045). */
 export const QUE_HACER_CON_EL_RECHAZO =
-  "Lo capturado sigue guardado en este teléfono. Avísale a oficina: ya ven el error en «Teléfonos de campo». Cuando te digan que está resuelto, toca «Reintentar envío».";
+  "Lo capturado sigue guardado en este teléfono. Avísale a oficina: ya ven el error en «Teléfonos de campo». Cuando te digan que está resuelto, toca «Reintentar envío»; si hay algo que corregir, vuelve a borrador.";
 
 /** Estado de negocio según el servidor (bajada). */
 export function estadoSegunServidor(estado: EstadoServidor): { texto: string; tono: Tono } {

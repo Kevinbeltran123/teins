@@ -19,6 +19,12 @@ const PAGINAS_MAXIMAS = 20;
  * Espera exponencial con variación aleatoria (ADR-0003, regla 6): muchos dispositivos que
  * recuperan señal a la vez no golpean al servidor en el mismo instante.
  */
+/**
+ * Mientras el técnico cambia la contraseña temporal, el servidor responde 403 a todo lo demás: no es un rechazo sin
+ * remedio, se espera como un error pasajero (iteración 42). Sin esto se perdían terminaciones y respuestas en cola.
+ */
+const esperaAlCambioDeContrasena = (error: ErrorApi) => error.codigo === "cambio_de_contrasena_requerido";
+
 export function espera(intentos: number, aleatorio: () => number): number {
   const tope = Math.min(ESPERA_MAXIMA_MS, ESPERA_BASE_MS * 2 ** Math.min(intentos, 20));
   return Math.round(tope * (0.5 + aleatorio() * 0.5));
@@ -147,7 +153,8 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
           await reintentarDespues(envio, codigo, error.message);
           return false;
         case "archivos_en_verificacion":
-          await reintentarDespues(envio, codigo, error.message, (problema.reintentarEnSegundos ?? 5) * 1000);
+          // Lo que pide el servidor, y cada vez más si sigue sin verificarse (el worker caído): no consulta cada 5 s sin fin.
+          await reintentarDespues(envio, codigo, error.message, Math.max((problema.reintentarEnSegundos ?? 5) * 1000, espera(envio.intentos + 1, aleatorio)));
           return false;
         case "no_autenticado":
           sesionRechazada = true;
@@ -157,7 +164,7 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
           await almacen.actualizarEnvio(envio.levantamientoId, { estado: "requiere_actualizar", versionAppRechazada: versionApp, ultimoError: { codigo, mensaje: error.message } });
           return false;
         default:
-          if (error.reintentable) await reintentarDespues(envio, codigo, error.message);
+          if (error.reintentable || esperaAlCambioDeContrasena(error)) await reintentarDespues(envio, codigo, error.message);
           // Error permanente (ADR-0003): no se reintenta solo; el técnico lo ve.
           else await almacen.actualizarEnvio(envio.levantamientoId, { estado: "error", ultimoError: { codigo, mensaje: error.message } });
           return false;
@@ -191,7 +198,7 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
           return;
         }
         // Una app vieja que el servidor ya no acepta también espera: la terminación sale al actualizarla.
-        if (error.reintentable || error.codigo === "version_protocolo_no_soportada") await despues();
+        if (error.reintentable || error.codigo === "version_protocolo_no_soportada" || esperaAlCambioDeContrasena(error)) await despues();
         else await almacen.resolverTerminacion(tecnicoId, visitaId, llave, null);
       }
     }
@@ -226,7 +233,7 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
           sesionRechazada = true;
           return;
         }
-        if (error.reintentable || error.codigo === "version_protocolo_no_soportada") await despues();
+        if (error.reintentable || error.codigo === "version_protocolo_no_soportada" || esperaAlCambioDeContrasena(error)) await despues();
         else await almacen.resolverRespuesta(r.llave, { rechazo: error.codigo === "estado_invalido" ? "revisado" : error.codigo === "no_encontrado" ? "no_existe" : "invalida" });
       }
     }

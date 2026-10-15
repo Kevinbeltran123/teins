@@ -166,6 +166,35 @@ describe("motor de sincronización", () => {
     expect(await motor.proximoIntento()).toBeNull();
   });
 
+  it("si la verificación no termina (el worker caído), la espera crece en vez de consultar cada 5 s (iteración 42)", async () => {
+    const { db, reloj } = await dispositivo();
+    const s = servidorFalso({ verificacionesPendientes: 4 });
+    const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+    const esperas: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      await motor.sincronizar();
+      const proximo = (await motor.proximoIntento())!;
+      esperas.push(proximo - reloj.ahora());
+      reloj.avanzar(proximo - reloj.ahora());
+    }
+    expect(esperas[0]).toBe(5000);
+    expect(esperas.at(-1)).toBeGreaterThan(5000);
+    await motor.sincronizar();
+    expect(await estados(db)).toEqual(["recibido"]);
+  });
+
+  it("mientras el técnico cambia la contraseña temporal (403), el envío espera: no queda en error (iteración 42)", async () => {
+    const { db, reloj } = await dispositivo();
+    const s = servidorFalso();
+    s.programar("enviarComando", "cambio_de_contrasena");
+    const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+    await motor.sincronizar();
+    expect(await estados(db)).toEqual(["pendiente"]);
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect(await estados(db)).toEqual(["recibido"]);
+  });
+
   it("con la sesión vencida espera a que el técnico vuelva a iniciar sesión, sin perder nada", async () => {
     const { db, reloj } = await dispositivo();
     const s = servidorFalso();
@@ -393,6 +422,25 @@ describe("bajada (ADR-0003)", () => {
     expect(await repo.obtener(enviado)).toBeDefined();
   });
 
+  it("un borrador descartado no retiene en el teléfono una visita que el servidor ya cerró (iteración 42)", async () => {
+    const db = abrirBase(`motor-${Math.random()}`);
+    bases.push(db);
+    const s = servidorFalso();
+    const reloj = { ahora: () => Date.now() };
+    s.publicar({ tipo: "visita", visita: visita(idVisita(7)) });
+    await motorDe(db, s, reloj, 15).sincronizar();
+    const repo = repositorioDexie(db);
+    const descartado = "0192f0e0-0000-7000-8000-000000000997";
+    await repo.crear(crearLevantamiento(formato, descartado, new Date(), idVisita(7)), "t1");
+    await repo.descartar(descartado, new Date());
+
+    s.publicar({ tipo: "fuera_de_alcance", entidad: "visita", id: idVisita(7), motivo: "atendida" });
+    await motorDe(db, s, reloj, 15).sincronizar({ bajar: true });
+    expect(await visitasDe(db, "t1")).toEqual([]);
+    // El descartado sigue en la papelera (regla 5).
+    expect((await repo.descartados("t1")).map((l) => l.id)).toEqual([descartado]);
+  });
+
   it("una visita cancelada con algo empezado se queda con el motivo, para avisarle al técnico (iteración 7)", async () => {
     const db = abrirBase(`motor-${Math.random()}`);
     bases.push(db);
@@ -561,6 +609,16 @@ describe("terminar visita (ADR-0037)", () => {
     expect(s.llamadas.filter((l) => l === "terminarVisita")).toHaveLength(1);
   });
 
+  it("mientras cambia la contraseña temporal (403) no la pierde: sale después (iteración 42)", async () => {
+    const { db, s, reloj, motor, llave } = await terminadaSinSenal();
+    s.programar("terminarVisita", "cambio_de_contrasena");
+    expect(await motor.sincronizar()).toBe("completa");
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toMatchObject({ llave, intentos: 1 });
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect((await visitaDe(db, "t1", idVisita))?.terminada).toMatchObject({ en: "2026-09-24T20:30:00.000Z" });
+  });
+
   it("con un error del servidor reintenta después, sin perderla", async () => {
     const { db, s, motor, llave } = await terminadaSinSenal();
     s.programar("terminarVisita", "error_500");
@@ -663,6 +721,17 @@ describe("conversaciones (ADR-0040)", () => {
     await motor.sincronizar();
     expect(s.respuestas.size).toBe(1);
     expect(s.respuestas.get(llave)?.veces).toBe(2);
+  });
+
+  it("mientras cambia la contraseña temporal (403) la respuesta espera en la cola: no queda rechazada (iteración 42)", async () => {
+    const { db, s, reloj, motor, llave } = await respondidaSinSenal();
+    s.programar("responderComentario", "cambio_de_contrasena");
+    await motor.sincronizar();
+    expect(await pendientesDe(db, "t1", idLev)).toMatchObject([{ llave, intentos: 1 }]);
+    expect((await pendientesDe(db, "t1", idLev))[0]?.rechazo).toBeUndefined();
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect(s.respuestas.get(llave)).toMatchObject({ veces: 1 });
   });
 
   it("si oficina ya lo marcó revisado, no se reintenta y el mensaje queda en el teléfono (regla 5)", async () => {

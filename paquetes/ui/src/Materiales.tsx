@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
 import { Search } from "./iconos";
 import type { LineaEditable } from "./Cantidades";
@@ -45,11 +45,20 @@ export function EditorMateriales({
   const [conNota, setConNota] = useState<ReadonlySet<string>>(new Set());
   const cambiar = (i: number, cambio: Partial<LineaEditable>) => onCambio(lineas.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
   const notificar = useNotificar();
-  // Bajar a cero quita la línea al instante; "Deshacer" la devuelve (DESIGN.md, iteración 24c).
+  // La lista de ahora: "Deshacer" llega hasta 10 s después, y en ese tiempo se pudo agregar o cambiar otra línea.
+  const vigentes = useRef(lineas);
+  vigentes.current = lineas;
+  // Bajar a cero quita la línea al instante; "Deshacer" la devuelve a su lugar (DESIGN.md, iteración 24c) sobre la lista
+  // de ahora, no la de antes: lo hecho entre tanto no se pierde, y un segundo toque no la duplica (iteración 42).
   const quitar = (i: number) => {
-    const antes = [...lineas];
+    const quitada = lineas[i]!;
     onCambio(lineas.filter((_, j) => j !== i));
-    notificar({ texto: `${lineas[i]!.descripcion.trim() || "Material"} quitado`, accion: { texto: "Deshacer", alHacer: () => onCambio(antes) } });
+    const devolver = () => {
+      const actuales = vigentes.current;
+      if (actuales.some((l) => l.id === quitada.id)) return;
+      onCambio([...actuales.slice(0, i), quitada, ...actuales.slice(i)]);
+    };
+    notificar({ texto: `${quitada.descripcion.trim() || "Material"} quitado`, accion: { texto: "Deshacer", alHacer: devolver } });
   };
   const sumar = (i: number, delta: number) => {
     const siguiente = Math.max(0, numero(lineas[i]!.cantidad) + delta);
