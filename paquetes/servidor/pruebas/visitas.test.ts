@@ -258,6 +258,23 @@ describe("visitas (iteración 7)", () => {
     expect(tecnicos.map((t: { id: string }) => t.id)).toContain(org.tecnico.id);
     expect(tecnicos.map((t: { id: string }) => t.id)).not.toContain(org.oficina.id);
   });
+
+  it("si un técnico elegido ya no está activo, el rechazo dice quién es: oficina lo muestra para quitarlo", async () => {
+    const usuario = `t.${randomUUID().slice(0, 8)}`;
+    const { id } = await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre: "Técnico Retirado", rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    const cliente = await clienteConSitio();
+    const visita = await programar(cliente, [org.tecnico.id, id], "2027-05-03");
+    await s.identidad.desactivarUsuario(usuario, { autorId: "prueba", correlacion: "prueba" });
+
+    // Reasignar con la lista que oficina tenía abierta: el desactivado sigue en ella.
+    const r = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/tecnicos`, { version: 1, tecnicos: [org.tecnico.id, id] });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toMatchObject({ codigo: "entrada_invalida", detail: "Técnico Retirado no es un técnico activo de la organización: quítelo de la visita" });
+    const otro = await s.nuevaOrganizacionConUsuarios();
+    const nueva = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: "2027-05-04", tecnicos: [id, otro.tecnico.id] });
+    // El de otra organización no se nombra: ni siquiera se sabe que existe.
+    expect(nueva.json().detail).toBe("Técnico Retirado y [Usuario no disponible] no son técnicos activos de la organización: quítelos de la visita");
+  });
 });
 
 describe("visitas con horario (ADR-0037)", () => {

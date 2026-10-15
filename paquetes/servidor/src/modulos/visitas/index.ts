@@ -300,7 +300,17 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       async function tecnicosValidos(organizacionId: string, ids: readonly string[]) {
         const activos = new Set((await identidad.tecnicosActivos(organizacionId)).map((t) => t.id));
         const unicos = [...new Set(ids)];
-        if (unicos.some((id) => !activos.has(id))) throw problema("entrada_invalida", "Solo se asignan técnicos activos de la organización");
+        const fuera = unicos.filter((id) => !activos.has(id));
+        if (fuera.length > 0) {
+          // El detalle dice a quién quitar (oficina lo muestra): por ejemplo, alguien desactivado con la visita abierta.
+          // Los nombres salen solo de esta organización: uno de otra no se revela.
+          const nombres = await identidad.nombres(organizacionId, fuera);
+          const quienes = new Intl.ListFormat("es", { type: "conjunction" }).format(fuera.map((id) => nombres.get(id) ?? "[Usuario no disponible]"));
+          throw problema(
+            "entrada_invalida",
+            fuera.length === 1 ? `${quienes} no es un técnico activo de la organización: quítelo de la visita` : `${quienes} no son técnicos activos de la organización: quítelos de la visita`,
+          );
+        }
         return unicos;
       }
 
