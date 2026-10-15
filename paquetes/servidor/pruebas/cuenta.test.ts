@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { autenticacion, cabecerasSync, cookiesDe, iniciarSesion, ORIGEN, servidorDePrueba } from "./ayudas";
 import { codigoTotp } from "./totp";
@@ -191,5 +191,37 @@ describe("reactivar un usuario desactivado", () => {
     const otraVez = await pedir(admin.cookie, "POST", `/api/administracion/usuarios/${tecnico.id}/reactivar`);
     expect(otraVez.statusCode).toBe(409);
     expect(otraVez.json().codigo).toBe("estado_invalido");
+  });
+
+  it("desactivarlo otra vez ordena de nuevo borrar el teléfono que ya había cumplido la orden; una orden sin cumplir no cambia (QA-5)", async () => {
+    const tecnico = await creadoPorAdministracion("tecnico");
+    // Un teléfono que cumple la orden y vuelve a usarse, y otro que nunca vuelve a conectarse.
+    const telefono = { id: randomUUID(), secreto: randomBytes(32).toString("base64url") };
+    const olvidado = randomUUID();
+    await s.propietario.pool.query(
+      "insert into identidad.dispositivos (id, usuario_id, organizacion_id, secreto_huella, ultimo_contacto) values ($1, $2, $3, $4, now()), ($5, $2, $3, 'huella', now())",
+      [telefono.id, tecnico.id, org.organizacionId, createHash("sha256").update(telefono.secreto).digest("hex"), olvidado],
+    );
+    const ordenes = (confirmados: string[] = []) => app.inject({ method: "POST", url: "/api/sync/dispositivo/ordenes", headers: cabecerasSync, payload: { ...telefono, confirmados } });
+    const ordenDe = async (id: string) => (await s.propietario.pool.query("select orden_de_borrado_en from identidad.dispositivos where id = $1", [id])).rows[0].orden_de_borrado_en as Date;
+
+    expect((await pedir(admin.cookie, "POST", `/api/administracion/usuarios/${tecnico.id}/desactivar`)).statusCode).toBe(200);
+    expect((await ordenes()).json()).toEqual({ borrar: [tecnico.id] });
+    expect((await ordenes([tecnico.id])).json()).toEqual({ borrar: [] });
+    const ordenDelOlvidado = await ordenDe(olvidado);
+
+    // Vuelve, cambia la temporal y trabaja otra vez en el mismo teléfono: la orden cumplida no le pide borrar.
+    const { contrasena } = (await pedir(admin.cookie, "POST", `/api/administracion/usuarios/${tecnico.id}/reactivar`)).json();
+    const temporal = await iniciarSesion(app, tecnico.usuario, contrasena);
+    const cookie = cookiesDe(await pedir(temporal, "POST", "/api/cuenta/contrasena", { actual: contrasena, nueva: "contrasena-de-vuelta" }));
+    const salud = { versionApp: 15, versionEsquemaLocal: 3, pendientes: 0, pendienteMasAntiguo: null, bytesUsados: 1_000_000, bytesDisponibles: 50_000_000, persistente: true, ultimoError: null };
+    const informe = await pedir(cookie, "POST", "/api/sync/dispositivo", { ...telefono, salud }, cabecerasSync);
+    expect(informe.statusCode, informe.body).toBe(202);
+    expect((await ordenes()).json()).toEqual({ borrar: [] });
+
+    // Lo desactivan otra vez: lo que bajó desde que volvió también se borra.
+    expect((await pedir(admin.cookie, "POST", `/api/administracion/usuarios/${tecnico.id}/desactivar`)).statusCode).toBe(200);
+    expect((await ordenes()).json()).toEqual({ borrar: [tecnico.id] });
+    expect(await ordenDe(olvidado)).toEqual(ordenDelOlvidado);
   });
 });
