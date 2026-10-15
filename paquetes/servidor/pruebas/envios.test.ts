@@ -190,6 +190,30 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     expect(await bandeja()).toMatchObject({ envioSinEntregar: false });
   }, 90_000);
 
+  it("lo que no llegó deja de contar como sin entregar si oficina quita al contacto o deja de enviarle por ese canal", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const jorge = (await crearContacto(oficina.cookie, clienteId, JORGE)).find((c) => c.nombre === "Jorge Pardo")!;
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [jorge.id] });
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    const bandeja = async () => (await get(oficina.cookie, "/api/informes")).json().elementos.find((e: { id: string }) => e.id === informeId);
+    expect(await bandeja()).toMatchObject({ envioSinEntregar: true });
+
+    // Ya no recibe por correo: «Volver a enviar» por ese canal no se puede, así que no queda nada pendiente.
+    const sinCorreo = await post(oficina.cookie, `/api/clientes/${clienteId}/contactos/${jorge.id}`, { ...JORGE, recibeCorreo: false, celular: "+573005550121", recibeWhatsapp: true, whatsappAutorizado: true });
+    expect(sinCorreo.statusCode, sinCorreo.body).toBe(200);
+    expect(await bandeja()).toMatchObject({ envioSinEntregar: false });
+    // Vuelve a recibir por correo en la misma dirección: lo que no le llegó vuelve a estar pendiente.
+    expect((await post(oficina.cookie, `/api/clientes/${clienteId}/contactos/${jorge.id}`, JORGE)).statusCode).toBe(200);
+    expect(await bandeja()).toMatchObject({ envioSinEntregar: true });
+
+    // Quitado, ya no es contacto del cliente: la alerta no se podría quitar nunca.
+    expect((await post(oficina.cookie, `/api/clientes/${clienteId}/contactos/${jorge.id}/quitar`)).statusCode).toBe(200);
+    expect(await bandeja()).toMatchObject({ envioSinEntregar: false });
+    // El intento se conserva como constancia.
+    expect((await enviosDe(oficina.cookie, informeId)).map((e) => [e.contacto.nombre, e.estado])).toEqual([["Jorge Pardo", "fallido"]]);
+  }, 90_000);
+
   it("el correo sale con el asunto y el texto que escribió oficina; el WhatsApp, con su plantilla (ADR-0036)", async () => {
     const { oficina, clienteId, informeId } = await informeListoParaPublicar();
     const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.propio@cliente.example", celular: "+573005550118" });

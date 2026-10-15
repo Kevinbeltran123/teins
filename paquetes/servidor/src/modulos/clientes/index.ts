@@ -185,6 +185,13 @@ export const contactosDelCliente = {
     return destinatarios;
   },
 
+  /** Por qué canales recibe hoy cada uno de estos contactos; uno que oficina quitó no aparece. */
+  async canales(tx: TxOrganizacion, contactoIds: readonly string[]): Promise<Map<string, ("correo" | "whatsapp")[]>> {
+    if (contactoIds.length === 0) return new Map();
+    const filas = await tx.select().from(contactos).where(and(inArray(contactos.id, [...contactoIds]), vigente));
+    return new Map(filas.map((c) => [c.id, canalesDe(c)]));
+  },
+
   /** Si el contacto sigue recibiendo por ese canal en ese destino: al salir, un envío en cola lo confirma. */
   async sigueRecibiendo(tx: TxOrganizacion, contactoId: string, canal: "correo" | "whatsapp", destino: string): Promise<boolean> {
     // Archivar el cliente detiene lo que todavía esperaba salir (ADR-0035).

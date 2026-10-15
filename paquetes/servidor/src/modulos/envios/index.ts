@@ -167,13 +167,15 @@ export async function enviosDeVersiones(tx: TxOrganizacion, versionIds: readonly
 export async function versionesConEnvioSinEntregar(tx: TxOrganizacion, versionIds: readonly string[]): Promise<Set<string>> {
   if (versionIds.length === 0) return new Set();
   const ultimos = tx
-    .selectDistinctOn([envios.versionId, envios.contactoId, envios.canal], { versionId: envios.versionId, estado: envios.estado })
+    .selectDistinctOn([envios.versionId, envios.contactoId, envios.canal], { versionId: envios.versionId, contactoId: envios.contactoId, canal: envios.canal, estado: envios.estado })
     .from(envios)
     .where(inArray(envios.versionId, [...versionIds]))
     .orderBy(envios.versionId, envios.contactoId, envios.canal, desc(envios.creadoEn))
     .as("ultimos");
-  const filas = await tx.select({ versionId: ultimos.versionId }).from(ultimos).where(eq(ultimos.estado, "fallido"));
-  return new Set(filas.map((f) => f.versionId));
+  const filas = await tx.select({ versionId: ultimos.versionId, contactoId: ultimos.contactoId, canal: ultimos.canal }).from(ultimos).where(eq(ultimos.estado, "fallido"));
+  // Solo cuenta lo que se puede volver a enviar: a un contacto que oficina quitó, o que ya no recibe por ese canal, no.
+  const canales = await contactosDelCliente.canales(tx, [...new Set(filas.map((f) => f.contactoId))]);
+  return new Set(filas.filter((f) => canales.get(f.contactoId)?.includes(f.canal)).map((f) => f.versionId));
 }
 
 async function marcarEnviado(tx: TxOrganizacion, envioId: string, proveedorId: string | null): Promise<void> {
