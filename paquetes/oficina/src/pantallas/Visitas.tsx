@@ -45,7 +45,7 @@ import { cliente } from "../api";
 import { csvDetalle, csvResumen, descargar } from "../csv";
 import { aFechaHora } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
-import { sinError } from "../mensajes";
+import { mensajeDeError, sinError } from "../mensajes";
 import { cambiosAlReasignar, consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
 import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../horario";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
@@ -114,6 +114,8 @@ export function Visitas() {
   }, [pedido]);
   const [edicion, setEdicion] = useState<Edicion | null>(null);
   const [recientes, setRecientes] = useState<string[]>([]);
+  // Lo que no se pudo hacer desde una fila («Abrir el informe»): encima de la lista, como en el catálogo.
+  const [errorFila, setErrorFila] = useState<string | null>(null);
   const notificar = useNotificar();
   const hoy = hoyLocal();
   const consulta = useQuery(consultasDeProgramacion.visitas(vista, hoy));
@@ -193,6 +195,7 @@ export function Visitas() {
           ]}
         />
       </BarraLista>
+      {errorFila && <Aviso tono="error">{errorFila}</Aviso>}
       <div role="tabpanel" aria-label={{ proximas: "Próximas", anteriores: "Anteriores", canceladas: "Canceladas" }[vista]}>
         {consulta.isPending ? (
           <EsqueletoLista etiqueta="Cargando visitas" />
@@ -233,7 +236,7 @@ export function Visitas() {
                   </td>
                 </tr>
                 {d.visitas.map((v) => (
-                  <FilaVisita key={v.id} visita={v} hoy={hoy} busqueda={busqueda} resaltada={recientes.includes(v.id)} activos={activos} editar={(tipo) => setEdicion({ tipo, v })} />
+                  <FilaVisita key={v.id} visita={v} hoy={hoy} busqueda={busqueda} resaltada={recientes.includes(v.id)} activos={activos} alFallar={setErrorFila} editar={(tipo) => setEdicion({ tipo, v })} />
                 ))}
               </CuerpoTabla>
             ))}
@@ -315,6 +318,7 @@ function FilaVisita({
   busqueda,
   resaltada,
   activos,
+  alFallar,
   editar,
 }: {
   visita: Visita;
@@ -322,6 +326,7 @@ function FilaVisita({
   busqueda: string;
   resaltada: boolean;
   activos: ReadonlySet<string> | undefined;
+  alFallar: (texto: string | null) => void;
   editar: (tipo: Edicion["tipo"]) => void;
 }) {
   const { hora, detalle } = horarioTexto(v);
@@ -373,7 +378,7 @@ function FilaVisita({
       <CeldaTabla derecha>
         {!v.cancelada && (
           <div className="fila-flex" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
-            {v.levantamientos.revisados > 0 && <AbrirInforme visitaId={v.id} cliente={v.cliente.nombre} />}
+            {v.levantamientos.revisados > 0 && <AbrirInforme visitaId={v.id} cliente={v.cliente.nombre} alFallar={alFallar} />}
             <MenuAcciones
               etiqueta={`Más acciones para la visita de ${v.cliente.nombre}`}
               opciones={[
@@ -390,7 +395,7 @@ function FilaVisita({
   );
 }
 
-function AbrirInforme({ visitaId, cliente: nombre }: { visitaId: string; cliente: string }) {
+function AbrirInforme({ visitaId, cliente: nombre, alFallar }: { visitaId: string; cliente: string; alFallar: (texto: string | null) => void }) {
   const abrir = useAbrirInformeDeVisita();
   const navegar = useNavigate();
   return (
@@ -400,7 +405,11 @@ function AbrirInforme({ visitaId, cliente: nombre }: { visitaId: string; cliente
       icono={FileText}
       aria-label={`Abrir el informe de ${nombre}`}
       cargando={abrir.isPending}
-      onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}
+      // Si no abre (sin conexión, la visita se canceló), se dice: antes el botón dejaba de girar y no pasaba nada.
+      onClick={() => {
+        alFallar(null);
+        abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }), onError: (e) => alFallar(`No se pudo abrir el informe de ${nombre}. ${mensajeDeError(e)}`) });
+      }}
     >
       Abrir el informe
     </Boton>
