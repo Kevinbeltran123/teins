@@ -37,7 +37,7 @@ import { cliente, consultas, esSesionVencida } from "../api";
 import { useBorrador } from "../borrador";
 import { aFechaCorta, aHora } from "../formato";
 import { mensajeDeAdministracion } from "../administracion";
-import { mensajeDeInforme, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
+import { mensajeDeInforme, resumenDelAvance, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
 import { consultasDeProgramacion } from "../programacion";
 import { type Plantillas } from "../documentos";
 import { useConexion } from "../conexion";
@@ -621,11 +621,13 @@ function AvancePublicacion({
   const entregados = envios.filter((e) => e.estado === "entregado").length;
   const enCola = envios.some((e) => e.estado === "en_cola");
   const pdfListo = v.pdf === "listo";
-  const hechos = { pdf: pdfListo, portal: pdfListo, envios: pdfListo && !enCola };
+  // Retirada en esta misma sesión (ADR-0034): ya no se dice que está en el portal.
+  const retirada = v.retirada !== null;
+  const hechos = { pdf: pdfListo, portal: pdfListo && !retirada, envios: pdfListo && !enCola };
   // Lo que ya estaba hecho al aparecer no se anima; lo que se cumple a la vista, sí.
   const alAparecer = useRef(hechos);
   const nueva = (paso: keyof typeof hechos) => !alAparecer.current[paso];
-  const resumen = v.pdf === "fallido" ? "No se generó el PDF" : !pdfListo ? "Generando el PDF" : enCola ? "Enviando" : envios.length > 0 ? "En el portal y enviada" : "En el portal";
+  const resumen = resumenDelAvance(v);
 
   return (
     <section className="avance-pub" aria-label={`Avance de la versión ${v.numero}`}>
@@ -656,9 +658,18 @@ function AvancePublicacion({
           )}
         </li>
         <li>
-          <MarcaDePaso hecho={pdfListo} trabajando={false} nueva={nueva("portal")} />
+          <MarcaDePaso hecho={hechos.portal} trabajando={false} nueva={nueva("portal")} />
           <span>
-            En el portal<small>{pdfListo ? "El cliente ya lo puede descargar" : v.pdf === "fallido" ? `Sin PDF no aparece. ${loQueVeElCliente(enElPortal)}` : `Aparece cuando el PDF esté listo. ${loQueVeElCliente(enElPortal)}`}</small>
+            En el portal
+            <small>
+              {retirada
+                ? `Retirada: el cliente ya no la ve${enElPortal ? `; ve la versión ${enElPortal}` : ""}`
+                : pdfListo
+                  ? "El cliente ya lo puede descargar"
+                  : v.pdf === "fallido"
+                    ? `Sin PDF no aparece. ${loQueVeElCliente(enElPortal)}`
+                    : `Aparece cuando el PDF esté listo. ${loQueVeElCliente(enElPortal)}`}
+            </small>
           </span>
           <span />
         </li>
