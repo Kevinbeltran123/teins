@@ -293,7 +293,7 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
         <fieldset className="bloque-form">
           <legend>Contacto principal</legend>
           <p className="ayuda">A quien le llegan los documentos. Puede agregar más contactos después.</p>
-          {contacto.campos(erroresContacto)}
+          {contacto.campos(erroresContacto, setErroresContacto)}
         </fieldset>
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>

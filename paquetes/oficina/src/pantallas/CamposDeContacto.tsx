@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { CELULAR, type Respuesta } from "@teins/protocolo";
 import { CampoTexto } from "@teins/ui";
 import { aFechaHora } from "../formato";
+import { sinError } from "../mensajes";
 
 type Contacto = Respuesta<"obtenerCliente">["contactos"][number];
 
@@ -21,6 +22,26 @@ export function aCelular(texto: string): string | null {
 
 export const celularLegible = (e164: string) => (e164.startsWith("+57") && e164.length === 13 ? `+57 ${e164.slice(3, 6)} ${e164.slice(6, 9)} ${e164.slice(9)}` : e164);
 
+/** Al cambiar un dato del contacto, se van los errores que hablan de él. */
+const corregido = (setErrores: Dispatch<SetStateAction<ErroresDeContacto>> | undefined, ...cuales: (keyof ErroresDeContacto)[]) => setErrores?.((e) => sinError(e, ...cuales));
+
+/** Lo que se marcó en la casilla de WhatsApp, con el número que estaba escrito al marcarla. */
+export interface MarcaDeAutorizacion {
+  celular: string | null;
+  autorizado: boolean;
+}
+
+/**
+ * La autorización de WhatsApp es del número (ADR-0028, parte 5): la registrada vale para el celular con que se dio, y lo
+ * que se marca aquí, para el número escrito al marcarlo. Con otro número la casilla queda sin marcar y se confirma de
+ * nuevo: si no, el servidor registraría a nombre de quien edita una autorización que nadie confirmó. Si vuelve al
+ * número autorizado, vuelve la registrada.
+ */
+export function autorizacionDelCelular(contacto: Pick<Contacto, "celular" | "whatsappAutorizado"> | null, celular: string | null, marca: MarcaDeAutorizacion | null) {
+  const vigente = contacto?.whatsappAutorizado && contacto.celular === celular ? contacto.whatsappAutorizado : null;
+  return { vigente, autorizado: marca?.celular === celular ? marca.autorizado : vigente !== null };
+}
+
 /**
  * Los datos de un contacto (ADR-0028, parte 5): quién es, por dónde le llegan los documentos y cuáles. Los usan
  * "Nuevo contacto" y "Nuevo cliente", que pide el contacto principal desde la iteración 29. `algunCanal` exige
@@ -35,11 +56,11 @@ export function useCamposDeContacto(contacto: Contacto | null, { algunCanal = fa
   const [recibeWhatsapp, setRecibeWhatsapp] = useState(contacto?.recibeWhatsapp ?? false);
   const [recibeInformes, setRecibeInformes] = useState(contacto?.recibeInformes ?? true);
   const [recibeCotizaciones, setRecibeCotizaciones] = useState(contacto?.recibeCotizaciones ?? cotizacionesPorOmision);
-  const [autorizado, setAutorizado] = useState(contacto?.whatsappAutorizado !== null && contacto?.whatsappAutorizado !== undefined);
+  const [marca, setMarca] = useState<MarcaDeAutorizacion | null>(null);
 
   const celularE164 = aCelular(celular);
   // La autorización es del número: si cambia, se vuelve a confirmar (ADR-0028, parte 5).
-  const autorizacionVigente = contacto?.whatsappAutorizado && contacto.celular === celularE164 ? contacto.whatsappAutorizado : null;
+  const { vigente: autorizacionVigente, autorizado } = autorizacionDelCelular(contacto, celularE164, marca);
   const quien = nombre.trim().split(/\s+/)[0] || "El contacto";
 
   const datos = () => ({
@@ -67,15 +88,26 @@ export function useCamposDeContacto(contacto: Contacto | null, { algunCanal = fa
     };
   }
 
-  const campos = (errores: ErroresDeContacto): ReactNode => (
+  /** `setErrores`: al cambiar un dato, se van los errores que hablan de él. */
+  const campos = (errores: ErroresDeContacto, setErrores?: Dispatch<SetStateAction<ErroresDeContacto>>): ReactNode => (
     <>
       <div className="fila-campos">
-        <CampoTexto etiqueta="Nombre" nombre="nombre" valorInicial={nombre} onCambio={setNombre} error={errores.nombre} autoComplete="off" />
+        <CampoTexto etiqueta="Nombre" nombre="nombre" valorInicial={nombre} onCambio={(t) => (setNombre(t), corregido(setErrores, "nombre"))} error={errores.nombre} autoComplete="off" />
         <CampoTexto etiqueta="Cargo (opcional)" nombre="cargo" valorInicial={cargo} onCambio={setCargo} />
       </div>
       <div className="fila-campos">
-        <CampoTexto etiqueta="Correo" nombre="correo" tipo="email" modoEntrada="email" autoComplete="email" valorInicial={correo} onCambio={setCorreo} error={errores.correo} />
-        <CampoTexto etiqueta="Celular" nombre="celular" valorInicial={contacto?.celular ? celularLegible(contacto.celular) : ""} onCambio={setCelular} error={errores.celular} tipo="tel" modoEntrada="tel" autoComplete="tel" />
+        <CampoTexto etiqueta="Correo" nombre="correo" tipo="email" modoEntrada="email" autoComplete="email" valorInicial={correo} onCambio={(t) => (setCorreo(t), corregido(setErrores, "correo"))} error={errores.correo} />
+        <CampoTexto
+          etiqueta="Celular"
+          nombre="celular"
+          valorInicial={contacto?.celular ? celularLegible(contacto.celular) : ""}
+          // Con `algunCanal`, el error del correo pide el correo o el celular: escribir el celular también lo atiende.
+          onCambio={(t) => (setCelular(t), corregido(setErrores, "celular", ...(algunCanal ? (["correo"] as const) : [])))}
+          error={errores.celular}
+          tipo="tel"
+          modoEntrada="tel"
+          autoComplete="tel"
+        />
       </div>
       <div className="fila-campos">
         <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
@@ -99,11 +131,11 @@ export function useCamposDeContacto(contacto: Contacto | null, { algunCanal = fa
           </legend>
           <div className="opciones">
             <label className="opcion">
-              <input type="checkbox" checked={recibeCorreo} onChange={(e) => setRecibeCorreo(e.target.checked)} />
+              <input type="checkbox" checked={recibeCorreo} onChange={(e) => (setRecibeCorreo(e.target.checked), corregido(setErrores, "correo"))} />
               Correo
             </label>
             <label className="opcion">
-              <input type="checkbox" checked={recibeWhatsapp} onChange={(e) => setRecibeWhatsapp(e.target.checked)} />
+              <input type="checkbox" checked={recibeWhatsapp} onChange={(e) => (setRecibeWhatsapp(e.target.checked), corregido(setErrores, "celular", "autorizacion"))} />
               WhatsApp
             </label>
           </div>
@@ -111,7 +143,7 @@ export function useCamposDeContacto(contacto: Contacto | null, { algunCanal = fa
       </div>
       {recibeWhatsapp && (
         <label className="casilla" style={{ boxShadow: errores.autorizacion ? "inset 0 0 0 2px var(--peligro)" : undefined }}>
-          <input type="checkbox" checked={autorizado} onChange={(e) => setAutorizado(e.target.checked)} />
+          <input type="checkbox" checked={autorizado} onChange={(e) => (setMarca({ celular: celularE164, autorizado: e.target.checked }), corregido(setErrores, "autorizacion"))} />
           <span>
             <b>{`${quien} autorizó recibir el informe por WhatsApp`}</b>
             <span style={{ display: "block", color: "var(--sec)", fontSize: 13 }}>

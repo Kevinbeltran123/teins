@@ -426,7 +426,7 @@ function FormularioContacto({
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
-        {c.campos(errores)}
+        {c.campos(errores, setErrores)}
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>
