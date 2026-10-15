@@ -106,6 +106,37 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
     expect((await bajar(cookie, tras.puntoDeControl)).json().cambios).toEqual([{ tipo: "visita", visita: expect.objectContaining({ id: visita.id, cliente: { nombre: "Clínica Santa Fe" } }) }]);
   });
 
+  it("programar mientras otra persona archiva el cliente: la visita espera al archivo y no queda en un cliente archivado", async () => {
+    const cliente = await clienteConSitio();
+    /** Hasta que una consulta espere lo que tiene tomado `pid` (true) o pasen 10 s (false). */
+    const esperarBloqueadoPor = async (pid: number) => {
+      for (let i = 0; i < 200; i++) {
+        const { rows } = await s.propietario.pool.query("select count(*)::int as n from pg_stat_activity where $1 = any(pg_blocking_pids(pid))", [pid]);
+        if (rows[0].n > 0) return true;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return false;
+    };
+    // Otra persona está archivando el cliente: tiene su fila tomada y todavía no confirma.
+    const archivando = await s.propietario.pool.connect();
+    try {
+      await archivando.query("begin");
+      await archivando.query("select id from clientes.clientes where id = $1 for update", [cliente.id]);
+      await archivando.query("update clientes.clientes set archivado_en = now(), archivado_por = $2 where id = $1", [cliente.id, org.oficina.id]);
+      const { rows } = await archivando.query("select pg_backend_pid() as pid");
+      const programada = pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: "2027-06-01", tecnicos: [org.tecnico.id] });
+      // Se confirma el archivo cuando la programación quedó esperándolo (o ya terminó sin esperarlo, que es el fallo).
+      await Promise.race([programada, esperarBloqueadoPor(rows[0].pid)]);
+      await archivando.query("commit");
+      const r = await programada;
+      expect(r.statusCode, r.body).toBe(409);
+      expect(r.json()).toMatchObject({ codigo: "estado_invalido" });
+    } finally {
+      archivando.release(true);
+    }
+    expect((await s.propietario.pool.query("select id from visitas.visitas where cliente_id = $1", [cliente.id])).rows).toEqual([]);
+  });
+
   it("con visitas por hacer no se archiva; archivado sale de la lista, de programar y de los envíos, y se recupera", async () => {
     const cliente = await clienteConSitio();
     const visita = await programar(cliente, [org.tecnico.id], "2027-01-15");

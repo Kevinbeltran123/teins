@@ -47,7 +47,7 @@ async function cerrarAtendidas(tx: TxOrganizacion, deps: Omit<Dependencias, "bd"
   const candidatas = await deps.visitas.porCerrar(tx, usuarioId, hoy);
   if (candidatas.length === 0) return;
   const conteos = await deps.levantamientos.conteosPorVisita(tx, candidatas.filter((c) => !c.terminada).map((c) => c.id));
-  await deps.visitas.cerrar(tx, organizacionId, candidatas.filter((c) => c.terminada || conteos.has(c.id)).map((c) => c.id));
+  await deps.visitas.cerrar(tx, organizacionId, candidatas.filter((c) => c.terminada || conteos.has(c.id)).map((c) => c.id), hoy);
 }
 
 /**

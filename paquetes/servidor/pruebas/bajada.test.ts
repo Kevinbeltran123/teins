@@ -350,4 +350,26 @@ describe("las visitas atendidas salen del teléfono al día siguiente (ADR-0041)
     // Reasignar lo pasado corrige quién la hizo: no vuelve a ningún teléfono como pendiente.
     expect(visitasQueBajan((await bajar(otro.cookie, 0, 15)).json().cambios)).toEqual([]);
   });
+
+  it("cerrar vuelve a mirar la fecha y la cancelación: lo que oficina reprogramó o canceló después de elegirlo no se cierra", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const movida = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    const cancelada = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    await enviarCon(tecnico.cookie, movida);
+    await enviarCon(tecnico.cookie, cancelada);
+    await enOrganizacion(s.conexionApp.bd, organizacionId, async (tx) => {
+      // La bajada las eligió para cerrar; antes de cerrarlas, oficina reprogramó una para mañana y canceló la otra.
+      const elegidas = (await visitas.porCerrar(tx, tecnico.id, dia(0))).map((v) => v.id);
+      expect(elegidas.sort()).toEqual([movida, cancelada].sort());
+      await visitas.reprogramar(tx, { organizacionId, ...contexto, visitaId: movida, version: 1, programadaPara: dia(1), motivo: "Volver a medir" });
+      await visitas.cancelar(tx, { organizacionId, ...contexto, visitaId: cancelada, version: 1, motivo: "Aplazada" });
+      await visitas.cerrar(tx, organizacionId, elegidas, dia(0));
+    });
+    const { rows } = await s.propietario.pool.query("select cerrada_en from visitas.visitas where id = any($1)", [[movida, cancelada]]);
+    expect(rows.map((r) => r.cerrada_en)).toEqual([null, null]);
+    // La reprogramada sigue en el teléfono como trabajo por hacer; la cancelada sale como cancelada, no como atendida.
+    const bajada = (await bajar(tecnico.cookie, 0, 15)).json();
+    expect(visitasQueBajan(bajada.cambios)).toEqual([movida]);
+    expect(salidas(bajada.cambios)).toEqual([[cancelada, "cancelada"]]);
+  });
 });

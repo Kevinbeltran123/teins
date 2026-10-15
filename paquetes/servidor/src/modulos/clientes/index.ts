@@ -86,6 +86,14 @@ export const clientesYSitios = {
     return fila;
   },
 
+  /**
+   * Toma el cliente para compartir hasta el final de la transacción. Archivarlo, o archivar uno de sus sitios, lo toma
+   * para cambiarlo: uno espera al otro, y lo que se lee después ya ve lo que el otro confirmó (ADR-0035).
+   */
+  async bloquear(tx: TxOrganizacion, id: string): Promise<void> {
+    await tx.select({ id: clientes.id }).from(clientes).where(eq(clientes.id, id)).for("share");
+  },
+
   async listar(tx: TxOrganizacion): Promise<{ id: string; nombre: string }[]> {
     return tx.select({ id: clientes.id, nombre: clientes.nombre }).from(clientes).orderBy(asc(clientes.nombre));
   },

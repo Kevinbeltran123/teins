@@ -82,8 +82,11 @@ export interface Visitas {
   canceladas(tx: TxOrganizacion, ids: readonly string[]): Promise<Set<string>>;
   /** Visitas del técnico que podrían cerrarse (ADR-0041): asignadas, sin cancelar ni cerrar, de un día anterior a `hoy`. */
   porCerrar(tx: TxOrganizacion, tecnicoId: string, hoy: string): Promise<{ id: string; terminada: boolean }[]>;
-  /** Cierra estas visitas (ADR-0041): salen de los teléfonos de sus técnicos y no vuelven a bajar. */
-  cerrar(tx: TxOrganizacion, organizacionId: string, ids: readonly string[]): Promise<void>;
+  /**
+   * Cierra estas visitas (ADR-0041): salen de los teléfonos de sus técnicos y no vuelven a bajar. Solo las que siguen
+   * sin cancelar y de un día anterior a `hoy`: oficina pudo reprogramarlas o cancelarlas después de `porCerrar`.
+   */
+  cerrar(tx: TxOrganizacion, organizacionId: string, ids: readonly string[], hoy: string): Promise<void>;
   /**
    * Se corrigió el nombre del cliente o el nombre o la dirección de un sitio (ADR-0035): las visitas que siguen en los
    * teléfonos, sin cancelar ni cerrar, vuelven a bajar a sus técnicos con el dato nuevo. Sin `sitioId`, las del cliente.
@@ -145,6 +148,9 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
     async crear(tx, { organizacionId, autorId, correlacion, clienteId, sitioId, motivo, programadaPara, tecnicos, horaInicio = null, horaFin = null }) {
       validarFecha(programadaPara);
       if (!motivo.trim()) throw problema("entrada_invalida", "La visita necesita un motivo");
+      // Con el cliente tomado, quien archiva el cliente o el sitio al mismo tiempo espera a esta visita y la ve, o esta
+      // espera al archivo y lo ve en la lectura siguiente: nunca queda una visita por hacer en algo archivado.
+      await clientes.bloquear(tx, clienteId);
       const sitio = (await clientes.sitios(tx, [sitioId])).get(sitioId);
       if (!sitio || sitio.clienteId !== clienteId) throw problema("entrada_invalida", "El sitio no pertenece al cliente");
       // A lo archivado ya no se le programa (ADR-0035): primero se recupera.
@@ -259,13 +265,14 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       return filas.map((f) => ({ id: f.id, terminada: f.terminadaEn !== null }));
     },
 
-    async cerrar(tx, organizacionId, ids) {
+    async cerrar(tx, organizacionId, ids, hoy) {
       if (ids.length === 0) return;
-      // Solo las que nadie cerró antes: dos bajadas a la vez no registran la salida dos veces.
+      // Solo las que nadie cerró antes: dos bajadas a la vez no registran la salida dos veces. La fecha y la cancelación
+      // se miran otra vez en la fila: si oficina la reprogramó o la canceló después de elegirla, gana oficina.
       const cerradas = await tx
         .update(visitas)
         .set({ cerradaEn: new Date() })
-        .where(and(inArray(visitas.id, [...ids]), isNull(visitas.cerradaEn)))
+        .where(and(inArray(visitas.id, [...ids]), isNull(visitas.cerradaEn), isNull(visitas.canceladaEn), lt(visitas.programadaPara, hoy)))
         .returning({ id: visitas.id, tecnicos: visitas.tecnicos });
       await registrarCambios(tx, cerradas.flatMap((v) => avisar(organizacionId, v.id, v.tecnicos, "fuera_de_alcance")));
     },
