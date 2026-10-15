@@ -185,6 +185,40 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
     expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${terminado.id}/archivar`)).statusCode).toBe(200);
   });
 
+  it("lo archivado no se reprograma: una visita pasada de un cliente archivado no vuelve a estar por hacer (iteración 42)", async () => {
+    const tecnico = await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario: `t.${randomUUID().slice(0, 8)}`, nombre: "Técnico de paso", rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    const cliente = await clienteConSitio();
+    const pasada = await programar(cliente, [tecnico.id], "2026-09-01");
+    // Una visita pasada sin atender no está por hacer: el cliente se archiva.
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/archivar`)).statusCode).toBe(200);
+    const r = await pedir(org.oficina.cookie, "POST", `/api/visitas/${pasada.id}/reprogramar`, { version: 1, programadaPara: "2027-09-01", horaInicio: null, horaFin: null, motivo: "Mantenimiento" });
+    expect(r.statusCode).toBe(409);
+    expect(r.json()).toMatchObject({ codigo: "estado_invalido" });
+  });
+
+  it("una visita atendida que se reprograma para volver está por hacer: su cliente no se archiva (iteración 42)", async () => {
+    const usuario = `t.${randomUUID().slice(0, 8)}`;
+    const tecnico = await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre: "Técnico que vuelve", rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    const cookie = await iniciarSesion(app, usuario, "contrasena-de-prueba");
+    const ayer = new Date(Date.now() - 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+    const manana = new Date(Date.now() + 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+    const cliente = await clienteConSitio();
+    const visita = await programar(cliente, [tecnico.id], ayer);
+    const id = randomUUID();
+    const envio = await app.inject({
+      method: "POST",
+      url: "/api/sync/comandos",
+      headers: { cookie, ...cabecerasSync },
+      payload: { tipo: "EnviarLevantamiento", llave: llaveDeEnvio(id), levantamiento: { id, visitaId: visita.id, formato: "prueba-ups", versionFormato: 1, respuestas: {}, creadoEn: new Date().toISOString(), enviadoEn: new Date().toISOString() } },
+    });
+    expect(envio.statusCode, envio.body).toBe(200);
+    // «Volver a medir» (ADR-0042): la misma visita, mañana.
+    const r = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 1, programadaPara: manana, horaInicio: null, horaFin: null, motivo: "Volver a medir" });
+    expect(r.statusCode, r.body).toBe(200);
+    expect((await pedir(org.oficina.cookie, "GET", `/api/clientes/${cliente.id}`)).json().visitasPorHacer).toEqual([expect.objectContaining({ programadaPara: manana })]);
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/archivar`)).json()).toMatchObject({ codigo: "estado_invalido" });
+  });
+
   it("un sitio archivado no se programa; no se archiva el único sitio activo ni uno con visitas por hacer", async () => {
     const cliente = await clienteConSitio();
     const principal = cliente.sitios[0]!.id;
@@ -382,6 +416,17 @@ describe("visitas con horario (ADR-0037)", () => {
     expect(r.statusCode, r.body).toBe(200);
     expect(r.json()).toMatchObject({ horaInicio: "09:30", horaFin: "10:30" });
   });
+
+  it("varias reprogramaciones a la vez no agotan el pool: los técnicos activos se leen fuera de la transacción (iteración 42)", async () => {
+    const fecha = "2027-08-02";
+    const delDia = [];
+    // Más que las conexiones del pool de prueba (5), a la vez.
+    for (let i = 0; i < 15; i++) delDia.push((await conHorario([(await nuevoTecnico(`Técnica ${i}`)).id], "08:00", "09:00", fecha)).json());
+    const respuestas = await Promise.all(
+      delDia.map((v) => pedir(org.oficina.cookie, "POST", `/api/visitas/${v.id}/reprogramar`, { version: 1, programadaPara: fecha, horaInicio: "10:00", horaFin: "11:00", motivo: "Mantenimiento" })),
+    );
+    expect(respuestas.map((r) => r.statusCode)).toEqual(Array(15).fill(200));
+  }, 60_000);
 
   it("programar toma el día antes que el registro de cambios, como reprogramar: los dos a la vez no se traban", async () => {
     const cliente = await clienteConSitio();

@@ -178,9 +178,11 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
     bd,
     identidad,
     async (tx, clienteId) => {
-      const porHacer = await visitas.porHacer(tx, clienteId, new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" }));
+      const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+      const porHacer = await visitas.porHacer(tx, clienteId, hoy);
       const atendidas = await levantamientos.conteosPorVisita(tx, porHacer.map((v) => v.id));
-      return porHacer.filter((v) => !atendidas.has(v.id));
+      // Una visita de otro día con un levantamiento ya recibido se reprogramó para volver (ADR-0042): sigue por hacer.
+      return porHacer.filter((v) => !atendidas.has(v.id) || v.programadaPara > hoy);
     },
     // Una corrección llega a los teléfonos que tienen sus visitas, y el nombre del cliente, también al portal.
     {

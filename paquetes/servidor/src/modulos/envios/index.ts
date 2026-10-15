@@ -185,8 +185,11 @@ async function marcarEnviado(tx: TxOrganizacion, envioId: string, proveedorId: s
     .where(and(eq(envios.id, envioId), puedeSalir));
 }
 
-/** "No llegó": queda el motivo y se avisa a quien lo pidió. Un rebote de correo marca al contacto. */
-async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string, rebote = false): Promise<void> {
+/**
+ * "No llegó": queda el motivo y se avisa a quien lo pidió. Un rebote de correo marca al contacto. Sin `avisarle` no se
+ * avisa: lo decidió oficina (quitó el contacto o su canal) y no hay nada que volver a enviar (iteración 42).
+ */
+async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string, rebote = false, avisarle = true): Promise<void> {
   const [cambiado] = await tx
     .update(envios)
     .set({ estado: "fallido", error: motivo.slice(0, 500), actualizadoEn: new Date() })
@@ -194,6 +197,7 @@ async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string
     .returning({ id: envios.id });
   if (!cambiado) return;
   if (rebote && fila.canal === "correo") await contactosDelCliente.marcarRebote(tx, fila.contactoId, fila.destino, motivo);
+  if (!avisarle) return;
   await avisar(tx, { tipo: "envio_fallido", organizacionId: fila.organizacionId, usuarioId: fila.creadoPor, versionId: fila.versionId, documento: fila.mensaje.documento ?? "informe" });
 }
 
@@ -271,7 +275,7 @@ export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { 
         if (!fila || fila.estado !== "en_cola") return undefined;
         // Mientras esperaba el PDF, el contacto pudo quitarse o dejar de recibir por este canal (ADR-0028, parte 5).
         if (!(await contactosDelCliente.sigueRecibiendo(tx, fila.contactoId, fila.canal, fila.destino))) {
-          await marcarFallido(tx, fila, "El contacto ya no recibe por este canal");
+          await marcarFallido(tx, fila, "El contacto ya no recibe por este canal", false, false);
           return undefined;
         }
         // Un intento anterior llegó al proveedor sin saberse el resultado. El correo repite con la misma

@@ -193,11 +193,18 @@ export const contactosDelCliente = {
     return destinatarios;
   },
 
-  /** Por qué canales recibe hoy cada uno de estos contactos; uno que oficina quitó no aparece. */
+  /**
+   * Por qué canales recibe hoy cada uno de estos contactos; uno que oficina quitó no aparece, ni los de un cliente
+   * archivado, que no recibe envíos hasta recuperarlo (iteración 42).
+   */
   async canales(tx: TxOrganizacion, contactoIds: readonly string[]): Promise<Map<string, ("correo" | "whatsapp")[]>> {
     if (contactoIds.length === 0) return new Map();
-    const filas = await tx.select().from(contactos).where(and(inArray(contactos.id, [...contactoIds]), vigente));
-    return new Map(filas.map((c) => [c.id, canalesDe(c)]));
+    const filas = await tx
+      .select({ contacto: contactos })
+      .from(contactos)
+      .innerJoin(clientes, eq(clientes.id, contactos.clienteId))
+      .where(and(inArray(contactos.id, [...contactoIds]), vigente, isNull(clientes.archivadoEn)));
+    return new Map(filas.map(({ contacto }) => [contacto.id, canalesDe(contacto)]));
   },
 
   /** Si el contacto sigue recibiendo por ese canal en ese destino: al salir, un envío en cola lo confirma. */
@@ -457,7 +464,8 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
     politica: politicas.oficina,
     manejar: async ({ parametros: { id }, cuerpo, actor, correlacion }) =>
       enOrganizacion(bd, actor.organizacionId, async (tx) => {
-        const anterior = await leerCliente(tx, id);
+        // Tomado, como al archivar o corregir un sitio: dos correcciones a la vez no registran el mismo valor anterior.
+        const anterior = await leerCliente(tx, id, true);
         if (anterior.archivadoEn) throw problema("estado_invalido", "El cliente está archivado: recupérelo para corregirlo");
         if (anterior.nombre !== cuerpo.nombre) {
           await tx.update(clientes).set({ nombre: cuerpo.nombre, editadoPor: actor.usuarioId, editadoEn: new Date() }).where(eq(clientes.id, id));

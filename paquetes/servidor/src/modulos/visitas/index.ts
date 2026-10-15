@@ -197,6 +197,13 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
 
     async reprogramar(tx, { organizacionId, autorId, correlacion, visitaId, version, programadaPara, motivo, horaInicio = null, horaFin = null }) {
       validarFecha(programadaPara);
+      // A lo archivado no se le reprograma, como no se le programa (ADR-0035): volvería a estar por hacer. El cliente se
+      // toma antes que la visita, como al programar: quien archiva al mismo tiempo espera o se ve (iteración 42).
+      const [donde] = await tx.select({ clienteId: visitas.clienteId, sitioId: visitas.sitioId }).from(visitas).where(eq(visitas.id, visitaId));
+      if (donde) {
+        await clientes.bloquear(tx, donde.clienteId);
+        if ((await clientes.sitios(tx, [donde.sitioId])).get(donde.sitioId)?.archivado) throw problema("estado_invalido", "El cliente o el sitio están archivados: recupérelos para reprogramar la visita");
+      }
       const actual = await paraCambiar(tx, visitaId, version);
       // Otro día u otra hora: lo que ya se había terminado vuelve a estar por hacer.
       const cambiaHorario = actual.programadaPara !== programadaPara || aHoraCorta(actual.horaInicio) !== horaInicio || aHoraCorta(actual.horaFin) !== horaFin;
@@ -425,15 +432,17 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
 
       registrarOperacion(app, "reprogramarVisita", {
         politica: politicas.oficina,
-        manejar: async ({ parametros: { id }, cuerpo, actor, correlacion }) =>
-          enOrganizacion(bd, actor.organizacionId, async (tx) => {
+        manejar: async ({ parametros: { id }, cuerpo, actor, correlacion }) => {
+          // Un técnico desactivado ya no hará esta ni sus otras visitas: no cuenta como ocupado (iteración 42). Se lee antes
+          // de la transacción: dentro pediría otra conexión del pool mientras retiene una, y a la vez lo agotan.
+          const activos = new Set((await identidad.tecnicosActivos(actor.organizacionId)).map((t) => t.id));
+          return enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const [actual] = await tx.select().from(visitas).where(eq(visitas.id, id));
-            // Un técnico desactivado ya no hará esta ni sus otras visitas: no cuenta como ocupado (iteración 42).
-            const activos = new Set((await identidad.tecnicosActivos(actor.organizacionId)).map((t) => t.id));
             if (actual) await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, actual.tecnicos.filter((t) => activos.has(t)), id);
             await publica.reprogramar(tx, { organizacionId: actor.organizacionId, autorId: actor.usuarioId, correlacion, visitaId: id, ...cuerpo });
             return una(actor.organizacionId, tx, id);
-          }),
+          });
+        },
       });
 
       registrarOperacion(app, "ocupacionDeTecnicos", {
