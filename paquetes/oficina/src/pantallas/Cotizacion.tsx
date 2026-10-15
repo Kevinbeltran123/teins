@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { aDecimalColombiano, calcularTotales, normalizarDecimal, PORCENTAJE, type Impuestos, type LineaDeCotizacion } from "@teins/dominio";
@@ -32,6 +32,7 @@ import {
   Trash,
   TriangleAlert,
   useNotificar,
+  useRetirarNotificacion,
   type AnclaDeHoja,
 } from "@teins/ui";
 import { cliente, consultas, esSesionVencida } from "../api";
@@ -151,6 +152,14 @@ export function DetalleCotizacion({ id }: { id: string }) {
 
 function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   const notificar = useNotificar();
+  const retirar = useRetirarNotificacion();
+  // Al salir de la cotización, el «Deshacer» de una línea se retira: lo guardado al salir ya no la tiene y devolverla
+  // en una pantalla cerrada no haría nada (iteración 42).
+  const avisosDeLineas = useRef(new Set<number>());
+  useEffect(() => {
+    const deEstaCotizacion = avisosDeLineas.current;
+    return () => deEstaCotizacion.forEach(retirar);
+  }, [retirar]);
   const doc = useBorrador(c.version, () => inicial(c));
   const { borrador, setBorrador } = doc;
   useAnotarReciente({ tipo: "cotizacion", id: c.id, titulo: c.numero, detalle: `${c.visita.cliente} · ${c.visita.sitio}` });
@@ -263,7 +272,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
     const posicion = borrador.lineas.findIndex((l) => l.id === linea.id);
     actualizar({ lineas: borrador.lineas.filter((l) => l.id !== linea.id) });
     // Se deshace fácil (DESIGN.md): al instante, con "Deshacer", que la devuelve una sola vez.
-    notificar({
+    avisosDeLineas.current.add(notificar({
       texto: `Línea quitada: ${linea.descripcion || "sin descripción"}`,
       accion: {
         texto: "Deshacer",
@@ -273,7 +282,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
             return lineas === b.lineas ? b : { ...b, lineas };
           }),
       },
-    });
+    }));
   }
 
   const primeraSinPrecio = borrador.lineas.find((l) => l.precio.trim() === "");

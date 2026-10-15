@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Respuesta } from "@teins/protocolo";
 import {
@@ -47,6 +47,10 @@ const normalizar = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLo
 /** Catálogo de ítems (iteración 11, P28): con él oficina vincula las líneas que anota el técnico. */
 export function Catalogo() {
   const consulta = useQuery(consultasDeCatalogo.items());
+  // Los ítems de ahora, para «Deshacer»: en sus 10 s pudo cambiar la descripción o la unidad, y volver a activar no la
+  // devuelve a la de antes (iteración 42).
+  const vigentes = useRef(consulta.data);
+  vigentes.current = consulta.data;
   const notificar = useNotificar();
   const [busqueda, setBusqueda] = useState("");
   const [creando, setCreando] = useState(false);
@@ -163,8 +167,10 @@ export function Catalogo() {
                                         texto: `${i.codigo} desactivado`,
                                         accion: {
                                           texto: "Deshacer",
-                                          alHacer: () =>
-                                            activar.mutate({ ...i, activo: false }, { onSuccess: () => destacar(i.id), onError: (e) => setErrorFila(`No se pudo volver a activar ${i.codigo}. ${mensajeDeError(e)}`) }),
+                                          alHacer: () => {
+                                            const ahora = vigentes.current?.items.find((x) => x.id === i.id) ?? i;
+                                            activar.mutate({ ...ahora, activo: false }, { onSuccess: () => destacar(i.id), onError: (e) => setErrorFila(`No se pudo volver a activar ${i.codigo}. ${mensajeDeError(e)}`) });
+                                          },
                                         },
                                       }),
                                     onError: (e) => setErrorFila(`No se pudo desactivar ${i.codigo}. ${mensajeDeError(e)}`),

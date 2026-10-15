@@ -54,15 +54,6 @@ const migas = (
 
 const dia = (iso: string) => new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" }).format(new Date(iso));
 
-/**
- * Celular como lo exige WhatsApp (E.164). Oficina escribe el número colombiano de 10 dígitos, con o sin
- * espacios; uno de otro país se escribe con su "+".
- */
-
-
-/** "+57 300 555 0117": legible para dictarlo. */
-
-
 export function DetalleCliente({ id }: { id: string }) {
   const consulta = useQuery(consultasDeProgramacion.cliente(id));
   const notificar = useNotificar();

@@ -1,10 +1,10 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Boton, BotonIcono } from "./Boton";
 import { CampoSeleccion } from "./CampoSeleccion";
 import { CampoTexto } from "./CampoTexto";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
 import { Plus, Search, Trash } from "./iconos";
-import { useNotificar } from "./Notificaciones";
+import { useNotificar, useRetirarNotificacion } from "./Notificaciones";
 
 /**
  * Tabla de cantidades (F9): materiales y trabajos con descripción, cantidad, unidad y observación, sin
@@ -54,6 +54,14 @@ export function EditorCantidades({
   disposicion?: "tarjetas" | "tabla";
 }) {
   const notificar = useNotificar();
+  const retirar = useRetirarNotificacion();
+  // Al cerrarse el editor (se guardó la corrección, «No se pudo obtener»), sus «Deshacer» se retiran: ya no tienen
+  // dónde devolver la línea y quedarían ofreciéndose sin hacer nada (iteración 42).
+  const avisos = useRef(new Set<number>());
+  useEffect(() => {
+    const deEsteEditor = avisos.current;
+    return () => deEsteEditor.forEach(retirar);
+  }, [retirar]);
   // Las líneas de ahora, para «Deshacer»: la notificación vive más que el pintado en que se quitó la línea.
   const vigente = useRef({ lineas, onCambio });
   vigente.current = { lineas, onCambio };
@@ -64,7 +72,7 @@ export function EditorCantidades({
   function quitar(i: number) {
     const quitada = lineas[i]!;
     onCambio(lineas.filter((_, j) => j !== i));
-    notificar({
+    avisos.current.add(notificar({
       texto: `Línea ${i + 1} quitada`,
       accion: {
         texto: "Deshacer",
@@ -73,7 +81,7 @@ export function EditorCantidades({
           if (!ahora.some((l) => l.id === quitada.id)) devolver([...ahora.slice(0, i), quitada, ...ahora.slice(i)]);
         },
       },
-    });
+    }));
   }
   const errorId = `error-cantidades-${etiqueta}`;
   const agregarLibre = () => onCambio([...lineas, lineaLibre(nuevoId(), unidades)]);

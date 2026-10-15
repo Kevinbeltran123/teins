@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { ErrorApi, type Respuesta } from "@teins/protocolo";
+import { ErrorApi, ErrorDeRed, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
   BarraLista,
@@ -116,6 +116,8 @@ export function Visitas() {
   const [recientes, setRecientes] = useState<string[]>([]);
   // Lo que no se pudo hacer desde una fila («Abrir el informe»): encima de la lista, como en el catálogo.
   const [errorFila, setErrorFila] = useState<string | null>(null);
+  // En otra pestaña la fila del aviso ya no está a la vista: el aviso se va con ella (iteración 42).
+  useEffect(() => setErrorFila(null), [vista]);
   const notificar = useNotificar();
   const hoy = hoyLocal();
   const consulta = useQuery(consultasDeProgramacion.visitas(vista, hoy));
@@ -408,7 +410,7 @@ function AbrirInforme({ visitaId, cliente: nombre, alFallar }: { visitaId: strin
       // Si no abre (sin conexión, la visita se canceló), se dice: antes el botón dejaba de girar y no pasaba nada.
       onClick={() => {
         alFallar(null);
-        abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }), onError: (e) => alFallar(`No se pudo abrir el informe de ${nombre}. ${mensajeDeError(e)}`) });
+        abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }), onError: (e) => alFallar(`No se pudo abrir el informe de ${nombre}. ${porQueNoAbrio(e)}`) });
       }}
     >
       Abrir el informe
@@ -553,6 +555,10 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
 
 const deLaVisita = (v: Visita) => `${v.cliente.nombre} · ${dia(v.programadaPara)} · ${resumenDeHorario(v)}`;
 const esConflicto = (e: unknown) => e instanceof ErrorApi && e.codigo === "conflicto_de_version";
+
+/** Por qué no se abrió el informe: lo que explica el servidor (una visita cancelada), o qué hacer; no «No se pudo guardar». */
+const porQueNoAbrio = (e: unknown) =>
+  e instanceof ErrorApi && e.codigo === "estado_invalido" ? mensajeDeError(e) : e instanceof ErrorDeRed ? "Revise la conexión e intente de nuevo." : "Intente de nuevo.";
 
 function Reasignar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: () => void; alCerrar: () => void; alGuardar: () => void }) {
   const formulario = useId();

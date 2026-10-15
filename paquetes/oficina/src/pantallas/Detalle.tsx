@@ -114,6 +114,54 @@ type Pendiente = { que: Escrito; valor: unknown };
  */
 const SinEnviar = createContext<Map<string, Pendiente> | null>(null);
 
+/**
+ * Lo escrito sin enviar de cada levantamiento, fuera del detalle: Esc, el menú, Atrás o «Siguiente» lo desmontan, y al
+ * volver sigue ahí (iteración 42). Los comentarios se copian en la pestaña (`sessionStorage`) y también vuelven al
+ * recargar; de una corrección solo queda la marca de que hay una abierta, que se va con su editor.
+ */
+class LoSinEnviar extends Map<string, Pendiente> {
+  private readonly llave: string;
+  constructor(levantamientoId: string) {
+    super();
+    this.llave = `revision-sin-enviar:${levantamientoId}`;
+    try {
+      for (const [clave, pendiente] of JSON.parse(sessionStorage.getItem(this.llave) ?? "[]") as [string, Pendiente][]) super.set(clave, pendiente);
+    } catch {
+      // Sin almacenamiento de la pestaña (navegación privada estricta), lo escrito vive mientras la app esté abierta.
+    }
+  }
+  override set(clave: string, pendiente: Pendiente) {
+    super.set(clave, pendiente);
+    this.copiar();
+    return this;
+  }
+  override delete(clave: string) {
+    const habia = super.delete(clave);
+    this.copiar();
+    return habia;
+  }
+  override clear() {
+    super.clear();
+    this.copiar();
+  }
+  private copiar() {
+    try {
+      const comentarios = [...this].filter(([, p]) => p.que.tipo !== "correccion");
+      if (comentarios.length === 0) sessionStorage.removeItem(this.llave);
+      else sessionStorage.setItem(this.llave, JSON.stringify(comentarios));
+    } catch {
+      // Lleno o sin permiso: sigue en memoria.
+    }
+  }
+}
+const sinEnviarPorLevantamiento = new Map<string, LoSinEnviar>();
+const sinEnviarDe = (levantamientoId: string) => {
+  let registro = sinEnviarPorLevantamiento.get(levantamientoId);
+  if (!registro) sinEnviarPorLevantamiento.set(levantamientoId, (registro = new LoSinEnviar(levantamientoId)));
+  return registro;
+};
+const hayCorreccionAbierta = (pendientes: Iterable<Pendiente>) => [...pendientes].some((p) => p.que.tipo === "correccion");
+
 /** Un texto de la revisión que sigue ahí si su campo se desmonta y vuelve a montarse. */
 function useSinEnviar<T>(que: Escrito, inicial: T): [T, (valor: T) => void] {
   const pendientes = useContext(SinEnviar);
@@ -193,9 +241,17 @@ export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined })
   useAnotarReciente(abierto ? { tipo: "levantamiento", id, titulo: abierto.visita ? `${abierto.visita.cliente} · ${abierto.visita.sitio}` : `Levantamiento de ${abierto.tecnico.nombre}`, detalle: `${abierto.tecnico.nombre} · ${{ enviado: "esperando revisión", en_revision: "en revisión", revisado: "revisado" }[abierto.estado]}` } : null);
   // Esc vuelve a la bandeja, con la fila de este levantamiento marcada (iteración 37).
   const volver = useNavigate();
-  useTeclaSuelta("Escape", () => void volver({ to: "/" }));
   const [enCurso, setEnCurso] = useState<EnCurso | null>(null);
-  const [sinEnviar] = useState(() => new Map<string, Pendiente>());
+  const sinEnviar = sinEnviarDe(id);
+  // Con una corrección abierta, Esc no sale: se perdería lo escrito en ella. Recargar o cerrar la pestaña pregunta.
+  useTeclaSuelta("Escape", () => void (hayCorreccionAbierta(sinEnviar.values()) || volver({ to: "/" })));
+  useEffect(() => {
+    const alSalir = (e: BeforeUnloadEvent) => {
+      if (hayCorreccionAbierta(sinEnviar.values())) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", alSalir);
+    return () => window.removeEventListener("beforeunload", alSalir);
+  }, [sinEnviar]);
 
   if (consulta.isPending) {
     return (
@@ -485,10 +541,17 @@ function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Le
   // Lo escrito y sin guardar ni enviar, al abrir la confirmación: sus consecuencias van primero.
   const pendientes = useContext(SinEnviar);
   const [loEscrito, setLoEscrito] = useState<Consecuencia[]>([]);
+  const [sePierdeAlgo, setSePierdeAlgo] = useState(false);
   const confirmarRevisado = () => {
     setLoEscrito(loEscritoAlMarcar(l, pendientes?.values() ?? []));
+    setSePierdeAlgo(alMarcarRevisado(pendientes?.values() ?? []).sePierden.length > 0);
     setConfirmando("revisado");
   };
+  // El error de tomar o marcar revisado habla de la versión en que se intentó: con otra (una corrección guardada), se va.
+  useEffect(() => {
+    tomar.reset();
+    marcar.reset();
+  }, [l.version]);
   // Sin responsable: en revisión, pero quien la tenía fue desactivado. La toma quien llegue, sin quitársela a nadie.
   const sinResponsable = l.estado === "en_revision" && !l.revisor;
   // Revisar con el teclado (iteración 37): T toma y R marca revisado, con la confirmación de siempre.
@@ -590,7 +653,8 @@ function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Le
       )}
       {confirmando === "revisado" && (
         <Confirmacion
-          nivel="consecuencia"
+          // Con algo que se pierde, «R» y luego ↵ no lo aceptan sin leer: el foco empieza en Cancelar.
+          nivel={sePierdeAlgo ? "irreversible" : "consecuencia"}
           titulo={`¿Marcar revisado el levantamiento de ${l.tecnico.nombre}?`}
           confirmar="Marcar revisado"
           consecuencias={[
@@ -606,7 +670,11 @@ function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Le
           ]}
           mensajeDeError={mensajeDeError}
           alCerrar={() => setConfirmando(null)}
-          accion={() => marcar.mutateAsync(l.version)}
+          accion={async () => {
+            await marcar.mutateAsync(l.version);
+            // Revisado: lo que quedaba sin enviar ya no se puede enviar (la confirmación lo dijo).
+            pendientes?.clear();
+          }}
           alTerminar={() => notificar({ texto: "Marcado revisado" })}
         />
       )}
@@ -1070,7 +1138,7 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
         // eslint-disable-next-line jsx-a11y/no-autofocus -- se abre con el globo de la fila: el foco va donde se escribe
         autoFocus
         className={`control ${vacio ? "error" : ""}`}
-        maxLength={2000}
+        maxLength={1000}
         placeholder={`Qué debe revisar el técnico sobre ${nombre}`}
         style={{ minHeight: 70 }}
         value={texto}
@@ -1127,7 +1195,10 @@ function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: 
   const restaurar = (comentarioId: string) => {
     if (restaurando.current.has(comentarioId) || !ultimo.current.comentarios.find((c) => c.id === comentarioId)?.retirado) return;
     restaurando.current.add(comentarioId);
-    corregir.mutate({ comentarioId, accion: { tipo: "restaurar" } }, { onSettled: () => restaurando.current.delete(comentarioId) });
+    void corregir
+      .mutateAsync({ comentarioId, accion: { tipo: "restaurar" } })
+      .catch(() => undefined)
+      .finally(() => restaurando.current.delete(comentarioId));
   };
   const retirar = (comentarioId: string) =>
     corregir.mutate(

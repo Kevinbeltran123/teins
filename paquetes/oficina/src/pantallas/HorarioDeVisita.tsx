@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Aviso, ChevronLeft, ChevronRight, ChevronDown, Clock, Search } from "@teins/ui";
+import { Aviso, Boton, ChevronLeft, ChevronRight, ChevronDown, Clock, RefreshCw, Search } from "@teins/ui";
 import { cruceDe, duracionTexto, hora12, aHora, aMinutos, libreTexto, ocupadoTexto, DIA_COMPLETO, type Horario, type Ocupacion } from "../horario";
 import { consultasDeProgramacion } from "../programacion";
 
@@ -245,10 +245,17 @@ export function TecnicosDisponibles({
             </button>
           </div>
           <div className="lista-tec">
+            {/* Sin la ocupación los técnicos se siguen viendo (todos como libres): sin ellos no se podría elegir a nadie. */}
+            {ocupacion.isError && (
+              <div className="ayuda vacia-tec">
+                No se pudo revisar quién está libre. El servidor igual rechaza un cruce al guardar.{" "}
+                <Boton variante="fantasma" tamano="pequeno" icono={RefreshCw} onClick={() => void ocupacion.refetch()}>
+                  Reintentar
+                </Boton>
+              </div>
+            )}
             {ocupacion.isPending ? (
               <p className="ayuda vacia-tec">Revisando quién está libre…</p>
-            ) : ocupacion.isError ? (
-              <p className="ayuda vacia-tec">No se pudo revisar quién está libre. El servidor igual rechaza un cruce al programar.</p>
             ) : lista.length === 0 ? (
               <p className="ayuda vacia-tec">{verOcupados ? "Nadie está ocupado a esa hora." : buscar.trim() ? "Nadie libre con ese nombre." : "Nadie está libre a esa hora: elija otra."}</p>
             ) : (

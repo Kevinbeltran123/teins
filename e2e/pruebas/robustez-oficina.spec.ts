@@ -145,9 +145,26 @@ test("lo escrito en la revisión sigue ahí al cambiar de pestaña o de globo, y
   await o.getByRole("button", { name: "Mostrar el panel" }).click();
   await expect(general.getByRole("textbox", { name: `Responder a ${tecnico.nombre}` })).toHaveValue("Respuesta a medias (E2E)");
 
+  // Salir con Esc y volver, o recargar la pestaña, tampoco lo borra (iteración 42).
+  const sinFoco = () => o.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await sinFoco();
+  await o.keyboard.press("Escape");
+  await expect(o.getByRole("tab", { name: /Esperando revisión/ })).toBeVisible();
+  await o.goBack();
+  await o.getByRole("tab", { name: /^Comentarios/ }).click();
+  await expect(general.getByRole("textbox", { name: `Responder a ${tecnico.nombre}` })).toHaveValue("Respuesta a medias (E2E)");
+  await o.reload();
+  await o.getByRole("tab", { name: /^Comentarios/ }).click();
+  await expect(general.getByRole("textbox", { name: `Responder a ${tecnico.nombre}` })).toHaveValue("Respuesta a medias (E2E)");
+  await expect(comentarios.getByRole("textbox", { name: "Comentario general" })).toHaveValue("Comentario general a medias (E2E)");
+
   // «Marcar revisado» dice primero lo que se pierde y lo que el técnico ya no podrá responder.
   await o.getByRole("button", { name: "Corregir descripción del sitio" }).click();
   await o.getByRole("textbox", { name: "Nuevo valor de descripción del sitio" }).fill("Cambio sin guardar (E2E)");
+  // Con la corrección abierta, Esc no sale de la revisión: se perdería.
+  await sinFoco();
+  await o.keyboard.press("Escape");
+  await expect(o.getByRole("textbox", { name: "Nuevo valor de descripción del sitio" })).toHaveValue("Cambio sin guardar (E2E)");
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   const confirmacion = o.getByRole("dialog");
   await expect(confirmacion).toContainText("la corrección sin guardar de «Descripción del sitio»");
@@ -158,4 +175,32 @@ test("lo escrito en la revisión sigue ahí al cambiar de pestaña o de globo, y
   // Revisado, la corrección que ya no se puede guardar se cierra.
   await expect(o.getByRole("region", { name: "Revisión" }).getByText("por usted", { exact: false })).toBeVisible();
   await expect(o.getByRole("textbox", { name: "Nuevo valor de descripción del sitio" })).toHaveCount(0);
+});
+
+test("apagar WhatsApp a un contacto no borra su autorización: al encenderlo otra vez sigue la registrada", async ({ browser }) => {
+  const programadora = nuevoUsuario("oficina", "oficina");
+  const { cliente } = nuevaVisitaConCliente(nuevoUsuario("tecnico", "tecnico.e2e"));
+  const o = await oficina(browser, programadora);
+  await o.getByRole("link", { name: "Clientes" }).click();
+  await o.getByRole("searchbox").fill(cliente);
+  await o.getByRole("link", { name: cliente }).click();
+  await o.getByRole("button", { name: "Nuevo contacto" }).click();
+  const nuevo = o.getByRole("dialog", { name: "Nuevo contacto" });
+  await nuevo.getByRole("textbox", { name: "Nombre" }).fill("Ana Torres");
+  await nuevo.getByRole("textbox", { name: "Correo" }).fill("ana.torres@cliente.example");
+  await nuevo.getByRole("textbox", { name: "Celular" }).fill("3005550118");
+  await nuevo.getByRole("checkbox", { name: "WhatsApp", exact: true }).check();
+  await nuevo.getByRole("checkbox", { name: /autorizó recibir el informe por WhatsApp/ }).check();
+  await nuevo.getByRole("button", { name: "Crear contacto" }).click();
+  await expect(o.getByText("Contacto creado: Ana Torres")).toBeVisible();
+
+  const edicion = o.getByRole("dialog", { name: "Editar a Ana Torres" });
+  await o.getByRole("button", { name: "Editar a Ana Torres" }).click();
+  await edicion.getByRole("checkbox", { name: "WhatsApp", exact: true }).uncheck();
+  await edicion.getByRole("button", { name: "Guardar contacto" }).click();
+  await expect(edicion).toHaveCount(0);
+  await o.getByRole("button", { name: "Editar a Ana Torres" }).click();
+  await edicion.getByRole("checkbox", { name: "WhatsApp", exact: true }).check();
+  await expect(edicion.getByRole("checkbox", { name: /autorizó recibir el informe por WhatsApp/ })).toBeChecked();
+  await expect(edicion.getByText(/^Lo confirmó /)).toBeVisible();
 });

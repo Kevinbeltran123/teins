@@ -72,7 +72,9 @@ export function useCamposDeContacto(contacto: Contacto | null, { algunCanal = fa
     recibeWhatsapp,
     recibeInformes,
     recibeCotizaciones,
-    whatsappAutorizado: recibeWhatsapp && autorizado,
+    // Sin el canal, la autorización del mismo número se conserva (quién y cuándo): apagar WhatsApp no la borra, cambiar el
+    // celular sí (iteración 42).
+    whatsappAutorizado: recibeWhatsapp ? autorizado : autorizacionVigente !== null,
   });
 
   function validar(): ErroresDeContacto {
