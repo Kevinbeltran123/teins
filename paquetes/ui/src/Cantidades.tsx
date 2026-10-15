@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Boton, BotonIcono } from "./Boton";
 import { CampoSeleccion } from "./CampoSeleccion";
 import { CampoTexto } from "./CampoTexto";
@@ -54,12 +54,26 @@ export function EditorCantidades({
   disposicion?: "tarjetas" | "tabla";
 }) {
   const notificar = useNotificar();
+  // Las líneas de ahora, para «Deshacer»: la notificación vive más que el pintado en que se quitó la línea.
+  const vigente = useRef({ lineas, onCambio });
+  vigente.current = { lineas, onCambio };
   const cambiar = (i: number, cambio: Partial<LineaEditable>) => onCambio(lineas.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
-  // Quitar es inmediato y se puede deshacer: preguntar antes solo entrenaría a aceptar sin leer (DESIGN.md).
+  // Quitar es inmediato y se puede deshacer: preguntar antes solo entrenaría a aceptar sin leer (DESIGN.md). «Deshacer»
+  // devuelve solo esa línea, a su lugar y sobre las líneas de ahora: volver a la lista de antes borraría lo escrito
+  // después en las demás (sus celdas no se controlan). Una sola vez: si ya volvió, no se duplica.
   function quitar(i: number) {
-    const antes = [...lineas];
+    const quitada = lineas[i]!;
     onCambio(lineas.filter((_, j) => j !== i));
-    notificar({ texto: `Línea ${i + 1} quitada`, accion: { texto: "Deshacer", alHacer: () => onCambio(antes) } });
+    notificar({
+      texto: `Línea ${i + 1} quitada`,
+      accion: {
+        texto: "Deshacer",
+        alHacer: () => {
+          const { lineas: ahora, onCambio: devolver } = vigente.current;
+          if (!ahora.some((l) => l.id === quitada.id)) devolver([...ahora.slice(0, i), quitada, ...ahora.slice(i)]);
+        },
+      },
+    });
   }
   const errorId = `error-cantidades-${etiqueta}`;
   const agregarLibre = () => onCambio([...lineas, lineaLibre(nuevoId(), unidades)]);

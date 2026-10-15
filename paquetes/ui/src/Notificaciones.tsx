@@ -36,6 +36,9 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
   const [visibles, setVisibles] = useState<Visible[]>([]);
   const siguiente = useRef(0);
   const temporizadores = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  // La acción se hace una sola vez por notificación: durante los 200 ms de salida el botón sigue a la vista, y un doble
+  // clic haría dos veces «Deshacer».
+  const usadas = useRef(new Set<number>());
 
   const quitar = useCallback((id: number) => {
     clearTimeout(temporizadores.current.get(id));
@@ -102,6 +105,8 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
             <button
               type="button"
               onClick={() => {
+                if (usadas.current.has(n.id)) return;
+                usadas.current.add(n.id);
                 n.accion!.alHacer();
                 quitar(n.id);
               }}
