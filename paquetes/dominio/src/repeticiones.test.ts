@@ -157,6 +157,10 @@ describe("rutas mal formadas (revisión de código)", () => {
     expect(restaurarRepeticion(l, "tableros", quitada, 1, respuestas, ahora).repeticiones?.tableros).toHaveLength(3);
   });
 
+  it("un error de la sección repetible entera se nombra por su título, no por su clave (iteración 42)", () => {
+    expect(rutaLegible(formato, {}, "tableros")).toBe("Tableros");
+  });
+
   it("lo que llega tarde a una repetición quitada no la revive (iteración 42)", () => {
     let l = crearLevantamiento(formato, "l10", ahora, undefined, nuevoId);
     l = agregarRepeticion(l, formato, "tableros", "otro0021", ahora);

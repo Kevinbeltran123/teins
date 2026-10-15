@@ -1,8 +1,8 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
 import { Search } from "./iconos";
 import type { LineaEditable } from "./Cantidades";
-import { useNotificar } from "./Notificaciones";
+import { useNotificar, useRetirarNotificacion } from "./Notificaciones";
 import { BotonAgregar } from "./Recorrido";
 import { useLoNuevo } from "./transicion";
 
@@ -45,9 +45,17 @@ export function EditorMateriales({
   const [conNota, setConNota] = useState<ReadonlySet<string>>(new Set());
   const cambiar = (i: number, cambio: Partial<LineaEditable>) => onCambio(lineas.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
   const notificar = useNotificar();
+  const retirar = useRetirarNotificacion();
   // La lista de ahora: "Deshacer" llega hasta 10 s después, y en ese tiempo se pudo agregar o cambiar otra línea.
   const vigentes = useRef(lineas);
   vigentes.current = lineas;
+  // Al cerrarse el editor (otro paso, o «No se pudo obtener»), sus «Deshacer» se retiran: su lista ya no es la vigente
+  // y devolver la línea sobre ella borraría lo que vino después (iteración 42).
+  const avisos = useRef(new Set<number>());
+  useEffect(() => {
+    const deEsteEditor = avisos.current;
+    return () => deEsteEditor.forEach(retirar);
+  }, [retirar]);
   // Bajar a cero quita la línea al instante; "Deshacer" la devuelve a su lugar (DESIGN.md, iteración 24c) sobre la lista
   // de ahora, no la de antes: lo hecho entre tanto no se pierde, y un segundo toque no la duplica (iteración 42).
   const quitar = (i: number) => {
@@ -58,7 +66,7 @@ export function EditorMateriales({
       if (actuales.some((l) => l.id === quitada.id)) return;
       onCambio([...actuales.slice(0, i), quitada, ...actuales.slice(i)]);
     };
-    notificar({ texto: `${quitada.descripcion.trim() || "Material"} quitado`, accion: { texto: "Deshacer", alHacer: devolver } });
+    avisos.current.add(notificar({ texto: `${quitada.descripcion.trim() || "Material"} quitado`, accion: { texto: "Deshacer", alHacer: devolver } }));
   };
   const sumar = (i: number, delta: number) => {
     const siguiente = Math.max(0, numero(lineas[i]!.cantidad) + delta);

@@ -101,7 +101,7 @@ import { usosPorItem } from "../catalogo";
 // El catálogo para elegir materiales (ADR-0025): va con la captura, que ya se carga aparte del arranque.
 import HojaCatalogo from "./HojaCatalogo";
 import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal } from "../datos/modelo";
-import type { ArchivoNuevo } from "../datos/repositorio";
+import { VisitaConOtroBorrador, type ArchivoNuevo } from "../datos/repositorio";
 import { procesarFoto } from "../fotos/procesar";
 import { fechaHora, horaExacta } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos } from "../formatos";
@@ -434,7 +434,8 @@ function Borrador({
   const [delEnvio, setDelEnvio] = useState<readonly ErrorValidacion[]>([]);
   const [confirmando, setConfirmando] = useState(false);
   const [descartando, setDescartando] = useState(false);
-  const [faltantesDelPaso, setFaltantesDelPaso] = useState<{ pasoId: string; lista: readonly ErrorValidacion[] } | null>(null);
+  // El paso cuya hoja de «Falta…» está abierta; lo que lista sale de la validación de ahora, como el resto (iteración 42).
+  const [faltantesDelPaso, setFaltantesDelPaso] = useState<{ pasoId: string } | null>(null);
   // Cada intento de enviar con datos pendientes sacude la lista de lo que falta.
   const [sacudir, setSacudir] = useState(0);
   // Los pasos por los que ya pasó el técnico en esta sesión: pasar un paso sin nada obligatorio lo da por hecho.
@@ -457,7 +458,8 @@ function Borrador({
       },
     );
   const { errores: validacion, obligatorios, completos } = progreso(formato, actual);
-  const pendientes = [...validacion, ...delEnvio];
+  const bloquesVigentes = new Set(bloques(formato, actual.repeticiones ?? {}).map((b) => b.clave));
+  const pendientes = [...validacion, ...delEnvio.filter((e) => bloquesVigentes.has(e.seccion))];
   const errores = senalados ? pendientes.filter((e) => senalados.has(claveDeError(e.seccion, e.campo ?? ""))) : null;
   const porClave: ReadonlyMap<string, CodigoErrorValidacion> = new Map((errores ?? []).map((e) => [claveDeError(e.seccion, e.campo ?? ""), e.codigo]));
   const avance = obligatorios > 0 ? completos / obligatorios : pendientes.length === 0 ? 1 : 0;
@@ -548,7 +550,7 @@ function Borrador({
     const lista = pendientes.filter((e) => pasoDeError(e)?.id === pasoId);
     if (lista.length > 0 && !aunQueFalte) {
       setSenalados((previos) => new Set([...(previos ?? []), ...lista.map((e) => claveDeError(e.seccion, e.campo ?? ""))]));
-      setFaltantesDelPaso({ pasoId, lista });
+      setFaltantesDelPaso({ pasoId });
       return;
     }
     setFaltantesDelPaso(null);
@@ -801,6 +803,11 @@ function Borrador({
   }
 
   const pasoConFaltantes = faltantesDelPaso ? pasos.find((p) => p.id === faltantesDelPaso.pasoId) : undefined;
+  const faltanDelPaso = pasoConFaltantes ? pendientes.filter((e) => pasoDeError(e)?.id === pasoConFaltantes.id) : [];
+  // Completado con la hoja abierta (un «Deshacer» la alcanza): ya no hay nada que decir y la hoja se va.
+  useEffect(() => {
+    if (faltantesDelPaso && faltanDelPaso.length === 0) setFaltantesDelPaso(null);
+  }, [faltantesDelPaso, faltanDelPaso.length]);
   return (
     <VigilarGuardado.Provider value={vigilar}>
       {pantalla}
@@ -812,11 +819,11 @@ function Borrador({
           </Aviso>
         </div>
       )}
-      {faltantesDelPaso && pasoConFaltantes && (
+      {faltantesDelPaso && pasoConFaltantes && faltanDelPaso.length > 0 && (
         <Dialogo
           forma="inferior"
           icono={CircleAlert}
-          titulo={faltantesDelPaso.lista.length === 1 ? `Falta 1 dato en ${pasoConFaltantes.titulo.toLowerCase()}` : `Faltan ${faltantesDelPaso.lista.length} datos en ${pasoConFaltantes.titulo.toLowerCase()}`}
+          titulo={faltanDelPaso.length === 1 ? `Falta 1 dato en ${pasoConFaltantes.titulo.toLowerCase()}` : `Faltan ${faltanDelPaso.length} datos en ${pasoConFaltantes.titulo.toLowerCase()}`}
           subtitulo="Son obligatorios para enviar. Puedes completarlos ahora o volver después."
           alCerrar={() => setFaltantesDelPaso(null)}
           pie={
@@ -825,7 +832,7 @@ function Borrador({
               <Boton
                 variante="principal"
                 onClick={() => {
-                  const primero = faltantesDelPaso.lista[0]!;
+                  const primero = faltanDelPaso[0]!;
                   setFaltantesDelPaso(null);
                   setTimeout(() => irAlError(primero), 250);
                 }}
@@ -836,7 +843,7 @@ function Borrador({
           }
         >
           <ul className="flex flex-col gap-2">
-            {faltantesDelPaso.lista.map((e, i) => {
+            {faltanDelPaso.map((e, i) => {
               const d = datoFaltante(e, () => {
                 setFaltantesDelPaso(null);
                 setTimeout(() => irAlError(e), 250);
@@ -1166,7 +1173,9 @@ function ContenidoDeCampo({ id, seccion, campo, inicial: alAbrir, actual, error,
           <CampoCantidades
             campo={campo}
             unidades={campo.unidades}
-            inicial={noObtenido ? undefined : inicial}
+            // De `desde`, no de lo guardado: al deshacer «No se pudo obtener», lo guardado todavía trae la marca en ese
+            // instante y el editor se montaría vacío; el siguiente cambio borraría lo devuelto (iteración 42).
+            inicial={inicial}
             error={noObtenido ? undefined : errorDelCampo}
             guardar={(valor) => guardar(valor)}
           />
@@ -1686,7 +1695,7 @@ function Enviado({
               { clave: "recibido", texto: recibido ? "Recibido en oficina" : "Llega a oficina", estado: recibido ? "hecho" : proceso === "enviando" && (totalArchivos === 0 || subidos === totalArchivos) ? "en_curso" : "espera" },
             ]}
           />
-          {envio?.estado === "error" ? (
+          {envio?.estado === "error" && !recibido ? (
             <>
               <p className="-mt-2 text-center text-ayuda text-texto-secundario">{QUE_HACER_CON_EL_RECHAZO}</p>
               <Boton cargando={reintentando} onClick={() => void reintentar()}>
@@ -1703,7 +1712,9 @@ function Enviado({
                   titulo="¿Volver a borrador?"
                   confirmar="Volver a borrador"
                   accion={() => repositorio.volverABorrador(levantamiento.id)}
-                  mensajeDeError={() => "No se pudo volver a borrador. Intenta de nuevo."}
+                  mensajeDeError={(e) =>
+                    e instanceof VisitaConOtroBorrador ? "Esta visita ya tiene otro levantamiento sin enviar. Envíalo o descártalo y vuelve a intentarlo." : "No se pudo volver a borrador. Intenta de nuevo."
+                  }
                   alCerrar={() => setCorrigiendo(false)}
                   consecuencias={[
                     { icono: Pencil, texto: "Lo vuelves a editar en este teléfono", detalle: "Oficina nunca lo recibió: no hay otra copia que cambie" },

@@ -23,10 +23,17 @@ const DURACION_MS = 5_000;
 const DURACION_CON_ACCION_MS = 10_000;
 const MAXIMO = 3;
 
-const Contexto = createContext<(notificacion: Notificacion) => void>(() => undefined);
+const Contexto = createContext<(notificacion: Notificacion) => number>(() => -1);
+const ContextoRetirar = createContext<(id: number) => void>(() => undefined);
 
-/** Avisa de algo que ya pasó y no exige respuesta (DESIGN.md: notificaciones). */
+/** Avisa de algo que ya pasó y no exige respuesta (DESIGN.md: notificaciones). Devuelve su id, para retirarla. */
 export const useNotificar = () => useContext(Contexto);
+
+/**
+ * Retira una notificación antes de tiempo: un «Deshacer» que ya no tiene sobre qué actuar (el editor que la dio se
+ * cerró) no se queda ofreciéndose (iteración 42).
+ */
+export const useRetirarNotificacion = () => useContext(ContextoRetirar);
 
 /**
  * Región de notificaciones de la superficie. Oficina las muestra abajo a la derecha; campo abajo, sobre la
@@ -65,6 +72,7 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
         id,
         setTimeout(() => quitar(id), notificacion.accion ? DURACION_CON_ACCION_MS : DURACION_MS),
       );
+      return id;
     },
     [quitar],
   );
@@ -122,8 +130,10 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
 
   return (
     <Contexto.Provider value={notificar}>
-      {children}
-      {capa && hayVisibles ? createPortal(region, capa) : region}
+      <ContextoRetirar.Provider value={quitar}>
+        {children}
+        {capa && hayVisibles ? createPortal(region, capa) : region}
+      </ContextoRetirar.Provider>
     </Contexto.Provider>
   );
 }

@@ -5,7 +5,7 @@ import { bocetoVacio, claveDeRepeticion, crearLevantamiento, LIMITES_BOCETO, typ
 import { almacenDexie } from "../sincronizacion/almacen";
 import { abrirBase, nuevoIdDeRepeticion, repositorioDexie } from "./dexie";
 import { sellarVisita } from "./registros";
-import type { ArchivoNuevo } from "./repositorio";
+import { VisitaConOtroBorrador, type ArchivoNuevo } from "./repositorio";
 
 // Formato ficticio (R5).
 const formato: VersionFormato = {
@@ -562,6 +562,40 @@ describe("copias viejas y escrituras tardías (iteración 42)", () => {
     expect(await db.envios.get("l1")).toBeUndefined();
     await repo.guardarRespuesta("l1", "s", "t", "corregido", despues);
     expect((await repo.enviar("l1", formato, despues)).ok).toBe(true);
+  });
+
+  it("no vuelve a borrador si su visita ya tiene otro borrador: uno quedaría escondido", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    await repo.crear(crearLevantamiento(formato, "l1", ahora, "v1"), "t1");
+    await repo.guardarRespuesta("l1", "s", "t", "listo", ahora);
+    await repo.enviar("l1", formato, despues);
+    await db.envios.update("l1", { estado: "error" });
+    // La visita quedó atendida y el técnico empezó otro levantamiento en ella.
+    await repo.crear(crearLevantamiento(formato, "l2", ahora, "v1"), "t1");
+    await expect(repo.volverABorrador("l1")).rejects.toBeInstanceOf(VisitaConOtroBorrador);
+    // Descartado el otro, ya puede.
+    await repo.descartar("l2", despues);
+    await repo.volverABorrador("l1");
+    expect((await repo.obtener("l1"))?.estado).toBe("borrador");
+  });
+
+  it("reemplazar un boceto no borra el documento que otro campo del mismo levantamiento todavía usa", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const dosCroquis: VersionFormato = {
+      ...formato,
+      appMinima: 5,
+      secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "a", etiqueta: "A", tipo: "boceto" }, { clave: "b", etiqueta: "B", tipo: "boceto" }] }],
+    };
+    await repo.crear(crearLevantamiento(dosCroquis, "l1", ahora), "t1");
+    const linea = (x: number) => ({ ...bocetoVacio(), elementos: [{ tipo: "linea" as const, grosor: 3, desde: [0, 0] as const, hasta: [x, 0] as const }] });
+    // El mismo dibujo en los dos campos: el mismo archivo.
+    await repo.guardarBoceto("l1", "s", "a", linea(100), ahora);
+    await repo.guardarBoceto("l1", "s", "b", linea(100), ahora);
+    const compartido = ((await repo.obtener("l1"))!.respuestas.s!.b as { boceto: string }).boceto;
+    await repo.guardarBoceto("l1", "s", "a", linea(200), despues);
+    expect(await repo.obtenerBoceto(compartido)).toEqual(linea(100));
   });
 
   it("lo que oficina ya recibió no vuelve a borrador aunque su envío haya quedado en error", async () => {

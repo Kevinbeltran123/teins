@@ -16,15 +16,15 @@ const INTENTOS_CON_ARCHIVOS_FALTANTES = 6;
 const PAGINAS_MAXIMAS = 20;
 
 /**
- * Espera exponencial con variación aleatoria (ADR-0003, regla 6): muchos dispositivos que
- * recuperan señal a la vez no golpean al servidor en el mismo instante.
- */
-/**
  * Mientras el técnico cambia la contraseña temporal, el servidor responde 403 a todo lo demás: no es un rechazo sin
  * remedio, se espera como un error pasajero (iteración 42). Sin esto se perdían terminaciones y respuestas en cola.
  */
 const esperaAlCambioDeContrasena = (error: ErrorApi) => error.codigo === "cambio_de_contrasena_requerido";
 
+/**
+ * Espera exponencial con variación aleatoria (ADR-0003, regla 6): muchos dispositivos que
+ * recuperan señal a la vez no golpean al servidor en el mismo instante.
+ */
 export function espera(intentos: number, aleatorio: () => number): number {
   const tope = Math.min(ESPERA_MAXIMA_MS, ESPERA_BASE_MS * 2 ** Math.min(intentos, 20));
   return Math.round(tope * (0.5 + aleatorio() * 0.5));

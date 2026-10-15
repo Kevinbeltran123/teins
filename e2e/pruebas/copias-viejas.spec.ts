@@ -99,16 +99,18 @@ test("quitar un tablero mientras su foto todavía se procesa no deja el envío b
   await enviarSinPendientes(page);
 });
 
-test("«Deshacer» de una foto obligatoria quita su aviso de lo que falta", async ({ page }) => {
+test("«Deshacer» de una foto obligatoria quita su aviso de lo que falta, también la hoja de «Siguiente»", async ({ page }) => {
   await iniciarConCuartoTecnico(page);
   await irAlPaso(page, "Cuarto técnico");
   await page.getByRole("button", { name: "Foto 1 de Fotos del equipo" }).click();
   await page.getByRole("dialog", { name: /^Fotos del equipo: foto 1 de 1/ }).getByRole("button", { name: "Eliminar foto" }).click();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Siguiente: tableros" }).click();
-  await expect(page.getByRole("dialog", { name: /Falta 1 dato en cuarto técnico/ })).toBeVisible();
+  const hoja = page.getByRole("dialog", { name: /Falta 1 dato en cuarto técnico/ });
+  await expect(hoja).toBeVisible();
   await page.getByRole("button", { name: "Deshacer" }).click();
-  await page.getByRole("button", { name: "Seguir y completar después" }).click();
+  // Con la foto de vuelta no falta nada: la hoja se va sola.
+  await expect(hoja).toHaveCount(0);
   await enviarSinPendientes(page);
 });
 
@@ -152,6 +154,13 @@ test("«Deshacer» de un material quitado lo devuelve a su lugar sin borrar lo a
   await expect(page.getByRole("group", { name: /^Línea \d+$/ })).toHaveCount(3);
   await expect(page.getByRole("textbox", { name: "Descripción de la línea 1" })).toHaveValue("Cable 12 AWG");
   await expect(page.getByRole("textbox", { name: "Descripción de la línea 3" })).toHaveValue("Tubo EMT");
+
+  // Al salir del paso, su «Deshacer» se retira: ya no tendría la lista vigente.
+  await page.getByRole("button", { name: "Menos de la línea 3" }).click();
+  const aviso = page.getByRole("status").getByText("Tubo EMT quitado");
+  await expect(aviso).toBeVisible();
+  await irAlRecorrido(page);
+  await expect(aviso).toHaveCount(0);
 });
 
 test("un envío que oficina rechazó para siempre vuelve a borrador, se corrige y se envía (ADR-0045)", async ({ page }) => {

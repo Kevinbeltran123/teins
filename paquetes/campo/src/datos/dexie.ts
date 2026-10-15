@@ -28,7 +28,7 @@ import type { BaseCampo } from "./base";
 import { DIAS_EN_LA_PAPELERA, type ArchivoGuardado, type EnvioLocal, type LevantamientoGuardado, type LevantamientoLocal } from "./modelo";
 import { visitaDe } from "./lecturas";
 import { abrirArchivo, abrirLevantamiento, referencias, sellarArchivo, sellarEnvio, sellarLevantamiento } from "./registros";
-import type { RepositorioLevantamientos } from "./repositorio";
+import { VisitaConOtroBorrador, type RepositorioLevantamientos } from "./repositorio";
 
 export { abrirBase } from "./base";
 
@@ -143,8 +143,11 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
         async enTransaccion() {
           if (!(await db.archivos.get(huella))) await db.archivos.add(archivo);
           if (huellaAnterior && huellaAnterior !== huella) {
-            // Las huellas de cada levantamiento están a la vista: no hace falta abrir ninguno.
-            const enUso = (await db.levantamientos.toArray()).some((l) => l.id !== id && referencias(l).archivos.includes(huellaAnterior));
+            // Las huellas de cada levantamiento están a la vista: no hace falta abrir ninguno. Otro campo de este mismo
+            // levantamiento puede tener el mismo documento (iteración 42).
+            const enUso =
+              archivosReferenciados(nuevo.respuestas).includes(huellaAnterior) ||
+              (await db.levantamientos.toArray()).some((l) => l.id !== id && referencias(l).archivos.includes(huellaAnterior));
             if (!enUso) await db.archivos.delete(huellaAnterior);
           }
         },
@@ -376,14 +379,18 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
         // Solo lo que oficina nunca recibió (ADR-0045): un envío rechazado para siempre, sin estado del servidor.
         const envio = await db.envios.get(id);
         if (actual.estado !== "enviado" || envio?.estado !== "error" || (await db.estadosServidor.get(id))) throw new Error("Solo vuelve a borrador un envío que oficina no recibió");
+        const otroEnLaVisita =
+          actual.visitaId !== undefined &&
+          (await db.levantamientos.filter((g) => g.id !== id && g.visitaId === actual.visitaId && g.estado === "borrador" && !g.descartadoEn && g.tecnicoId === actual.tecnicoId).count()) > 0;
+        if (otroEnLaVisita) throw new VisitaConOtroBorrador();
         const { enviadoEn: _enviadoEn, ...sinEnvio } = actual;
         return {
           resultado: undefined,
           levantamiento: { ...sinEnvio, estado: "borrador" },
-          tablas: [db.envios],
+          tablas: [db.envios, db.estadosServidor],
           async enTransaccion() {
-            // Si en medio se reintentó, el envío ya no está en error: no se toca.
-            if ((await db.envios.get(id))?.estado !== "error") throw new Error("El envío cambió mientras volvía a borrador");
+            // Si en medio se reintentó o llegó a oficina, ya no vuelve: no se toca.
+            if ((await db.envios.get(id))?.estado !== "error" || (await db.estadosServidor.get(id))) throw new Error("El envío cambió mientras volvía a borrador");
             await db.envios.delete(id);
           },
         };

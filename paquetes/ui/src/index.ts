@@ -35,7 +35,7 @@ export type { TonoInsignia } from "./Insignia";
 export { MarcaNoObtenido } from "./MarcaNoObtenido";
 export { MenuAcciones } from "./MenuAcciones";
 export type { OpcionMenu } from "./MenuAcciones";
-export { ProveedorNotificaciones, useNotificar } from "./Notificaciones";
+export { ProveedorNotificaciones, useNotificar, useRetirarNotificacion } from "./Notificaciones";
 export type { Notificacion } from "./Notificaciones";
 export { BotonHerramienta, Pastilla } from "./Pastilla";
 export { EditorMateriales } from "./Materiales";

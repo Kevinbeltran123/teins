@@ -121,6 +121,7 @@ Decisiones incluidas:
 - **Estado de negocio ≠ estado de sincronización.** "Pendiente de subir", "subiendo", "confirmado" y "error" viven solo en el dispositivo.
 - **Toma de revisión (I-1):** un revisor toma el levantamiento y queda visible como responsable. Otro puede reasignarse la toma explícitamente, lo que queda registrado. Cada guardado lleva la versión que el usuario tenía abierta; si otro guardó antes, se rechaza (QA-25).
 - **Llegada completa:** el servidor solo registra un envío cuando llegaron todos sus archivos con huellas correctas.
+- **Un envío que oficina nunca recibió vuelve a Borrador (ADR-0045):** si el servidor lo rechaza para siempre, en el teléfono queda «No se pudo enviar» y el técnico puede volverlo a borrador para corregirlo. Como oficina no lo tiene, sigue habiendo un solo editor. No aplica si la visita ya tiene otro borrador, ni a lo que oficina ya recibió.
 
 ### Informe
 

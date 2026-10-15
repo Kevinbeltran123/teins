@@ -10,6 +10,17 @@ export interface RepeticionQuitada {
   respuestas: Record<string, Valor> | undefined;
 }
 
+/**
+ * La visita ya tiene otro borrador: el envío rechazado no vuelve a borrador hasta que ese se envíe o se descarte. Una
+ * visita no tiene dos borradores, y el segundo no se vería en ninguna lista (iteración 42).
+ */
+export class VisitaConOtroBorrador extends Error {
+  constructor() {
+    super("La visita ya tiene otro borrador");
+    this.name = "VisitaConOtroBorrador";
+  }
+}
+
 /** Archivo recién capturado: aún no se sube. */
 export type ArchivoNuevo = Omit<ArchivoLocal, "subida" | "ultimoErrorDeSubida">;
 
