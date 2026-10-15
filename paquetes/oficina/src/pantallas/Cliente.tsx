@@ -91,7 +91,8 @@ export function DetalleCliente({ id }: { id: string }) {
       </>
     );
   }
-  if (consulta.isError) {
+  // Solo si nunca cargó: un error al releer (foco, sesión vencida) no cierra lo que se estaba escribiendo.
+  if (consulta.data === undefined) {
     const noExiste = consulta.error instanceof ErrorApi && consulta.error.codigo === "no_encontrado";
     return (
       <>

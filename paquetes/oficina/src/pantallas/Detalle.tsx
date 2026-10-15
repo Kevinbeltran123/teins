@@ -183,7 +183,8 @@ export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined })
       </>
     );
   }
-  if (consulta.isError) {
+  // Solo si nunca cargó: un error al releer (foco, sondeo, sesión vencida) deja la revisión y lo escrito donde están.
+  if (consulta.data === undefined) {
     const noExiste = consulta.error instanceof ErrorApi && consulta.error.codigo === "no_encontrado";
     return (
       <>
