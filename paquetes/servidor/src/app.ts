@@ -18,7 +18,7 @@ import { clientesYSitios, registrarRutasDeClientes } from "./modulos/clientes";
 import { crearSincronizacion } from "./modulos/sincronizacion";
 import { crearVisitas } from "./modulos/visitas";
 import { crearInformes } from "./modulos/informes";
-import { crearAccesosDeClientes, crearPortal } from "./modulos/portal";
+import { crearAccesosDeClientes, crearPortal, renombrarClienteDelPortal } from "./modulos/portal";
 import { crearCatalogo } from "./modulos/catalogo";
 import { crearSimbolos } from "./modulos/simbolos";
 import { crearAvisos } from "./modulos/avisos";
@@ -173,11 +173,24 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   sincronizacion.registrarRutas(app);
   informes.registrarRutas(app);
   // Por hacer: sin cancelar, terminar ni cerrar, y sin ningún levantamiento recibido (lo atendido ya se hizo).
-  registrarRutasDeClientes(app, bd, identidad, async (tx, clienteId) => {
-    const porHacer = await visitas.porHacer(tx, clienteId, new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" }));
-    const atendidas = await levantamientos.conteosPorVisita(tx, porHacer.map((v) => v.id));
-    return porHacer.filter((v) => !atendidas.has(v.id));
-  });
+  registrarRutasDeClientes(
+    app,
+    bd,
+    identidad,
+    async (tx, clienteId) => {
+      const porHacer = await visitas.porHacer(tx, clienteId, new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" }));
+      const atendidas = await levantamientos.conteosPorVisita(tx, porHacer.map((v) => v.id));
+      return porHacer.filter((v) => !atendidas.has(v.id));
+    },
+    // Una corrección llega a los teléfonos que tienen sus visitas, y el nombre del cliente, también al portal.
+    {
+      cliente: async (tx, correccion) => {
+        await renombrarClienteDelPortal(tx, correccion.clienteId, correccion.nombre);
+        await visitas.avisarCorreccion(tx, correccion);
+      },
+      sitio: (tx, correccion) => visitas.avisarCorreccion(tx, correccion),
+    },
+  );
   // El rol web no envía (lo hace el worker): solo recibe los eventos firmados de los proveedores.
   crearEnvios({ bd, almacenamiento, config }).registrarRutas(app);
   crearCotizaciones({ bd, almacenamiento, config, levantamientos, visitas, catalogo, identidad }).registrarRutas(app);

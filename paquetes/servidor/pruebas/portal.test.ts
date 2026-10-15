@@ -198,6 +198,27 @@ describe("portal del cliente (ADR-0009, parte 4)", () => {
     expect((await ingresar(nuevas.identificador, nuevas.clave, "10.5.0.3")).statusCode).toBe(200);
   });
 
+  it("el portal muestra el nombre vigente del cliente: corregirlo en oficina lo cambia, también en la sesión abierta", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const { clienteId } = await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) =>
+      clientesYSitios.crear(tx, { organizacionId: org.organizacionId, nombre: "Clinica Santafe", sitio: { nombre: "Sede", direccion: "Calle [N]" } }),
+    );
+    const credenciales = await accesos.crear(org.organizacionId, clienteId, contexto);
+    const cookie = cookieDe(await ingresar(credenciales.identificador, credenciales.clave, "10.8.0.1"));
+    expect((await portal(cookie, "/api/portal/sesion")).json()).toEqual({ cliente: "Clinica Santafe" });
+
+    const corregido = await app.inject({ method: "POST", url: `/api/clientes/${clienteId}`, headers: { cookie: org.oficina.cookie }, payload: { nombre: "Clínica Santa Fe" } });
+    expect(corregido.statusCode, corregido.body).toBe(200);
+    expect((await portal(cookie, "/api/portal/sesion")).json()).toEqual({ cliente: "Clínica Santa Fe" });
+    expect((await portal(cookie, "/api/portal/informes")).json()).toMatchObject({ cliente: "Clínica Santa Fe" });
+    expect((await ingresar(credenciales.identificador, credenciales.clave, "10.8.0.2")).json()).toEqual({ cliente: "Clínica Santa Fe" });
+
+    // Una copia que quedó vieja antes de este arreglo se pone al día al regenerar el acceso.
+    await s.propietario.pool.query("update portal.accesos set cliente_nombre = 'Clinica Santafe' where cliente_id = $1", [clienteId]);
+    const nuevas = await accesos.regenerar(org.organizacionId, clienteId, contexto);
+    expect((await ingresar(nuevas.identificador, nuevas.clave, "10.8.0.3")).json()).toEqual({ cliente: "Clínica Santa Fe" });
+  });
+
   it("un ingreso con la clave anterior que termina después de regenerar no deja una sesión viva", async () => {
     const org = await s.nuevaOrganizacionConUsuarios();
     const e = await clienteConInforme(org, "Cliente E");

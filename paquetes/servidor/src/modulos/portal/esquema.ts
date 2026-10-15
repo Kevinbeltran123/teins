@@ -15,7 +15,7 @@ export const accesosDeClientes = esquemaPortal.table(
     id: uuid("id").primaryKey(),
     organizacionId: organizacionId(),
     clienteId: uuid("cliente_id").notNull(),
-    /** Nombre del cliente al crear el acceso: el portal no puede leer la tabla de clientes. */
+    /** Copia del nombre del cliente: el portal no puede leer la tabla de clientes. Se corrige con el cliente. */
     clienteNombre: text("cliente_nombre").notNull(),
     identificador: text("identificador").notNull().unique(),
     claveHash: text("clave_hash").notNull(),

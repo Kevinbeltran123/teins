@@ -84,6 +84,11 @@ export interface Visitas {
   porCerrar(tx: TxOrganizacion, tecnicoId: string, hoy: string): Promise<{ id: string; terminada: boolean }[]>;
   /** Cierra estas visitas (ADR-0041): salen de los teléfonos de sus técnicos y no vuelven a bajar. */
   cerrar(tx: TxOrganizacion, organizacionId: string, ids: readonly string[]): Promise<void>;
+  /**
+   * Se corrigió el nombre del cliente o el nombre o la dirección de un sitio (ADR-0035): las visitas que siguen en los
+   * teléfonos, sin cancelar ni cerrar, vuelven a bajar a sus técnicos con el dato nuevo. Sin `sitioId`, las del cliente.
+   */
+  avisarCorreccion(tx: TxOrganizacion, datos: { organizacionId: string; clienteId: string; sitioId?: string }): Promise<void>;
   /** Cuáles de estas visitas están cerradas: salen del teléfono como atendidas. */
   cerradas(tx: TxOrganizacion, ids: readonly string[]): Promise<Set<string>>;
   clienteDe(tx: TxOrganizacion, visitaId: string): Promise<string | undefined>;
@@ -263,6 +268,14 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         .where(and(inArray(visitas.id, [...ids]), isNull(visitas.cerradaEn)))
         .returning({ id: visitas.id, tecnicos: visitas.tecnicos });
       await registrarCambios(tx, cerradas.flatMap((v) => avisar(organizacionId, v.id, v.tecnicos, "fuera_de_alcance")));
+    },
+
+    async avisarCorreccion(tx, { organizacionId, clienteId, sitioId }) {
+      const enTelefonos = await tx
+        .select({ id: visitas.id, tecnicos: visitas.tecnicos })
+        .from(visitas)
+        .where(and(eq(visitas.clienteId, clienteId), sitioId ? eq(visitas.sitioId, sitioId) : undefined, isNull(visitas.canceladaEn), isNull(visitas.cerradaEn)));
+      await registrarCambios(tx, enTelefonos.flatMap((v) => avisar(organizacionId, v.id, v.tecnicos, "cambio")));
     },
 
     async cerradas(tx, ids) {

@@ -47,6 +47,15 @@ export interface VisitaPorHacer {
 }
 export type VisitasPorHacer = (tx: TxOrganizacion, clienteId: string) => Promise<VisitaPorHacer[]>;
 
+/**
+ * Lo que otros módulos hacen en la misma transacción al corregir un cliente o un sitio (la composición lo pasa): los
+ * teléfonos vuelven a bajar sus visitas y el portal toma el nombre nuevo.
+ */
+export interface AlCorregir {
+  cliente(tx: TxOrganizacion, datos: { organizacionId: string; clienteId: string; nombre: string }): Promise<void>;
+  sitio(tx: TxOrganizacion, datos: { organizacionId: string; clienteId: string; sitioId: string }): Promise<void>;
+}
+
 /** Un destinatario listo para enviar: el contacto con el dato del canal (ADR-0028). */
 export interface Destinatario {
   contactoId: string;
@@ -309,7 +318,7 @@ const auditable = (v: Pick<FilaContacto, "nombre" | "cargo" | "correo" | "celula
 });
 
 /** Operaciones de oficina sobre clientes, sitios (iteración 7) y contactos (iteración 20). */
-export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, identidad: Pick<Identidad, "nombres">, porHacer: VisitasPorHacer): void {
+export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, identidad: Pick<Identidad, "nombres">, porHacer: VisitasPorHacer, alCorregir: AlCorregir): void {
   const deps: Dependencias = { identidad, porHacer };
   registrarOperacion(app, "obtenerCliente", {
     politica: politicas.oficina,
@@ -440,6 +449,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
           await registrar(tx, [
             { organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_editado", autorId: actor.usuarioId, correlacion, valorAnterior: { nombre: anterior.nombre }, valorNuevo: { nombre: cuerpo.nombre } },
           ]);
+          await alCorregir.cliente(tx, { organizacionId: actor.organizacionId, clienteId: id, nombre: cuerpo.nombre });
         }
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
@@ -500,6 +510,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
               valorNuevo: { id: sitioId, ...cuerpo },
             },
           ]);
+          await alCorregir.sitio(tx, { organizacionId: actor.organizacionId, clienteId: id, sitioId });
         }
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),

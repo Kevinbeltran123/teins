@@ -86,6 +86,26 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
     expect((await pedir(org.tecnico.cookie, "POST", `/api/clientes/${cliente.id}`, { nombre: "X" })).statusCode).toBe(403);
   });
 
+  it("corregir el sitio o el nombre del cliente llega a los teléfonos con sus visitas por hacer; las canceladas no vuelven", async () => {
+    const usuario = `t.${randomUUID().slice(0, 8)}`;
+    const { id: tecnicoId } = await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre: "Técnico del sitio", rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    const cookie = await iniciarSesion(app, usuario, "contrasena-de-prueba");
+    const cliente = await clienteConSitio("Clinica Santafe");
+    const visita = await programar(cliente, [tecnicoId], "2027-04-01");
+    const cancelada = await programar(cliente, [tecnicoId], "2027-04-02");
+    expect((await pedir(org.oficina.cookie, "POST", `/api/visitas/${cancelada.id}/cancelar`, { version: 1, motivo: "Aplazada" })).statusCode).toBe(200);
+    const antes = (await bajar(cookie)).json();
+
+    const sitio = await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios/${cliente.sitios[0]!.id}`, { nombre: "Sede Norte", direccion: "Carrera [N] # [N]-[N]" });
+    expect(sitio.statusCode, sitio.body).toBe(200);
+    // El teléfono que ya tenía la visita recibe la dirección nueva: el técnico no va a la vieja.
+    const tras = (await bajar(cookie, antes.puntoDeControl)).json();
+    expect(tras.cambios).toEqual([{ tipo: "visita", visita: expect.objectContaining({ id: visita.id, sitio: { nombre: "Sede Norte", direccion: "Carrera [N] # [N]-[N]" } }) }]);
+
+    expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}`, { nombre: "Clínica Santa Fe" })).statusCode).toBe(200);
+    expect((await bajar(cookie, tras.puntoDeControl)).json().cambios).toEqual([{ tipo: "visita", visita: expect.objectContaining({ id: visita.id, cliente: { nombre: "Clínica Santa Fe" } }) }]);
+  });
+
   it("con visitas por hacer no se archiva; archivado sale de la lista, de programar y de los envíos, y se recupera", async () => {
     const cliente = await clienteConSitio();
     const visita = await programar(cliente, [org.tecnico.id], "2027-01-15");
