@@ -355,7 +355,7 @@ function FilaVisita({
         {inactivos.length > 0 && (
           <span className="sub">
             {inactivos.length === v.tecnicos.length && <Insignia tono="alerta">Nadie la hará</Insignia>}{" "}
-            {`${enLista(inactivos.map((t) => t.nombre))} ya no ${inactivos.length === 1 ? "está activo" : "están activos"}`}
+            {`Se desactivó a ${enLista(inactivos.map((t) => t.nombre))}`}
           </span>
         )}
       </CeldaTabla>
@@ -606,7 +606,7 @@ function Reasignar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: () =
           <ul aria-label="Lo que cambia" className="flex flex-col gap-1.5 rounded-control bg-panel-hundido px-3 py-2.5 text-ayuda">
             {inactivos.map((n) => (
               <li key={`inactivo-${n}`}>
-                <b className="font-medium">{n}</b> ya no está activo y sale de la visita.
+                Se desactivó a <b className="font-medium">{n}</b>: sale de la visita.
               </li>
             ))}
             {cambios.finales.length > 0 &&
