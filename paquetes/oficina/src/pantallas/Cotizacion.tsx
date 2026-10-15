@@ -39,7 +39,7 @@ import { type Plantillas } from "../documentos";
 import { useConexion } from "../conexion";
 import { useGuardadoAutomatico } from "../guardado";
 import { useBorrador } from "../borrador";
-import { consultasDeCotizaciones, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
+import { consultasDeCotizaciones, devolverLinea, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
 import { aFechaCorta, leerPesos, pesos } from "../formato";
 import { consultasDeProgramacion } from "../programacion";
 import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
@@ -260,10 +260,17 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   function quitar(linea: LineaEditable) {
     const posicion = borrador.lineas.findIndex((l) => l.id === linea.id);
     actualizar({ lineas: borrador.lineas.filter((l) => l.id !== linea.id) });
-    // Se deshace fácil (DESIGN.md): al instante, con "Deshacer".
+    // Se deshace fácil (DESIGN.md): al instante, con "Deshacer", que la devuelve una sola vez.
     notificar({
       texto: `Línea quitada: ${linea.descripcion || "sin descripción"}`,
-      accion: { texto: "Deshacer", alHacer: () => setBorrador((b) => ({ ...b, lineas: [...b.lineas.slice(0, posicion), linea, ...b.lineas.slice(posicion)] })) },
+      accion: {
+        texto: "Deshacer",
+        alHacer: () =>
+          setBorrador((b) => {
+            const lineas = devolverLinea(b.lineas, linea, posicion);
+            return lineas === b.lineas ? b : { ...b, lineas };
+          }),
+      },
     });
   }
 

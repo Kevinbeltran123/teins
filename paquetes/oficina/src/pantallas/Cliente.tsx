@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
@@ -77,6 +77,9 @@ export function DetalleCliente({ id }: { id: string }) {
   const navegar = useNavigate();
   const recuperar = useAccionDeProgramacion(() => cliente.llamar("recuperarCliente", { parametros: { id } }));
   const recuperarSitio = useAccionDeProgramacion((sitioId: string) => cliente.llamar("recuperarSitio", { parametros: { id, sitioId } }));
+  // «Deshacer» al archivar un sitio lo recupera una sola vez: si ya se recuperó desde su fila, no hace nada.
+  const ultimo = useRef(consulta.data);
+  ultimo.current = consulta.data;
   // Lo creado o cambiado en esta visita a la pantalla: va primero y resaltado (DESIGN.md, crear y editar).
   const [recientes, setRecientes] = useState<string[]>([]);
   // Se llegó desde "Agregar contactos" al crear el cliente: "Nuevo contacto" queda con el foco (iteración 27).
@@ -323,7 +326,12 @@ export function DetalleCliente({ id }: { id: string }) {
           alArchivar={() =>
             notificar({
               texto: `Sitio ${archivandoSitio.nombre} archivado`,
-              accion: { texto: "Deshacer", alHacer: () => recuperarSitio.mutate(archivandoSitio.id) },
+              accion: {
+                texto: "Deshacer",
+                alHacer: () => {
+                  if (ultimo.current?.sitios.find((s) => s.id === archivandoSitio.id)?.archivado) recuperarSitio.mutate(archivandoSitio.id);
+                },
+              },
             })
           }
         />

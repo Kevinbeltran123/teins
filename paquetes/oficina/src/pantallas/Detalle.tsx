@@ -1000,7 +1000,16 @@ function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: 
   const [leidoAlAbrir] = useState(l.leidoHasta);
   const revisado = l.estado === "revisado";
   const corregible = (c: ComentarioDeOficina) => c.autor.id === usuarioId && !revisado;
-  const restaurar = (comentarioId: string) => corregir.mutate({ comentarioId, accion: { tipo: "restaurar" } });
+  // «Deshacer» (en la notificación o en el comentario) restaura una sola vez: si ya no está retirado, o ya se está
+  // restaurando, no hace nada. Si no, la segunda vez el servidor respondería «no estaba retirado» como un error.
+  const ultimo = useRef(l);
+  ultimo.current = l;
+  const restaurando = useRef(new Set<string>());
+  const restaurar = (comentarioId: string) => {
+    if (restaurando.current.has(comentarioId) || !ultimo.current.comentarios.find((c) => c.id === comentarioId)?.retirado) return;
+    restaurando.current.add(comentarioId);
+    corregir.mutate({ comentarioId, accion: { tipo: "restaurar" } }, { onSettled: () => restaurando.current.delete(comentarioId) });
+  };
   const retirar = (comentarioId: string) =>
     corregir.mutate(
       { comentarioId, accion: { tipo: "retirar" } },

@@ -124,14 +124,19 @@ export function useCancelarEnvio(
     try {
       await corregirEnvio(e.id, "cancelar");
       recargar();
+      // Una sola vez: reanudar dos veces fallaría la segunda («no estaba cancelado») y diría que no se pudo deshacer.
+      let deshecho = false;
       notificar({
         texto: `Envío a ${e.contacto.nombre} cancelado`,
         accion: {
           texto: "Deshacer",
-          alHacer: () =>
+          alHacer: () => {
+            if (deshecho) return;
+            deshecho = true;
             void corregirEnvio(e.id, "reanudar")
               .then(recargar)
-              .catch(() => setError(`No se pudo deshacer: el envío a ${e.contacto.nombre} sigue cancelado.`)),
+              .catch(() => setError(`No se pudo deshacer: el envío a ${e.contacto.nombre} sigue cancelado.`));
+          },
         },
       });
     } catch (causa) {
