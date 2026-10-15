@@ -10,11 +10,20 @@ export const consultasDeAdministracion = {
   accesos: () => queryOptions({ queryKey: ["administracion", "accesos"], queryFn: () => cliente.llamar("listarAccesosDeClientes") }),
 };
 
-/** Toda acción de administración vuelve a leer las listas (el servidor es la fuente de verdad), en una transición. */
+/**
+ * Toda acción de administración vuelve a leer las listas (el servidor es la fuente de verdad), en una transición. También
+ * los técnicos que se ofrecen al programar: uno recién creado, desactivado o reactivado cambia esa lista.
+ */
 export function useAccion<E, R>(accion: (entrada: E) => Promise<R>) {
   const consultas = useQueryClient();
   // La relectura no se espera: si falla, no convierte en error una acción que el servidor ya hizo.
-  return useMutation({ mutationFn: accion, onSettled: () => void conTransicion(() => consultas.invalidateQueries({ queryKey: ["administracion"] })).catch(() => undefined) });
+  return useMutation({
+    mutationFn: accion,
+    onSettled: () => {
+      void consultas.invalidateQueries({ queryKey: ["programacion", "tecnicos"] });
+      void conTransicion(() => consultas.invalidateQueries({ queryKey: ["administracion"] })).catch(() => undefined);
+    },
+  });
 }
 
 /** QR como imagen SVG (la biblioteca se carga solo cuando se necesita). */

@@ -50,8 +50,13 @@ export function intervalo(fecha: string, h: Horario, terminadaEn: string | null 
 
 const seCruzan = (a: [number, number], b: [number, number]) => a[0] < b[1] && b[0] < a[1];
 
-/** Con qué visita se cruza el técnico a esa hora, si se cruza (sin contar la que se está cambiando). */
+/**
+ * Con qué visita se cruza el técnico a esa hora, si se cruza (sin contar la que se está cambiando). Al reasignar, quien
+ * ya tenía esa visita no se cruza consigo mismo: el servidor solo revisa a los que entran, y quitarlo en silencio al
+ * abrir el diálogo lo sacaría de la visita sin que nadie lo pidiera.
+ */
 export function cruceDe(tecnicoId: string, fecha: string, pedido: Horario, ocupaciones: readonly Ocupacion[], excluir?: string): Ocupacion | null {
+  if (excluir && ocupaciones.some((o) => o.visitaId === excluir && o.tecnicoId === tecnicoId)) return null;
   const rango = intervalo(fecha, pedido);
   return ocupaciones.find((o) => o.tecnicoId === tecnicoId && o.visitaId !== excluir && seCruzan(rango, intervalo(fecha, o, o.terminadaEn))) ?? null;
 }

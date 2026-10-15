@@ -14,12 +14,29 @@ export const consultasDeProgramacion = {
   clientes: (vista: "activos" | "archivados" = "activos") =>
     queryOptions({ queryKey: ["programacion", "clientes", vista], queryFn: () => cliente.llamar("listarClientes", { consulta: { vista } }) }),
   cliente: (id: string) => queryOptions({ queryKey: ["programacion", "cliente", id], queryFn: () => cliente.llamar("obtenerCliente", { parametros: { id } }) }),
-  tecnicos: () => queryOptions({ queryKey: ["programacion", "tecnicos"], queryFn: () => cliente.llamar("listarTecnicos"), staleTime: 5 * 60_000 }),
+  // Un minuto, como el catálogo: un técnico que otra persona desactiva deja de ofrecerse pronto. Lo que se cambia aquí
+  // en Administración la vuelve a leer al instante.
+  tecnicos: () => queryOptions({ queryKey: ["programacion", "tecnicos"], queryFn: () => cliente.llamar("listarTecnicos"), staleTime: 60_000 }),
   /** Lo que ocupa a cada técnico ese día (ADR-0037): para programar solo con los libres. */
   ocupacion: (fecha: string) => queryOptions({ queryKey: ["programacion", "ocupacion", fecha], queryFn: () => cliente.llamar("ocupacionDeTecnicos", { consulta: { fecha } }), staleTime: 15_000 }),
   visitas: (vista: Vista, hoy: string) =>
     queryOptions({ queryKey: ["programacion", "visitas", vista, hoy], queryFn: () => cliente.llamar("listarVisitas", { consulta: { vista, hoy } }), refetchInterval: 60_000 }),
 };
+
+/**
+ * Lo que cambia al reasignar (iteración 24c): quién la recibe y quién deja de verla. El servidor solo asigna técnicos
+ * activos: uno desactivado sale al guardar, sin bloquear, y se dice aparte. Sin la lista de activos, no sale nadie.
+ */
+export function cambiosAlReasignar(antes: readonly { id: string }[], elegidos: readonly string[], activos: ReadonlySet<string> | undefined) {
+  const inactivos = activos ? antes.map((t) => t.id).filter((id) => !activos.has(id)) : [];
+  const finales = elegidos.filter((id) => !inactivos.includes(id));
+  return {
+    finales,
+    inactivos,
+    salen: antes.map((t) => t.id).filter((id) => !finales.includes(id) && !inactivos.includes(id)),
+    entran: finales.filter((id) => !antes.some((t) => t.id === id)),
+  };
+}
 
 /**
  * Toda acción vuelve a leer clientes y visitas: el servidor es la fuente de verdad. Dentro de una transición: la

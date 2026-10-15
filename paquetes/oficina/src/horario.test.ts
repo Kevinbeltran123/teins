@@ -29,6 +29,16 @@ describe("el horario de una visita (ADR-0037)", () => {
     expect(cruceDe("ana", FECHA, { horaInicio: "10:00", horaFin: "11:00" }, ana, ana[0]!.visitaId)).toBeNull();
   });
 
+  it("al reasignar, quien ya tenía la visita no se cruza consigo mismo: el servidor solo revisa a los que entran", () => {
+    // La de Ana, sin duración y ya terminada a las 10:00 a. m.; después le programaron otra a las 2:00 p. m.
+    const suya = ocupacion({ tecnicoId: "ana", horaInicio: "08:00", terminadaEn: "2026-10-02T15:00:00.000Z" });
+    const otra = ocupacion({ tecnicoId: "ana", horaInicio: "14:00", horaFin: "16:00" });
+    expect(cruceDe("ana", FECHA, { horaInicio: "08:00", horaFin: null }, [suya, otra], suya.visitaId)).toBeNull();
+    // Quien entra sí se revisa.
+    const deLuis = ocupacion({ tecnicoId: "luis", horaInicio: "14:00", horaFin: "16:00" });
+    expect(cruceDe("luis", FECHA, { horaInicio: "08:00", horaFin: null }, [suya, otra, deLuis], suya.visitaId)).toBe(deLuis);
+  });
+
   it("dice cuándo tiene la siguiente o desde cuándo está libre", () => {
     const juan = [ocupacion({ tecnicoId: "juan", horaInicio: "14:00" })];
     expect(libreTexto("juan", FECHA, { horaInicio: "09:00", horaFin: "11:00" }, juan)).toBe("Libre · tiene otra a las 2:00 p. m.");

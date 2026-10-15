@@ -83,7 +83,18 @@ export function errorDelCampo(error: unknown, clave: string): string | undefined
   return error.problema.campos?.some((c) => claveDeRuta(c.ruta) === clave) ? "Revise este dato: no tiene la forma esperada." : undefined;
 }
 
-export const MENSAJE_VERSION_NUEVA = "Hay una versión nueva de TEINS: recargue la página e intente de nuevo.";
+/**
+ * Al cambiar un campo, su error se va: ya no describe lo que hay. Los de los demás campos se quedan hasta corregirlos.
+ * Sin error en esos campos, devuelve el mismo objeto y la pantalla no se vuelve a pintar.
+ */
+export function sinError<E extends object>(errores: E, ...campos: (keyof E)[]): E {
+  if (!campos.some((c) => errores[c] !== undefined)) return errores;
+  const resto: Partial<E> = { ...errores };
+  for (const c of campos) delete resto[c];
+  return resto as E;
+}
+
+export const MENSAJE_VERSION_NUEVA ="Hay una versión nueva de TEINS: recargue la página e intente de nuevo.";
 
 /**
  * Una pestaña abierta desde antes de un despliegue pide archivos que ya cambiaron de nombre: el navegador lanza un

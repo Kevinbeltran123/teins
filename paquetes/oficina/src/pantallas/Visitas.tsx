@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import type { Respuesta } from "@teins/protocolo";
+import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
   BarraLista,
@@ -18,6 +18,7 @@ import {
   CampoTextoLargo,
   Casilla,
   CeldaTabla,
+  Insignia,
   Confirmacion,
   conTransicion,
   Dialogo,
@@ -44,9 +45,11 @@ import { cliente } from "../api";
 import { csvDetalle, csvResumen, descargar } from "../csv";
 import { aFechaHora } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
-import { consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
+import { sinError } from "../mensajes";
+import { cambiosAlReasignar, consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
 import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../horario";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
+import { enLista } from "./Envios";
 import { CuandoVisita, resumenDeHorario, TecnicosDisponibles } from "./HorarioDeVisita";
 
 type Visita = Respuesta<"listarVisitas">["visitas"][number];
@@ -115,6 +118,9 @@ export function Visitas() {
   const hoy = hoyLocal();
   const consulta = useQuery(consultasDeProgramacion.visitas(vista, hoy));
   const proximas = useQuery(consultasDeProgramacion.visitas("proximas", hoy));
+  // Los técnicos activos: un asignado que ya no lo está se marca en la fila (nadie más la ve en su teléfono).
+  const tecnicos = useQuery(consultasDeProgramacion.tecnicos());
+  const activos = tecnicos.data && new Set(tecnicos.data.tecnicos.map((t) => t.id));
   const consultas = useQueryClient();
   const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
   const cerrarEdicion = () => setEdicion(null);
@@ -141,6 +147,17 @@ export function Visitas() {
   }
   const deHoy = proximas.data?.visitas.filter((v) => v.programadaPara === hoy).length;
   const cantidadProximas = proximas.data?.visitas.length;
+  /**
+   * Tras un conflicto la lista ya se volvió a leer: el diálogo sigue abierto con la visita vigente y el reintento va sobre
+   * su versión nueva (la persona ya vio el aviso). Antes, sigue con la que abrió: un cambio ajeno no se pisa sin avisar.
+   */
+  const releer = () =>
+    setEdicion((e) => {
+      if (!e) return e;
+      const leidas = consultas.getQueriesData<Respuesta<"listarVisitas">>({ queryKey: ["programacion", "visitas"] }).flatMap(([, d]) => d?.visitas ?? []);
+      const vigente = leidas.filter((x) => x.id === e.v.id).sort((a, b) => b.version - a.version)[0];
+      return vigente && vigente.version > e.v.version ? { ...e, v: vigente } : e;
+    });
 
   return (
     <>
@@ -216,7 +233,7 @@ export function Visitas() {
                   </td>
                 </tr>
                 {d.visitas.map((v) => (
-                  <FilaVisita key={v.id} visita={v} hoy={hoy} busqueda={busqueda} resaltada={recientes.includes(v.id)} editar={(tipo) => setEdicion({ tipo, v })} />
+                  <FilaVisita key={v.id} visita={v} hoy={hoy} busqueda={busqueda} resaltada={recientes.includes(v.id)} activos={activos} editar={(tipo) => setEdicion({ tipo, v })} />
                 ))}
               </CuerpoTabla>
             ))}
@@ -239,6 +256,7 @@ export function Visitas() {
       {edicion?.tipo === "reasignar" && (
         <Reasignar
           v={edicion.v}
+          releer={releer}
           alCerrar={cerrarEdicion}
           alGuardar={() => {
             cerrarEdicion();
@@ -250,6 +268,7 @@ export function Visitas() {
       {edicion?.tipo === "reprogramar" && (
         <Reprogramar
           v={edicion.v}
+          releer={releer}
           alCerrar={cerrarEdicion}
           alGuardar={(fecha) => {
             cerrarEdicion();
@@ -261,6 +280,7 @@ export function Visitas() {
       {edicion?.tipo === "cancelar" && (
         <Cancelar
           v={edicion.v}
+          releer={releer}
           alCerrar={cerrarEdicion}
           alCancelar={() => {
             const id = edicion.v.id;
@@ -289,8 +309,24 @@ function Avance({ v }: { v: Visita }) {
   );
 }
 
-function FilaVisita({ visita: v, hoy, busqueda, resaltada, editar }: { visita: Visita; hoy: string; busqueda: string; resaltada: boolean; editar: (tipo: Edicion["tipo"]) => void }) {
+function FilaVisita({
+  visita: v,
+  hoy,
+  busqueda,
+  resaltada,
+  activos,
+  editar,
+}: {
+  visita: Visita;
+  hoy: string;
+  busqueda: string;
+  resaltada: boolean;
+  activos: ReadonlySet<string> | undefined;
+  editar: (tipo: Edicion["tipo"]) => void;
+}) {
   const { hora, detalle } = horarioTexto(v);
+  // Un técnico desactivado ya no la ve en su teléfono: en una visita por hacer se dice, y si no queda nadie, nadie la hará.
+  const inactivos = activos && !v.cancelada && v.programadaPara >= hoy ? v.tecnicos.filter((t) => !activos.has(t.id)) : [];
   return (
     <FilaTabla resaltada={resaltada} clave={v.id}>
       <CeldaTabla>
@@ -316,6 +352,12 @@ function FilaVisita({ visita: v, hoy, busqueda, resaltada, editar }: { visita: V
       </CeldaTabla>
       <CeldaTabla>
         <Marcado texto={v.tecnicos.map((t) => t.nombre).join(", ")} busqueda={busqueda} />
+        {inactivos.length > 0 && (
+          <span className="sub">
+            {inactivos.length === v.tecnicos.length && <Insignia tono="alerta">Nadie la hará</Insignia>}{" "}
+            {`${enLista(inactivos.map((t) => t.nombre))} ya no ${inactivos.length === 1 ? "está activo" : "están activos"}`}
+          </span>
+        )}
       </CeldaTabla>
       <CeldaTabla clase="sec">{v.motivo}</CeldaTabla>
       <CeldaTabla>
@@ -441,6 +483,8 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
                 // Con un solo sitio, queda elegido.
                 const deEse = lista.find((c) => c.id === id)?.sitios ?? [];
                 setSitioId(deEse.length === 1 ? deEse[0]!.id : "");
+                // El sitio era del cliente anterior: su error tampoco describe lo que hay.
+                setErrores((e) => sinError(e, "cliente", "sitio"));
               }}
               opciones={lista.map((c) => ({ valor: c.id, texto: c.nombre }))}
             />
@@ -449,7 +493,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
               vacio={clienteId ? "Elija un sitio" : "Primero el cliente"}
               valor={sitioId}
               error={errores.sitio}
-              onCambio={setSitioId}
+              onCambio={(id) => (setSitioId(id), setErrores((e) => sinError(e, "sitio")))}
               deshabilitado={!clienteId}
               opciones={sitios.map((x) => ({ valor: x.id, texto: x.nombre }))}
             />
@@ -467,7 +511,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
           {error && <Aviso tono="error">{error}</Aviso>}
         </div>
         <div className="col-f">
-          <TecnicosDisponibles tecnicos={tecnicos.data.tecnicos} fecha={fecha} horario={horario} elegidos={elegidos} alCambiar={setElegidos} error={errores.tecnicos} />
+          <TecnicosDisponibles tecnicos={tecnicos.data.tecnicos} fecha={fecha} horario={horario} elegidos={elegidos} alCambiar={(ids) => (setElegidos(ids), setErrores((e) => sinError(e, "tecnicos")))} error={errores.tecnicos} />
         </div>
       </form>
     );
@@ -499,26 +543,26 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
 // Una visita -------------------------------------------------------------------------------------
 
 const deLaVisita = (v: Visita) => `${v.cliente.nombre} · ${dia(v.programadaPara)} · ${resumenDeHorario(v)}`;
+const esConflicto = (e: unknown) => e instanceof ErrorApi && e.codigo === "conflicto_de_version";
 
-function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void; alGuardar: () => void }) {
+function Reasignar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: () => void; alCerrar: () => void; alGuardar: () => void }) {
   const formulario = useId();
   const tecnicos = useQuery(consultasDeProgramacion.tecnicos());
   const [elegidos, setElegidos] = useState(v.tecnicos.map((t) => t.id));
   const [errorCampo, setErrorCampo] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
-  const accion = useAccionDeProgramacion(() => cliente.llamar("reasignarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, tecnicos: elegidos } }));
+  // Lo que cambia, antes de guardarlo (iteración 24c): quién deja de ver la visita, quién la recibe y quién sale por no
+  // estar activo (no se puede quitar desde la lista, que solo trae a los activos).
+  const cambios = cambiosAlReasignar(v.tecnicos, elegidos, tecnicos.data && new Set(tecnicos.data.tecnicos.map((t) => t.id)));
+  const accion = useAccionDeProgramacion(() => cliente.llamar("reasignarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, tecnicos: cambios.finales } }));
 
-  // Lo que cambia, antes de guardarlo (iteración 24c): quién deja de ver la visita y quién la recibe.
   const nombreDe = (id: string) => tecnicos.data?.tecnicos.find((t) => t.id === id)?.nombre ?? v.tecnicos.find((t) => t.id === id)?.nombre ?? "Un técnico";
-  const antes = v.tecnicos.map((t) => t.id);
-  const salen = antes.filter((id) => !elegidos.includes(id)).map(nombreDe);
-  const entran = elegidos.filter((id) => !antes.includes(id)).map(nombreDe);
-  const lista = (nombres: string[]) => (nombres.length === 1 ? nombres[0]! : `${nombres.slice(0, -1).join(", ")} y ${nombres.at(-1)}`);
-  const verbo = entran.length > 0 ? `Reasignar a ${lista(entran)}` : salen.length > 0 ? `Quitar a ${lista(salen)}` : "Guardar técnicos";
+  const [salen, entran, inactivos] = [cambios.salen.map(nombreDe), cambios.entran.map(nombreDe), cambios.inactivos.map(nombreDe)];
+  const verbo = entran.length > 0 ? `Reasignar a ${enLista(entran)}` : salen.length + inactivos.length > 0 ? `Quitar a ${enLista([...salen, ...inactivos])}` : "Guardar técnicos";
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    if (elegidos.length === 0) return setErrorCampo("Asigne al menos un técnico.");
+    if (cambios.finales.length === 0) return setErrorCampo("Asigne al menos un técnico.");
     setErrorCampo(undefined);
     setError(null);
     try {
@@ -526,6 +570,7 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
       alGuardar();
     } catch (e) {
       // Tras un conflicto la lista ya se volvió a leer: el diálogo sigue abierto y reintenta con la versión nueva.
+      if (esConflicto(e)) releer();
       setError(mensajeDeProgramacion(e));
     }
   }
@@ -543,7 +588,7 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
           <Boton onClick={alCerrar} disabled={accion.isPending}>
             Cancelar
           </Boton>
-          <Boton type="submit" form={formulario} variante="principal" cargando={accion.isPending} disabled={salen.length + entran.length === 0}>
+          <Boton type="submit" form={formulario} variante="principal" cargando={accion.isPending} disabled={salen.length + entran.length + inactivos.length === 0}>
             {verbo}
           </Boton>
         </>
@@ -555,20 +600,27 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
         ) : tecnicos.isError ? (
           <Aviso tono="error">No se pudieron cargar los técnicos.</Aviso>
         ) : (
-          <TecnicosDisponibles tecnicos={tecnicos.data.tecnicos} fecha={v.programadaPara} horario={v} elegidos={elegidos} alCambiar={setElegidos} excluir={v.id} error={errorCampo} />
+          <TecnicosDisponibles tecnicos={tecnicos.data.tecnicos} fecha={v.programadaPara} horario={v} elegidos={elegidos} alCambiar={(ids) => (setElegidos(ids), setErrorCampo(undefined))} excluir={v.id} error={errorCampo} />
         )}
-        {elegidos.length > 0 && salen.length + entran.length > 0 && (
+        {(inactivos.length > 0 || (cambios.finales.length > 0 && salen.length + entran.length > 0)) && (
           <ul aria-label="Lo que cambia" className="flex flex-col gap-1.5 rounded-control bg-panel-hundido px-3 py-2.5 text-ayuda">
-            {salen.map((n) => (
-              <li key={`sale-${n}`}>
-                <b className="font-medium">{n}</b> deja de verla en su teléfono. Lo que ya empezó se conserva y lo puede enviar.
+            {inactivos.map((n) => (
+              <li key={`inactivo-${n}`}>
+                <b className="font-medium">{n}</b> ya no está activo y sale de la visita.
               </li>
             ))}
-            {entran.map((n) => (
-              <li key={`entra-${n}`}>
-                <b className="font-medium">{n}</b> la recibe en su teléfono.
-              </li>
-            ))}
+            {cambios.finales.length > 0 &&
+              salen.map((n) => (
+                <li key={`sale-${n}`}>
+                  <b className="font-medium">{n}</b> deja de verla en su teléfono. Lo que ya empezó se conserva y lo puede enviar.
+                </li>
+              ))}
+            {cambios.finales.length > 0 &&
+              entran.map((n) => (
+                <li key={`entra-${n}`}>
+                  <b className="font-medium">{n}</b> la recibe en su teléfono.
+                </li>
+              ))}
           </ul>
         )}
         {error && <Aviso tono="error">{error}</Aviso>}
@@ -577,7 +629,7 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
   );
 }
 
-function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void; alGuardar: (fecha: string) => void }) {
+function Reprogramar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: () => void; alCerrar: () => void; alGuardar: (fecha: string) => void }) {
   const formulario = useId();
   const hoy = hoyLocal();
   const [fecha, setFecha] = useState(v.programadaPara < hoy ? hoy : v.programadaPara);
@@ -593,6 +645,7 @@ function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => vo
       await accion.mutateAsync(undefined);
       alGuardar(fecha);
     } catch (e) {
+      if (esConflicto(e)) releer();
       setError(mensajeDeProgramacion(e));
     }
   }
@@ -627,7 +680,7 @@ function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => vo
   );
 }
 
-function Cancelar({ v, alCerrar, alCancelar }: { v: Visita; alCerrar: () => void; alCancelar: () => void }) {
+function Cancelar({ v, releer, alCerrar, alCancelar }: { v: Visita; releer: () => void; alCerrar: () => void; alCancelar: () => void }) {
   const [motivo, setMotivo] = useState("");
   const accion = useAccionDeProgramacion(() => cliente.llamar("cancelarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, motivo: motivo.trim() } }));
   return (
@@ -638,7 +691,15 @@ function Cancelar({ v, alCerrar, alCancelar }: { v: Visita; alCerrar: () => void
       nivel="irreversible"
       validar={() => (motivo.trim() === "" ? "Escriba por qué se cancela: queda en el registro." : null)}
       mensajeDeError={mensajeDeProgramacion}
-      accion={() => accion.mutateAsync(undefined)}
+      accion={async () => {
+        try {
+          await accion.mutateAsync(undefined);
+        } catch (e) {
+          // El diálogo sigue abierto con el aviso: el reintento va sobre la versión que dejó la otra persona.
+          if (esConflicto(e)) releer();
+          throw e;
+        }
+      }}
       alCerrar={alCerrar}
       alTerminar={alCancelar}
       consecuencias={[
