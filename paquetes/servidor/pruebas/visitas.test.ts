@@ -27,6 +27,16 @@ async function programar(cliente: { id: string; sitios: { id: string }[] }, tecn
   return r.json();
 }
 
+/** Hasta que una consulta espere lo que tiene tomado la conexión `pid` (true) o pasen 10 s (false). */
+async function esperarBloqueadoPor(pid: number) {
+  for (let i = 0; i < 200; i++) {
+    const { rows } = await s.propietario.pool.query("select count(*)::int as n from pg_stat_activity where $1 = any(pg_blocking_pids(pid))", [pid]);
+    if (rows[0].n > 0) return true;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return false;
+}
+
 describe("clientes y sitios (iteración 7)", () => {
   it("oficina crea un cliente con su primer sitio y le agrega otro; queda en la auditoría", async () => {
     const cliente = await clienteConSitio("Cliente Uno");
@@ -108,15 +118,6 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
 
   it("programar mientras otra persona archiva el cliente: la visita espera al archivo y no queda en un cliente archivado", async () => {
     const cliente = await clienteConSitio();
-    /** Hasta que una consulta espere lo que tiene tomado `pid` (true) o pasen 10 s (false). */
-    const esperarBloqueadoPor = async (pid: number) => {
-      for (let i = 0; i < 200; i++) {
-        const { rows } = await s.propietario.pool.query("select count(*)::int as n from pg_stat_activity where $1 = any(pg_blocking_pids(pid))", [pid]);
-        if (rows[0].n > 0) return true;
-        await new Promise((r) => setTimeout(r, 50));
-      }
-      return false;
-    };
     // Otra persona está archivando el cliente: tiene su fila tomada y todavía no confirma.
     const archivando = await s.propietario.pool.connect();
     try {
@@ -367,5 +368,26 @@ describe("visitas con horario (ADR-0037)", () => {
     expect(r.json().codigo).toBe("tecnico_ocupado");
     const ok = await pedir(org.oficina.cookie, "POST", `/api/visitas/${otra.id}/reprogramar`, { version: 1, programadaPara: "2026-11-05", horaInicio: "10:00", horaFin: null, motivo: "Mantenimiento" });
     expect(ok.json()).toMatchObject({ horaInicio: "10:00", horaFin: null });
+  });
+
+  it("programar toma el día antes que el registro de cambios, como reprogramar: los dos a la vez no se traban", async () => {
+    const cliente = await clienteConSitio();
+    const fecha = "2027-07-01";
+    // Otra persona reprograma una visita a ese día: ya tomó el día y le falta registrar sus cambios.
+    const reprogramando = await s.propietario.pool.connect();
+    try {
+      await reprogramando.query("begin");
+      await reprogramando.query("select pg_advisory_xact_lock(hashtext($1))", [`visitas:${org.organizacionId}:${fecha}`]);
+      const { rows } = await reprogramando.query("select pg_backend_pid() as pid");
+      const programada = pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: fecha, tecnicos: [org.tecnico.id] });
+      expect(await esperarBloqueadoPor(rows[0].pid)).toBe(true);
+      // Mientras programar espera el día, no tiene tomado el registro de cambios: reprogramar lo toma y termina.
+      const { rows: libre } = await reprogramando.query("select pg_try_advisory_xact_lock(hashtextextended($1, 0)) as libre", [`cambios:${org.organizacionId}`]);
+      expect(libre[0].libre).toBe(true);
+      await reprogramando.query("commit");
+      expect((await programada).statusCode).toBe(201);
+    } finally {
+      reprogramando.release(true);
+    }
   });
 });

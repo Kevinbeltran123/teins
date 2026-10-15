@@ -349,13 +349,16 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         });
       }
 
+      /** Un bloqueo por organización y día serializa a quienes programan ese día a la vez, para que dos no se crucen. */
+      const tomarDia = (tx: TxOrganizacion, organizacionId: string, fecha: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`visitas:${organizacionId}:${fecha}`}))`);
+
       /**
        * Rechaza a los técnicos que ya tienen otra visita a esa hora (ADR-0037), aunque se llame a la API sin pasar por la
-       * pantalla. Un bloqueo por organización y día serializa a quienes programan a la vez, para que dos no se crucen.
+       * pantalla, con el día tomado.
        */
       async function sinCruces(tx: TxOrganizacion, organizacionId: string, fecha: string, horario: Horario, tecnicos: readonly string[], excluir?: string) {
         if (tecnicos.length === 0) return;
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`visitas:${organizacionId}:${fecha}`}))`);
+        await tomarDia(tx, organizacionId, fecha);
         const pedido = intervaloDe({ programadaPara: fecha, ...horario, terminadaEn: null });
         const delDia = await tx
           .select()
@@ -395,6 +398,9 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         manejar: async ({ cuerpo, actor, correlacion }) => {
           const tecnicos = await tecnicosValidos(actor.organizacionId, cuerpo.tecnicos);
           return enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            // El día va antes que el registro de cambios que toma crear, en el mismo orden que reprogramar y reasignar:
+            // al revés, programar y reprogramar ese día a la vez se esperan uno al otro y Postgres aborta a uno.
+            await tomarDia(tx, actor.organizacionId, cuerpo.programadaPara);
             // Primero se valida el pedido (fecha, sitio); el cruce se mira después, sin contarse a sí misma.
             const id = await publica.crear(tx, { organizacionId: actor.organizacionId, autorId: actor.usuarioId, correlacion, ...cuerpo, tecnicos });
             await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, tecnicos, id);
