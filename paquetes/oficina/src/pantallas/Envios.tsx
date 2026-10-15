@@ -11,9 +11,24 @@ import { Lienzo, VistaDeCorreo, VistaDeWhatsapp, type EdicionDeCorreo } from "./
 type Contacto = Respuesta<"obtenerCliente">["contactos"][number];
 type Envio = Respuesta<"obtenerInforme">["versiones"][number]["envios"][number];
 
-/** Quienes reciben ese documento por algún canal: se marcan por omisión al publicar (ADR-0028, ADR-0029). */
-export const receptores = (contactos: readonly Contacto[], documento: "informes" | "cotizaciones") =>
-  contactos.filter((c) => (documento === "informes" ? c.recibeInformes : c.recibeCotizaciones) && (c.recibeCorreo || c.recibeWhatsapp)).map((c) => c.id);
+/**
+ * Quienes reciben ese documento por algún canal: se marcan por omisión al publicar (ADR-0028, ADR-0029). De un cliente
+ * archivado, nadie: no recibe envíos (ADR-0035), y con destinatarios el servidor no publicaría.
+ */
+export const receptores = (cliente: Pick<Respuesta<"obtenerCliente">, "archivado" | "contactos">, documento: "informes" | "cotizaciones") =>
+  cliente.archivado ? [] : cliente.contactos.filter((c) => (documento === "informes" ? c.recibeInformes : c.recibeCotizaciones) && (c.recibeCorreo || c.recibeWhatsapp)).map((c) => c.id);
+
+/** En vez de elegir a quién enviar: el cliente está archivado, se publica sin enviar y se dice cómo enviarla después. */
+export function ClienteArchivado({ cliente: c }: { cliente: { id: string; nombre: string } }) {
+  return (
+    <Aviso tono="alerta">
+      <span>{`${c.nombre} está archivado: sus contactos no reciben envíos y se publica sin enviar. Para enviarla, recupere el cliente y use «Enviar a un contacto» en la versión publicada.`}</span>
+      <Link to="/clientes/$id" params={{ id: c.id }} className="migas">
+        {`Ir a ${c.nombre}`}
+      </Link>
+    </Aviso>
+  );
+}
 
 const canalesDe = (c: Contacto) => [...(c.recibeCorreo ? ["Correo"] : []), ...(c.recibeWhatsapp ? ["WhatsApp"] : [])];
 

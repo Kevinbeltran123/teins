@@ -43,7 +43,7 @@ import { type Plantillas } from "../documentos";
 import { useConexion } from "../conexion";
 import { useGuardadoAutomatico } from "../guardado";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
-import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores, useCancelarEnvio } from "./Envios";
+import { ClienteArchivado, copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores, useCancelarEnvio } from "./Envios";
 import { AvisoDeConflicto, EstadoDeGuardado } from "./Guardado";
 import { BotonMostrarVista, CorreoDeContactos, EditorConVista, Lienzo, PestanasDeVista, useVistaPrevia, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
 import { QueSaleEnElInforme } from "./QueSaleEnElInforme";
@@ -138,7 +138,8 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   const [publicadaAqui, setPublicadaAqui] = useState<number | null>(null);
   const [destinatarios, setDestinatarios] = useState<string[] | null>(null);
   const contactos = useQuery(consultasDeProgramacion.cliente(informe.clienteId));
-  const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "informes") : []);
+  // Un cliente archivado no recibe envíos (ADR-0035): se publica sin enviar a nadie.
+  const elegidos = contactos.data?.archivado ? [] : (destinatarios ?? (contactos.data ? receptores(contactos.data, "informes") : []));
   const guardar = useGuardarInforme(informe.id);
   const enLinea = useConexion();
   // Se guarda solo (prototipos/usabilidad-oficina): sin botón y sin preguntar al salir.
@@ -162,7 +163,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
   const error = errorPlano ?? (auto.estado === "error" && !esSesionVencida(auto.error) ? auto.error : null);
   const actualizar = (cambio: Partial<Borrador>) => setBorrador((b) => ({ ...b, ...cambio }));
   const vigente = vigenteDe(informe);
-  const quienesReciben = contactos.data ? contactos.data.contactos.filter((c) => receptores(contactos.data.contactos, "informes").includes(c.id)) : [];
+  const quienesReciben = contactos.data ? contactos.data.contactos.filter((c) => receptores(contactos.data, "informes").includes(c.id)) : [];
   const reciben = quienesReciben.map((c) => c.nombre);
 
   // La vista en vivo (ADR-0031): la siguiente versión tal como la congelaría el servidor al publicar, desde el borrador.
@@ -480,6 +481,8 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
             <p className="ayuda">Cargando los contactos del cliente…</p>
           ) : contactos.isError ? (
             <Aviso tono="error">No se pudieron cargar los contactos: se publicará sin enviar. Podrá enviarla después desde "Envíos".</Aviso>
+          ) : contactos.data.archivado ? (
+            <ClienteArchivado cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} />
           ) : (
             <Destinatarios contactos={contactos.data.contactos} elegidos={elegidos} alCambiar={setDestinatarios} cliente={{ id: informe.clienteId, nombre: informe.visita.cliente }} titulo="Enviar el PDF cuando esté listo" />
           )}

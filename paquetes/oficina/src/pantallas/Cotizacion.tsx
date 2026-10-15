@@ -42,7 +42,7 @@ import { useBorrador } from "../borrador";
 import { consultasDeCotizaciones, devolverLinea, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
 import { aFechaCorta, leerPesos, pesos } from "../formato";
 import { consultasDeProgramacion } from "../programacion";
-import { copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
+import { ClienteArchivado, copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
 import { AvisoDeConflicto, EstadoDeGuardado } from "./Guardado";
 import { BotonMostrarVista, CorreoDeContactos, EditorConVista, Lienzo, PestanasDeVista, useVistaPrevia, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
 import { useAnotarReciente } from "./Paleta";
@@ -191,7 +191,8 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   // El correo de la versión que se va a publicar, escrito sobre la pestaña "Correo" (ADR-0036): null es el de TEINS.
   const [textoCorreo, setTextoCorreo] = useState<TextoPropio | null>(null);
   const edicionCorreo = { propio: textoCorreo, alCambiar: setTextoCorreo };
-  const elegidos = destinatarios ?? (contactos.data ? receptores(contactos.data.contactos, "cotizaciones") : []);
+  // Un cliente archivado no recibe envíos (ADR-0035): se publica sin enviar a nadie.
+  const elegidos = contactos.data?.archivado ? [] : (destinatarios ?? (contactos.data ? receptores(contactos.data, "cotizaciones") : []));
   // La sesión vencida se resuelve ingresando de nuevo encima (rutas.tsx): su error no queda a la vista después.
   // Sin red y el conflicto los dicen el estado y su aviso.
   const error = [auto.estado === "error" ? auto.error : null, publicar.error].find((e) => e && !esSesionVencida(e)) ?? null;
@@ -275,7 +276,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
   }
 
   const primeraSinPrecio = borrador.lineas.find((l) => l.precio.trim() === "");
-  const quienesReciben = contactos.data ? contactos.data.contactos.filter((x) => receptores(contactos.data.contactos, "cotizaciones").includes(x.id)) : [];
+  const quienesReciben = contactos.data ? contactos.data.contactos.filter((x) => receptores(contactos.data, "cotizaciones").includes(x.id)) : [];
   const reciben = quienesReciben.map((x) => x.nombre);
   const irALinea = (id: string) => {
     const fila = document.getElementById(`linea-${id}`);
@@ -629,6 +630,8 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
             <p className="ayuda">Cargando los contactos del cliente…</p>
           ) : contactos.isError ? (
             <Aviso tono="error">No se pudieron cargar los contactos: se publicará sin enviar. Podrá enviarla después desde "Envíos".</Aviso>
+          ) : contactos.data.archivado ? (
+            <ClienteArchivado cliente={{ id: c.clienteId, nombre: c.visita.cliente }} />
           ) : (
             <Destinatarios contactos={contactos.data.contactos} elegidos={elegidos} alCambiar={setDestinatarios} cliente={{ id: c.clienteId, nombre: c.visita.cliente }} titulo="Enviar el PDF cuando esté listo" />
           )}
