@@ -370,6 +370,19 @@ describe("visitas con horario (ADR-0037)", () => {
     expect(ok.json()).toMatchObject({ horaInicio: "10:00", horaFin: null });
   });
 
+  it("reprogramar no se rechaza por un técnico desactivado: ya no hará ninguna de sus visitas (iteración 42)", async () => {
+    const eva = await nuevoTecnico("Eva Técnica");
+    const usuario = `t.${randomUUID().slice(0, 8)}`;
+    const { id: retirado } = await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre: "Técnico Retirado", rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    await conHorario([retirado], "09:00", "11:00", "2026-11-06");
+    const visita = (await conHorario([eva.id, retirado], "13:00", "15:00", "2026-11-06")).json();
+    await s.identidad.desactivarUsuario(usuario, { autorId: "prueba", correlacion: "prueba" });
+    // A la hora de su otra visita: el desactivado ya no cuenta como ocupado; Eva sigue libre.
+    const r = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 1, programadaPara: "2026-11-06", horaInicio: "09:30", horaFin: "10:30", motivo: "Mantenimiento" });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(r.json()).toMatchObject({ horaInicio: "09:30", horaFin: "10:30" });
+  });
+
   it("programar toma el día antes que el registro de cambios, como reprogramar: los dos a la vez no se traban", async () => {
     const cliente = await clienteConSitio();
     const fecha = "2027-07-01";

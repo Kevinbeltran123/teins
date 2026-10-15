@@ -428,7 +428,9 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         manejar: async ({ parametros: { id }, cuerpo, actor, correlacion }) =>
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const [actual] = await tx.select().from(visitas).where(eq(visitas.id, id));
-            if (actual) await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, actual.tecnicos, id);
+            // Un técnico desactivado ya no hará esta ni sus otras visitas: no cuenta como ocupado (iteración 42).
+            const activos = new Set((await identidad.tecnicosActivos(actor.organizacionId)).map((t) => t.id));
+            if (actual) await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, actual.tecnicos.filter((t) => activos.has(t)), id);
             await publica.reprogramar(tx, { organizacionId: actor.organizacionId, autorId: actor.usuarioId, correlacion, visitaId: id, ...cuerpo });
             return una(actor.organizacionId, tx, id);
           }),
