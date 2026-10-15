@@ -46,7 +46,7 @@ test("una visita con su técnico desactivado se marca en la lista y se reasigna 
   const o = await oficina(browser, programadora);
   const { fila, dialogo } = await abrirReasignar(o, cliente);
   // En la lista: nadie activo la tiene.
-  await expect(fila.getByText("Nadie la hará")).toBeVisible();
+  await expect(fila.getByText("Sin técnico", { exact: true })).toBeVisible();
   await expect(fila.getByText(`Se desactivó a ${tecnico.nombre}`)).toBeVisible();
 
   // El desactivado no está en la lista de técnicos (solo trae activos): sale al guardar, y se dice.
@@ -58,7 +58,7 @@ test("una visita con su técnico desactivado se marca en la lista y se reasigna 
   await dialogo.getByRole("button", { name: `Reasignar a ${reemplazo.nombre}` }).click();
   await expect(o.getByText(`Técnicos reasignados: ${cliente}`)).toBeVisible();
   await expect(fila).toContainText(reemplazo.nombre);
-  await expect(fila.getByText("Nadie la hará")).toHaveCount(0);
+  await expect(fila.getByText("Sin técnico", { exact: true })).toHaveCount(0);
 });
 
 test("reasignar después de que otra persona cambió la visita: el aviso sale una vez y el reintento se guarda", async ({ browser }) => {

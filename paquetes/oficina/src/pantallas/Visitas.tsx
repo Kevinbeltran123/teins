@@ -325,7 +325,7 @@ function FilaVisita({
   editar: (tipo: Edicion["tipo"]) => void;
 }) {
   const { hora, detalle } = horarioTexto(v);
-  // Un técnico desactivado ya no la ve en su teléfono: en una visita por hacer se dice, y si no queda nadie, nadie la hará.
+  // Un técnico desactivado ya no la ve en su teléfono: en una visita por hacer se dice, y si no queda ninguno, nadie la hará.
   const inactivos = activos && !v.cancelada && v.programadaPara >= hoy ? v.tecnicos.filter((t) => !activos.has(t.id)) : [];
   return (
     <FilaTabla resaltada={resaltada} clave={v.id}>
@@ -354,7 +354,7 @@ function FilaVisita({
         <Marcado texto={v.tecnicos.map((t) => t.nombre).join(", ")} busqueda={busqueda} />
         {inactivos.length > 0 && (
           <span className="sub">
-            {inactivos.length === v.tecnicos.length && <Insignia tono="alerta">Nadie la hará</Insignia>}{" "}
+            {inactivos.length === v.tecnicos.length && <Insignia tono="alerta">Sin técnico</Insignia>}{" "}
             {`Se desactivó a ${enLista(inactivos.map((t) => t.nombre))}`}
           </span>
         )}
