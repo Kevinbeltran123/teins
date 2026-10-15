@@ -48,10 +48,13 @@ Cortes verticales ordenados por riesgo (`forma-de-trabajo.md`). Cada corte termi
 | Iteración 39 | Conversaciones entre oficina y campo: el técnico responde los comentarios desde un chat en el teléfono, con o sin señal; oficina responde en hilos; «sin leer», avisos y «Leído» (ADR-0040) | El técnico no podía contestar un comentario; las aclaraciones iban por llamada o WhatsApp y no quedaban en el levantamiento | Desplegada en el entorno de pruebas con la migración `0036` y la app 14 (2026-10-06); falta que Kevin la pruebe en su iPhone |
 | Iteración 40 | Lo atendido no es la siguiente visita (ADR-0041 y ADR-0042) | Una visita ya hecha seguía como «Siguiente visita» y se acumulaba en el teléfono | Desplegada en el entorno de pruebas con la migración `0037` y la app 15 (2026-10-06) |
 | Iteración 41 | Nada queda a medias ni crece sin fin (ADR-0043 y ADR-0044): lo que espera la app nueva, la foto rechazada, el envío sin salida, los trabajos a medias, la retención de 30 días, la poda del servidor y el estado que no se actualizaba | Trabajo atascado para siempre, un teléfono que se llena y pantallas que no se enteran del paso del tiempo | Desplegada en el entorno de pruebas y en producción con la migración `0038` (2026-10-06) |
+| Iteración 42 | Lo que se ve sale de lo guardado (ADR-0045): el tablero quitado que se seguía pidiendo, los pasos que volvían vacíos y borraban materiales, lo que llegaba tarde a un tablero quitado, el croquis grande, el envío rechazado que vuelve a borrador, y la misma familia en oficina y servidor | Un tablero quitado bloqueaba el envío, lo capturado se perdía al volver a un paso y oficina podía escribir un documento sobre otro | Desplegada en el entorno de pruebas (2026-10-15); producción sigue apagada |
 
 Con el corte 5 queda el **recorrido delgado** completo. Después, iteraciones por riesgo: secciones repetibles, bocetos (ADR-0019), cantidades con catálogo y exportación, passkeys y segundo factor, cifrado local, gestión de visitas y clientes, administración de usuarios y dispositivos, salud de dispositivos (ADR-0017), entorno de producción y simulacro de restauración (ADR-0016).
 
 ## Próximo paso
+
+**Iteración 42 desplegada en el entorno de pruebas (2026-10-15).** Kevin encontró en producción que un tablero quitado se seguía pidiendo al enviar. La investigación lo reprodujo y encontró la misma familia de fallos en campo, oficina y servidor, todos arreglados (sección "Iteración 42", ADR-0045). Siguiente: que Kevin pruebe la 42 en su iPhone (agregar y quitar tableros, volver a pasos ya capturados, materiales, croquis) y en oficina. Después, producción cuando la vuelva a encender: respaldo antes, y `campo`, `oficina`, `portal` y `worker`, sin migración. Pendiente de antes: probar de la 38 a la 41 y lo que entregue TEINS.
 
 **Producción al día (2026-10-06):** las iteraciones 29 a 41 están en producción. Antes se sacó un respaldo (`20261006T224752Z`); después se desplegó `campo`, que aplicó las migraciones `0033` a `0038`, y luego `worker`, `oficina` y `portal`. El worker arrancó con la tarea periódica y las tres superficies responden. Producción sigue sin formatos publicados hasta que TEINS entregue los suyos.
 
@@ -1055,6 +1058,99 @@ P7, P8 y P9 (formatos prioritarios, obligatorios reales y errores frecuentes). N
 **Arquitectura propuesta (va al ADR):** las plantillas del informe y la cotización salen del servidor a un paquete nuevo, `paquetes/documentos`, que solo depende de `dominio` (hoy ya solo dependen de él y de una función de escape). El servidor las sigue usando para imprimir el PDF; oficina las usa para dibujar la vista en vivo sin ir al servidor en cada tecla. Así la vista previa y el PDF salen del mismo código y no se pueden separar. Los estilos de la plantilla pasan a un archivo servido por la misma superficie, para que la CSP de oficina (`style-src 'self'`) los admita en un marco `srcdoc`. Queda por decidir cómo paginar en pantalla (hojas carta fijas o continuo con marcas de salto).
 
 **Lo que ya existe y se reemplaza:** la vista previa de la cotización de la iteración 24 (documento del servidor con la versión guardada), que pasaría a ser en vivo y sin guardar.
+
+## Iteración 42 · Lo que se ve sale de lo guardado
+
+**Estado:** pedido de Kevin el 2026-10-15. Encontró en producción que, al agregar un tablero y quitarlo, «Revisa y envía» le pedía completar los campos del tablero quitado («Investiga qué otros bugs de este estilo puede haber»). La investigación lo reprodujo en el navegador y encontró la misma familia en campo, oficina y servidor: copias viejas de los datos que sobreviven a lo que las originó, escrituras que llegan tarde y callejones sin salida. Kevin aprobó arreglarlo todo de corrido y sin pedirle confirmación («Termina todas las tandas de corrido»), con un solo despliegue al entorno de pruebas al final. Aceptó las tres decisiones propuestas: croquis de hasta 10 MiB medido en el teléfono, cliente y sitio guardados en el levantamiento, y quitar al enviar las respuestas de tableros que ya no existen. ADR-0045. Construida, verificada y desplegada en el entorno de pruebas el 2026-10-15 (`campo`, `oficina`, `portal` y `worker`; sin migración ni versión nueva de la app de campo). Allí pasaron las dos pruebas del fallo reportado y el worker arrancó con su tarea periódica.
+
+**El fallo reportado:** la pantalla guardaba los errores como una copia. Al tocar «Siguiente» con el tablero nuevo vacío, sus campos entraban a esa copia, y quitar el tablero no los sacaba. «Revisa y envía» mostraba «Faltan 2 datos» con nombres internos (`ubicacion`, `tableros~…`), aunque el envío sí pasaba al confirmar.
+
+**Tanda 1 · Campo: lo que perdía datos o bloqueaba el envío**
+- **Volver a un paso mostraba los campos vacíos, y agregar un material borraba los anteriores.** Desde la iteración 22, cada paso monta sus campos al abrirse, pero partían de la copia tomada al abrir el borrador. Ahora parten de lo guardado, también el motivo de «No se pudo obtener» y la unidad de la medida.
+- **Lo que llegaba tarde a un tablero quitado lo revivía y bloqueaba el envío para siempre**: el «Deshacer» de una foto o de «No se pudo obtener», o una foto que terminaba de procesarse. Quedaba «Falta 1 dato: `tableros~…`» sin nada que completar, y la única salida era descartar el levantamiento. Ahora el dominio no escribe en una repetición que ya no existe (`editar`), y el repositorio no guarda nada si no hubo cambio. Al enviar, el teléfono quita las respuestas huérfanas que hubiera dejado una versión anterior (`sinRespuestasHuerfanas`), y lo mismo hacen el recorrido y «Mis visitas».
+- **Lo que falta sale de la validación vigente**: la pantalla recuerda qué datos ya señaló, no los errores. Un tablero quitado, o una foto devuelta con «Deshacer», dejan de pedirse.
+- **La clave de cada campo lleva su sección**: dos pasos seguidos con un campo de la misma clave (el meta-esquema solo exige claves únicas dentro de cada sección) no comparten lo escrito.
+- **«Deshacer» de un material** devolvía la lista entera del momento y borraba lo agregado en esos 10 s. Ahora devuelve solo esa línea, en su lugar, sobre la lista vigente, y un segundo toque no la duplica.
+- **Un croquis grande se perdía después de enviar.** Con el formato del editor, 100 trazos a mano pesan 0,54 MB: unos 370 pasaban el límite de 2 MB del servidor, el envío quedaba en error y oficina no podía resolverlo. El límite pasa a 10 MiB, el mismo de una foto (`LIMITES_BOCETO.bytes`). El teléfono mide bocetos y firmas antes de enviar y, si alguno se pasa, lo dice en el dato (`archivo_muy_grande`). «Dibujar boceto» espera a que se lea lo guardado, para no abrir una hoja vacía que lo reemplace.
+- **Un envío que oficina nunca recibió vuelve a borrador** (ADR-0045): «Volver a borrador para corregir», junto a «Reintentar envío» y «Descartar levantamiento». Antes, un rechazo permanente solo dejaba descartar la visita.
+- **El teléfono ya no deja salir lo que el servidor rechazaría para siempre:** los decimales se validan con el largo del protocolo (`LIMITES.decimal`), y los caracteres nulos salen del texto al enviar y al responder en el chat.
+
+**Tanda 2 · Campo: lo que engañaba**
+- **Lo enviado de días anteriores guarda dónde fue.** La visita atendida sale del teléfono al día siguiente (ADR-0041), y «Enviados» mostraba «Formato de prueba · N fotos» en todas las filas. Ahora el levantamiento guarda sellados el cliente y el sitio al crearse (`lugar`), o al enviarse si es de antes. Los usan «Enviados», la papelera, el chat y la captura. La cuenta de fotos ya no suma las líneas de materiales.
+- **«Ver en Descartados» abre la papelera una vez**: antes se abría sola cada vez que se volvía al inicio.
+- **Al abrir la app se borran los archivos que nada usa** (`limpiarArchivosSinUso`): las fotos de un tablero quitado o las que reemplazó «No se pudo obtener». Se hace solo al abrir, para que ningún «Deshacer» pierda su foto.
+- **El chat fija su destino** al empezar a escribir: una pregunta que llega mientras tanto no lo cambia, y si oficina retira la elegida vuelve a la última que sigue. Dice qué pasa si no hay pregunta, si el teléfono no pudo guardar la respuesta o si la sesión venció.
+- **Mientras el técnico cambia la contraseña temporal**, el 403 del servidor ya no hace perder terminaciones de visita ni marca las respuestas del chat como rechazadas: esperan como un error pasajero.
+- **La espera de verificación de archivos crece**: con el worker caído, el teléfono ya no consulta cada 5 s sin fin.
+- **Un borrador descartado no retiene en el teléfono una visita que el servidor ya cerró.**
+- **Menores:** una foto que falla en un lote no detiene las demás, y el aviso dice cuántas faltan. Si la captura no se puede cargar, se dice y el siguiente toque la intenta de nuevo. Un borrador bloqueado dice «Ver lo capturado», no «Ver lo que enviaste».
+- **Dominio:** un mínimo de fotos exige que el campo sea obligatorio. Sin eso, el envío quedaba bloqueado y no se podía marcar «No se pudo obtener».
+
+**Tanda 3 · Oficina**
+- **Un documento ya no se escribe encima de otro.** Las rutas del informe, la cotización y el cliente no se volvían a montar al cambiar de id (⌘K, Recientes, Atrás). La pantalla del segundo mostraba el borrador del primero, y el guardado automático podía escribirlo encima. Ahora llevan `key={id}`, como el levantamiento.
+- **Una visita con su técnico desactivado se puede reasignar.** Antes el desactivado no tenía casilla para quitarlo y el servidor rechazaba la lista. Ahora sale al guardar («Se desactivó a X: sale de la visita»), y la lista de Visitas lo dice en la fila, con la insignia «Sin técnico» si no queda nadie activo. Reprogramar tampoco lo cuenta como ocupado (servidor).
+- **Lo que se está escribiendo no se pierde:**
+  - si falla una relectura, la revisión y el cliente ya no se reemplazan por «No se pudo cargar»: el error solo se ve si nunca hubo datos;
+  - el comentario o la respuesta a medias sobrevive al cambiar de pestaña, ocultar el panel o abrir otro globo;
+  - «Marcar revisado» dice qué se pierde, como una corrección sin guardar o comentarios sin enviar;
+  - con un conflicto de guardado, lo escrito después también se copia en el equipo.
+- **La autorización de WhatsApp queda atada al número**: con otro celular se desmarca y hay que confirmarla de nuevo.
+- **Cada «Deshacer» se hace una sola vez** (`Notificaciones`): un doble clic duplicaba una línea de la cotización. El de las cantidades en la revisión devuelve solo su línea sobre las de ahora.
+- **Los diálogos de visita adoptan la versión vigente después de un conflicto**: el reintento ya no choca otra vez. Mientras no hay conflicto siguen con su copia, para no pisar en silencio lo que cambió otra persona.
+- **Mensajes que dicen lo que pasó.** Un `estado_invalido` muestra la explicación del servidor, por ejemplo una visita cancelada sin informe o un cliente archivado mientras se programaba. En la lista de visitas, «Abrir el informe» dice por qué no abrió. Un cliente archivado no tiene contactos marcados por omisión al publicar, y la confirmación dice cómo enviarlo después.
+- **Errores que sobreviven a su causa:** los errores por campo se van al corregir el campo (Visitas, Cliente, Clientes, Catálogo, Administración, Mi cuenta y la contraseña obligatoria). El error de publicar ya no queda en la cotización después de cancelar. «Con correcciones» compara la sección exacta. Si quien revisaba se desactivó, se dice y se ofrece tomar la revisión.
+- **Menores:** marcar «No se pudo obtener» vuelve a dejar guardar la corrección, y desmarcarlo conserva lo que muestra el campo. El avance de una versión retirada dice «Retirada del portal». La lista de técnicos se vuelve a leer tras cada acción de Administración. Al abrir «Reasignar», ya no se quita en silencio a quien tenía la visita.
+
+**Tanda 4 · Servidor**
+- **Corregir un sitio o un cliente llega a los teléfonos**: sus visitas por hacer vuelven a bajar con la dirección o el nombre nuevo. Antes el técnico seguía viendo la dirección vieja. El portal también toma el nombre corregido.
+- **Desactivar otra vez a quien se reactivó vuelve a ordenar el borrado de sus teléfonos.** Antes, la orden ya cumplida impedía una nueva y sus datos de clientes se quedaban en el teléfono (QA-5).
+- **Una foto o un boceto que ya está guardado y perdió su fila** (después de restaurar la base o de dejar limpio un entorno) se adopta si pasa el mismo examen del worker: huella, tamaño y tipo por contenido. Antes se rechazaba para siempre y el envío quedaba atascado. Un PDF nunca se adopta: no se distingue de un documento generado (regla 7).
+- **Lo que no llegó a un contacto que ya no recibe por ese canal** no queda como «envío sin entregar» para siempre.
+- **El rechazo por técnico inactivo dice quién es**, sin nombrar a nadie de otra organización.
+- **Carreras con oficina:**
+  - cerrar visitas vuelve a mirar la fecha y la cancelación en la fila, así que una visita reprogramada no queda cerrada;
+  - programar en un cliente que se archiva espera al archivo (`FOR SHARE` sobre el cliente);
+  - programar y reprogramar el mismo día a la vez ya no se traban: los dos toman el día primero.
+
+**Decisiones tomadas al construirla**
+- **Lo que se muestra se deriva de los datos; no se copia.** La pantalla recuerda qué datos ya señaló, no los errores, y cada paso parte de lo guardado. Se descartó limpiar la copia en cada lugar que cambia algo, porque siempre aparece un lugar nuevo.
+- **El guardia va en el dominio (`editar`)**, el único punto por donde pasa toda escritura de respuestas. Un «Deshacer» o una foto que llegue tarde en el futuro tampoco revive un tablero.
+- **El servidor sigue estricto.** El teléfono limpia antes de enviar y, si aun así el servidor rechaza para siempre, el levantamiento vuelve a borrador (ADR-0045).
+- **10 MiB para el croquis**, el mismo límite de una foto, sin cambiar su formato. Se descartó no guardar el contorno de cada trazo: pesaría la tercera parte, pero cambia el formato del boceto y el PDF, y necesitaría un ADR.
+- **El cliente y el sitio van en el levantamiento, sellados**, en vez de conservar la visita atendida en el teléfono: no cambia el ADR-0041 ni la agenda.
+- **Los archivos sin uso se borran solo al abrir la app**: durante la sesión, un «Deshacer» puede devolverlos.
+- **«Deshacer» después de enviar no hace nada**, porque el levantamiento ya no se edita. Se deja así: no se pierde nada de lo enviado.
+- **Al reprogramar, solo cuentan los técnicos activos.** Un desactivado ya no hará ninguna de sus visitas.
+- **Repartida en tres frentes:** campo, dominio y protocolo los construyó la sesión principal. Oficina y servidor los construyeron dos agentes, cada uno en su worktree, con commits propios. Después se integraron y se verificó todo junto.
+- **Tres verificadores independientes** (campo, oficina, servidor), de solo lectura, revisaron lo construido. No encontraron regresiones graves. Sí encontraron fallos de la misma familia, y se corrigieron:
+  - **campo:**
+    - en un campo de materiales obligatorio, «Deshacer» de «No se pudo obtener» montaba el editor vacío y el siguiente cambio borraba lo devuelto;
+    - volver a borrador podía dejar dos borradores en una visita (ahora lo dice: `VisitaConOtroBorrador`);
+    - la hoja de «Siguiente» se quedaba con su lista (ahora sale de la validación y se cierra sola);
+    - un error de croquis de un tablero quitado se quedaba atascado;
+    - una sección repetible entera se nombraba por su clave;
+    - el «Deshacer» de materiales podía escribir sobre un editor que ya se había cerrado (ahora se retira al salir del paso, `useRetirarNotificacion`);
+    - reemplazar un boceto borraba el documento que otro campo del mismo levantamiento usaba.
+  - **oficina:**
+    - los «Deshacer» de líneas se ofrecían con su editor ya cerrado;
+    - Esc, el menú, Atrás o recargar perdían lo escrito en la revisión (ahora se conserva en la pestaña, Esc no sale con una corrección abierta y recargar pregunta);
+    - con algo que se pierde, «Marcar revisado» se confirmaba con ↵;
+    - apagar WhatsApp borraba la autorización registrada;
+    - si fallaba la ocupación, no se veían técnicos;
+    - el candado de «Deshacer» de un comentario podía quedar pegado;
+    - el comentario sobre un dato admitía 2.000 caracteres y el servidor recibe 1.000.
+  - **servidor:**
+    - reprogramar pedía una segunda conexión del pool dentro de su transacción, y quince a la vez respondían 500;
+    - lo archivado se podía reprogramar;
+    - una visita atendida que se reprogramaba para volver no contaba como por hacer;
+    - quitar un contacto avisaba como un envío fallido;
+    - corregir el nombre de un cliente no lo tomaba.
+
+**Evidencia:**
+- **Antes del arreglo**, cada fallo de campo se reprodujo con una prueba de navegador sobre la compilación de producción local, cada uno con su captura de pantalla: el tablero quitado que se pedía, los tres caminos que bloqueaban el envío para siempre, la foto devuelta con su aviso y el paso que volvía vacío y borraba materiales. Esas pruebas pasaron a `e2e/pruebas/copias-viejas.spec.ts`. Las tres fallas del servidor que encontró su verificador también se reprodujeron antes del arreglo; la del pool lo hizo con quince reprogramaciones a la vez.
+- **Verificaciones:** `pnpm typecheck` (8 paquetes), `arquitectura` (372 módulos), `licencias` (325 paquetes), `audit` sin vulnerabilidades y `presupuesto` (134,6 KB de 135).
+- **Pruebas:** dominio 121, documentos 11, protocolo 29, oficina 62, campo 143 y servidor 245.
+- **Extremo a extremo** en Chromium y WebKit: 143 pasan, 3 omitidas y ninguna falla (27,6 min). Incluye `copias-viejas.spec.ts` (8 pruebas) y `robustez-oficina.spec.ts` (4).
 
 ## Iteración 41 · Nada queda a medias ni crece sin fin
 
