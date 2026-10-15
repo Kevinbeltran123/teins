@@ -864,6 +864,13 @@ function EditorCorreccion({
   const noObtenidoAntes = esNoObtenido(valor);
   const [nuevo, setNuevo] = useState<Valor | undefined>(valor);
   const [valido, setValido] = useState(true);
+  // Lo que muestra el control y si se puede leer: marcar «No se pudo obtener» no lo borra, y desmarcarlo vuelve a él.
+  const delControl = useRef<{ valor: Valor | undefined; valido: boolean }>({ valor: noObtenidoAntes ? undefined : valor, valido: true });
+  const desdeElControl = (escrito: Valor | undefined, esValido = true) => {
+    delControl.current = { valor: escrito, valido: esValido };
+    setNuevo(escrito);
+    setValido(esValido);
+  };
   const [motivo, setMotivo] = useState("");
   const [faltaMotivo, setFaltaMotivo] = useState(false);
   const idMotivo = `motivo-${seccion}-${campo.clave}`;
@@ -908,7 +915,7 @@ function EditorCorreccion({
             valorInicial={typeof valor === "string" ? valor : ""}
             deshabilitado={marcado}
             error={marcado ? undefined : mensajeCampo}
-            onCambio={(texto) => setNuevo(texto === "" ? undefined : texto)}
+            onCambio={(texto) => desdeElControl(texto === "" ? undefined : texto)}
           />
         );
       case "medida": {
@@ -923,13 +930,12 @@ function EditorCorreccion({
             error={marcado ? undefined : mensajeCampo}
             onCambio={(texto, unidad) => {
               if (texto.trim() === "") {
-                setNuevo(undefined);
-                setValido(true);
+                desdeElControl(undefined);
                 return true;
               }
+              // Una medida que no se puede leer deja el último valor bueno, pero no se guarda.
               const m = crearMedida(texto, unidad, campo.unidades);
-              if (m) setNuevo(m);
-              setValido(m !== null);
+              desdeElControl(m ?? delControl.current.valor, m !== null);
               return m !== null;
             }}
           />
@@ -937,7 +943,7 @@ function EditorCorreccion({
       }
       case "cantidades": {
         const lineas = esCantidades(valor) ? valor : [];
-        return <CorregirCantidades etiqueta={`Líneas corregidas de ${campo.etiqueta.toLowerCase()}`} inicial={lineas} unidades={campo.unidades} deshabilitado={marcado} error={marcado ? undefined : mensajeCampo} onCambio={setNuevo} />;
+        return <CorregirCantidades etiqueta={`Líneas corregidas de ${campo.etiqueta.toLowerCase()}`} inicial={lineas} unidades={campo.unidades} deshabilitado={marcado} error={marcado ? undefined : mensajeCampo} onCambio={(v) => desdeElControl(v)} />;
       }
       default:
         return null;
@@ -953,7 +959,11 @@ function EditorCorreccion({
           marcado={marcado}
           motivoInicial={noObtenidoAntes ? valor.motivo : ""}
           error={marcado ? mensajeCampo : undefined}
-          onMarcar={(m, motivoNoObtenido) => setNuevo(m ? { noObtenido: true, motivo: motivoNoObtenido } : undefined)}
+          // Marcar o desmarcar reinicia la validez: marcado no importa lo escrito; desmarcado, vale lo que muestra el control.
+          onMarcar={(m, motivoNoObtenido) => {
+            setNuevo(m ? { noObtenido: true, motivo: motivoNoObtenido } : delControl.current.valor);
+            setValido(m || delControl.current.valido);
+          }}
           onMotivo={(motivoNoObtenido) => setNuevo({ noObtenido: true, motivo: motivoNoObtenido })}
         />
       )}
