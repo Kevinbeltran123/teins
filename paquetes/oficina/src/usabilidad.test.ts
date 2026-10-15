@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { destinoAlArrastrar, esAtajo, etiquetaAtajo, etiquetaEnter, moverEnLista } from "@teins/ui";
 import { leerPreferencia, llaveDePreferencia, escribirPreferencia } from "./preferencias";
-import { copiaParaRestaurar, estadoTrasError } from "./guardado";
+import { copiaParaRestaurar, copiaTrasCambio, estadoTrasError } from "./guardado";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
 
 /** Un almacenamiento en memoria con la forma de localStorage. */
@@ -106,5 +106,15 @@ describe("el guardado automático", () => {
     expect(copiaParaRestaurar({ version: 2, borrador }, 3)).toEqual({ accion: "preguntar", borrador });
     // Una copia de una versión que el servidor no tiene todavía no sirve (otra base de datos, una copia vieja rota).
     expect(copiaParaRestaurar({ version: 9, borrador }, 3)).toBeNull();
+  });
+
+  it("lo escrito queda en el equipo también con un conflicto; el de lo escrito antes conserva su copia hasta elegir", () => {
+    expect(copiaTrasCambio("pendiente", true, false)).toBe("escribir");
+    expect(copiaTrasCambio("sin-conexion", true, false)).toBe("escribir");
+    expect(copiaTrasCambio("guardado", false, false)).toBe("borrar");
+    expect(copiaTrasCambio("conflicto", true, false)).toBe("escribir");
+    expect(copiaTrasCambio("conflicto", true, true)).toBe("dejar");
+    expect(copiaTrasCambio("conflicto", false, false)).toBe("dejar");
+    expect(copiaTrasCambio("guardando", true, false)).toBe("dejar");
   });
 });

@@ -39,6 +39,17 @@ export function copiaParaRestaurar<B>(copia: Copia<B> | null, version: number): 
   return { accion: copia.version === version ? "restaurar" : "preguntar", borrador: copia.borrador };
 }
 
+/**
+ * Qué pasa con la copia en este equipo tras un cambio: se escribe mientras haya algo sin guardar, también con un
+ * conflicto (si se cierra la pestaña antes de elegir, vuelve al abrir y se pregunta), y se borra cuando todo quedó
+ * guardado. Con el conflicto de lo escrito antes, la copia conserva eso hasta que se elija; mientras se guarda, espera.
+ */
+export function copiaTrasCambio(estado: EstadoGuardado, cambios: boolean, conflictoDeAntes: boolean): "escribir" | "borrar" | "dejar" {
+  if (estado === "guardando") return "dejar";
+  if (estado === "conflicto") return cambios && !conflictoDeAntes ? "escribir" : "dejar";
+  return cambios ? "escribir" : "borrar";
+}
+
 function leerCopia<B>(llave: string): Copia<B> | null {
   try {
     const crudo = localStorage.getItem(llave);
@@ -134,13 +145,14 @@ export function useGuardadoAutomatico<B>({ documento, borrador, puedeGuardar = t
   // Cada cambio: la copia en el equipo y, al dejar de escribir, el guardado.
   useEffect(() => {
     const v = vigente.current;
+    const copia = copiaTrasCambio(v.estado, v.borrador.hayCambios(), conflictoDeAntes);
+    if (copia === "escribir") escribirPreferencia(almacen(), llave, v.borrador.actual());
+    if (copia === "borrar") borrarCopia(llave);
     if (v.estado === "conflicto" || v.estado === "guardando") return;
     if (!v.borrador.hayCambios()) {
-      borrarCopia(llave);
       if (v.estado !== "guardado") setEstado("guardado");
       return;
     }
-    escribirPreferencia(almacen(), llave, v.borrador.actual());
     if (!enLinea) return setEstado("sin-conexion");
     const repetido = fallido.current === contenido;
     if (repetido && v.estado === "error") return;
@@ -149,7 +161,7 @@ export function useGuardadoAutomatico<B>({ documento, borrador, puedeGuardar = t
     if (!puedeGuardar) return;
     const t = setTimeout(() => void ejecutar().catch(() => undefined), repetido ? REINTENTO_SIN_RED : ESPERA_AL_ESCRIBIR);
     return () => clearTimeout(t);
-  }, [contenido, enLinea, puedeGuardar, ronda, llave, ejecutar]);
+  }, [contenido, enLinea, puedeGuardar, ronda, llave, ejecutar, conflictoDeAntes]);
 
   // Al salir de la pantalla, lo pendiente se guarda sin esperar.
   useEffect(
