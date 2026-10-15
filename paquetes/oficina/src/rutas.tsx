@@ -118,7 +118,8 @@ const informe = createRoute({
   path: "informes/$id",
   component: function RutaInforme() {
     const { id } = informe.useParams();
-    return <InformeDeVisita id={id} />;
+    // Otro informe (⌘K, Recientes, Atrás) empieza limpio: su borrador no es el del anterior ni se guarda encima.
+    return <InformeDeVisita key={id} id={id} />;
   },
 });
 
@@ -130,7 +131,8 @@ const detalleDeCliente = createRoute({
   loader: ({ params }) => antesDeAbrir(clienteDeConsultas.ensureQueryData(consultasDeProgramacion.cliente(params.id))),
   component: function RutaCliente() {
     const { id } = detalleDeCliente.useParams();
-    return <DetalleCliente id={id} />;
+    // Otro cliente empieza limpio: sin los diálogos ni lo resaltado del anterior.
+    return <DetalleCliente key={id} id={id} />;
   },
 });
 const catalogo = createRoute({ getParentRoute: () => raiz, path: "catalogo", component: Catalogo });
@@ -140,7 +142,8 @@ const cotizacion = createRoute({
   path: "cotizaciones/$id",
   component: function RutaCotizacion() {
     const { id } = cotizacion.useParams();
-    return <DetalleCotizacion id={id} />;
+    // Otra cotización empieza limpia: su borrador no es el de la anterior ni se guarda encima.
+    return <DetalleCotizacion key={id} id={id} />;
   },
 });
 
