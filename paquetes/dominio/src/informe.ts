@@ -1,4 +1,5 @@
 import type { Repeticiones } from "./repeticiones";
+import { validarSeleccion, type SeleccionInforme } from "./seleccion";
 import type { VersionFormato } from "./formato";
 import type { Respuestas } from "./levantamiento";
 import type { EstadoRevision } from "./revision";
@@ -17,6 +18,8 @@ export interface BorradorInforme {
   /** En el orden en que aparecen en el informe. */
   levantamientos: readonly string[];
   planos: readonly Plano[];
+  /** Qué sale de cada levantamiento (ADR-0039). */
+  seleccion: SeleccionInforme;
 }
 
 export const LIMITES_INFORME = { texto: 20_000, planos: 20, nombrePlano: 200, levantamientos: 50 } as const;
@@ -42,7 +45,7 @@ export function validarBorrador(visitaId: string, borrador: BorradorInforme, lev
   const errores: ErrorInforme[] = [];
   if (borrador.introduccion.length > LIMITES_INFORME.texto) errores.push({ codigo: "texto_muy_largo", campo: "introduccion" });
   if (borrador.conclusiones.length > LIMITES_INFORME.texto) errores.push({ codigo: "texto_muy_largo", campo: "conclusiones" });
-  if (borrador.levantamientos.length > LIMITES_INFORME.levantamientos || borrador.planos.length > LIMITES_INFORME.planos) errores.push({ codigo: "demasiados_elementos" });
+  if (borrador.levantamientos.length > LIMITES_INFORME.levantamientos || borrador.planos.length > LIMITES_INFORME.planos || !validarSeleccion(borrador.seleccion)) errores.push({ codigo: "demasiados_elementos" });
 
   const vistos = new Set<string>();
   for (const id of borrador.levantamientos) {
@@ -92,6 +95,8 @@ export interface ContenidoVersion {
     respuestas: Respuestas;
     /** Repeticiones de las secciones repetibles (iteración 9); ausente en las versiones anteriores. */
     repeticiones?: Repeticiones | undefined;
+    /** Lo que oficina dejó fuera (ADR-0039), ya sin sus valores: "<bloque>" o "<bloque>|<campo>". Ausente antes. */
+    ocultos?: readonly string[] | undefined;
   }[];
   planos: Plano[];
 }

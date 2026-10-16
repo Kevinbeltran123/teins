@@ -1,7 +1,8 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
+import { conTransicion } from "@teins/ui";
 import { cliente } from "./api";
-import { textoDelServidor } from "./mensajes";
+import { esVersionVieja, MENSAJE_VERSION_NUEVA, textoDelServidor } from "./mensajes";
 
 export const consultasDeAdministracion = {
   usuarios: () => queryOptions({ queryKey: ["administracion", "usuarios"], queryFn: () => cliente.llamar("listarUsuarios") }),
@@ -9,10 +10,20 @@ export const consultasDeAdministracion = {
   accesos: () => queryOptions({ queryKey: ["administracion", "accesos"], queryFn: () => cliente.llamar("listarAccesosDeClientes") }),
 };
 
-/** Toda acción de administración vuelve a leer las listas: el servidor es la fuente de verdad. */
+/**
+ * Toda acción de administración vuelve a leer las listas (el servidor es la fuente de verdad), en una transición. También
+ * los técnicos que se ofrecen al programar: uno recién creado, desactivado o reactivado cambia esa lista.
+ */
 export function useAccion<E, R>(accion: (entrada: E) => Promise<R>) {
   const consultas = useQueryClient();
-  return useMutation({ mutationFn: accion, onSettled: () => consultas.invalidateQueries({ queryKey: ["administracion"] }) });
+  // La relectura no se espera: si falla, no convierte en error una acción que el servidor ya hizo.
+  return useMutation({
+    mutationFn: accion,
+    onSettled: () => {
+      void consultas.invalidateQueries({ queryKey: ["programacion", "tecnicos"] });
+      void conTransicion(() => consultas.invalidateQueries({ queryKey: ["administracion"] })).catch(() => undefined);
+    },
+  });
 }
 
 /** QR como imagen SVG (la biblioteca se carga solo cuando se necesita). */
@@ -22,7 +33,20 @@ export async function qrComoImagen(texto: string): Promise<string> {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+/**
+ * La credencial que el servidor ya entregó, con su QR si se pudo dibujar. Nunca falla: si el QR no carga (por ejemplo,
+ * una pestaña con la versión anterior), la clave se muestra igual, porque la anterior ya dejó de servir.
+ */
+export async function credencialConQr<T extends { url: string }>(respuesta: T, dibujar: (texto: string) => Promise<string> = qrComoImagen): Promise<T & { qr: string | null }> {
+  try {
+    return { ...respuesta, qr: await dibujar(respuesta.url) };
+  } catch {
+    return { ...respuesta, qr: null };
+  }
+}
+
 export function mensajeDeAdministracion(error: unknown): string {
+  if (esVersionVieja(error)) return MENSAJE_VERSION_NUEVA;
   if (error instanceof ErrorDeRed) return "Sin conexión con el servidor. No se hizo ningún cambio; intente de nuevo al recuperar la conexión.";
   if (!(error instanceof ErrorApi)) return "No se pudo completar la acción. Intente de nuevo.";
   switch (error.codigo) {

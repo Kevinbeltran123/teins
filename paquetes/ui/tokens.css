@@ -1,104 +1,122 @@
 /*
-  Tokens de diseño de TEINS (dirección Consola, iteración 14).
+  Tokens de diseño de TEINS (dirección Precisión, 2026-09-29).
   Fuente única de verdad: DESIGN.md explica cada valor; ADR-0020 explica los dos niveles.
   Los componentes usan solo los tokens semánticos (--t-*), nunca los de marca ni valores fijos.
+
+  Tema: cada color lleva su valor claro y oscuro con light-dark(), y lo elige color-scheme. Por omisión sigue al
+  sistema; <html data-tema="claro|oscuro"> lo fija (selector de la cuenta, tema.ts). Una isla data-tema="claro"
+  (croquis, firma, hoja del PDF) se ve clara dentro del oscuro sin repetir la paleta.
 */
 
 :root {
+  color-scheme: light dark;
+
   /* Nivel 1: marca de la organización (se reemplaza por organización en tiempo de ejecución) */
   --marca-superficie: #002B81;
   --marca-acento: #FFC21A;
   --marca-texto-secundario: #525152;
 
-  /* Nivel 2: semánticos, derivados de la marca */
-  --t-superficie: var(--marca-superficie);
-  --t-superficie-elevada: color-mix(in srgb, var(--marca-superficie), #FFFFFF 12%);
-  --t-superficie-pista: color-mix(in srgb, var(--marca-superficie), #FFFFFF 24%);
-  /* Fondo del elemento activo (sección del menú, paso actual): la marca muy diluida */
-  --t-superficie-suave: color-mix(in srgb, var(--marca-superficie), #FFFFFF 90%);
+  /* Nivel 2: semánticos. La acción es el azul de TEINS aclarado para pantalla (el #002B81 queda para el PDF). */
+  --t-superficie: light-dark(#2F5FE8, #3B6FF5);
+  --t-superficie-elevada: color-mix(in srgb, var(--t-superficie), #FFFFFF 10%);
+  --t-superficie-pista: light-dark(#E9EBEF, #1E2126);
+  /* Fondo del elemento activo (sección del menú, paso actual, opción elegida) */
+  --t-superficie-suave: light-dark(rgb(47 95 232 / 0.09), rgb(59 111 245 / 0.14));
   --t-sobre-superficie: #FFFFFF;
-  --t-sobre-superficie-tenue: color-mix(in srgb, var(--marca-superficie), #FFFFFF 70%);
-  --t-sobre-superficie-suave: color-mix(in srgb, var(--marca-superficie), #FFFFFF 85%);
+  --t-sobre-superficie-tenue: rgb(255 255 255 / 0.72);
+  --t-sobre-superficie-suave: rgb(255 255 255 / 0.18);
 
-  /* El acento ya no pinta botones: marca el foco y lo recién hecho */
-  --t-acento: var(--marca-acento);
-  --t-sobre-acento: #15171A;
-  --t-resaltado: color-mix(in srgb, var(--marca-acento), #FFFFFF 80%);
+  /* Sin amarillo en Precisión: lo actual y lo recién hecho se marcan con el azul de la acción */
+  --t-acento: var(--t-superficie);
+  --t-sobre-acento: #FFFFFF;
+  --t-resaltado: light-dark(rgb(47 95 232 / 0.14), rgb(59 111 245 / 0.22));
 
-  --t-fondo: #F5F6F8;
-  --t-panel: #FFFFFF;
-  /* Encabezados de tabla y pies de diálogo: un escalón bajo el panel */
-  --t-panel-hundido: #F8F9FB;
-  --t-texto: #15171A;
-  --t-texto-secundario: var(--marca-texto-secundario);
-  --t-division: #E1E4EA;
-  /* Borde de botones secundarios y tarjetas: el texto ya los identifica */
-  --t-borde-suave: #C9CED8;
-  /* Borde de campos de texto: 3:1 sobre blanco (WCAG 1.4.11), el borde es lo único que los delimita */
-  --t-borde-control: #8C93A3;
-  --t-borde-activo: var(--marca-superficie);
-  --t-foco: var(--marca-acento);
+  --t-fondo: light-dark(#FAFAFB, #0A0B0D);
+  --t-panel: light-dark(#FFFFFF, #111316);
+  /* Encabezados de tabla, pies de diálogo, fila al pasar: un escalón bajo el panel */
+  --t-panel-hundido: light-dark(#F3F4F6, #17191D);
+  --t-texto: light-dark(#111317, #EDEEF0);
+  --t-texto-secundario: light-dark(#5E646E, #8B9099);
+  --t-texto-terciario: light-dark(#6F7580, #7C828C);
+  --t-division: light-dark(#E5E7EB, #23262C);
+  /* Borde de botones secundarios, tarjetas y campos: una línea fina, más marcada que las divisiones */
+  --t-borde-suave: light-dark(#D5D8DE, #2E323A);
+  --t-borde-control: var(--t-borde-suave);
+  --t-borde-activo: var(--t-superficie);
+  --t-foco: var(--t-superficie);
   /* Capa translúcida del cursor encima de filas y botones fantasma */
-  --t-encima: rgb(21 23 26 / 0.05);
+  --t-encima: light-dark(rgb(17 19 23 / 0.04), rgb(255 255 255 / 0.05));
 
-  /* Estados del documento: fijos para toda organización (ADR-0020) */
-  --t-estado-enviado-fondo: #E3ECFA;      --t-estado-enviado-texto: #1C4E9E;
-  --t-estado-revision-fondo: #EEE6F7;     --t-estado-revision-texto: #5B2E91;
-  --t-estado-revisado-fondo: #DDF1EB;     --t-estado-revisado-texto: #0B5E50;
-  --t-estado-anulado-fondo: #F8E0E4;      --t-estado-anulado-texto: #8E1D33;
+  /* Tonos de estado: hecho, pendiente, peligro y revisión */
+  --t-tono-ok: light-dark(#188A5B, #3DBE8B);
+  --t-tono-alerta: light-dark(#A15C00, #E8A33D);
+  --t-tono-peligro: light-dark(#D22F34, #E5484D);
+  --t-tono-revision: light-dark(#6B4FD3, #A38BFA);
+
+  /* Estados del documento: fijos para toda organización (ADR-0020); el tono sobre el mismo tono al 12 % */
+  --t-estado-enviado-fondo: var(--t-superficie-suave);  --t-estado-enviado-texto: var(--t-superficie);
+  --t-estado-revision-fondo: color-mix(in srgb, var(--t-tono-revision) 12%, transparent);  --t-estado-revision-texto: var(--t-tono-revision);
+  --t-estado-revisado-fondo: color-mix(in srgb, var(--t-tono-ok) 12%, transparent);  --t-estado-revisado-texto: var(--t-tono-ok);
+  --t-estado-anulado-fondo: color-mix(in srgb, var(--t-tono-peligro) 12%, transparent);  --t-estado-anulado-texto: var(--t-tono-peligro);
   /* Borrador usa --t-superficie-pista; Publicado usa --t-superficie */
 
-  /*
-    Mensajes: éxito, alerta y peligro. El texto de color va solo en insignias (palabras cortas en negrita,
-    6:1 o más); los avisos usan --t-texto sobre el fondo teñido y el color queda en el icono.
-  */
-  --t-exito-fondo: #E3F4EC;     --t-exito-texto: #0B5E45;
-  --t-alerta-fondo: #FFF4D6;    --t-alerta-texto: #6B4500;
-  --t-peligro-fondo: #FBE9EB;   --t-error: #A3223A;
-  /* Botón de peligro: blanco sobre rojo, 6,5:1 */
-  --t-peligro: #B42318;
+  /* Mensajes: el fondo teñido al 10 %; en un aviso el texto va en --t-texto y el tono lo lleva el icono */
+  --t-exito-fondo: color-mix(in srgb, var(--t-tono-ok) 10%, transparent);  --t-exito-texto: var(--t-tono-ok);
+  --t-alerta-fondo: color-mix(in srgb, var(--t-tono-alerta) 10%, transparent);  --t-alerta-texto: var(--t-tono-alerta);
+  --t-peligro-fondo: color-mix(in srgb, var(--t-tono-peligro) 10%, transparent);  --t-error: var(--t-tono-peligro);
+  /* Botón de peligro: blanco sobre rojo */
+  --t-peligro: var(--t-tono-peligro);
   --t-sobre-peligro: #FFFFFF;
-  /* Notificaciones: oscuras para separarse del contenido */
-  --t-notificacion: #1B2130;
+  /* Notificaciones: el color del texto de fondo, para separarse del contenido (el texto va en --t-fondo) */
+  --t-notificacion: var(--t-texto);
+  /* La acción de una notificación es texto, sin borde (iteración 29): azul claro sobre el fondo oscuro, la marca sobre el claro */
+  --t-enlace-notificacion: light-dark(#9DB8FF, #2F5FE8);
   /* Visor de fotos: casi negro, para que la foto sea lo único que se ve */
-  --t-visor: #0B0F17;
+  --t-visor: #0A0B0D;
 
   /* Sincronización (campo) */
-  --t-sync-ok: #0F6B5C;
-  --t-sync-pendiente: #7A4F00;
-  --t-sync-error: #A3223A;
+  --t-sync-ok: var(--t-tono-ok);
+  --t-sync-pendiente: var(--t-tono-alerta);
+  --t-sync-error: var(--t-tono-peligro);
 
   /* Capas: diálogos, hojas laterales y menús (las únicas con sombra) */
-  --t-velo: rgb(10 18 36 / 0.48);
-  --t-sombra-capa: 0 24px 64px rgb(10 18 36 / 0.24);
-  --t-sombra-menu: 0 8px 24px rgb(10 18 36 / 0.16);
+  --t-velo: light-dark(rgb(17 19 23 / 0.28), rgb(3 4 6 / 0.62));
+  --t-sombra-capa: 0 0 0 1px light-dark(rgb(17 19 23 / 0.08), rgb(255 255 255 / 0.06)), 0 18px 48px light-dark(rgb(17 19 23 / 0.16), rgb(0 0 0 / 0.55));
+  --t-sombra-menu: 0 0 0 1px light-dark(rgb(17 19 23 / 0.08), rgb(255 255 255 / 0.06)), 0 8px 24px light-dark(rgb(17 19 23 / 0.12), rgb(0 0 0 / 0.45));
+  --t-sombra-boton: 0 1px 2px light-dark(rgb(17 19 23 / 0.06), rgb(0 0 0 / 0.4));
 
-  /* Tipografía */
-  /* Una sola familia en toda la interfaz (DESIGN.md) */
-  --t-fuente-texto: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
+  /* El degradado quieto del inicio de sesión: los azules de TEINS en la mitad de abajo */
+  --t-resplandor-1: light-dark(#D3E4F4, #0F1E36);
+  --t-resplandor-2: light-dark(rgb(118 170 219 / 0.35), rgb(59 111 245 / 0.20));
 
-  /* Escala de campo (DESIGN.md), la predeterminada. Oficina la redefine abajo. */
-  --t-texto-cuerpo: 17px;
-  --t-texto-ayuda: 15px;
-  --t-subtitulo: 21px;
+  /* El logo oficial es a color; en oscuro se pinta en blanco (abajo) hasta tener la versión en negativo */
+  --t-filtro-logo: none;
+
+  /* Tipografía: una sola familia (DESIGN.md) */
+  --t-fuente-texto: "Geist Variable", "Geist", system-ui, -apple-system, sans-serif;
+
+  /* Escala de campo (DESIGN.md), la predeterminada. Oficina la redefine abajo. 16 px en los campos: iPhone no acerca. */
+  --t-texto-cuerpo: 16px;
+  --t-texto-ayuda: 13px;
+  --t-subtitulo: 20px;
   --t-titulo: 26px;
-  --t-cifra-focal: 44px;
+  --t-cifra-focal: 40px;
 
   /* Forma */
-  --t-radio-control: 8px;
-  --t-radio-panel: 12px;
+  --t-radio-control: 12px;
+  --t-radio-panel: 14px;
   --t-radio-capa: 16px;
   --t-tactil-min: 44px;
-  --t-tactil: 58px;
+  --t-tactil: 50px;
   /* Alto de los controles: normal y pequeño (en campo, nunca menos que la zona táctil mínima) */
   --t-control: var(--t-tactil);
   --t-control-sm: var(--t-tactil-min);
 
-  /* Controles de texto: borde, fondo y foco (campo los rellena sin borde, rediseño Recorrido) */
+  /* Controles de texto: borde fino sobre la superficie y anillo azul al enfocar */
   --t-control-borde: var(--t-borde-control);
   --t-control-fondo: var(--t-panel);
-  --t-control-borde-foco: var(--t-borde-activo);
-  --t-control-halo: var(--t-foco);
+  --t-control-borde-foco: var(--t-superficie);
+  --t-control-halo: var(--t-superficie-suave);
   /* La cifra de una medida y el grupo de unidades */
   --t-texto-valor: var(--t-texto-cuerpo);
   --t-peso-valor: 400;
@@ -111,6 +129,8 @@
   --t-medida-radio: 0px;
   --t-medida-margen: 0px;
   --t-medida-foco: transparent;
+  --t-medida-borde: transparent;
+  --t-medida-halo: transparent;
   --t-medida-control-fondo: var(--t-control-fondo);
   --t-medida-control-borde: var(--t-control-borde);
   --t-medida-control-margen: 12px;
@@ -119,182 +139,66 @@
   --t-duracion-rapida: 120ms;
   --t-duracion-estandar: 200ms;
   --t-duracion-pantalla: 280ms;
-  /* Lo recién creado se resalta y se desvanece (Basecamp, "yellow fade") */
-  --t-duracion-resaltado: 2400ms;
+  /* Lo recién creado se resalta y se desvanece (Basecamp, "yellow fade"); 1,2 s y sin barra desde la iteración 29 */
+  --t-duracion-resaltado: 1200ms;
   --t-curva: cubic-bezier(0.2, 0, 0, 1);
+  /* Hojas de campo (iteración 32): entran desde el borde y frenan al final, en 260 ms, sin sentirse lentas */
+  --t-duracion-hoja: 260ms;
+  --t-curva-hoja: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /*
-  Escala de oficina (DESIGN.md): escritorio, controles de 40 y 32.
-  Los componentes no cambian: usan los mismos tokens y la superficie los redefine.
+  El tema elegido en el equipo. Lo que no es color (el filtro del logo) va por selector. El color heredado ya
+  llega resuelto con el tema del padre: la isla lo vuelve a declarar para tomar el suyo.
 */
+[data-tema="claro"] {
+  color-scheme: light;
+  color: var(--t-texto);
+  --t-filtro-logo: none;
+}
+[data-tema="oscuro"] {
+  color-scheme: dark;
+  color: var(--t-texto);
+  --t-filtro-logo: brightness(0) invert(1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --t-filtro-logo: brightness(0) invert(1);
+  }
+}
+
+/* Escala de oficina (DESIGN.md): escritorio, texto de 13 a 14 y controles de 32. Los componentes no cambian. */
 [data-superficie="oficina"] {
-  /* Identidad Recorrido (iteración 23): la paleta oscura de campo, con la escala de escritorio. */
-  --t-fuente-texto: "Atkinson Hyperlegible Next Variable", "Atkinson Hyperlegible Next", system-ui, sans-serif;
-  color-scheme: dark;
-  --t-superficie: #6E9BFF;
-  --t-superficie-elevada: #86ACFF;
-  --t-superficie-pista: #3A4A6B;
-  --t-superficie-suave: rgb(110 155 255 / 0.16);
-  --t-sobre-superficie: #0B0F17;
-  --t-sobre-superficie-tenue: #3A4A6B;
-  --t-sobre-superficie-suave: #1E2634;
-  --t-resaltado: rgb(255 194 26 / 0.22);
-  --t-fondo: #0B0F17;
-  --t-panel: #151B26;
-  --t-panel-hundido: #1E2634;
-  --t-texto: #F3F5F9;
-  --t-texto-secundario: #AEB6C6;
-  --t-division: #2C3647;
-  --t-borde-suave: #2C3647;
-  --t-borde-control: #5B6780;
-  --t-borde-activo: #F3F5F9;
-  --t-encima: rgb(255 255 255 / 0.06);
-  --t-estado-enviado-fondo: #1B2B4A;      --t-estado-enviado-texto: #9DBBFF;
-  --t-estado-revision-fondo: #2E2342;     --t-estado-revision-texto: #D2B8F5;
-  --t-estado-revisado-fondo: #12372F;     --t-estado-revisado-texto: #8FDCC4;
-  --t-estado-anulado-fondo: #3D1D25;      --t-estado-anulado-texto: #F5A8B8;
-  --t-exito-fondo: #12372F;     --t-exito-texto: #6FE0B4;
-  --t-alerta-fondo: #3A2E12;    --t-alerta-texto: #FFC66B;
-  --t-peligro-fondo: #3D1D25;   --t-error: #FF8A8A;
-  --t-peligro: #FF6B6B;
-  --t-sobre-peligro: #0B0F17;
-  --t-notificacion: #F3F5F9;
-  --t-velo: rgb(5 8 14 / 0.55);
-  --t-sombra-capa: 0 24px 60px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.3);
-  --t-sombra-menu: 0 24px 60px rgb(0 0 0 / 0.45);
-  --t-radio-control: 12px;
-  --t-radio-panel: 20px;
-  --t-radio-capa: 26px;
-  --t-control-borde: transparent;
-  --t-control-fondo: #1E2634;
-  --t-control-borde-foco: var(--t-foco);
-  --t-control-halo: rgb(255 194 26 / 0.22);
-  --t-texto-cuerpo: 15px;
-  --t-texto-ayuda: 13px;
-  --t-subtitulo: 18px;
-  --t-titulo: 28px;
-  --t-cifra-focal: 56px;
-  --t-tactil: 44px;
-  --t-control: 40px;
-  --t-control-sm: 32px;
+  --t-texto-cuerpo: 14px;
+  --t-texto-ayuda: 12px;
+  --t-subtitulo: 16px;
+  --t-titulo: 22px;
+  --t-cifra-focal: 32px;
+  --t-radio-control: 7px;
+  --t-radio-panel: 10px;
+  --t-radio-capa: 12px;
+  --t-tactil: 40px;
+  --t-control: 32px;
+  --t-control-sm: 28px;
 }
 
-/*
-  Campo, dirección Recorrido (DESIGN.md): oscuro, con el lenguaje del croquis. La marca se aclara para
-  leerse sobre el fondo casi negro y el texto de los botones principales pasa a oscuro.
-  Los estados, avisos y la sincronización se tiñen sobre oscuro con el mismo significado.
-*/
+/* Campo: la cifra de una medida en grande, con su unidad en la misma caja (estructura de Recorrido). */
 [data-superficie="campo"] {
-  color-scheme: dark;
-  --t-superficie: #6E9BFF;
-  --t-superficie-elevada: #86ACFF;
-  --t-superficie-pista: #3A4A6B;
-  --t-superficie-suave: rgb(110 155 255 / 0.16);
-  --t-sobre-superficie: #0B0F17;
-  --t-sobre-superficie-tenue: #3A4A6B;
-  --t-sobre-superficie-suave: #1E2634;
-  --t-resaltado: rgb(255 194 26 / 0.22);
-
-  --t-fondo: #0B0F17;
-  --t-panel: #151B26;
-  --t-panel-hundido: #1E2634;
-  --t-texto: #F3F5F9;
-  --t-texto-secundario: #AEB6C6;
-  --t-division: #242C3A;
-  --t-borde-suave: #2C3647;
-  --t-borde-control: #5B6780;
-  --t-borde-activo: #F3F5F9;
-  --t-encima: rgb(255 255 255 / 0.06);
-
-  --t-estado-enviado-fondo: #1B2B4A;      --t-estado-enviado-texto: #9DBBFF;
-  --t-estado-revision-fondo: #2E2342;     --t-estado-revision-texto: #D2B8F5;
-  --t-estado-revisado-fondo: #12372F;     --t-estado-revisado-texto: #8FDCC4;
-  --t-estado-anulado-fondo: #3D1D25;      --t-estado-anulado-texto: #F5A8B8;
-
-  --t-exito-fondo: #12372F;     --t-exito-texto: #6FE0B4;
-  --t-alerta-fondo: #3A2E12;    --t-alerta-texto: #FFC66B;
-  --t-peligro-fondo: #3D1D25;   --t-error: #FF8A8A;
-  --t-peligro: #E5484D;
-  --t-notificacion: #F3F5F9;
-  --t-sync-ok: #3DD68C;
-  --t-sync-pendiente: #FFB547;
-  --t-sync-error: #FF8A8A;
-  --t-velo: rgb(3 5 10 / 0.6);
-  --t-sombra-capa: 0 24px 64px rgb(0 0 0 / 0.5);
-  --t-sombra-menu: 0 8px 24px rgb(0 0 0 / 0.4);
-
-  --t-radio-control: 16px;
-  --t-radio-panel: 22px;
-  --t-radio-capa: 28px;
-  --t-titulo: 30px;
-  --t-control: 60px;
-
-  /* Campos rellenos, sin borde; al enfocarlos, borde amarillo (prototipo Recorrido) */
-  --t-control-borde: transparent;
-  --t-control-fondo: #151B26;
-  --t-control-borde-foco: var(--t-foco);
-  --t-control-halo: transparent;
-  --t-texto-valor: 40px;
-  --t-peso-valor: 800;
-  --t-unidades-fondo: #1E2634;
+  --t-texto-valor: 36px;
+  --t-peso-valor: 600;
+  --t-unidades-fondo: var(--t-panel-hundido);
   --t-unidades-margen: 4px;
-  --t-unidad-alto: 48px;
+  --t-unidad-alto: 44px;
   --t-unidad-borde: transparent;
-  --t-medida-fondo: #151B26;
-  --t-medida-radio: 20px;
+  --t-medida-fondo: var(--t-panel);
+  --t-medida-radio: 14px;
   --t-medida-margen: 10px;
-  --t-medida-foco: var(--t-foco);
+  --t-medida-foco: var(--t-superficie);
+  --t-medida-borde: var(--t-borde-suave);
+  --t-medida-halo: var(--t-superficie-suave);
   --t-medida-control-fondo: transparent;
   --t-medida-control-borde: transparent;
   --t-medida-control-margen: 0px;
-}
-
-/*
-  Lo que se dibuja o se firma va sobre papel claro, como hoy: el croquis y la firma conservan la paleta
-  clara dentro de campo (el croquis es el modelo de la dirección y la tinta es negra).
-*/
-[data-superficie="campo"] [data-tema="claro"],
-[data-superficie="oficina"] [data-tema="claro"] {
-  color-scheme: light;
-  --t-superficie: var(--marca-superficie);
-  --t-superficie-elevada: color-mix(in srgb, var(--marca-superficie), #FFFFFF 12%);
-  --t-superficie-pista: color-mix(in srgb, var(--marca-superficie), #FFFFFF 24%);
-  --t-superficie-suave: color-mix(in srgb, var(--marca-superficie), #FFFFFF 90%);
-  --t-sobre-superficie: #FFFFFF;
-  --t-sobre-superficie-tenue: color-mix(in srgb, var(--marca-superficie), #FFFFFF 70%);
-  --t-sobre-superficie-suave: color-mix(in srgb, var(--marca-superficie), #FFFFFF 85%);
-  --t-resaltado: color-mix(in srgb, var(--marca-acento), #FFFFFF 80%);
-  --t-fondo: #F5F6F8;
-  --t-panel: #FFFFFF;
-  --t-panel-hundido: #F8F9FB;
-  --t-texto: #15171A;
-  --t-texto-secundario: var(--marca-texto-secundario);
-  --t-division: #E1E4EA;
-  --t-borde-suave: #C9CED8;
-  --t-borde-control: #8C93A3;
-  --t-borde-activo: var(--marca-superficie);
-  --t-encima: rgb(21 23 26 / 0.05);
-  --t-exito-fondo: #E3F4EC;     --t-exito-texto: #0B5E45;
-  --t-alerta-fondo: #FFF4D6;    --t-alerta-texto: #6B4500;
-  --t-peligro-fondo: #FBE9EB;   --t-error: #A3223A;
-  --t-peligro: #B42318;
-  --t-notificacion: #1B2130;
-  --t-sombra-capa: 0 24px 64px rgb(10 18 36 / 0.24);
-  --t-sombra-menu: 0 8px 24px rgb(10 18 36 / 0.16);
-  --t-radio-control: 8px;
-  --t-radio-panel: 12px;
-  --t-radio-capa: 16px;
-  --t-control: 58px;
-  --t-control-borde: var(--t-borde-control);
-  --t-control-fondo: var(--t-panel);
-  --t-control-borde-foco: var(--t-borde-activo);
-  --t-control-halo: var(--t-foco);
-  --t-texto-valor: var(--t-texto-cuerpo);
-  --t-peso-valor: 400;
-  --t-unidades-fondo: transparent;
-  --t-unidades-margen: 0px;
-  color: var(--t-texto);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -302,5 +206,6 @@
     --t-duracion-rapida: 0ms;
     --t-duracion-estandar: 0ms;
     --t-duracion-pantalla: 0ms;
+    --t-duracion-hoja: 0ms;
   }
 }

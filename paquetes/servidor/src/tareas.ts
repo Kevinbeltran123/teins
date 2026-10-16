@@ -1,4 +1,4 @@
-import type { Task, TaskList } from "graphile-worker";
+import { parseCronItems, type ParsedCronItem, type Task, type TaskList } from "graphile-worker";
 import { z } from "zod";
 import type { Archivos, RegistroDeTrabajo } from "./modulos/archivos";
 import type { Avisos } from "./modulos/avisos";
@@ -11,10 +11,19 @@ import type { NombreTrabajo, Trabajos } from "./plataforma/cola";
 const esquemas: { [N in NombreTrabajo]: z.ZodType<Trabajos[N]> } = {
   "archivos.verificar": z.object({ organizacionId: z.uuid(), huella: z.string().regex(/^[0-9a-f]{64}$/) }),
   "informes.generarPdf": z.object({ organizacionId: z.uuid(), versionId: z.uuid() }),
-  "avisos.enviar": z.object({ organizacionId: z.uuid(), suscripcionId: z.uuid(), titulo: z.string(), cuerpo: z.string(), etiqueta: z.string() }),
+  // `ruta`: dentro de la superficie (ADR-0040); siempre relativa, para que el aviso nunca lleve a otro sitio.
+  "avisos.enviar": z.object({ organizacionId: z.uuid(), suscripcionId: z.uuid(), titulo: z.string(), cuerpo: z.string(), etiqueta: z.string(), ruta: z.string().regex(/^\/(?!\/)/).optional() }),
   "envios.enviar": z.object({ organizacionId: z.uuid(), envioId: z.uuid(), pdfRuta: z.string().min(1) }),
   "cotizaciones.generarPdf": z.object({ organizacionId: z.uuid(), versionId: z.uuid() }),
+  // Programada por el crontab: Graphile le pone sus propios datos (`_cron`), que no se usan.
+  "mantenimiento.recuperar": z.record(z.string(), z.unknown()),
 };
+
+/**
+ * Tareas periódicas (ADR-0012, regla 5; ADR-0043). Cada hora, en el minuto 17 para no coincidir con otros procesos en
+ * punto. Van como objetos: el crontab de texto no acepta el punto de los nombres y el worker no arrancaría.
+ */
+export const periodicas = (): ParsedCronItem[] => parseCronItems([{ task: "mantenimiento.recuperar" satisfies NombreTrabajo, match: "17 * * * *" }]);
 
 /** `ultimoIntento`: el manejador deja visible un fallo permanente en lugar de quedar "en curso" (ADR-0012, regla 4). */
 type Manejadores = { [N in NombreTrabajo]: (datos: Trabajos[N], contexto: { ultimoIntento: boolean; registro: RegistroDeTrabajo }) => Promise<void> };
@@ -26,12 +35,15 @@ export function definirTareas({
   avisos,
   envios,
   cotizaciones,
+  mantenimiento,
 }: {
   archivos: Archivos;
   informes: GeneradorPdf;
   avisos: Pick<Avisos, "enviar">;
   envios: Pick<Envios, "enviar">;
   cotizaciones: GeneradorPdfCotizaciones;
+  /** Tarea periódica (ADR-0043). */
+  mantenimiento: { recuperar: () => Promise<unknown> };
 }): TaskList {
   const manejadores: Manejadores = {
     "archivos.verificar": (datos, contexto) => archivos.verificar(datos, contexto),
@@ -39,6 +51,9 @@ export function definirTareas({
     "avisos.enviar": (datos) => avisos.enviar(datos),
     "envios.enviar": (datos, contexto) => envios.enviar(datos, contexto),
     "cotizaciones.generarPdf": (datos, contexto) => cotizaciones.generarPdf(datos, contexto),
+    "mantenimiento.recuperar": async () => {
+      await mantenimiento.recuperar();
+    },
   };
   return Object.fromEntries(
     (Object.keys(manejadores) as NombreTrabajo[]).map((nombre) => {

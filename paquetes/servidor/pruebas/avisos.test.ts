@@ -208,15 +208,35 @@ describe("qué se avisa (ADR-0023)", () => {
     await pedir(org.oficina.cookie, "POST", `/api/levantamientos/${id}/tomar`, { version: 1 });
     await pedir(org.oficina.cookie, "POST", `/api/levantamientos/${id}/marcar-revisado`, { version: 2 });
     await s.procesarCola();
+    // El comentario abre una conversación (ADR-0040): lleva el texto y abre el chat. Sin visita no hay cliente.
     expect(avisos()).toEqual(
       expect.arrayContaining([
-        { titulo: "Comentario de oficina", cuerpo: "En tu levantamiento del mié, 30 de sept." },
+        { titulo: "Oficina", cuerpo: "Falta la foto de la placa" },
         { titulo: "Levantamiento revisado", cuerpo: "Oficina revisó tu levantamiento del mié, 30 de sept." },
       ]),
     );
     expect(recibidos).toHaveLength(2);
     // El comentario no llega a oficina ni el envío al técnico.
-    expect(recibidos.every((r) => r.carga.notification.navigate === `${ORIGEN}/`)).toBe(true);
+    expect(recibidos.map((r) => r.carga.notification.navigate).sort()).toEqual([`${ORIGEN}/`, `${ORIGEN}/?conversacion=${id}`]);
+  });
+
+  it("la respuesta del técnico avisa solo a quien comentó, mientras nadie lo ha tomado (ADR-0040)", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const usuario = `oficina.${randomBytes(4).toString("hex")}`;
+    await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre: "Otra de oficina", rol: "oficina", contrasena: "contrasena-de-prueba" });
+    const otra = await iniciarSesion(app, usuario, "contrasena-de-prueba");
+    await suscribir(org.oficina.cookie, "http://localhost:5174");
+    await suscribir(otra, "http://localhost:5174");
+    const id = await enviarLevantamiento(org.tecnico.cookie);
+    const raiz = (await pedir(org.oficina.cookie, "POST", `/api/levantamientos/${id}/comentarios`, { texto: "¿Seguro?", seccion: "cuarto_tecnico", campo: "potencia_nominal" })).json() as { id: string };
+    await s.procesarCola();
+    recibidos.length = 0;
+
+    const r = await pedir(org.tecnico.cookie, "POST", `/api/levantamientos/${id}/comentarios/${raiz.id}/respuestas`, { llave: randomUUID(), texto: "Sí, 10 kVA" });
+    expect(r.statusCode, r.body).toBe(201);
+    await s.procesarCola();
+    expect(avisos()).toEqual([{ titulo: "Técnico de prueba respondió", cuerpo: "sobre Potencia nominal" }]);
+    expect(recibidos[0]!.carga.notification.navigate).toBe(`http://localhost:5174/levantamientos/${id}?hilo=${raiz.id}`);
   });
 
   it("otra organización nunca recibe los avisos de esta", async () => {
@@ -240,7 +260,7 @@ describe("entrega y ciclo de vida (ADR-0023, QA-5)", () => {
     expect((await filas(org.organizacionId))[0]!.ultimoError).toMatch(/^400 el /);
 
     respuesta = 503;
-    await programar(org);
+    await programar(org, [org.tecnico.id], "2026-10-04"); // otro día: dos visitas de todo el día se cruzan (ADR-0037)
     await s.procesarCola();
     const { rows } = await s.propietario.pool.query(
       "select j.attempts, j.last_error from graphile_worker._private_jobs j join graphile_worker._private_tasks t on t.id = j.task_id where t.identifier = 'avisos.enviar' and j.payload->>'organizacionId' = $1",
@@ -250,7 +270,7 @@ describe("entrega y ciclo de vida (ADR-0023, QA-5)", () => {
     await s.propietario.pool.query("delete from graphile_worker._private_jobs where payload->>'organizacionId' = $1", [org.organizacionId]);
 
     respuesta = 410;
-    await programar(org);
+    await programar(org, [org.tecnico.id], "2026-10-05");
     await s.procesarCola();
     expect((await filas(org.organizacionId)).map((f) => f.endpoint)).not.toContain(datos.endpoint);
   });

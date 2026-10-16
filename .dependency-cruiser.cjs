@@ -21,6 +21,13 @@ module.exports = {
       to: { path: "^paquetes/", pathNot: [paquete("protocolo"), paquete("dominio")] },
     },
     {
+      name: "documentos-solo-dominio",
+      comment: "documentos son plantillas puras: solo dependen de dominio; las usan el servidor y oficina (ADR-0031).",
+      severity: "error",
+      from: { path: paquete("documentos"), pathNot: "\\.test\\.ts$" },
+      to: { pathNot: [paquete("documentos"), paquete("dominio")] },
+    },
+    {
       name: "ui-independiente",
       comment: "ui no depende de ningún otro paquete del monorepo.",
       severity: "error",

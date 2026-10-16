@@ -34,9 +34,26 @@ export const consultas = {
   // La URL firmada dura 5 minutos: se renueva antes de que venza.
   // Un boceto es inmutable (su huella es su contenido): no se vuelve a pedir.
   boceto: (huella: string) => queryOptions({ queryKey: ["boceto", huella], queryFn: () => cliente.llamar("bocetoDeArchivo", { parametros: { huella } }), staleTime: Infinity }),
+  /** Un plano antes de publicar: se vuelve a leer mientras el worker lo verifica (iteración 26). */
+  plano: (huella: string) =>
+    queryOptions({
+      queryKey: ["plano", huella],
+      queryFn: () => cliente.llamar("estadoDePlano", { parametros: { huella } }),
+      refetchInterval: (q) => (q.state.data?.estado === "verificando" ? 2_000 : false),
+    }),
   urlDeArchivo: (huella: string) =>
     queryOptions({ queryKey: ["archivo", huella], queryFn: () => cliente.llamar("urlDeArchivo", { parametros: { huella } }), staleTime: 4 * 60_000 }),
 };
 
 /** Frescura de la bandeja (ADR-0014): consulta periódica y al volver a la pestaña. */
 export const REFRESCO_BANDEJA_MS = 60_000;
+
+/**
+ * La contraseña con la que se acaba de entrar, solo en memoria y solo hasta leer la sesión: si es temporal, la
+ * pantalla obligatoria la manda como la actual y la persona escribe solo la nueva (ADR-0033). Si la página se
+ * recarga antes, se pierde y esa pantalla la pide.
+ */
+let contrasenaDeIngreso: string | null = null;
+export const recordarContrasenaDeIngreso = (contrasena: string) => void (contrasenaDeIngreso = contrasena);
+export const leerContrasenaDeIngreso = () => contrasenaDeIngreso;
+export const olvidarContrasenaDeIngreso = () => void (contrasenaDeIngreso = null);

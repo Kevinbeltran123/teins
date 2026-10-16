@@ -1,14 +1,15 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { conTransicion } from "@teins/ui";
 import { cliente } from "./api";
 
 export const consultasDeCatalogo = {
   items: () => queryOptions({ queryKey: ["catalogo"], queryFn: () => cliente.llamar("listarCatalogo"), staleTime: 60_000 }),
 };
 
-/** Toda acción del catálogo vuelve a leerlo: el servidor es la fuente de verdad. */
+/** Toda acción del catálogo vuelve a leerlo (el servidor es la fuente de verdad), en una transición. */
 export function useAccionDeCatalogo<E, R>(accion: (entrada: E) => Promise<R>) {
   const consultas = useQueryClient();
-  return useMutation({ mutationFn: accion, onSettled: () => consultas.invalidateQueries({ queryKey: ["catalogo"] }) });
+  return useMutation({ mutationFn: accion, onSettled: () => conTransicion(() => consultas.invalidateQueries({ queryKey: ["catalogo"] })) });
 }
 
 /** Vincular una línea cambia la versión del levantamiento: el detalle y el historial se vuelven a leer. */

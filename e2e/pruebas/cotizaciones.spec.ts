@@ -33,7 +33,7 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   const fila = o.getByRole("row").filter({ hasText: codigo });
   await expect(fila.getByText("Sin precio")).toBeVisible();
   await fila.getByRole("button", { name: `Cambiar el precio de ${codigo}` }).click();
-  const hojaPrecio = o.getByRole("dialog", { name: `Precio de ${codigo}` });
+  const hojaPrecio = o.getByRole("dialog", { name: `Cambiar precio de ${codigo}` });
   await expect(hojaPrecio.getByText("Todavía no tiene precio.")).toBeVisible();
   await hojaPrecio.getByRole("textbox", { name: "Precio unitario sin IVA" }).fill("4.800");
   await hojaPrecio.getByRole("button", { name: "Guardar precio" }).click();
@@ -51,10 +51,10 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   await expect(page.getByRole("img", { name: "Foto 1 de Fotos del equipo" })).toBeVisible();
   await irAlPaso(page, "Materiales");
   await page.getByRole("button", { name: "Buscar en el catálogo" }).click();
-  const catalogo = page.getByRole("dialog", { name: "Catálogo" });
+  const catalogo = page.getByRole("dialog", { name: "Agregar del catálogo" });
   await catalogo.getByRole("searchbox", { name: "Buscar en el catálogo" }).fill(codigo);
   await catalogo.getByRole("button", { name: `Agregar ${descripcion}` }).click();
-  await catalogo.getByRole("button", { name: /^Listo · / }).click();
+  await catalogo.getByRole("button", { name: "Ver materiales" }).click();
   await page.getByRole("textbox", { name: "Cantidad de la línea 1" }).fill("30");
   await expect(page.getByText("4.800")).toHaveCount(0);
   await irARevisar(page);
@@ -93,12 +93,21 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   await expect(cable.getByRole("textbox", { name: `Precio de ${descripcion}` })).toHaveValue("4.800");
   await expect(cable.getByText("$ 144.000")).toBeVisible();
 
-  // Mano de obra: sin precio no se publica, y lo dice junto a la línea.
+  // Al lado, la hoja que recibe el cliente, dibujada con la plantilla del PDF mientras se escribe (ADR-0031).
+  const hoja = o.frameLocator('iframe[title^="Vista previa de la cotización"]');
+  await expect(hoja.getByText(descripcion)).toBeVisible();
+  await expect(hoja.getByRole("heading", { name: /^Cotización COT-/ })).toBeVisible();
+
+  // Mano de obra: sin precio no se publica, y lo dice junto a la línea; en la hoja va como marcador.
   await o.getByRole("button", { name: "Agregar línea" }).click();
   await o.getByRole("textbox", { name: "Descripción de la línea nueva" }).fill("Mano de obra de instalación");
   await expect(o.getByRole("button", { name: "Falta el precio de 1 línea" })).toBeVisible();
   await expect(o.getByRole("button", { name: "Publicar versión 1" })).toBeDisabled();
+  await expect(hoja.getByText("Mano de obra de instalación")).toBeVisible();
+  await expect(hoja.getByText("[Precio]")).toBeVisible();
   await o.getByRole("textbox", { name: "Precio de Mano de obra de instalación" }).fill("850.000");
+  await expect(hoja.getByText("$ 850.000").first()).toBeVisible();
+  await expect(hoja.getByText("[Precio]")).toHaveCount(0);
 
   // AIU: 994.000 + A 99.400 + I 29.820 + U 49.700 + IVA sobre U 9.443.
   await o.getByRole("radio", { name: "AIU, con IVA sobre la utilidad" }).check();
@@ -106,14 +115,31 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   await expect(totales.getByText("$ 994.000")).toBeVisible();
   await expect(totales.getByText("$ 9.443")).toBeVisible();
   await expect(totales.getByText("$ 1.182.363")).toBeVisible();
+  await expect(hoja.getByText("Imprevistos 3 %")).toBeVisible();
+  await expect(hoja.getByText("$ 1.182.363")).toBeVisible();
+
+  // "Correo": lo que le llega a quien recibe cotizaciones, con el asunto y el adjunto.
+  await o.getByRole("tab", { name: "Correo" }).click();
+  const vistaCorreo = o.getByRole("region", { name: "Vista previa" });
+  await expect(vistaCorreo.getByLabel("Asunto del correo")).toHaveValue(/^Cotización COT-\d{4}-\d{4,} · /);
+  await expect(vistaCorreo.getByText(/^Cotización COT-.* - versión 1\.pdf$/)).toBeVisible();
+  await expect(o.frameLocator('iframe[title="Correo a Marta Gil"]').getByText("Hola, Marta:")).toBeVisible();
+  // Se escribe sobre el correo (ADR-0036): el texto dentro del correo (también en Safari, donde el marco no entrega sus
+  // eventos) y el asunto en su lugar; sale así al publicar.
+  const textoDelCorreo = o.frameLocator('iframe[title="Correo a Marta Gil"]').locator('[data-editable="texto"]');
+  await textoDelCorreo.click();
+  await o.keyboard.press("End");
+  await o.keyboard.type(" Quedo atento.");
+  await expect(o.getByRole("button", { name: "Volver al texto de TEINS" })).toBeVisible();
+  await o.getByLabel("Asunto del correo").fill("Su cotización de cableado");
+  await o.getByRole("tab", { name: "Cotización" }).click();
 
   // Publicar: quien recibe cotizaciones viene marcado; el PDF se genera y sale.
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
   const confirmar = o.getByRole("dialog", { name: /¿Publicar la versión 1 de COT-/ });
-  // Antes de publicar se ve lo que recibe el cliente: lo guardado, con la plantilla del PDF (iteración 24).
-  const vista = confirmar.frameLocator('iframe[title="Vista previa de la versión 1"]');
-  await expect(vista.getByText("Mano de obra de instalación")).toBeVisible();
-  await expect(vista.getByText("$ 1.182.363")).toBeVisible();
+  // Lo que se publica es lo que mostró la vista previa: la confirmación ya no carga el PDF del servidor.
+  await expect(confirmar.getByText("Queda congelada con sus precios e impuestos, por $ 1.182.363")).toBeVisible();
+  await expect(confirmar.getByText("Es el documento de la vista previa")).toBeVisible();
   await expect(confirmar.getByRole("checkbox", { name: "Marta Gil" })).toBeChecked();
   await confirmar.getByRole("button", { name: "Publicar y enviar a 1" }).click();
   await expect(o.getByText("Versión 1 vigente")).toBeVisible();
@@ -121,6 +147,14 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   await expect(descargar).toBeVisible({ timeout: 90_000 });
   const envios = o.getByRole("region", { name: "Envíos de la versión 1" });
   await expect(envios.getByRole("listitem").filter({ hasText: "Marta Gil" }).getByText(/^(Enviado|Entregado)$/)).toBeVisible({ timeout: 60_000 });
+  await expect(envios.getByRole("listitem").filter({ hasText: "Marta Gil" })).toContainText("con su texto");
+  // A otro contacto: quien ya la recibió no se vuelve a ofrecer (iteración 29).
+  await envios.getByRole("button", { name: "Enviar a otro contacto" }).click();
+  await expect(o.getByRole("dialog", { name: /Enviar la versión 1 a otro contacto/ }).getByText("Todos los contactos ya la recibieron")).toBeVisible();
+  await o.keyboard.press("Escape");
+  // Con las versiones y sus envíos al final del editor, la página no se alarga más que la ventana: cada columna baja
+  // sola y la rueda no deja ver el fondo vacío debajo (iteración 29).
+  expect(await o.evaluate(() => document.scrollingElement!.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
   const pdf = o.waitForEvent("download");
   await descargar.click();
   // WebKit entrega el nombre en forma descompuesta (NFD, como macOS): se compara normalizado.

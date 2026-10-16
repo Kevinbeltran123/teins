@@ -36,7 +36,7 @@ async function levantamientoEnviado() {
   const usuario = `oficina.${randomBytes(4).toString("hex")}`;
   await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre: "Otra de oficina", rol: "oficina", contrasena: "contrasena-de-prueba" });
   const otra = { cookie: await iniciarSesion(app, usuario, "contrasena-de-prueba") };
-  return { ...org, id, otra };
+  return { ...org, id, otra: { ...otra, usuario } };
 }
 
 const post = (cookie: string, id: string, accion: string, payload: object) =>
@@ -164,6 +164,21 @@ describe("revisión (QA-8, I-1)", () => {
     expect((await post(tecnico.cookie, id, "tomar", { version: 3, reasignar: true })).json()).toMatchObject({ codigo: "sin_permiso" });
   });
 
+  it("al desactivar a quien revisa, el levantamiento queda sin tomar y otra persona lo toma sin reasignar", async () => {
+    const { oficina, otra, id } = await levantamientoEnviado();
+    await post(otra.cookie, id, "tomar", { version: 1 });
+
+    expect(await s.identidad.desactivarUsuario(otra.usuario, { autorId: oficina.id, correlacion: "prueba" })).toBe("desactivado");
+    const bandeja = (await get(oficina.cookie, "/api/levantamientos?estado=en_revision")).json();
+    expect(bandeja.elementos.find((e: { id: string }) => e.id === id)).toMatchObject({ revisor: null });
+
+    expect((await post(oficina.cookie, id, "tomar", { version: 3 })).json()).toMatchObject({ estado: "en_revision", revisor: { id: oficina.id }, version: 4 });
+    const historial = (await get(oficina.cookie, `/api/levantamientos/${id}/historial`)).json();
+    expect(historial.integra).toBe(true);
+    expect(historial.eventos.map((e: { tipo: string }) => e.tipo)).toContain("revision_liberada");
+    expect(historial.eventos.find((e: { tipo: string }) => e.tipo === "revision_liberada")).toMatchObject({ autor: { id: oficina.id }, anterior: { revisor: "Otra de oficina" } });
+  });
+
   it("las correcciones cumplen las reglas del formato y no tocan fotos", async () => {
     const { oficina, id } = await levantamientoEnviado();
     await post(oficina.cookie, id, "tomar", { version: 1 });
@@ -206,8 +221,142 @@ describe("revisión (QA-8, I-1)", () => {
   });
 });
 
+describe("corregir un comentario (ADR-0035)", () => {
+  const corregir = (cookie: string, id: string, comentarioId: string, accion = "", payload: object = {}) =>
+    app.inject({ method: "POST", url: `/api/levantamientos/${id}/comentarios/${comentarioId}${accion ? `/${accion}` : ""}`, headers: { cookie }, payload });
+
+  it("su autor lo edita o lo retira mientras no esté revisado; el técnico ve la última versión y no ve lo retirado", async () => {
+    const { oficina, otra, tecnico, id } = await levantamientoEnviado();
+    const editable = (await post(oficina.cookie, id, "comentarios", { texto: "La placa dice 20 A", seccion: "cuarto_tecnico", campo: "potencia_nominal" })).json();
+    const retirable = (await post(oficina.cookie, id, "comentarios", { texto: "Falta la foto del tablero" })).json();
+
+    // Solo su autor.
+    expect((await corregir(otra.cookie, id, editable.id, "", { texto: "Otro texto" })).statusCode).toBe(403);
+    expect((await corregir(oficina.cookie, id, randomUUID(), "", { texto: "Otro texto" })).statusCode).toBe(404);
+
+    const editado = await corregir(oficina.cookie, id, editable.id, "", { texto: "La placa dice 200 A: revise la foto" });
+    expect(editado.statusCode, editado.body).toBe(200);
+    expect(editado.json()).toMatchObject({ texto: "La placa dice 200 A: revise la foto", editadoEn: expect.any(String), retirado: null });
+    const retirado = await corregir(oficina.cookie, id, retirable.id, "retirar");
+    expect(retirado.json()).toMatchObject({ retirado: { por: { nombre: "Oficina de prueba" } } });
+    expect((await corregir(oficina.cookie, id, retirable.id, "", { texto: "x" })).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    // Oficina ve los dos (el retirado, marcado); el técnico, solo el vigente, con su edición.
+    const detalle = (await get(oficina.cookie, `/api/levantamientos/${id}`)).json();
+    expect(detalle.comentarios.map((c: { texto: string; retirado: unknown }) => [c.texto, c.retirado !== null])).toEqual([["La placa dice 200 A: revise la foto", false], ["Falta la foto del tablero", true]]);
+    const enElTelefono = (await bajarSync(tecnico.cookie, 3)).find((c) => c["id"] === id)!;
+    expect(enElTelefono["comentarios"]).toEqual([expect.objectContaining({ texto: "La placa dice 200 A: revise la foto", editadoEn: expect.any(String) })]);
+
+    // "Deshacer" lo devuelve.
+    expect((await corregir(oficina.cookie, id, retirable.id, "restaurar")).json()).toMatchObject({ retirado: null });
+    expect(((await bajarSync(tecnico.cookie, 3)).find((c) => c["id"] === id)!["comentarios"] as unknown[]).length).toBe(2);
+
+    const historial = (await get(oficina.cookie, `/api/levantamientos/${id}/historial`)).json();
+    expect(historial.eventos.map((e: { tipo: string }) => e.tipo).filter((t: string) => t.startsWith("comentario"))).toEqual([
+      "comentario_agregado",
+      "comentario_agregado",
+      "comentario_editado",
+      "comentario_retirado",
+      "comentario_restaurado",
+    ]);
+
+    // Revisado, ya no se corrigen: es lo que el técnico recibió con la revisión.
+    expect((await post(oficina.cookie, id, "tomar", { version: 1 })).statusCode).toBe(200);
+    expect((await post(oficina.cookie, id, "marcar-revisado", { version: 2 })).statusCode).toBe(200);
+    expect((await corregir(oficina.cookie, id, editable.id, "retirar")).json()).toMatchObject({ codigo: "estado_invalido" });
+  });
+});
+
 async function bajarSync(cookie: string, appVersion: number) {
   const r = await getSync(cookie, `/api/sync/cambios?app=${appVersion}`);
   expect(r.statusCode, r.body).toBe(200);
   return (r.json() as { cambios: { tipo: string }[] }).cambios.filter((c) => c.tipo === "levantamiento") as Record<string, unknown>[];
 }
+
+describe("conversaciones (ADR-0040)", () => {
+  const responder = (cookie: string, id: string, comentarioId: string, payload: object) =>
+    app.inject({ method: "POST", url: `/api/levantamientos/${id}/comentarios/${comentarioId}/respuestas`, headers: { cookie }, payload });
+  const comentarios = async (cookie: string, id: string) => (await get(cookie, `/api/levantamientos/${id}`)).json().comentarios as Record<string, unknown>[];
+  const conversacionEnBandeja = async (cookie: string, id: string, estado = "enviado") =>
+    ((await get(cookie, `/api/levantamientos?estado=${estado}`)).json().elementos as { id: string; conversacion: unknown }[]).find((e) => e.id === id)?.conversacion;
+
+  async function conComentario() {
+    const datos = await levantamientoEnviado();
+    const raiz = (await post(datos.oficina.cookie, datos.id, "comentarios", { texto: "¿Quién te recibe?", seccion: "cuarto_tecnico", campo: "descripcion" })).json() as { id: string };
+    return { ...datos, raiz };
+  }
+
+  it("el técnico responde una vez por llave; oficina la ve en el hilo y queda en el historial", async () => {
+    const { oficina, tecnico, id, raiz } = await conComentario();
+    const llave = randomUUID();
+    const primera = await responder(tecnico.cookie, id, raiz.id, { llave, texto: "  Nadie, estaba cerrado  " });
+    expect(primera.statusCode, primera.body).toBe(201);
+    expect(primera.json()).toMatchObject({ texto: "Nadie, estaba cerrado", de: "tecnico", autor: "Técnico de prueba", llave, leido: false });
+    // El teléfono reintenta con la misma llave (regla 4): mismo mensaje, ninguno nuevo.
+    const otraVez = await responder(tecnico.cookie, id, raiz.id, { llave, texto: "Nadie, estaba cerrado" });
+    expect(otraVez.statusCode).toBe(201);
+    expect(otraVez.json().id).toBe(primera.json().id);
+
+    const hilo = await comentarios(oficina.cookie, id);
+    expect(hilo).toHaveLength(2);
+    expect(hilo[1]).toMatchObject({ texto: "Nadie, estaba cerrado", de: "tecnico", enRespuestaA: raiz.id, autor: { id: tecnico.id, nombre: "Técnico de prueba" } });
+    const historial = (await get(oficina.cookie, `/api/levantamientos/${id}/historial`)).json();
+    expect(historial.eventos.at(-1)).toMatchObject({ tipo: "comentario_respondido", autor: { nombre: "Técnico de prueba" }, seccion: "cuarto_tecnico", campo: "descripcion" });
+    expect(historial.integra).toBe(true);
+
+    // Oficina responde en el mismo hilo y el técnico ve las dos respuestas dentro del comentario.
+    expect((await post(oficina.cookie, id, "comentarios", { texto: "Gracias", enRespuestaA: raiz.id })).statusCode).toBe(201);
+    const [cambio] = (await bajarSync(tecnico.cookie, 14)).filter((c) => c.id === id);
+    expect(cambio).toMatchObject({
+      comentarios: [{ id: raiz.id, respuestas: [{ texto: "Nadie, estaba cerrado", de: "tecnico", llave, leido: false }, { texto: "Gracias", de: "oficina", autor: "Oficina de prueba" }] }],
+    });
+    expect((cambio!.comentarios as unknown[]).length).toBe(1);
+  });
+
+  it("solo el técnico del levantamiento responde, solo a un comentario de oficina vigente y hasta 1000 caracteres", async () => {
+    const { oficina, tecnico, organizacionId, id, raiz } = await conComentario();
+    const usuario = `tecnico.${randomBytes(4).toString("hex")}`;
+    await s.identidad.crearUsuario({ organizacionId, usuario, nombre: "Otro técnico", rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    const otro = await iniciarSesion(app, usuario, "contrasena-de-prueba");
+    expect((await responder(otro, id, raiz.id, { llave: randomUUID(), texto: "Hola" })).json()).toMatchObject({ codigo: "no_encontrado" });
+    expect((await responder(oficina.cookie, id, raiz.id, { llave: randomUUID(), texto: "Hola" })).json()).toMatchObject({ codigo: "sin_permiso" });
+    expect((await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "a".repeat(1001) })).json()).toMatchObject({ codigo: "entrada_invalida" });
+    // A una respuesta no se responde: la conversación cuelga del comentario de oficina.
+    const respuesta = (await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "Nadie" })).json() as { id: string };
+    expect((await responder(tecnico.cookie, id, respuesta.id, { llave: randomUUID(), texto: "Hola" })).json()).toMatchObject({ codigo: "no_encontrado" });
+    expect((await post(oficina.cookie, id, "comentarios", { texto: "x", enRespuestaA: respuesta.id })).json()).toMatchObject({ codigo: "no_encontrado" });
+    // Un comentario retirado (ADR-0035) ya no se responde.
+    await app.inject({ method: "POST", url: `/api/levantamientos/${id}/comentarios/${raiz.id}/retirar`, headers: { cookie: oficina.cookie } });
+    expect((await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "Hola" })).json()).toMatchObject({ codigo: "no_encontrado" });
+  });
+
+  it("al marcar revisado la conversación se cierra para los dos lados", async () => {
+    const { oficina, tecnico, id, raiz } = await conComentario();
+    await post(oficina.cookie, id, "tomar", { version: 1 });
+    await post(oficina.cookie, id, "marcar-revisado", { version: 2 });
+    expect((await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "Tarde" })).json()).toMatchObject({ codigo: "estado_invalido" });
+    expect((await post(oficina.cookie, id, "comentarios", { texto: "Tarde", enRespuestaA: raiz.id })).json()).toMatchObject({ codigo: "estado_invalido" });
+  });
+
+  it("el punto de «sin leer» es de quien revisa o, si nadie lo ha tomado, de quien comentó; al leer se apaga y el técnico ve «Leído»", async () => {
+    const { oficina, otra, tecnico, id, raiz } = await conComentario();
+    expect(await conversacionEnBandeja(oficina.cookie, id)).toBeNull();
+    await responder(tecnico.cookie, id, raiz.id, { llave: randomUUID(), texto: "Nadie" });
+    // Nadie lo ha tomado: es de quien escribió el comentario.
+    expect(await conversacionEnBandeja(oficina.cookie, id)).toMatchObject({ sinLeer: true, ultima: { autor: "Técnico de prueba", en: expect.any(String) } });
+    expect(await conversacionEnBandeja(otra.cookie, id)).toMatchObject({ sinLeer: false });
+
+    // La toma otra persona: ahora el punto es suyo.
+    await post(otra.cookie, id, "tomar", { version: 1 });
+    expect(await conversacionEnBandeja(otra.cookie, id, "en_revision")).toMatchObject({ sinLeer: true });
+    expect(await conversacionEnBandeja(oficina.cookie, id, "en_revision")).toMatchObject({ sinLeer: false });
+    expect((await get(otra.cookie, `/api/levantamientos/${id}`)).json().leidoHasta).toBeNull();
+
+    const leida = await post(otra.cookie, id, "lectura", {});
+    expect(leida.statusCode, leida.body).toBe(200);
+    expect(await conversacionEnBandeja(otra.cookie, id, "en_revision")).toMatchObject({ sinLeer: false });
+    expect((await get(otra.cookie, `/api/levantamientos/${id}`)).json().leidoHasta).toBe(leida.json().leidoHasta);
+    const [cambio] = (await bajarSync(tecnico.cookie, 14)).filter((c) => c.id === id);
+    expect(cambio).toMatchObject({ comentarios: [{ respuestas: [{ texto: "Nadie", leido: true }] }] });
+  });
+});

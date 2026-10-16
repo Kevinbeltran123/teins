@@ -1,15 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { sinMovimiento } from "./transicion";
 
 export interface Notificacion {
   /** Qué pasó, en participio: "Cliente creado", "Foto eliminada". Nunca un error: esos quedan donde ocurrieron. */
   texto: string;
-  /** Una sola acción de una palabra, que también exista en la pantalla o que deshaga lo recién hecho. */
+  /**
+   * Una sola acción corta: el siguiente paso de lo recién hecho ("Agregar contactos", "Ver en Canceladas"), algo que
+   * también exista en la pantalla o deshacerlo.
+   */
   accion?: { texto: string; alHacer: () => void } | undefined;
 }
 
 interface Visible extends Notificacion {
   id: number;
+  /** Sale en 200 ms antes de quitarse (iteración 27). */
+  saliendo?: boolean;
 }
 
 /** 5 s; con acción, 10 s para alcanzar a usarla (Polaris). Nunca más de tres a la vez. */
@@ -17,10 +23,17 @@ const DURACION_MS = 5_000;
 const DURACION_CON_ACCION_MS = 10_000;
 const MAXIMO = 3;
 
-const Contexto = createContext<(notificacion: Notificacion) => void>(() => undefined);
+const Contexto = createContext<(notificacion: Notificacion) => number>(() => -1);
+const ContextoRetirar = createContext<(id: number) => void>(() => undefined);
 
-/** Avisa de algo que ya pasó y no exige respuesta (DESIGN.md: notificaciones). */
+/** Avisa de algo que ya pasó y no exige respuesta (DESIGN.md: notificaciones). Devuelve su id, para retirarla. */
 export const useNotificar = () => useContext(Contexto);
+
+/**
+ * Retira una notificación antes de tiempo: un «Deshacer» que ya no tiene sobre qué actuar (el editor que la dio se
+ * cerró) no se queda ofreciéndose (iteración 42).
+ */
+export const useRetirarNotificacion = () => useContext(ContextoRetirar);
 
 /**
  * Región de notificaciones de la superficie. Oficina las muestra abajo a la derecha; campo abajo, sobre la
@@ -30,21 +43,36 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
   const [visibles, setVisibles] = useState<Visible[]>([]);
   const siguiente = useRef(0);
   const temporizadores = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  // La acción se hace una sola vez por notificación: durante los 200 ms de salida el botón sigue a la vista, y un doble
+  // clic haría dos veces «Deshacer».
+  const usadas = useRef(new Set<number>());
 
   const quitar = useCallback((id: number) => {
     clearTimeout(temporizadores.current.get(id));
     temporizadores.current.delete(id);
-    setVisibles((lista) => lista.filter((n) => n.id !== id));
+    if (sinMovimiento()) {
+      setVisibles((lista) => lista.filter((n) => n.id !== id));
+      return;
+    }
+    setVisibles((lista) => lista.map((n) => (n.id === id ? { ...n, saliendo: true } : n)));
+    temporizadores.current.set(
+      id,
+      setTimeout(() => {
+        temporizadores.current.delete(id);
+        setVisibles((lista) => lista.filter((n) => n.id !== id));
+      }, 200),
+    );
   }, []);
 
   const notificar = useCallback(
     (notificacion: Notificacion) => {
       const id = siguiente.current++;
-      setVisibles((lista) => [...lista, { ...notificacion, id }].slice(-MAXIMO));
+      setVisibles((lista) => [...lista.filter((n) => !n.saliendo), { ...notificacion, id }].slice(-MAXIMO));
       temporizadores.current.set(
         id,
         setTimeout(() => quitar(id), notificacion.accion ? DURACION_CON_ACCION_MS : DURACION_MS),
       );
+      return id;
     },
     [quitar],
   );
@@ -77,17 +105,20 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
       {visibles.map((n) => (
         <div
           key={n.id}
-          className="pointer-events-auto flex min-h-12 animate-aparecer items-center justify-between gap-3 rounded-control bg-notificacion py-1 pr-1 pl-4 text-cuerpo text-sobre-superficie shadow-menu"
+          className={`${n.saliendo ? "animate-sale-abajo" : "animate-entra-abajo"} pointer-events-auto flex min-h-12 items-center justify-between gap-3 rounded-[10px] bg-notificacion py-1 pr-1 pl-4 text-cuerpo font-medium text-fondo shadow-menu`}
+          aria-hidden={n.saliendo || undefined}
         >
           <span className="py-2">{n.texto}</span>
           {n.accion && (
             <button
               type="button"
               onClick={() => {
+                if (usadas.current.has(n.id)) return;
+                usadas.current.add(n.id);
                 n.accion!.alHacer();
                 quitar(n.id);
               }}
-              className="min-h-control-sm shrink-0 rounded-control px-3 font-extrabold text-acento hover:bg-sobre-superficie/10 focus-visible:outline-3 focus-visible:outline-acento"
+              className="min-h-control-sm shrink-0 rounded-[7px] px-2.5 font-semibold text-enlace-notificacion underline-offset-3 hover:underline focus-visible:outline-2 focus-visible:outline-fondo"
             >
               {n.accion.texto}
             </button>
@@ -99,8 +130,10 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
 
   return (
     <Contexto.Provider value={notificar}>
-      {children}
-      {capa && hayVisibles ? createPortal(region, capa) : region}
+      <ContextoRetirar.Provider value={quitar}>
+        {children}
+        {capa && hayVisibles ? createPortal(region, capa) : region}
+      </ContextoRetirar.Provider>
     </Contexto.Provider>
   );
 }

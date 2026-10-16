@@ -1,8 +1,10 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
 import { Search } from "./iconos";
 import type { LineaEditable } from "./Cantidades";
+import { useNotificar, useRetirarNotificacion } from "./Notificaciones";
 import { BotonAgregar } from "./Recorrido";
+import { useLoNuevo } from "./transicion";
 
 /** Lee una cantidad escrita en campo ("12,5") como número; lo que no se lee cuenta como 0. */
 const numero = (texto: string) => {
@@ -37,10 +39,35 @@ export function EditorMateriales({
   buscar?: (() => void) | undefined;
 }) {
   const id = useId();
+  // Solo la línea recién agregada entra animada; las demás no se animan otra vez al volver al paso.
+  const esNueva = useLoNuevo(lineas.map((l) => l.id));
   // Las líneas con la nota abierta; una nota escrita siempre se ve.
   const [conNota, setConNota] = useState<ReadonlySet<string>>(new Set());
   const cambiar = (i: number, cambio: Partial<LineaEditable>) => onCambio(lineas.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
-  const quitar = (i: number) => onCambio(lineas.filter((_, j) => j !== i));
+  const notificar = useNotificar();
+  const retirar = useRetirarNotificacion();
+  // La lista de ahora: "Deshacer" llega hasta 10 s después, y en ese tiempo se pudo agregar o cambiar otra línea.
+  const vigentes = useRef(lineas);
+  vigentes.current = lineas;
+  // Al cerrarse el editor (otro paso, o «No se pudo obtener»), sus «Deshacer» se retiran: su lista ya no es la vigente
+  // y devolver la línea sobre ella borraría lo que vino después (iteración 42).
+  const avisos = useRef(new Set<number>());
+  useEffect(() => {
+    const deEsteEditor = avisos.current;
+    return () => deEsteEditor.forEach(retirar);
+  }, [retirar]);
+  // Bajar a cero quita la línea al instante; "Deshacer" la devuelve a su lugar (DESIGN.md, iteración 24c) sobre la lista
+  // de ahora, no la de antes: lo hecho entre tanto no se pierde, y un segundo toque no la duplica (iteración 42).
+  const quitar = (i: number) => {
+    const quitada = lineas[i]!;
+    onCambio(lineas.filter((_, j) => j !== i));
+    const devolver = () => {
+      const actuales = vigentes.current;
+      if (actuales.some((l) => l.id === quitada.id)) return;
+      onCambio([...actuales.slice(0, i), quitada, ...actuales.slice(i)]);
+    };
+    avisos.current.add(notificar({ texto: `${quitada.descripcion.trim() || "Material"} quitado`, accion: { texto: "Deshacer", alHacer: devolver } }));
+  };
   const sumar = (i: number, delta: number) => {
     const siguiente = Math.max(0, numero(lineas[i]!.cantidad) + delta);
     if (siguiente === 0) quitar(i);
@@ -57,7 +84,7 @@ export function EditorMateriales({
       </span>
       {lineas.length === 0 && <p className="text-cuerpo text-texto-secundario">Busca en el catálogo lo que vas a usar. Si no está, agrégalo como línea libre.</p>}
       {lineas.map((l, i) => (
-        <div key={l.id} role="group" aria-label={`Línea ${i + 1}`} className="flex flex-col gap-3 rounded-panel bg-panel py-3.5 pr-3.5 pl-4.5 motion-safe:animate-subir">
+        <div key={l.id} role="group" aria-label={`Línea ${i + 1}`} className={`flex flex-col gap-3 rounded-panel border border-division bg-panel py-3.5 pr-3.5 pl-4.5 ${esNueva(l.id) ? "motion-safe:animate-subir" : ""}`}>
           <div className="flex items-center gap-3">
             <div className="flex min-w-0 grow flex-col">
               {l.catalogo ? (

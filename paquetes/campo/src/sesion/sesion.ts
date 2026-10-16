@@ -13,6 +13,17 @@ export class RolNoPermitido extends Error {
 }
 
 /**
+ * Entró con una contraseña temporal (ADR-0033): la cambia antes de cualquier otra cosa. El servidor niega todo lo
+ * demás mientras tanto; el teléfono no guarda el usuario ni baja nada hasta que la cambie.
+ */
+export class ContrasenaTemporal extends Error {
+  constructor() {
+    super("La contraseña es temporal");
+    this.name = "ContrasenaTemporal";
+  }
+}
+
+/**
  * Inicia sesión (requiere conexión, como toda primera instalación: ADR-0015). Guarda el usuario
  * para trabajar sin conexión y reanuda lo que esperaba por una sesión.
  */
@@ -35,6 +46,7 @@ async function prepararSesion(): Promise<void> {
     await cliente.cerrarSesion().catch(() => undefined);
     throw new RolNoPermitido();
   }
+  if (datos.debeCambiarContrasena) throw new ContrasenaTemporal();
   await almacen.renovarPermiso(datos.id, permisoLocalHasta, VERSION_APP);
   await db.ajustes.put({ clave: "usuario", valor: datos });
   await db.ajustes.delete("acceso_cerrado");
@@ -44,6 +56,18 @@ async function prepararSesion(): Promise<void> {
   await almacen.reanudar("requiere_sesion");
   // La primera instalación descarga visitas y formatos de inmediato (ADR-0015, sección 5).
   sincronizarEnSegundoPlano({ bajar: true });
+}
+
+/** Cambia la temporal por la propia. `entrarConLaNueva` sigue como cualquier ingreso. */
+export async function cambiarContrasenaTemporal(temporal: string, nueva: string): Promise<void> {
+  await cliente.llamar("cambiarContrasena", { cuerpo: { actual: temporal, nueva } });
+}
+
+export const entrarConLaNueva = prepararSesion;
+
+/** Sale sin cambiar la temporal: cierra la sesión en el servidor y no toca nada del teléfono. */
+export async function salirSinCambiar(): Promise<void> {
+  await cliente.cerrarSesion().catch(() => undefined);
 }
 
 /**

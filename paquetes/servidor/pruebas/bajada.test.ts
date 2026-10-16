@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
 import { llaveDeEnvio } from "@teins/protocolo";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
@@ -20,14 +21,14 @@ const bajar = (cookie: string, desde = 0, app_ = 1, limite?: number) =>
     headers: { cookie, ...cabecerasSync },
   });
 
-async function nuevaVisita(organizacionId: string, tecnicos: string[]) {
+async function nuevaVisita(organizacionId: string, tecnicos: string[], programadaPara = "2026-09-30") {
   return enOrganizacion(s.conexionApp.bd, organizacionId, async (tx) => {
     const { clienteId, sitioId } = await clientesYSitios.crear(tx, {
       organizacionId,
       nombre: "Cliente ficticio",
       sitio: { nombre: "Sede de prueba", direccion: "Calle [N] # [N]-[N]" },
     });
-    return visitas.crear(tx, { organizacionId, ...contexto, clienteId, sitioId, motivo: "Mantenimiento", programadaPara: "2026-09-30", tecnicos });
+    return visitas.crear(tx, { organizacionId, ...contexto, clienteId, sitioId, motivo: "Mantenimiento", programadaPara, tecnicos });
   });
 }
 
@@ -92,6 +93,19 @@ describe("bajada (ADR-0003)", () => {
   });
 });
 
+describe("época de la bajada (ADR-0038)", () => {
+  it("es la inicial hasta que se deja limpio el entorno, y cada organización tiene la suya", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const otra = await s.nuevaOrganizacionConUsuarios();
+    expect((await bajar(tecnico.cookie)).json().epoca).toBe("inicial");
+
+    // Lo que hace dejar-limpio.sql como dueño de la base: la aplicación solo la lee.
+    await s.propietario.pool.query("insert into cambios.epocas (organizacion_id, epoca) values ($1, 'limpieza-1') on conflict (organizacion_id) do update set epoca = excluded.epoca", [organizacionId]);
+    expect((await bajar(tecnico.cookie)).json().epoca).toBe("limpieza-1");
+    expect((await bajar(otra.tecnico.cookie)).json().epoca).toBe("inicial");
+  });
+});
+
 describe("visitas asignadas", () => {
   it("baja al técnico asignado, no a otros ni a otra organización, y sale del alcance al reasignar (regla 17)", async () => {
     const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
@@ -110,6 +124,10 @@ describe("visitas asignadas", () => {
         sitio: { nombre: "Sede de prueba", direccion: "Calle [N] # [N]-[N]" },
         motivo: "Mantenimiento",
         programadaPara: "2026-09-30",
+        // Sin horario: todo el día (ADR-0037).
+        horaInicio: null,
+        horaFin: null,
+        terminada: null,
       },
     });
     expect((await bajar(otro.cookie, puntoOtro)).json().cambios).toEqual([]);
@@ -267,5 +285,91 @@ describe("dispositivo y revocación (ADR-0009, ADR-0017, QA-5)", () => {
       [organizacionId, tecnico.id],
     );
     expect(rows[0].n).toBe(1);
+  });
+});
+
+describe("las visitas atendidas salen del teléfono al día siguiente (ADR-0041)", () => {
+  /** El día en Colombia, como lo cuenta el servidor, corrido `dias`. */
+  const dia = (dias: number) => new Date(Date.now() + dias * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+  async function enviarCon(cookie: string, visitaId: string) {
+    const id = randomUUID();
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/sync/comandos",
+      headers: { cookie, ...cabecerasSync },
+      payload: { tipo: "EnviarLevantamiento", llave: llaveDeEnvio(id), levantamiento: { id, visitaId, formato: "prueba-ups", versionFormato: 1, respuestas: {}, creadoEn: new Date().toISOString(), enviadoEn: new Date().toISOString() } },
+    });
+    expect(r.statusCode, r.body).toBe(200);
+  }
+  const salidas = (cambios: { tipo: string; id?: string; motivo?: string }[]) => cambios.filter((c) => c.tipo === "fuera_de_alcance").map((c) => [c.id, c.motivo]);
+  const visitasQueBajan = (cambios: { tipo: string; visita?: { id: string } }[]) => cambios.filter((c) => c.tipo === "visita").map((c) => c.visita!.id);
+
+  it("cierra lo atendido de días anteriores, no lo de hoy ni lo atrasado sin atender; la app 14 no recibe el motivo", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const enviadaAyer = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    const terminadaAyer = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    const atrasada = await nuevaVisita(organizacionId, [tecnico.id], dia(-2));
+    const deHoy = await nuevaVisita(organizacionId, [tecnico.id], dia(0));
+    await enviarCon(tecnico.cookie, enviadaAyer);
+    await enviarCon(tecnico.cookie, deHoy);
+    await s.propietario.pool.query("update visitas.visitas set terminada_en = now() - interval '1 day' where id = $1", [terminadaAyer]);
+
+    // Una app que no conoce el motivo no recibe la salida: lo tomaría por una reasignación.
+    expect(salidas((await bajar(tecnico.cookie, 0, 14)).json().cambios)).toEqual([]);
+
+    const bajada = (await bajar(tecnico.cookie, 0, 15)).json();
+    expect(salidas(bajada.cambios).sort()).toEqual([
+      [enviadaAyer, "atendida"],
+      [terminadaAyer, "atendida"],
+    ].sort());
+    // Una cerrada no vuelve a bajar, ni a la app que se actualiza y baja todo de nuevo.
+    expect(visitasQueBajan(bajada.cambios).sort()).toEqual([atrasada, deHoy].sort());
+    expect(visitasQueBajan((await bajar(tecnico.cookie, 0, 14)).json().cambios).sort()).toEqual([atrasada, deHoy].sort());
+    // Se cierra una sola vez: la siguiente bajada no la repite.
+    expect(salidas((await bajar(tecnico.cookie, bajada.puntoDeControl, 15)).json().cambios)).toEqual([]);
+  });
+
+  it("reprogramar una visita cerrada la reabre; reasignarla sin cambiar la fecha la deja cerrada", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const otro = await nuevoTecnico(organizacionId);
+    const movida = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    const pasada = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    await enviarCon(tecnico.cookie, movida);
+    await enviarCon(tecnico.cookie, pasada);
+    const cerro = (await bajar(tecnico.cookie, 0, 15)).json();
+    expect(salidas(cerro.cambios).map(([id]) => id).sort()).toEqual([movida, pasada].sort());
+
+    await enOrganizacion(s.conexionApp.bd, organizacionId, async (tx) => {
+      const [m] = await tx.execute<{ version: number }>(sql`select version from visitas.visitas where id = ${movida}`).then((r) => r.rows);
+      await visitas.reprogramar(tx, { organizacionId, ...contexto, visitaId: movida, version: m!.version, programadaPara: dia(1), motivo: "Volver a medir" });
+      await visitas.reasignar(tx, { organizacionId, ...contexto, visitaId: pasada, tecnicos: [otro.id] });
+    });
+    // Reprogramada a mañana: vuelve como trabajo por hacer.
+    const despues = (await bajar(tecnico.cookie, cerro.puntoDeControl, 15)).json();
+    expect(visitasQueBajan(despues.cambios)).toEqual([movida]);
+    // Reasignar lo pasado corrige quién la hizo: no vuelve a ningún teléfono como pendiente.
+    expect(visitasQueBajan((await bajar(otro.cookie, 0, 15)).json().cambios)).toEqual([]);
+  });
+
+  it("cerrar vuelve a mirar la fecha y la cancelación: lo que oficina reprogramó o canceló después de elegirlo no se cierra", async () => {
+    const { tecnico, organizacionId } = await s.nuevaOrganizacionConUsuarios();
+    const movida = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    const cancelada = await nuevaVisita(organizacionId, [tecnico.id], dia(-1));
+    await enviarCon(tecnico.cookie, movida);
+    await enviarCon(tecnico.cookie, cancelada);
+    await enOrganizacion(s.conexionApp.bd, organizacionId, async (tx) => {
+      // La bajada las eligió para cerrar; antes de cerrarlas, oficina reprogramó una para mañana y canceló la otra.
+      const elegidas = (await visitas.porCerrar(tx, tecnico.id, dia(0))).map((v) => v.id);
+      expect(elegidas.sort()).toEqual([movida, cancelada].sort());
+      await visitas.reprogramar(tx, { organizacionId, ...contexto, visitaId: movida, version: 1, programadaPara: dia(1), motivo: "Volver a medir" });
+      await visitas.cancelar(tx, { organizacionId, ...contexto, visitaId: cancelada, version: 1, motivo: "Aplazada" });
+      await visitas.cerrar(tx, organizacionId, elegidas, dia(0));
+    });
+    const { rows } = await s.propietario.pool.query("select cerrada_en from visitas.visitas where id = any($1)", [[movida, cancelada]]);
+    expect(rows.map((r) => r.cerrada_en)).toEqual([null, null]);
+    // La reprogramada sigue en el teléfono como trabajo por hacer; la cancelada sale como cancelada, no como atendida.
+    const bajada = (await bajar(tecnico.cookie, 0, 15)).json();
+    expect(visitasQueBajan(bajada.cambios)).toEqual([movida]);
+    expect(salidas(bajada.cambios)).toEqual([[cancelada, "cancelada"]]);
   });
 });

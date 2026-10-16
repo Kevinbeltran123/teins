@@ -2,7 +2,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { bloques, esCantidades, type EstadoRevision } from "@teins/dominio";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import type { DatosDeProyeccion, RepositorioLevantamientos, RepositorioRevision } from "./aplicacion/puertos";
-import { comandosProcesados, comentarios, levantamientos, lineasCantidad } from "./esquema";
+import { comandosProcesados, comentarios, lecturas, levantamientos, lineasCantidad } from "./esquema";
 
 /**
  * La tabla de líneas sigue al documento (ADR-0006, parte 2): inserta las nuevas, actualiza las que
@@ -99,6 +99,7 @@ export const repositorioRevision: RepositorioRevision = {
         respuestas: levantamientos.respuestas,
         repeticiones: levantamientos.repeticiones,
         creadoEnDispositivo: levantamientos.creadoEnDispositivo,
+        visitaId: levantamientos.visitaId,
       })
       .from(levantamientos)
       .where(eq(levantamientos.id, id));
@@ -114,6 +115,33 @@ export const repositorioRevision: RepositorioRevision = {
   },
   async agregarComentario(tx, comentario) {
     await tx.insert(comentarios).values(comentario);
+  },
+  async comentario(tx, levantamientoId, comentarioId) {
+    const [fila] = await tx
+      .select()
+      .from(comentarios)
+      .where(and(eq(comentarios.id, comentarioId), eq(comentarios.levantamientoId, levantamientoId)))
+      .for("update");
+    return fila ? { ...fila, de: fila.de as "oficina" | "tecnico" } : undefined;
+  },
+  async agregarRespuesta(tx, respuesta) {
+    // Dos reintentos a la vez: el segundo espera al primero y no inserta nada.
+    const filas = await tx.insert(comentarios).values(respuesta).onConflictDoNothing({ target: comentarios.llave }).returning({ id: comentarios.id });
+    return filas.length === 1;
+  },
+  async comentarioPorLlave(tx, llave) {
+    const [fila] = await tx.select().from(comentarios).where(eq(comentarios.llave, llave));
+    return fila ? { ...fila, de: fila.de as "oficina" | "tecnico" } : undefined;
+  },
+  async leer(tx, { organizacionId, usuarioId, levantamientoId, en }) {
+    await tx
+      .insert(lecturas)
+      .values({ organizacionId, usuarioId, levantamientoId, leidoHasta: en })
+      // Lo leído solo avanza: dos pestañas abiertas no lo devuelven.
+      .onConflictDoUpdate({ target: [lecturas.usuarioId, lecturas.levantamientoId], set: { leidoHasta: sql`greatest(${lecturas.leidoHasta}, excluded.leido_hasta)` } });
+  },
+  async corregirComentario(tx, comentarioId, cambios) {
+    await tx.update(comentarios).set(cambios).where(eq(comentarios.id, comentarioId));
   },
   proyectarCantidades,
   async vincularLinea(tx, { levantamientoId, seccion, campo, linea, itemId, autorId, en }) {

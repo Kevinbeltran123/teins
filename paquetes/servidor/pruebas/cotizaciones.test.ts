@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { llaveDeEnvio, rutaVistaPreviaCotizacion } from "@teins/protocolo";
+import { llaveDeEnvio } from "@teins/protocolo";
 import type { LineaCantidad, VersionFormato } from "@teins/dominio";
 import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
@@ -190,34 +190,18 @@ describe("cotización desde las cantidades revisadas (ADR-0029, parte 2)", () =>
     expect(listado.find((c: { id: string }) => c.id === id)).toMatchObject({ vigente: 1, total: 1213766, envioSinEntregar: false });
   }, 120_000);
 
-  it("la vista previa es el borrador guardado con la plantilla del PDF, en un documento que no ejecuta nada (iteración 24)", async () => {
-    const e = await escenario();
-    await e.revisado([linea("a0000001", "Canaleta <b>metálica</b>", "4")]);
-    const { id } = (await e.oficina("POST", "/api/cotizaciones", { visitaId: e.visitaId })).json();
-    const detalle = (await e.oficina("GET", `/api/cotizaciones/${id}`)).json();
-    await e.oficina("POST", `/api/cotizaciones/${id}/borrador`, { version: 1, lineas: [{ ...detalle.lineas[0], precio: 25000 }], impuestos: { tipo: "iva" }, condiciones: detalle.condiciones });
-
-    const vista = await e.oficina("GET", rutaVistaPreviaCotizacion(id));
-    expect(vista.statusCode, vista.body).toBe(200);
-    expect(vista.headers["content-type"]).toContain("text/html");
-    expect(vista.headers["cache-control"]).toBe("no-store");
-    // Solo sus propios estilos y fuentes; ni scripts, ni conexiones, ni formularios, y solo dentro de oficina.
-    const csp = String(vista.headers["content-security-policy"]);
-    for (const directiva of ["default-src 'none'", "style-src 'unsafe-inline'", "font-src data:", "frame-ancestors 'self'", "sandbox"]) expect(csp).toContain(directiva);
-    expect(vista.body).toContain(detalle.numero);
-    expect(vista.body).toContain("Canaleta &lt;b&gt;metálica&lt;/b&gt;");
-    // 4 × 25.000 = 100.000, con IVA 19 %.
-    expect(vista.body).toContain("$ 119.000");
-
-    expect((await app.inject({ method: "GET", url: rutaVistaPreviaCotizacion(id), headers: { cookie: e.tecnico.cookie } })).statusCode).toBe(403);
-    expect((await e.oficina("GET", rutaVistaPreviaCotizacion(randomUUID()))).statusCode).toBe(404);
-  });
-
   it("la lista para cotizar solo trae levantamientos recibidos en los últimos 90 días", async () => {
     const e = await escenario();
     const id = await e.revisado([linea("a0000001", "Canaleta", "4")]);
     expect((await e.oficina("GET", "/api/cotizaciones/visitas")).json().visitas).toEqual([expect.objectContaining({ visitaId: e.visitaId })]);
     await s.propietario.pool.query("update levantamientos.levantamientos set recibido_en = now() - interval '100 days' where id = $1", [id]);
+    expect((await e.oficina("GET", "/api/cotizaciones/visitas")).json().visitas).toEqual([]);
+  });
+
+  it("una visita cancelada no aparece para cotizar", async () => {
+    const e = await escenario();
+    await e.revisado([linea("a0000001", "Canaleta", "4")]);
+    await s.propietario.pool.query("update visitas.visitas set cancelada_en = now() where id = $1", [e.visitaId]);
     expect((await e.oficina("GET", "/api/cotizaciones/visitas")).json().visitas).toEqual([]);
   });
 
@@ -246,6 +230,46 @@ describe("envío de una cotización publicada (ADR-0029)", () => {
     const enviar = () => e.oficina("POST", `/api/cotizaciones/${id}/versiones/1/enviar`, { destinos: [{ contactoId: contactos[0].id }] });
     return { ...e, id, versionId: rows[0].id as string, marta: contactos[0] as { id: string }, enviar };
   }
+
+  it("retirar una versión (ADR-0034): solo administración, con motivo; deja de ser la vigente y no se envía más", async () => {
+    const { id, organizacionId, oficina, comoAdmin } = await publicada();
+    // Una segunda versión, que es la que se retira.
+    expect((await oficina("POST", `/api/cotizaciones/${id}/publicar`, { version: 3, destinatarios: [] })).statusCode).toBe(201);
+    const vigente = async () => ((await oficina("GET", "/api/cotizaciones")).json().cotizaciones as { id: string; vigente: number | null }[]).find((c) => c.id === id)!.vigente;
+    expect(await vigente()).toBe(2);
+
+    expect((await oficina("POST", `/api/cotizaciones/${id}/versiones/2/retirar`, { motivo: "El precio estaba mal" })).statusCode).toBe(403);
+    expect((await comoAdmin("POST", `/api/cotizaciones/${id}/versiones/2/retirar`, { motivo: " " })).json()).toMatchObject({ codigo: "entrada_invalida" });
+    const retirada = await comoAdmin("POST", `/api/cotizaciones/${id}/versiones/2/retirar`, { motivo: "El precio estaba mal" });
+    expect(retirada.statusCode, retirada.body).toBe(200);
+    expect(retirada.json()).toMatchObject({ numero: 2, retirada: { motivo: "El precio estaba mal", por: { nombre: expect.any(String) } } });
+    expect((await comoAdmin("POST", `/api/cotizaciones/${id}/versiones/2/retirar`, { motivo: "Otra vez" })).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    // La anterior vuelve a ser la vigente; la retirada se conserva, con su PDF, y no se envía.
+    expect(await vigente()).toBe(1);
+    const detalle = (await oficina("GET", `/api/cotizaciones/${id}`)).json();
+    expect(detalle.versiones.map((v: { numero: number; retirada: unknown }) => [v.numero, v.retirada !== null])).toEqual([[2, true], [1, false]]);
+    const contacto = (await oficina("GET", `/api/clientes/${detalle.clienteId}`)).json().contactos[0];
+    expect((await oficina("POST", `/api/cotizaciones/${id}/versiones/2/enviar`, { destinos: [{ contactoId: contacto.id }] })).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    // Retirar también la 1: la cotización queda sin vigente.
+    expect((await comoAdmin("POST", `/api/cotizaciones/${id}/versiones/1/retirar`, { motivo: "Ya no aplica" })).statusCode).toBe(200);
+    expect(await vigente()).toBeNull();
+    const { rows } = await s.propietario.pool.query("select count(*)::int as n from auditoria.registros where organizacion_id = $1 and agregado_tipo = 'cotizacion' and tipo_evento = 'version_retirada'", [organizacionId]);
+    expect(rows[0].n).toBe(2);
+  }, 120_000);
+
+  it("un envío de la cotización que espera en cola se cancela y se reanuda", async () => {
+    const { id, enviar, oficina } = await publicada();
+    // Como justo después de publicar: el envío espera el PDF.
+    await s.propietario.pool.query("update cotizaciones.versiones set pdf_estado = 'generando' where cotizacion_id = $1", [id]);
+    const [envio] = (await enviar()).json().envios as { id: string }[];
+    const cancelado = await oficina("POST", `/api/cotizaciones/${id}/versiones/1/envios/${envio!.id}/cancelar`);
+    expect(cancelado.statusCode, cancelado.body).toBe(200);
+    expect(cancelado.json().envios[0]).toMatchObject({ estado: "cancelado", cancelado: { por: { nombre: "Oficina de prueba" } } });
+    const reanudado = await oficina("POST", `/api/cotizaciones/${id}/versiones/1/envios/${envio!.id}/reanudar`);
+    expect(reanudado.json().envios[0]).toMatchObject({ estado: "en_cola", cancelado: null });
+  }, 120_000);
 
   it("el mensaje lleva el nombre de la organización que quedó en el PDF, aunque cambie después", async () => {
     const { organizacionId, marta, enviar } = await publicada();

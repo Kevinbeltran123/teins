@@ -3,7 +3,7 @@ import type { VersionFormato } from "@teins/dominio";
 import v1 from "@teins/dominio/formatos-de-prueba/prueba-ups.v1.json";
 import v2 from "@teins/dominio/formatos-de-prueba/prueba-ups.v2.json";
 import { VERSION_APP } from "../version";
-import type { Ajuste, ClaveLocal, ArchivoGuardado, BajadaLocal, EnvioGuardado, EstadoServidorGuardado, FormatoLocal, ItemCatalogoLocal, LevantamientoGuardado, SimboloLocal, UsuarioLocal, VisitaGuardada } from "./modelo";
+import type { Ajuste, ClaveLocal, ArchivoGuardado, BajadaLocal, EnvioGuardado, EstadoServidorGuardado, FormatoLocal, ItemCatalogoLocal, LecturaDeChat, LevantamientoGuardado, RespuestaGuardada, SimboloLocal, UsuarioLocal, VisitaGuardada } from "./modelo";
 
 export type BaseCampo = Dexie & {
   levantamientos: EntityTable<LevantamientoGuardado, "id">;
@@ -17,6 +17,8 @@ export type BaseCampo = Dexie & {
   claves: EntityTable<ClaveLocal, "tecnicoId">;
   catalogo: EntityTable<ItemCatalogoLocal, "id">;
   simbolos: EntityTable<SimboloLocal, "id">;
+  respuestasPendientes: EntityTable<RespuestaGuardada, "llave">;
+  lecturasDeChat: Table<LecturaDeChat, [string, string]>;
 };
 
 /** Los formatos que los cortes 0 y 1 traían en el código. Solo los usa la migración a la versión 3. */
@@ -92,6 +94,10 @@ export function abrirBase(nombre = "teins-campo"): BaseCampo {
   // Iteración 19: la biblioteca de símbolos de los bocetos (ADR-0027), igual que el catálogo: llega con la bajada
   // y, al actualizar a la app 10, el teléfono baja todo de nuevo y la trae completa.
   db.version(6).stores({ simbolos: "id" });
+
+  // Iteración 39: lo que el técnico responde a oficina y espera señal, sellado, y hasta dónde leyó cada chat (ADR-0040).
+  // Solo tablas nuevas: no se transforma ni se borra nada de antes.
+  db.version(7).stores({ respuestasPendientes: "llave, tecnicoId, levantamientoId", lecturasDeChat: "[tecnicoId+levantamientoId], tecnicoId" });
 
   return db;
 }

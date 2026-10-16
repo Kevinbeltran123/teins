@@ -12,7 +12,7 @@ const requerir = createRequire(import.meta.url);
 let fuente: string | undefined;
 /** La misma familia de la interfaz, incrustada: el PDF no depende de las fuentes del servidor (ADR-0013). */
 export const fuenteIncrustada = () =>
-  (fuente ??= readFileSync(requerir.resolve("@fontsource-variable/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-wght-normal.woff2")).toString("base64"));
+  (fuente ??= readFileSync(requerir.resolve("@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")).toString("base64"));
 
 export interface Impresion {
   html: string;
@@ -22,6 +22,19 @@ export interface Impresion {
   metadatos: { titulo: string; autor: string; fecha: Date };
   /** Sin valor: el Chromium que instala Playwright (desarrollo y pruebas). */
   chromiumRuta?: string | undefined;
+}
+
+/**
+ * Cuántas páginas anexaría un plano al informe, con los mismos dos pasos de `imprimirPdf` (cargar y copiar); 0 si
+ * pdf-lib no puede, porque entonces el PDF del informe fallaría con `PlanoIlegible` (iteración 26).
+ */
+export async function paginasDePlano(plano: Uint8Array): Promise<number> {
+  try {
+    const origen = await PDFDocument.load(plano);
+    return (await (await PDFDocument.create()).copyPages(origen, origen.getPageIndices())).length;
+  } catch {
+    return 0;
+  }
 }
 
 export class PlanoIlegible extends Error {

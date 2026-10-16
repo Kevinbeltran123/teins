@@ -1,10 +1,13 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { CapturaDeErrores, FallaAlDibujar, ProveedorNotificaciones } from "@teins/ui";
+import { aplicarTema, CapturaDeErrores, FallaAlDibujar, ProveedorNotificaciones } from "@teins/ui";
 import { App } from "./App";
 import { sellarEnSegundoPlano } from "./datos/instancia";
 import { solicitarPersistencia } from "./dispositivo/almacenamiento";
 import "./estilos.css";
+
+// El tema elegido en este equipo, antes de dibujar nada (DESIGN.md, "Tema").
+aplicarTema();
 
 void solicitarPersistencia();
 void sellarEnSegundoPlano();

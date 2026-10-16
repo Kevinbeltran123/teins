@@ -64,11 +64,14 @@ export async function volverALaPestana(page: Page) {
  * más abajo, así que se carga más hasta encontrarlo.
  */
 export async function filaDeLaBandeja(pagina: Page, nombre: string): Promise<Locator> {
-  const fila = pagina.getByRole("row").filter({ hasText: nombre });
-  const mas = pagina.getByRole("button", { name: "Cargar más" });
+  // Dentro del panel de la bandeja: al llegar desde otra sección, la navegación se aplica dentro de una transición
+  // (iteración 27) y las filas de la pantalla anterior siguen un instante a la vista.
+  const panel = pagina.getByRole("tabpanel", { name: /^(Esperando revisión|En revisión|Revisados)$/ });
+  const fila = panel.getByRole("row").filter({ hasText: nombre });
+  const mas = panel.getByRole("button", { name: "Cargar más" });
   for (let i = 0; i < 20; i++) {
     // Espera a que la página cargue: o aparece la fila, o el botón para cargar más, o la lista termina.
-    await fila.or(mas).or(pagina.getByRole("row").last()).first().waitFor();
+    await fila.or(mas).or(panel.getByRole("row").last()).first().waitFor();
     if (await fila.count()) return fila;
     if (!(await mas.isVisible())) break;
     await mas.click();
@@ -134,7 +137,8 @@ export async function arrastrar(page: Page, puntos: [number, number][], { quieto
  */
 export async function irAlRecorrido(page: Page) {
   const recorrido = page.getByRole("navigation", { name: "Recorrido de la visita" });
-  const listo = page.getByRole("button", { name: /^Listo este / });
+  // Desde un tablero abierto (iteración 32): "Volver a la lista" o, en el último, "Listo, ver…".
+  const listo = page.getByRole("button", { name: /^(Volver a la lista|Listo, ver )/ });
   const ver = page.getByRole("button", { name: "Ver el recorrido", exact: true });
   // Espera a que la pantalla (recorrido, paso o repetición) termine de pintarse antes de decidir.
   await expect(recorrido.or(ver).or(listo)).toBeVisible();
@@ -158,7 +162,7 @@ export async function irAlPaso(page: Page, titulo: string) {
 export async function irARevisar(page: Page) {
   const recorrido = await irAlRecorrido(page);
   await recorrido.getByRole("button", { name: /^Revisar y enviar/ }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Antes de enviar" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Revisa y envía" })).toBeVisible();
 }
 
 /** El croquis es un paso que abre el editor a pantalla completa. */
@@ -173,4 +177,25 @@ export async function verLoEnviado(page: Page) {
   const resumen = page.getByText("Ver lo que enviaste");
   await expect(resumen).toBeVisible();
   if (!(await page.locator("details[open]").count())) await resumen.click();
+}
+
+/** Desde Administración: crea un usuario y devuelve la contraseña temporal que se entrega una vez. */
+export async function crearUsuarioDesdeAdministracion(page: Page, u: { usuario: string; nombre: string }, rol: "Técnico (campo)" | "Oficina"): Promise<string> {
+  await page.getByRole("button", { name: "Nuevo usuario" }).click();
+  // Dentro de la hoja: buscar por etiqueta en toda la página recorre la tabla de usuarios, que en una base de pruebas
+  // larga tiene cientos de filas y en WebKit tarda decenas de segundos.
+  const hoja = page.getByRole("dialog", { name: "Nuevo usuario" });
+  await hoja.getByLabel("Nombre completo").fill(u.nombre);
+  await hoja.getByLabel("Usuario para iniciar sesión").fill(u.usuario);
+  await hoja.getByRole("radio", { name: rol }).check();
+  await hoja.getByRole("button", { name: "Crear usuario" }).click();
+  const entrega = page.getByRole("dialog", { name: "Usuario creado" });
+  const temporal = (await entrega.locator("dt:has-text('Contraseña temporal') + dd code").textContent())!;
+  await entrega.getByRole("button", { name: "Ya la entregué" }).click();
+  return temporal;
+}
+
+/** El informe o la cotización ya se guardó solo (guardado automático, prototipos/usabilidad-oficina). */
+export async function guardadoSolo(page: Page) {
+  await expect(page.getByRole("status").filter({ hasText: /^Guardado$/ })).toBeVisible({ timeout: 15_000 });
 }

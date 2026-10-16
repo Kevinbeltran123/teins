@@ -1,8 +1,8 @@
-import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { flushSync } from "react-dom";
+import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { pasosDe, type Paso } from "../recorrido";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
+  aDecimalColombiano,
   archivosReferenciados,
   bloques,
   claveDeRepeticion,
@@ -18,8 +18,10 @@ import {
   LIENZO,
   normalizarDecimal,
   LIMITES,
+  fotosReferenciadas,
   nombreDeDato,
   rutaLegible,
+  sinRespuestasHuerfanas,
   validarRespuestas,
   type CodigoErrorValidacion,
   type DefinicionCampo,
@@ -27,6 +29,7 @@ import {
   type DocumentoBoceto,
   type ErrorValidacion,
   type Valor,
+  type ValorCantidades,
   type ValorFirma,
   type ValorMedida,
   type VersionFormato,
@@ -34,19 +37,28 @@ import {
 import {
   Aviso,
   BarraDePaso,
+  Building,
+  WifiOff,
   Boton,
   BotonAgregar,
   BotonRedondo,
   BotonSiguiente,
   Check,
-  ChuloDeExito,
+  CifrasDeRepaso,
+  RefreshCw,
   EncabezadoDePaso,
   FilaDeRepaso,
   FranjaSincronizacion,
   ListaRecorrido,
   PasoDelRecorrido,
   Repaso,
-  TarjetaResumen,
+  FilaDeRepeticion,
+  ListaDeRepeticiones,
+  MenuAcciones,
+  conTransicion,
+  nombreDeTransicion,
+  sinMovimiento,
+  useLoNuevo,
   type EstadoDePaso,
   BotonIcono,
   CampoFotos,
@@ -73,6 +85,7 @@ import {
   Plus,
   Send,
   Smartphone,
+  TriangleAlert,
   TablaCantidades,
   Trash,
   useNotificar,
@@ -88,13 +101,21 @@ import { usosPorItem } from "../catalogo";
 // El catálogo para elegir materiales (ADR-0025): va con la captura, que ya se carga aparte del arranque.
 import HojaCatalogo from "./HojaCatalogo";
 import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal } from "../datos/modelo";
-import type { ArchivoNuevo } from "../datos/repositorio";
+import { VisitaConOtroBorrador, type ArchivoNuevo } from "../datos/repositorio";
 import { procesarFoto } from "../fotos/procesar";
 import { fechaHora, horaExacta } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos } from "../formatos";
 import { claseDeTono, estadoDeEnvio, estadoSegunServidor, mensajeDeValidacion, porQueNoEntro, QUE_HACER_CON_EL_RECHAZO } from "../mensajes";
+import { useBotonAtras } from "../dispositivo/atras";
 import { useServidorAlcanzable } from "../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
+import { agendaDeVisitas, hoyLocal } from "../visitas";
+import { armarChat, horaDelChat, sinLeer } from "../conversacion";
+import { leidoHasta, pendientesDe } from "../datos/conversacion";
+import { Chat } from "./Chat";
+
+/** Id del dato en «Ver lo que enviaste», para ir a él desde el chat. */
+const idDeDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`.replace(/[^a-zA-Z0-9_-]/g, "");
 
 // El editor de bocetos pesa (perfect-freehand y la lógica del lienzo): se carga solo al dibujar (ADR-0011).
 const EditorBoceto = lazy(() => import("./EditorBoceto"));
@@ -112,23 +133,53 @@ const VigilarGuardado = createContext<(escritura: Promise<unknown>) => void>(() 
 /** Ancla de un dato en la pantalla: el resumen de errores lleva hasta él. */
 const anclaDeDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`;
 const anclaDeSeccion = (seccion: string) => `seccion-${seccion}`;
+/**
+ * Nombre de transición de la cabecera de la captura (iteración 27): el mismo que la tarjeta de su visita en el inicio,
+ * para que la tarjeta se convierta en la cabecera. Entre pasos se queda; solo se desliza el cuerpo.
+ */
+const CabeceraDeLaVisita = createContext<string | undefined>(undefined);
 
-export function Captura({ id, volver }: { id: string; volver: () => void }) {
+export function Captura({
+  id,
+  volver,
+  alMostrar,
+  alDescartar,
+  conversacion = false,
+  pedirSesion,
+}: {
+  id: string;
+  volver: () => void;
+  /** Abrir de una vez el chat con oficina: lo pidió un aviso (ADR-0040). */
+  conversacion?: boolean;
+  /** Con la captura bloqueada y la sesión vencida, conectarse no basta: se inicia sesión desde aquí (iteración 42). */
+  pedirSesion?: () => void;
+  /** Ya se ve lo del levantamiento (no el esqueleto): la tarjeta del inicio puede convertirse en la cabecera. */
+  alMostrar?: () => void;
+  /** Se descartó el borrador (ADR-0035): quien abrió la captura vuelve al inicio y lo dice. */
+  alDescartar?: () => void;
+}) {
   // `null` distingue "no existe" de `undefined` (cargando).
   const levantamiento = useLiveQuery(async () => (await repositorio.obtener(id)) ?? null, [id]);
   const envio = useLiveQuery(async () => (await db.envios.get(id)) ?? null, [id]);
   const servidor = useLiveQuery(() => estadoDe(db, id), [id]);
   const formatos = useFormatos();
+  const [chatAbierto, setChatAbierto] = useState(conversacion);
+  const estadoChat = { abierto: chatAbierto, abrir: setChatAbierto };
+  // El botón atrás del teléfono hace lo que la flecha de la pantalla (iteración 24c): el borrador dice cuál es.
+  const atrasDelBorrador = useRef<(() => void) | null>(null);
+  useBotonAtras(() => (atrasDelBorrador.current ?? volver)());
   const visita = useLiveQuery(async () => {
     const l = await repositorio.obtener(id);
     return l?.visitaId && l.tecnicoId ? visitaDe(db, l.tecnicoId, l.visitaId) : null;
   }, [id]);
   // Vencido el permiso de trabajo local, el borrador se ve pero no se edita (ADR-0009, parte 2).
-  const bloqueado = useLiveQuery(async () => {
+  const permiso = useLiveQuery(async () => {
     const l = await repositorio.obtener(id);
     const bajada = l?.tecnicoId ? await db.bajadas.get(l.tecnicoId) : undefined;
-    return bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
+    if (!bajada || Date.parse(bajada.permisoLocalHasta) >= Date.now()) return "vigente";
+    return bajada.sesionVencida ? "vencido_sin_sesion" : "vencido";
   }, [id]);
+  const bloqueado = permiso === undefined ? undefined : permiso !== "vigente";
   // Los campos leen los valores una sola vez; después solo escriben (ver CampoTexto).
   const [inicial, setInicial] = useState<LevantamientoLocal>();
   useEffect(() => {
@@ -136,17 +187,37 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   }, [levantamiento, inicial]);
 
   const formato = levantamiento && formatos ? formatoDe(formatos, levantamiento) : undefined;
-  const borrador = levantamiento?.estado === "borrador";
+  // Al enviar, el borrador se queda a la vista mientras baja la hoja de confirmar; después la pantalla avanza a
+  // "Enviado" en una transición, desde arriba (iteración 27).
+  const [retenido, setRetenido] = useState(false);
+  const borrador = levantamiento?.estado === "borrador" || (retenido && levantamiento?.estado === "enviado");
+  const pantallaEnviado = Boolean(levantamiento && formato && levantamiento.estado === "enviado" && !retenido && envio !== undefined);
+  const cargando = levantamiento === undefined || envio === undefined || formatos === undefined || bloqueado === undefined || visita === undefined || (levantamiento !== null && !inicial);
+  const mostrado = pantallaEnviado || !cargando;
+  useLayoutEffect(() => {
+    if (mostrado) alMostrar?.();
+  }, [mostrado]);
+  const cabecera = levantamiento?.visitaId ? nombreDeTransicion("visita", levantamiento.visitaId) : nombreDeTransicion("lev", id);
+  const soltar = () =>
+    setTimeout(
+      () =>
+        void conTransicion(() => {
+          setRetenido(false);
+          window.scrollTo(0, 0);
+        }, "adelante"),
+      // Lo que tarda en bajar la hoja de confirmar.
+      sinMovimiento() ? 0 : 220,
+    );
 
   // Enviado: la pantalla de éxito del prototipo, con lo enviado debajo.
-  if (levantamiento && formato && levantamiento.estado === "enviado" && envio !== undefined) {
+  if (pantallaEnviado && levantamiento && formato && envio !== undefined) {
     return (
       <div className="min-h-dvh bg-fondo">
         <div className="mx-auto flex max-w-xl items-center px-4 pt-[max(0.625rem,env(safe-area-inset-top))] pb-1">
           <BotonRedondo icono={ChevronLeft} etiqueta="Volver a mis visitas" onClick={volver} />
         </div>
         <main className="mx-auto flex max-w-xl flex-col gap-6 px-4 pb-10">
-          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} />
+          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} estadoChat={estadoChat} alDescartar={alDescartar ?? volver} />
         </main>
       </div>
     );
@@ -155,17 +226,23 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
   // Un borrador que se puede editar ocupa toda la pantalla con su recorrido (DESIGN.md, campo).
   if (levantamiento && inicial && formato && borrador && bloqueado === false && envio !== undefined) {
     return (
-      <div className="min-h-dvh bg-fondo">
-        <Borrador
-          id={id}
+      <CabeceraDeLaVisita.Provider value={cabecera}>
+        <div className="min-h-dvh bg-fondo">
+          <Borrador
+            id={id}
           formato={formato}
           inicial={inicial}
           actual={levantamiento}
           nombre={formatos ? nombreDeFormato(formatos, levantamiento.formato) : "Levantamiento"}
-          contexto={visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : "Levantamiento suelto"}
-          volver={volver}
-        />
-      </div>
+          contexto={visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : levantamiento.lugar ? `${levantamiento.lugar.cliente} · ${levantamiento.lugar.sitio}` : "Levantamiento suelto"}
+            volver={volver}
+            atras={atrasDelBorrador}
+            retener={() => setRetenido(true)}
+            soltar={soltar}
+            alDescartar={alDescartar ?? volver}
+          />
+        </div>
+      </CabeceraDeLaVisita.Provider>
     );
   }
 
@@ -207,11 +284,20 @@ export function Captura({ id, volver }: { id: string; volver: () => void }) {
         ) : !formato ? (
           <Aviso tono="error">Falta en este teléfono el formato de este levantamiento. Conéctate para descargarlo; el levantamiento se conserva.</Aviso>
         ) : levantamiento.estado === "enviado" ? (
-          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} />
+          <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} estadoChat={estadoChat} alDescartar={alDescartar ?? volver} />
         ) : bloqueado ? (
           <>
-            <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>
-            <Enviado levantamiento={levantamiento} formato={formato} envio={null} servidor={null} volver={volver} />
+            {permiso === "vencido_sin_sesion" && pedirSesion ? (
+              <Aviso tono="alerta">
+                <p>Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: inicia sesión para seguir.</p>
+                <Boton className="mt-3 w-full" onClick={pedirSesion}>
+                  Iniciar sesión
+                </Boton>
+              </Aviso>
+            ) : (
+              <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>
+            )}
+            <Enviado levantamiento={levantamiento} formato={formato} envio={null} servidor={null} volver={volver} estadoChat={estadoChat} alDescartar={alDescartar ?? volver} />
           </>
         ) : (
           <EsqueletoBloques etiqueta="Cargando levantamiento" altos={["alto", "medio"]} />
@@ -238,7 +324,9 @@ function agrupar(campos: readonly DefinicionCampo[]): DefinicionCampo[][] {
  * pueda decir "listo" cuando el envío diría que no.
  */
 function progreso(formato: VersionFormato, l: LevantamientoLocal) {
-  const errores = validarRespuestas(formato, l.respuestas, l.repeticiones);
+  // Las respuestas de un tablero quitado no se pueden completar ni salen al enviar (iteración 42).
+  const limpio = sinRespuestasHuerfanas(l);
+  const errores = validarRespuestas(formato, limpio.respuestas, limpio.repeticiones);
   const conError = new Set(errores.map((e) => claveDeError(e.seccion, e.campo ?? "")));
   let obligatorios = 0;
   let completos = 0;
@@ -267,17 +355,14 @@ type Vista = { tipo: "recorrido" } | { tipo: "paso"; paso: string } | { tipo: "r
 
 /**
  * Cambiar de pantalla dentro del borrador: la transición la dibuja el navegador (View Transitions) y el
- * movimiento es CSS (regla 10). Sin soporte, o con movimiento reducido, el cambio es inmediato.
+ * movimiento es CSS (regla 10). Solo se desliza el cuerpo; la cabecera y la barra se quedan (iteración 27). Sin
+ * soporte, o con movimiento reducido, el cambio es inmediato.
  */
 function navegar(direccion: "adelante" | "atras", cambiar: () => void) {
-  const aplicar = () => {
-    flushSync(cambiar);
+  void conTransicion(() => {
+    cambiar();
     window.scrollTo(0, 0);
-  };
-  document.documentElement.dataset.direccion = direccion;
-  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
-  if (doc.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) doc.startViewTransition(aplicar);
-  else aplicar();
+  }, direccion);
 }
 
 /** Los datos que resumen una repetición en su tarjeta: los tres primeros que tienen valor y se leen en una línea. */
@@ -292,6 +377,39 @@ function datosDeResumen(seccion: DefinicionSeccion, respuestas: Record<string, V
 
 const faltan = (n: number) => (n === 1 ? "Falta 1 dato" : `Faltan ${n} datos`);
 
+const huellasDe = (valor: Valor | undefined): string[] => (Array.isArray(valor) && valor.every((x) => typeof x === "string") ? (valor as string[]) : []);
+
+/** "Cable UTP × 120 m · Breaker × 4 · 2 más". */
+function lineasEnTexto(lineas: ValorCantidades): string {
+  if (lineas.length === 0) return "Sin materiales";
+  const primeras = lineas.slice(0, 2).map((l) => `${l.descripcion} × ${aDecimalColombiano(l.cantidad)}${l.unidad === "und" ? "" : ` ${l.unidad}`}`);
+  return [...primeras, ...(lineas.length > 2 ? [`${lineas.length - 2} más`] : [])].join(" · ");
+}
+
+/** Las primeras fotos de un paso, en el repaso; si hay más, cuántas. */
+function MiniaturasDeFotos({ huellas }: { huellas: readonly string[] }) {
+  const fotos = useUrlsDeFotos(huellas.slice(0, 4));
+  return (
+    <span className="mt-2 flex gap-1">
+      {fotos.map((f) => (
+        <img key={f.id} src={f.url} alt="" className="size-10 rounded-[6px] object-cover" />
+      ))}
+      {huellas.length > 4 && <span className="grid size-10 place-items-center rounded-[6px] bg-panel-hundido text-ayuda font-medium text-texto-secundario">{`+${huellas.length - 4}`}</span>}
+    </span>
+  );
+}
+
+/** La firma en pequeño, en el repaso. */
+function MiniaturaDeFirma({ firma }: { firma: ValorFirma }) {
+  const documento = useLiveQuery(() => repositorio.obtenerBoceto(firma.firma), [firma.firma]);
+  const trazos = documento ? hojasDe(documento)[0] : undefined;
+  return (
+    <span data-tema="claro" className="mt-2 flex h-10 w-30 items-center rounded-[6px] bg-panel-hundido px-1.5">
+      {trazos && <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={`Firma de ${firma.nombre}`} className="max-h-9 w-full" />}
+    </span>
+  );
+}
+
 function Borrador({
   id,
   formato,
@@ -300,6 +418,10 @@ function Borrador({
   nombre,
   contexto,
   volver,
+  atras,
+  retener,
+  soltar,
+  alDescartar,
 }: {
   id: string;
   formato: VersionFormato;
@@ -308,13 +430,26 @@ function Borrador({
   nombre: string;
   contexto: string;
   volver: () => void;
+  atras: RefObject<(() => void) | null>;
+  /** Mantener el borrador a la vista mientras se envía y baja la hoja de confirmar. */
+  retener: () => void;
+  /** Ya bajó la hoja: avanzar a "Enviado". */
+  soltar: () => void;
+  alDescartar: () => void;
 }) {
   const pasos = pasosDe(formato);
+  const cabecera = useContext(CabeceraDeLaVisita);
   const enLinea = useServidorAlcanzable();
   const porSubir = useLiveQuery(() => db.envios.filter((e) => e.estado !== "recibido").count(), []);
-  const [errores, setErrores] = useState<readonly ErrorValidacion[] | null>(null);
+  // Qué datos ya se le señalaron al técnico (al tocar «Siguiente» o «Enviar»): lo que se muestra sale siempre de la
+  // validación de ahora, así un tablero quitado o una foto devuelta con «Deshacer» dejan de pedirse (iteración 42).
+  const [senalados, setSenalados] = useState<ReadonlySet<string> | null>(null);
+  // Lo que rechazó el envío y la validación no ve (un croquis que pesa demasiado): se va al volver a guardar ese dato.
+  const [delEnvio, setDelEnvio] = useState<readonly ErrorValidacion[]>([]);
   const [confirmando, setConfirmando] = useState(false);
-  const [faltantesDelPaso, setFaltantesDelPaso] = useState<{ pasoId: string; lista: readonly ErrorValidacion[] } | null>(null);
+  const [descartando, setDescartando] = useState(false);
+  // El paso cuya hoja de «Falta…» está abierta; lo que lista sale de la validación de ahora, como el resto (iteración 42).
+  const [faltantesDelPaso, setFaltantesDelPaso] = useState<{ pasoId: string } | null>(null);
   // Cada intento de enviar con datos pendientes sacude la lista de lo que falta.
   const [sacudir, setSacudir] = useState(0);
   // Los pasos por los que ya pasó el técnico en esta sesión: pasar un paso sin nada obligatorio lo da por hecho.
@@ -336,8 +471,11 @@ function Borrador({
         setNoGuardo(true);
       },
     );
+  const { errores: validacion, obligatorios, completos } = progreso(formato, actual);
+  const bloquesVigentes = new Set(bloques(formato, actual.repeticiones ?? {}).map((b) => b.clave));
+  const pendientes = [...validacion, ...delEnvio.filter((e) => bloquesVigentes.has(e.seccion))];
+  const errores = senalados ? pendientes.filter((e) => senalados.has(claveDeError(e.seccion, e.campo ?? ""))) : null;
   const porClave: ReadonlyMap<string, CodigoErrorValidacion> = new Map((errores ?? []).map((e) => [claveDeError(e.seccion, e.campo ?? ""), e.codigo]));
-  const { errores: pendientes, obligatorios, completos } = progreso(formato, actual);
   const avance = obligatorios > 0 ? completos / obligatorios : pendientes.length === 0 ? 1 : 0;
   const repeticiones = actual.repeticiones ?? {};
 
@@ -379,8 +517,41 @@ function Borrador({
     return visitados.has(p.id) ? "Sin datos" : p.titulo === p.seccion.titulo ? "Sin datos todavía" : p.seccion.titulo;
   }
 
+  /** Lo que lleva un paso, en una línea, para el repaso antes de enviar (iteración 32). */
+  function resumenDe(p: Paso): string {
+    if (p.seccion.repetible) {
+      const lista = repeticiones[p.seccion.clave] ?? [];
+      return lista.length === 0 ? `Ningún ${p.seccion.repetible.etiqueta.toLowerCase()}` : `${lista.length} · ${lista.map((r) => r.nombre).join(", ")}`;
+    }
+    const partes = p.campos.flatMap((c) => {
+      const v = actual.respuestas[p.seccion.clave]?.[c.clave];
+      if (v === undefined) return [];
+      if (c.tipo === "cantidades" && esCantidades(v)) return [lineasEnTexto(v)];
+      if (esFirma(v)) return [`${v.nombre}${v.cargo ? ` · ${v.cargo}` : ""}`];
+      if (esBoceto(v)) return ["Dibujado"];
+      return [describirValor(c, v)];
+    });
+    return partes.length > 0 ? partes.slice(0, 3).join(" · ") : "Sin datos";
+  }
+
+  /** Fotos, repeticiones y materiales: lo que se envía en números, solo lo que el formato tiene. */
+  function cifrasDelBorrador() {
+    const cifras = [{ valor: fotosDelBorrador, texto: fotosDelBorrador === 1 ? "foto" : "fotos" }];
+    for (const p of pasos)
+      if (p.seccion.repetible) cifras.push({ valor: repeticiones[p.seccion.clave]?.length ?? 0, texto: p.seccion.titulo.toLowerCase() });
+    const lineas = pasos.flatMap((p) => p.campos.filter((c) => c.tipo === "cantidades").map((c) => actual.respuestas[p.seccion.clave]?.[c.clave]));
+    if (lineas.length > 0) {
+      const total = lineas.reduce<number>((suma, v) => suma + (esCantidades(v) ? v.length : 0), 0);
+      cifras.push({ valor: total, texto: total === 1 ? "material" : "materiales" });
+    }
+    return cifras.slice(0, 3);
+  }
+
   const ir = (destino: Vista, direccion: "adelante" | "atras" = "adelante") => navegar(direccion, () => setVista(destino));
   const recorrido = () => ir({ tipo: "recorrido" }, "atras");
+  // Lo mismo que la flecha de cada vista: del paso o de Revisar al recorrido, de un tablero a su paso, del recorrido a mis visitas.
+  atras.current = vista.tipo === "recorrido" ? volver : vista.tipo === "repeticion" ? () => ir({ tipo: "paso", paso: vista.seccion }, "atras") : recorrido;
+  useEffect(() => () => void (atras.current = null), [atras]);
   const despuesDe = (pasoId: string): Vista => {
     const siguiente = pasos[pasos.findIndex((p) => p.id === pasoId) + 1];
     return siguiente ? { tipo: "paso", paso: siguiente.id } : { tipo: "revisar" };
@@ -392,8 +563,8 @@ function Borrador({
   const avanzarDesde = (pasoId: string, aunQueFalte = false) => {
     const lista = pendientes.filter((e) => pasoDeError(e)?.id === pasoId);
     if (lista.length > 0 && !aunQueFalte) {
-      setErrores((previos) => [...(previos ?? []).filter((e) => !lista.some((l) => claveDeError(l.seccion, l.campo ?? "") === claveDeError(e.seccion, e.campo ?? ""))), ...lista]);
-      setFaltantesDelPaso({ pasoId, lista });
+      setSenalados((previos) => new Set([...(previos ?? []), ...lista.map((e) => claveDeError(e.seccion, e.campo ?? ""))]));
+      setFaltantesDelPaso({ pasoId });
       return;
     }
     setFaltantesDelPaso(null);
@@ -402,12 +573,22 @@ function Borrador({
   };
   const datoFaltante = (e: ErrorValidacion, alIr: () => void): DatoFaltante => {
     const ruta = (e.campo ? nombreDeDato(formato, repeticiones, e.seccion, e.campo) : rutaLegible(formato, repeticiones, e.seccion)).split(" · ");
-    return { clave: `${claveDeError(e.seccion, e.campo ?? "")}:${e.codigo}`, titulo: ruta.at(-1)!, donde: ruta.slice(0, -1).join(" · ") || undefined, ir: alIr };
+    // No falta: pesa demasiado. El dato dice por qué, porque el croquis abre su editor sin espacio para el aviso.
+    const donde = e.codigo === "archivo_muy_grande" ? mensajeDeValidacion.archivo_muy_grande : ruta.slice(0, -1).join(" · ") || undefined;
+    return { clave: `${claveDeError(e.seccion, e.campo ?? "")}:${e.codigo}`, titulo: ruta.at(-1)!, donde, ir: alIr };
   };
 
   // Al corregir, el error de ese campo se va: la validación completa se repite al enviar.
   const alGuardar = (seccion: string, campo: string) => {
-    if (porClave.has(claveDeError(seccion, campo))) setErrores((lista) => (lista ?? []).filter((e) => claveDeError(e.seccion, e.campo ?? "") !== claveDeError(seccion, campo)));
+    const clave = claveDeError(seccion, campo);
+    if (senalados?.has(clave)) {
+      setSenalados((previos) => {
+        const siguen = new Set(previos);
+        siguen.delete(clave);
+        return siguen;
+      });
+    }
+    if (delEnvio.some((e) => claveDeError(e.seccion, e.campo ?? "") === clave)) setDelEnvio((lista) => lista.filter((e) => claveDeError(e.seccion, e.campo ?? "") !== clave));
   };
 
   /** Del resumen de errores al dato: abre su paso (o su repetición) y lo enfoca. */
@@ -419,7 +600,9 @@ function Borrador({
   }
 
   function mostrarErrores(lista: readonly ErrorValidacion[]) {
-    setErrores(lista);
+    setSenalados(new Set(lista.map((e) => claveDeError(e.seccion, e.campo ?? ""))));
+    const deLaValidacion = new Set(validacion.map((e) => `${claveDeError(e.seccion, e.campo ?? "")}:${e.codigo}`));
+    setDelEnvio(lista.filter((e) => !deLaValidacion.has(`${claveDeError(e.seccion, e.campo ?? "")}:${e.codigo}`)));
     setSacudir((n) => n + 1);
     if (vista.tipo !== "revisar") ir({ tipo: "revisar" });
     requestAnimationFrame(() => {
@@ -434,9 +617,11 @@ function Borrador({
   }
 
   async function enviar() {
+    retener();
     const resultado = await repositorio.enviar(id, formato, new Date());
     if (resultado.ok) {
       sincronizarEnSegundoPlano();
+      soltar();
       return;
     }
     if (resultado.motivo === "respuestas_invalidas") {
@@ -449,24 +634,28 @@ function Borrador({
   const campos = (lista: readonly DefinicionCampo[], clave: string) =>
     lista.map((campo) => (
       <Campo
-        key={campo.clave}
+        // Con la sección: dos pasos seguidos con un campo de la misma clave no comparten lo escrito (iteración 42).
+        key={`${clave}.${campo.clave}`}
         id={id}
         seccion={clave}
         campo={campo}
-        inicial={inicial.respuestas[clave]?.[campo.clave]}
+        // Cada paso y cada tablero montan sus campos al abrirse: parten de lo guardado, no de lo que había al abrir el
+        // borrador. Si no, volver a un paso lo mostraba vacío y agregar un material borraba los demás (iteración 42).
+        inicial={actual.respuestas[clave]?.[campo.clave]}
         actual={actual.respuestas[clave]?.[campo.clave]}
         error={porClave.get(claveDeError(clave, campo.clave))}
         alGuardar={() => alGuardar(clave, campo.clave)}
       />
     ));
   const total = pasos.length + 1;
+  const fotosDelBorrador = fotosReferenciadas(sinRespuestasHuerfanas(actual).respuestas).length;
   const contador = `${hechos}/${pasos.length}`;
 
   let pantalla: ReactNode;
   if (vista.tipo === "recorrido") {
     pantalla = (
       <>
-        <EncabezadoDePaso contexto={contexto} avance={avance} volver={volver} etiquetaVolver="Volver a mis visitas" />
+        <EncabezadoDePaso transicion={cabecera} contexto={contexto} avance={avance} volver={volver} etiquetaVolver="Volver a mis visitas" />
         <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 pt-3 pb-40">
           {/* Cada dato se guarda al escribirlo: la hora confirma que nada se pierde si la app se cierra. */}
           <FranjaSincronizacion enLinea={enLinea} porSubir={porSubir ?? 0} guardado={`Guardado en este teléfono a las ${soloHora.format(new Date(actual.actualizadoEn))}`} />
@@ -489,6 +678,15 @@ function Borrador({
               />
             </ListaRecorrido>
           </nav>
+          {/* Al final y discreto: no se toca por error (ADR-0035). Con un toque, la hoja dice qué pasa con las fotos. */}
+          <button
+            type="button"
+            onClick={() => setDescartando(true)}
+            className="inline-flex min-h-tactil items-center gap-2 self-center rounded-control px-3 text-cuerpo font-medium text-error focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-4"
+          >
+            <Trash aria-hidden />
+            Descartar levantamiento
+          </button>
         </main>
         <BarraDePaso>
           <BotonSiguiente onClick={() => ir(actualEnRecorrido ? { tipo: "paso", paso: actualEnRecorrido.id } : { tipo: "revisar" })}>
@@ -516,7 +714,7 @@ function Borrador({
       />
     ) : (
       <>
-        <EncabezadoDePaso contexto={`Paso ${i + 1} de ${total} · ${paso.seccion.titulo}`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
+        <EncabezadoDePaso transicion={cabecera} contexto={`Paso ${i + 1} de ${total} · ${paso.seccion.titulo}`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
         <main className="mx-auto flex max-w-xl flex-col gap-8 px-4 pt-3 pb-40">
           <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{paso.titulo}</h1>
           {paso.seccion.repetible ? (
@@ -544,16 +742,28 @@ function Borrador({
     );
   } else if (vista.tipo === "repeticion") {
     const seccion = formato.secciones.find((s) => s.clave === vista.seccion)!;
-    const r = repeticiones[seccion.clave]?.find((x) => x.id === vista.repeticion);
+    const lista = repeticiones[seccion.clave] ?? [];
+    const r = lista.find((x) => x.id === vista.repeticion);
     const alPaso = () => ir({ tipo: "paso", paso: seccion.clave }, "atras");
     pantalla = r ? (
-      <Repeticion id={id} seccion={seccion} repeticion={r} avance={avance} error={porClave.get(claveDeError(seccion.clave, ""))} volver={alPaso}>
+      <Repeticion
+        key={r.id}
+        id={id}
+        seccion={seccion}
+        repeticion={r}
+        posicion={{ indice: lista.indexOf(r), total: lista.length }}
+        siguiente={lista[lista.indexOf(r) + 1]}
+        avance={avance}
+        error={porClave.get(claveDeError(seccion.clave, ""))}
+        volver={alPaso}
+        abrirSiguiente={() => ir({ tipo: "repeticion", seccion: seccion.clave, repeticion: lista[lista.indexOf(r) + 1]!.id })}
+      >
         {campos(seccion.campos, claveDeRepeticion(seccion.clave, r.id))}
       </Repeticion>
     ) : (
       // Se quitó (o no existe): de vuelta a la lista de su sección.
       <>
-        <EncabezadoDePaso contexto={seccion.titulo} avance={avance} volver={alPaso} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
+        <EncabezadoDePaso transicion={cabecera} contexto={seccion.titulo} avance={avance} volver={alPaso} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
         <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 pt-3">
           <Boton onClick={alPaso}>{`Volver a ${seccion.titulo.toLowerCase()}`}</Boton>
         </main>
@@ -562,9 +772,14 @@ function Borrador({
   } else {
     pantalla = (
       <>
-        <EncabezadoDePaso contexto={`Paso ${total} de ${total} · Revisar`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
+        <EncabezadoDePaso transicion={cabecera} contexto={`Paso ${total} de ${total} · Revisar`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
         <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 pt-3 pb-40">
-          <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Antes de enviar</h1>
+          <div className="flex flex-col gap-1">
+            <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Revisa y envía</h1>
+            <p className="text-cuerpo font-medium">{contexto}</p>
+            <p className="text-ayuda text-texto-secundario">{nombre}</p>
+          </div>
+          <CifrasDeRepaso cifras={cifrasDelBorrador()} />
           {errores && errores.length > 0 && (
             <div ref={resumen} tabIndex={-1} className="focus:outline-none">
               <ListaFaltantes
@@ -574,24 +789,39 @@ function Borrador({
               />
             </div>
           )}
-          <Aviso tono="alerta">Después de enviar ya no podrás editarlo. Si algo cambia, oficina lo corrige y queda registrado.</Aviso>
           <Repaso etiqueta="Lo que se envía">
-            {pasos.map((p) => (
-              <FilaDeRepaso key={p.id} titulo={p.titulo} detalle={detalleDe(p)} falta={faltanDe(p) > 0} onEditar={() => ir({ tipo: "paso", paso: p.id }, "atras")} />
-            ))}
+            {pasos.map((p) => {
+              const n = faltanDe(p);
+              const fotosDelPaso = p.seccion.repetible ? [] : p.campos.filter((c) => c.tipo === "foto").flatMap((c) => huellasDe(actual.respuestas[p.seccion.clave]?.[c.clave]));
+              const firma = p.seccion.repetible ? undefined : p.campos.map((c) => actual.respuestas[p.seccion.clave]?.[c.clave]).find(esFirma);
+              return (
+                <FilaDeRepaso key={p.id} titulo={p.titulo} detalle={resumenDe(p)} falta={n > 0 ? faltan(n) : undefined} vacio={!tocado(p)} onEditar={() => ir({ tipo: "paso", paso: p.id }, "atras")}>
+                  {fotosDelPaso.length > 0 && <MiniaturasDeFotos huellas={fotosDelPaso} />}
+                  {firma && <MiniaturaDeFirma firma={firma} />}
+                </FilaDeRepaso>
+              );
+            })}
           </Repaso>
-          <p className="text-ayuda text-texto-secundario">{enLinea ? "Sale ahora a oficina." : "Sin señal: queda listo en el teléfono y sale solo cuando vuelva la señal."}</p>
         </main>
         <BarraDePaso>
-          <BotonSiguiente icono={Send} onClick={intentarEnviar}>
-            Enviar a oficina
-          </BotonSiguiente>
+          <div className="flex w-full flex-col gap-2">
+            <BotonSiguiente icono={Send} onClick={intentarEnviar}>
+              Enviar a oficina
+            </BotonSiguiente>
+            {/* La consecuencia, junto a la acción que la causa (iteración 32). */}
+            <p className="text-center text-ayuda text-texto-secundario">{`Después solo oficina puede corregirlo · ${enLinea ? "sale ahora" : "sin señal, sale al volver la señal"}`}</p>
+          </div>
         </BarraDePaso>
       </>
     );
   }
 
   const pasoConFaltantes = faltantesDelPaso ? pasos.find((p) => p.id === faltantesDelPaso.pasoId) : undefined;
+  const faltanDelPaso = pasoConFaltantes ? pendientes.filter((e) => pasoDeError(e)?.id === pasoConFaltantes.id) : [];
+  // Completado con la hoja abierta (un «Deshacer» la alcanza): ya no hay nada que decir y la hoja se va.
+  useEffect(() => {
+    if (faltantesDelPaso && faltanDelPaso.length === 0) setFaltantesDelPaso(null);
+  }, [faltantesDelPaso, faltanDelPaso.length]);
   return (
     <VigilarGuardado.Provider value={vigilar}>
       {pantalla}
@@ -603,11 +833,11 @@ function Borrador({
           </Aviso>
         </div>
       )}
-      {faltantesDelPaso && pasoConFaltantes && (
+      {faltantesDelPaso && pasoConFaltantes && faltanDelPaso.length > 0 && (
         <Dialogo
           forma="inferior"
           icono={CircleAlert}
-          titulo={faltantesDelPaso.lista.length === 1 ? `Falta 1 dato en ${pasoConFaltantes.titulo.toLowerCase()}` : `Faltan ${faltantesDelPaso.lista.length} datos en ${pasoConFaltantes.titulo.toLowerCase()}`}
+          titulo={faltanDelPaso.length === 1 ? `Falta 1 dato en ${pasoConFaltantes.titulo.toLowerCase()}` : `Faltan ${faltanDelPaso.length} datos en ${pasoConFaltantes.titulo.toLowerCase()}`}
           subtitulo="Son obligatorios para enviar. Puedes completarlos ahora o volver después."
           alCerrar={() => setFaltantesDelPaso(null)}
           pie={
@@ -616,7 +846,7 @@ function Borrador({
               <Boton
                 variante="principal"
                 onClick={() => {
-                  const primero = faltantesDelPaso.lista[0]!;
+                  const primero = faltanDelPaso[0]!;
                   setFaltantesDelPaso(null);
                   setTimeout(() => irAlError(primero), 250);
                 }}
@@ -627,7 +857,7 @@ function Borrador({
           }
         >
           <ul className="flex flex-col gap-2">
-            {faltantesDelPaso.lista.map((e, i) => {
+            {faltanDelPaso.map((e, i) => {
               const d = datoFaltante(e, () => {
                 setFaltantesDelPaso(null);
                 setTimeout(() => irAlError(e), 250);
@@ -646,6 +876,28 @@ function Borrador({
             })}
           </ul>
         </Dialogo>
+      )}
+      {descartando && (
+        <Confirmacion
+          nivel="irreversible"
+          forma="inferior"
+          titulo="¿Descartar este levantamiento?"
+          confirmar="Descartar"
+          descartar="Volver"
+          accion={() => repositorio.descartar(id, new Date())}
+          mensajeDeError={() => "No se pudo descartar. Intenta de nuevo."}
+          alCerrar={() => setDescartando(false)}
+          alTerminar={alDescartar}
+          consecuencias={[
+            { icono: Smartphone, texto: "Sale de Mis visitas", ...(actual.visitaId ? { detalle: "La visita queda sin levantamiento: se puede iniciar otro" } : {}) },
+            { icono: Trash, texto: "Queda 30 días en Descartados, en tu cuenta", detalle: "De ahí lo recuperas con todo lo que tenía" },
+            {
+              icono: TriangleAlert,
+              texto: `Después se borra del teléfono${fotosDelBorrador > 0 ? ` con ${fotosDelBorrador === 1 ? "su foto" : `sus ${fotosDelBorrador} fotos`}` : ""}`,
+              detalle: "Oficina nunca lo recibió: no queda otra copia",
+            },
+          ]}
+        />
       )}
       {confirmando && (
         <Confirmacion
@@ -688,6 +940,8 @@ function Repeticiones({
   abrir: (repeticion: string) => void;
 }) {
   const lista = actual.repeticiones?.[seccion.clave] ?? [];
+  // Solo la tarjeta recién agregada entra animada: las demás no se animan otra vez al volver (iteración 27).
+  const esNueva = useLoNuevo(lista.map((r) => r.id));
   const etiqueta = seccion.repetible!.etiqueta;
   const maximo = seccion.repetible!.max ?? LIMITES.repeticiones;
 
@@ -710,11 +964,17 @@ function Repeticiones({
     <section aria-label={seccion.titulo} className="flex flex-col gap-3">
       {error && <Aviso tono="error">{mensajeDeValidacion[error]}</Aviso>}
       {lista.length === 0 && <p className="text-cuerpo text-texto-secundario">{`Agrega uno por cada ${etiqueta.toLowerCase()} que revises. Si no aplica, sigue.`}</p>}
-      {lista.map((r) => {
-        const clave = claveDeRepeticion(seccion.clave, r.id);
-        const n = faltanEn.get(clave) ?? 0;
-        return <TarjetaResumen key={r.id} titulo={r.nombre} etiqueta={r.nombre} estado={n > 0 ? faltan(n) : "Completo"} completo={n === 0} datos={datosDeResumen(seccion, actual.respuestas[clave])} onClick={() => abrir(r.id)} />;
-      })}
+      {lista.length > 0 && (
+        <>
+          <p className="-mt-5 text-ayuda text-texto-secundario">{`${lista.filter((r) => (faltanEn.get(claveDeRepeticion(seccion.clave, r.id)) ?? 0) === 0).length} de ${lista.length} completos`}</p>
+          <ListaDeRepeticiones etiqueta={seccion.titulo}>
+            {lista.map((r) => {
+              const clave = claveDeRepeticion(seccion.clave, r.id);
+              return <FilaDeTablero key={r.id} seccion={seccion} nombre={r.nombre} respuestas={actual.respuestas[clave]} faltan={faltanEn.get(clave) ?? 0} nueva={esNueva(r.id)} onClick={() => abrir(r.id)} />;
+            })}
+          </ListaDeRepeticiones>
+        </>
+      )}
       <BotonAgregar icono={Plus} disabled={lista.length >= maximo} onClick={() => void agregar()}>
         {`Agregar ${etiqueta.toLowerCase()}`}
       </BotonAgregar>
@@ -723,67 +983,121 @@ function Repeticiones({
   );
 }
 
-/** Una repetición abierta: su nombre, sus datos y "Quitar" al final, lejos de "Listo". */
+/**
+ * Una fila de la lista de repeticiones (iteración 32): su primera foto, lo que la identifica en una línea y cuánto
+ * lleva de lo obligatorio.
+ */
+function FilaDeTablero({ seccion, nombre, respuestas, faltan: n, nueva, onClick }: { seccion: DefinicionSeccion; nombre: string; respuestas: Record<string, Valor> | undefined; faltan: number; nueva: boolean; onClick: () => void }) {
+  const huellas = seccion.campos.filter((c) => c.tipo === "foto").flatMap((c) => (Array.isArray(respuestas?.[c.clave]) ? (respuestas![c.clave] as string[]) : []));
+  const [primera] = useUrlsDeFotos(huellas.slice(0, 1));
+  const obligatorios = seccion.campos.filter((c) => c.obligatorio).length;
+  const detalle = [...datosDeResumen(seccion, respuestas).slice(0, 2).map((d) => d.valor), huellas.length === 0 ? "Sin fotos" : fotosEnTexto(huellas.length)].join(" · ");
+  return <FilaDeRepeticion titulo={nombre} detalle={detalle} foto={primera?.url} faltan={n} avance={obligatorios === 0 ? 1 : (obligatorios - n) / obligatorios} nueva={nueva} onClick={onClick} />;
+}
+
+const fotosEnTexto = (n: number) => (n === 1 ? "1 foto" : `${n} fotos`);
+
+/**
+ * Una repetición abierta (iteración 32): su nombre es el título; cambiarlo y quitarla van en el menú de arriba, lejos
+ * del pulgar. Abajo, la siguiente sin volver a la lista; en la última, de vuelta a la lista.
+ */
 function Repeticion({
   id,
   seccion,
   repeticion,
+  posicion,
+  siguiente,
   avance,
   error,
   volver,
+  abrirSiguiente,
   children,
 }: {
   id: string;
   seccion: DefinicionSeccion;
   repeticion: { id: string; nombre: string };
+  /** Cuál es (desde 0) y cuántas hay. */
+  posicion: { indice: number; total: number };
+  siguiente: { id: string; nombre: string } | undefined;
   avance: number;
   error: CodigoErrorValidacion | undefined;
   volver: () => void;
+  abrirSiguiente: () => void;
   children: ReactNode;
 }) {
-  const [quitando, setQuitando] = useState(false);
   const vigilar = useContext(VigilarGuardado);
+  const notificar = useNotificar();
+  const cabecera = useContext(CabeceraDeLaVisita);
   const etiqueta = seccion.repetible!.etiqueta;
+  const errorDeNombre = error === "nombre_de_repeticion_invalido";
+  const [renombrando, setRenombrando] = useState(errorDeNombre);
+
+  /**
+   * Quitar es al instante y se deshace desde la notificación (DESIGN.md, iteración 24c): está en el teléfono, así que
+   * "Deshacer" lo devuelve a su lugar con lo escrito. Las fotos siguen guardadas mientras tanto.
+   */
+  async function quitar() {
+    const escritura = repositorio.quitarRepeticion(id, seccion.clave, repeticion.id, new Date());
+    vigilar(escritura);
+    const quitada = await escritura.catch(() => undefined);
+    volver();
+    if (!quitada) return;
+    notificar({
+      texto: `${repeticion.nombre} quitado`,
+      accion: {
+        texto: "Deshacer",
+        alHacer: () => vigilar(repositorio.restaurarRepeticion(id, seccion.clave, quitada.repeticion, quitada.posicion, quitada.respuestas, new Date())),
+      },
+    });
+  }
   return (
     <>
-      <EncabezadoDePaso contexto={`${seccion.titulo} · ${repeticion.nombre}`} avance={avance} volver={volver} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
+      <EncabezadoDePaso transicion={cabecera} contexto={`${seccion.titulo} · ${posicion.indice + 1} de ${posicion.total}`} avance={avance} volver={volver} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
       <main className="mx-auto flex max-w-xl flex-col gap-8 px-4 pt-3 pb-40">
-        <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{repeticion.nombre}</h1>
-        <article aria-label={repeticion.nombre} className="flex flex-col gap-8">
-          {children}
+        {renombrando ? (
           <CampoTexto
-            etiqueta={`Nombre (${etiqueta.toLowerCase()})`}
+            etiqueta={`Nombre del ${etiqueta.toLowerCase()}`}
             valorInicial={repeticion.nombre}
-            error={error === "nombre_de_repeticion_invalido" ? mensajeDeValidacion.nombre_de_repeticion_invalido : undefined}
+            error={errorDeNombre ? mensajeDeValidacion.nombre_de_repeticion_invalido : undefined}
             onCambio={(texto) => {
               // Un nombre vacío no se guarda: se conserva el anterior.
               if (texto.trim()) vigilar(repositorio.renombrarRepeticion(id, seccion.clave, repeticion.id, texto.trim(), new Date()));
             }}
           />
-          <div>
-            <Boton variante="fantasma" icono={Trash} aria-label={`Quitar ${repeticion.nombre}`} onClick={() => setQuitando(true)}>
-              {`Quitar ${etiqueta.toLowerCase()}`}
-            </Boton>
+        ) : (
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{repeticion.nombre}</h1>
+            <MenuAcciones
+              etiqueta={`Opciones de ${repeticion.nombre}`}
+              opciones={[
+                { texto: "Cambiar nombre", icono: Pencil, alElegir: () => setRenombrando(true) },
+                { texto: `Quitar ${etiqueta.toLowerCase()}`, icono: Trash, peligro: true, alElegir: () => void quitar() },
+              ]}
+            />
           </div>
+        )}
+        <article aria-label={repeticion.nombre} className="flex flex-col gap-8">
+          {children}
         </article>
       </main>
       <BarraDePaso>
-        <BotonSiguiente icono={Check} onClick={volver}>{`Listo este ${etiqueta.toLowerCase()}`}</BotonSiguiente>
+        {renombrando ? (
+          <BotonSiguiente icono={Check} onClick={() => setRenombrando(false)}>
+            Listo
+          </BotonSiguiente>
+        ) : siguiente ? (
+          <div className="flex w-full flex-col gap-1">
+            <BotonSiguiente onClick={abrirSiguiente}>{`Siguiente: ${siguiente.nombre}`}</BotonSiguiente>
+            <Boton variante="fantasma" className="w-full" onClick={volver}>
+              Volver a la lista
+            </Boton>
+          </div>
+        ) : (
+          <BotonSiguiente icono={Check} onClick={volver}>
+            {posicion.total === 1 ? `Listo, ver ${seccion.titulo.toLowerCase()}` : `Listo, ver los ${posicion.total}`}
+          </BotonSiguiente>
+        )}
       </BarraDePaso>
-      {quitando && (
-        <Confirmacion
-          forma="inferior"
-          nivel="irreversible"
-          titulo={`¿Quitar ${repeticion.nombre}?`}
-          confirmar={`Quitar ${etiqueta.toLowerCase()}`}
-          accion={() => repositorio.quitarRepeticion(id, seccion.clave, repeticion.id, new Date())}
-          mensajeDeError={() => "No se pudo quitar. Intenta de nuevo."}
-          alCerrar={() => setQuitando(false)}
-          alTerminar={volver}
-        >
-          <p>Se borra lo que llenaste en {repeticion.nombre}. Las fotos que tomaste en él también dejan de ir en el levantamiento.</p>
-        </Confirmacion>
-      )}
     </>
   );
 }
@@ -873,7 +1187,9 @@ function ContenidoDeCampo({ id, seccion, campo, inicial: alAbrir, actual, error,
           <CampoCantidades
             campo={campo}
             unidades={campo.unidades}
-            inicial={noObtenido ? undefined : inicial}
+            // De `desde`, no de lo guardado: al deshacer «No se pudo obtener», lo guardado todavía trae la marca en ese
+            // instante y el editor se montaría vacío; el siguiente cambio borraría lo devuelto (iteración 42).
+            inicial={inicial}
             error={noObtenido ? undefined : errorDelCampo}
             guardar={(valor) => guardar(valor)}
           />
@@ -963,7 +1279,6 @@ function CampoCantidades({ campo, unidades, inicial, error, guardar }: { campo: 
           items={catalogo}
           unidades={unidades}
           usos={usos}
-          total={lineas.length}
           cantidadDe={(item) => {
             const i = indiceDe(item.id);
             return i >= 0 ? lineas[i]!.cantidad : undefined;
@@ -1006,21 +1321,27 @@ function PasoCroquis({
 }) {
   const documento = useBoceto(actual);
   const simbolos = useLiveQuery(() => db.simbolos.toArray(), []);
-  if (documento === undefined) return <div aria-busy="true" aria-label="Abriendo el editor" className="fixed inset-0 z-50 bg-fondo" />;
+  // La capa sube una sola vez, mientras se lee el documento y se carga el editor; el editor aparece encima sin subir
+  // otra vez (iteración 32: antes se veía un fondo vacío y después el editor subiendo).
   return (
-    <Suspense fallback={<div aria-busy="true" aria-label="Abriendo el editor" className="fixed inset-0 z-50 bg-fondo" />}>
-      <EditorBoceto
-        etiqueta={campo.etiqueta}
-        inicial={documento}
-        simbolos={simbolos}
-        guardar={async (d) => {
-          await repositorio.guardarBoceto(id, seccion, campo.clave, d, new Date());
-          alGuardar();
-        }}
-        cerrar={volver}
-        listo={listo}
-      />
-    </Suspense>
+    <div aria-busy={documento === undefined} aria-label={documento === undefined ? "Abriendo el editor" : undefined} data-tema="claro" className="fixed inset-0 z-50 bg-fondo motion-safe:animate-hoja-sube">
+      {documento !== undefined && (
+        <Suspense fallback={null}>
+          <EditorBoceto
+            entrar={false}
+            etiqueta={campo.etiqueta}
+            inicial={documento}
+            simbolos={simbolos}
+            guardar={async (d) => {
+              await repositorio.guardarBoceto(id, seccion, campo.clave, d, new Date());
+              alGuardar();
+            }}
+            cerrar={volver}
+            listo={listo}
+          />
+        </Suspense>
+      )}
+    </div>
   );
 }
 
@@ -1047,7 +1368,8 @@ function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { id: str
         <p className="text-ayuda text-texto-secundario">Todavía no hay boceto.</p>
       )}
       {error && <MensajeError id={`error-${seccion}-${campo.clave}`}>{error}</MensajeError>}
-      <Boton icono={Pencil} onClick={() => setEditando(0)}>
+      {/* Mientras se lee lo guardado no se abre: el editor partiría de una hoja vacía y la reemplazaría (iteración 42). */}
+      <Boton icono={Pencil} disabled={documento === undefined} onClick={() => setEditando(0)}>
         {hayDibujo ? "Editar boceto" : "Dibujar boceto"}
       </Boton>
       {editando !== null && (
@@ -1073,26 +1395,39 @@ const diaLargo = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numer
 const soloHora = new Intl.DateTimeFormat("es-CO", { timeStyle: "short" });
 const diaCorto = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric" });
 /** "hoy a las 3:40 p. m." o la fecha completa si no fue hoy. */
-const cuandoFirmo = (iso: string) => (new Date(iso).toDateString() === new Date().toDateString() ? `hoy a las ${soloHora.format(new Date(iso))}` : `el ${fechaHora(iso)}`);
+const cuandoFirmo = (iso: string) => (new Date(iso).toDateString() === new Date().toDateString() ? `hoy ${soloHora.format(new Date(iso))}` : fechaHora(iso));
 
-function FirmaTomada({ valor, documento }: { valor: ValorFirma; documento: DocumentoBoceto | null | undefined }) {
+/**
+ * La constancia firmada (iteración 32): la firma grande sobre su línea, quién firmó y la declaración tal como sale en
+ * el informe, con "Repetir" arriba (Liven y Docusign en Mobbin). Clara en los dos temas, como el papel.
+ */
+function FirmaTomada({ valor, documento, cliente, repetir }: { valor: ValorFirma; documento: DocumentoBoceto | null | undefined; cliente?: string | undefined; repetir?: (() => void) | undefined }) {
   // La firma es un boceto de una sola hoja (ADR-0024).
   const trazos = documento ? hojasDe(documento)[0] : undefined;
   return (
-    <>
-      {trazos && (
-        <div className="rounded-control border border-division bg-panel p-2">
-          <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={`Firma de ${valor.nombre}`} className="max-h-32" />
-        </div>
-      )}
-      <div className="flex flex-col gap-0.5">
-        <span className="text-cuerpo font-bold">
-          {valor.nombre}
-          {valor.cargo ? ` · ${valor.cargo}` : ""}
+    <section aria-label="Constancia firmada" data-tema="claro" className="overflow-hidden rounded-capa border border-division bg-panel text-texto">
+      <div className="flex items-center justify-between gap-2 pt-3 pr-2 pl-4">
+        <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-exito-fondo px-3 text-ayuda font-medium text-exito-texto [&_svg]:size-4">
+          <Check aria-hidden />
+          {`Firmada ${cuandoFirmo(valor.firmadoEn)}`}
         </span>
-        <span className="text-ayuda text-texto-secundario">Firmó {cuandoFirmo(valor.firmadoEn)}</span>
+        {repetir ? (
+          <Boton variante="fantasma" icono={RefreshCw} onClick={repetir}>
+            Repetir
+          </Boton>
+        ) : (
+          <span className="h-control-sm" />
+        )}
       </div>
-    </>
+      <div className="mx-4 mt-1 flex h-48 items-center justify-center border-b-[1.5px] border-borde-control">
+        {trazos && <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={`Firma de ${valor.nombre}`} className="max-h-44 w-full" />}
+      </div>
+      <div className="flex flex-col gap-0.5 px-4 pt-2.5 pb-3.5">
+        <strong className="text-[17px] font-semibold">{valor.nombre}</strong>
+        {(valor.cargo || cliente) && <span className="text-ayuda text-texto-secundario">{[valor.cargo, cliente].filter(Boolean).join(" · ")}</span>}
+      </div>
+      <p className="border-t border-division px-4 py-3 text-ayuda leading-relaxed text-texto-secundario">{valor.declaracion}</p>
+    </section>
   );
 }
 
@@ -1121,11 +1456,11 @@ function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: stri
     <div className="flex flex-col gap-3">
       {!propio && <EtiquetaCampo obligatorio={campo.obligatorio}>{campo.etiqueta}</EtiquetaCampo>}
       {firma ? (
-        <FirmaTomada valor={firma} documento={documento} />
+        <FirmaTomada valor={firma} documento={documento} cliente={visita?.cliente.nombre} repetir={() => setConfirmando(true)} />
       ) : propio ? (
         <>
           <p className="text-cuerpo leading-relaxed text-texto-secundario">Vas a entregar el teléfono a quien te recibió. Firma una constancia de que estuviste en el sitio hoy.</p>
-          <div className="flex flex-col gap-0.5 rounded-panel bg-panel px-4.5 py-4">
+          <div className="flex flex-col gap-0.5 rounded-panel border border-division bg-panel px-4.5 py-4">
             <strong className="text-cuerpo">Constancia de visita</strong>
             <span className="text-ayuda text-texto-secundario">{`${visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : "Este sitio"} · ${diaCorto.format(new Date())}`}</span>
           </div>
@@ -1134,11 +1469,7 @@ function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: stri
         <p className="text-ayuda text-texto-secundario">Entrégale el teléfono a quien recibió la visita: firma una constancia de que estuviste en el sitio.</p>
       )}
       {error && <MensajeError id={`error-${seccion}-${campo.clave}`}>{error}</MensajeError>}
-      {firma ? (
-        <Boton variante="fantasma" className="self-start" onClick={() => setConfirmando(true)}>
-          Volver a firmar
-        </Boton>
-      ) : propio ? (
+      {firma ? null : propio ? (
         <BarraDePaso>
           <BotonSiguiente icono={Smartphone} onClick={() => setFirmando(true)}>
             Entregar el teléfono
@@ -1166,6 +1497,7 @@ function CampoFirma({ id, seccion, campo, actual, error, alGuardar }: { id: stri
         <Suspense fallback={<div aria-busy="true" aria-label="Abriendo la constancia" className="fixed inset-0 z-50 bg-panel" />}>
           <HojaDeFirma
             declaracion={declaracion}
+            recibe={{ tecnico: usuario?.nombre ?? "el técnico", cliente: visita?.cliente.nombre }}
             guardar={async (d, datos) => {
               await repositorio.guardarFirma(id, seccion, campo.clave, d, { ...datos, declaracion }, new Date());
               alGuardar();
@@ -1223,21 +1555,24 @@ function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: string; secc
   async function agregar(originales: File[]) {
     setProcesando(true);
     setFallo(null);
-    try {
-      for (const original of originales) {
+    // Una que falla no detiene las demás del lote, y el aviso dice cuántas faltan (iteración 42).
+    let fallidas = 0;
+    for (const original of originales) {
+      try {
         const archivo = await procesarFoto(original, new Date());
         await repositorio.agregarFoto(id, seccion, campo.clave, archivo, new Date());
         alGuardar();
+      } catch (error) {
+        // El técnico ve un mensaje simple; soporte necesita la causa (ADR-0017).
+        console.error("No se pudo guardar la foto", error);
+        fallidas++;
       }
-      // Las fotos suben por adelantado cuando hay señal (ADR-0003).
-      sincronizarEnSegundoPlano();
-    } catch (error) {
-      // El técnico ve un mensaje simple; soporte necesita la causa (ADR-0017).
-      console.error("No se pudo guardar la foto", error);
-      setFallo("No se pudo guardar la foto. Tómala de nuevo.");
-    } finally {
-      setProcesando(false);
     }
+    // Las fotos suben por adelantado cuando hay señal (ADR-0003).
+    if (fallidas < originales.length) sincronizarEnSegundoPlano();
+    if (fallidas === 1 && originales.length === 1) setFallo("No se pudo guardar la foto. Tómala de nuevo.");
+    else if (fallidas > 0) setFallo(`No se ${fallidas === 1 ? "pudo guardar 1 foto" : `pudieron guardar ${fallidas} fotos`} de ${originales.length}. Tómalas de nuevo.`);
+    setProcesando(false);
   }
 
   /** Quitar es inmediato y se deshace desde la notificación (DESIGN.md: qué se confirma y qué se deshace). */
@@ -1288,14 +1623,32 @@ function Enviado({
   envio,
   servidor,
   volver,
+  estadoChat,
+  alDescartar,
 }: {
   levantamiento: LevantamientoLocal;
   formato: VersionFormato;
   envio: EstadoDeEnvio | null;
   servidor: EstadoServidor | null;
   volver: () => void;
+  /** El chat con oficina (ADR-0040): lo guarda Captura, porque esta vista se vuelve a montar al cambiar el estado. */
+  estadoChat: { abierto: boolean; abrir: (abierto: boolean) => void };
+  /** Descartó un envío que oficina rechazó para siempre: quien abrió la captura vuelve al inicio y lo dice. */
+  alDescartar: () => void;
 }) {
+  const [descartando, setDescartando] = useState(false);
+  const [corrigiendo, setCorrigiendo] = useState(false);
   const enLinea = useServidorAlcanzable();
+  const { abierto: chatAbierto, abrir: setChatAbierto } = estadoChat;
+  const loEnviado = useRef<HTMLDetailsElement>(null);
+  const tecnicoId = levantamiento.tecnicoId;
+  const pendientes = useLiveQuery(async () => (tecnicoId ? pendientesDe(db, tecnicoId, levantamiento.id) : []), [tecnicoId, levantamiento.id]);
+  const leido = useLiveQuery(async () => (tecnicoId ? leidoHasta(db, tecnicoId, levantamiento.id) : null), [tecnicoId, levantamiento.id]);
+  const sitio = useLiveQuery(async () => {
+    const v = levantamiento.visitaId && tecnicoId ? await visitaDe(db, tecnicoId, levantamiento.visitaId) : null;
+    // La visita atendida sale del teléfono al día siguiente (ADR-0041): el levantamiento guarda dónde fue (iteración 42).
+    return v ? `${v.cliente.nombre} · ${v.sitio.nombre}` : levantamiento.lugar ? `${levantamiento.lugar.cliente} · ${levantamiento.lugar.sitio}` : "";
+  }, [levantamiento.visitaId, tecnicoId, levantamiento.lugar?.cliente, levantamiento.lugar?.sitio]);
   const [reintentar, reintentando] = useSinRepetir(async () => {
     await repositorio.reintentarEnvio(levantamiento.id);
     sincronizarEnSegundoPlano();
@@ -1309,16 +1662,26 @@ function Enviado({
   // La siguiente visita, si hay otra: el botón lleva a ella.
   const siguienteVisita = useLiveQuery(async () => {
     if (!levantamiento.tecnicoId) return null;
-    const hoy = new Date().toLocaleDateString("en-CA");
-    const otras = (await visitasDe(db, levantamiento.tecnicoId)).filter((v) => v.id !== levantamiento.visitaId && !v.fueraDeAlcance && v.programadaPara >= hoy);
-    return otras.sort((a, b) => a.programadaPara.localeCompare(b.programadaPara))[0] ?? null;
+    // La misma agenda del inicio (iteración 40): lo atendido o terminado no es la siguiente; las atrasadas sí lo son.
+    const propios = await repositorio.listar(levantamiento.tecnicoId);
+    const con = (estado: LevantamientoLocal["estado"]) => new Set(propios.filter((l) => l.estado === estado && l.visitaId).map((l) => l.visitaId!));
+    const visitas = (await visitasDe(db, levantamiento.tecnicoId)).filter((v) => v.id !== levantamiento.visitaId && !v.fueraDeAlcance);
+    return agendaDeVisitas(visitas, hoyLocal(), con("borrador"), con("enviado")).pendientes[0] ?? null;
   }, [levantamiento.tecnicoId, levantamiento.visitaId]);
   // Lo que dijo el servidor en la bajada manda sobre el estado de envío del teléfono.
   const estado = servidor ? estadoSegunServidor(servidor) : envio ? estadoDeEnvio(envio, enLinea) : null;
   const comentarios = servidor?.comentarios ?? [];
-  // En una repetición, el comentario dice en cuál (iteración 9).
-  const sobre = (c: { seccion?: string | undefined; campo?: string | undefined }) =>
-    c.seccion && c.campo ? nombreDeDato(formato, levantamiento.repeticiones ?? {}, c.seccion, c.campo, true) : undefined;
+  const chat = armarChat(comentarios, pendientes ?? []);
+  const ultimo = chat.at(-1);
+  const nuevos = leido === undefined ? 0 : sinLeer(chat, leido);
+  const enCola = chat.filter((m) => m.estado === "cola").length;
+  // «Ver lo que enviaste» abierto en el dato del que habla la conversación.
+  function verDato(seccion: string, campo: string) {
+    setChatAbierto(false);
+    if (loEnviado.current) loEnviado.current.open = true;
+    requestAnimationFrame(() => document.getElementById(idDeDato(seccion, campo))?.scrollIntoView({ block: "center", behavior: sinMovimiento() ? "auto" : "smooth" }));
+  }
+  if (chatAbierto && tecnicoId) return <Chat levantamiento={levantamiento} formato={formato} servidor={servidor} sitio={sitio ?? ""} volver={() => setChatAbierto(false)} verDato={verDato} />;
   return (
     <>
       {levantamiento.estado === "enviado" ? (
@@ -1337,20 +1700,64 @@ function Enviado({
                     : "Puedes salir de esta pantalla: el envío sigue solo."
             }
             etapas={[
-              { texto: "Guardado en el teléfono", estado: "hecho" },
+              { clave: "guardado", texto: "Guardado en el teléfono", estado: "hecho" },
               {
+                clave: "archivos",
                 texto: totalArchivos > 0 ? `Fotos y dibujos · ${recibido ? totalArchivos : (subidos ?? 0)} de ${totalArchivos}` : "Datos del levantamiento",
                 estado: recibido || (totalArchivos > 0 && subidos === totalArchivos) ? "hecho" : proceso === "error" ? "error" : proceso === "enviando" ? "en_curso" : "espera",
               },
-              { texto: recibido ? "Recibido en oficina" : "Llega a oficina", estado: recibido ? "hecho" : proceso === "enviando" && (totalArchivos === 0 || subidos === totalArchivos) ? "en_curso" : "espera" },
+              { clave: "recibido", texto: recibido ? "Recibido en oficina" : "Llega a oficina", estado: recibido ? "hecho" : proceso === "enviando" && (totalArchivos === 0 || subidos === totalArchivos) ? "en_curso" : "espera" },
             ]}
           />
-          {envio?.estado === "error" ? (
+          {envio?.estado === "error" && !recibido ? (
             <>
               <p className="-mt-2 text-center text-ayuda text-texto-secundario">{QUE_HACER_CON_EL_RECHAZO}</p>
               <Boton cargando={reintentando} onClick={() => void reintentar()}>
                 Reintentar envío
               </Boton>
+              {/* Oficina nunca lo recibió: si hay algo que corregir, vuelve a ser borrador (ADR-0045). */}
+              <Boton variante="fantasma" icono={Pencil} onClick={() => setCorrigiendo(true)}>
+                Volver a borrador para corregir
+              </Boton>
+              {corrigiendo && (
+                <Confirmacion
+                  nivel="consecuencia"
+                  forma="inferior"
+                  titulo="¿Volver a borrador?"
+                  confirmar="Volver a borrador"
+                  accion={() => repositorio.volverABorrador(levantamiento.id)}
+                  mensajeDeError={(e) =>
+                    e instanceof VisitaConOtroBorrador ? "Esta visita ya tiene otro levantamiento sin enviar. Envíalo o descártalo y vuelve a intentarlo." : "No se pudo volver a borrador. Intenta de nuevo."
+                  }
+                  alCerrar={() => setCorrigiendo(false)}
+                  consecuencias={[
+                    { icono: Pencil, texto: "Lo vuelves a editar en este teléfono", detalle: "Oficina nunca lo recibió: no hay otra copia que cambie" },
+                    { icono: Send, texto: "Cuando lo envíes, sale otra vez a oficina" },
+                  ]}
+                />
+              )}
+              {/* Si oficina no lo va a aceptar nunca (otro ya lo envió, el formato se retiró), aquí sale del inicio. */}
+              <Boton variante="fantasma" icono={Trash} onClick={() => setDescartando(true)}>
+                Descartar levantamiento
+              </Boton>
+              {descartando && (
+                <Confirmacion
+                  nivel="irreversible"
+                  forma="inferior"
+                  titulo="¿Descartar este levantamiento?"
+                  confirmar="Descartar"
+                  descartar="Volver"
+                  accion={() => repositorio.descartar(levantamiento.id, new Date())}
+                  mensajeDeError={() => "No se pudo descartar. Intenta de nuevo."}
+                  alCerrar={() => setDescartando(false)}
+                  alTerminar={alDescartar}
+                  consecuencias={[
+                    { icono: Smartphone, texto: "Deja de esperar a oficina y sale de Mis visitas" },
+                    { icono: Trash, texto: "Queda 30 días en Descartados, en tu cuenta", detalle: "De ahí lo recuperas con todo lo que tenía" },
+                    { icono: TriangleAlert, texto: "Después se borra del teléfono con sus fotos", detalle: "Oficina nunca lo recibió: no queda otra copia" },
+                  ]}
+                />
+              )}
             </>
           ) : (
             !recibido && estado && <p className="-mt-2 text-center text-ayuda text-texto-secundario">{estado.texto}</p>
@@ -1358,7 +1765,7 @@ function Enviado({
           <BotonSiguiente onClick={volver}>
             {siguienteVisita ? (
               <span className="flex min-w-0 flex-col items-start leading-tight">
-                <span>Siguiente visita</span>
+                <span>Ver la siguiente visita</span>
                 <span className="max-w-full truncate text-ayuda font-bold opacity-75">{`${siguienteVisita.cliente.nombre} · ${siguienteVisita.sitio.nombre}`}</span>
               </span>
             ) : (
@@ -1368,35 +1775,56 @@ function Enviado({
         </>
       ) : (
         estado && (
-          <div className="flex flex-col gap-3 rounded-panel bg-panel p-4">
+          <div className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-4">
             <p className={`text-cuerpo font-bold ${claseDeTono[estado.tono]}`} aria-live="polite">
               {estado.texto}
             </p>
           </div>
         )
       )}
-      {comentarios.length > 0 && (
-        <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-3 rounded-panel border border-division bg-panel p-4">
-          <h2 id="titulo-comentarios" className="text-subtitulo font-extrabold">
+      {comentarios.length > 0 && ultimo && (
+        <section aria-labelledby="titulo-comentarios" className="flex flex-col gap-2">
+          {/* Sin señal y con respuestas en cola: quedan en el teléfono y salen solas (ADR-0040). */}
+          {!enLinea && enCola > 0 && (
+            <div className="flex gap-2.5 rounded-panel bg-alerta-fondo px-3.5 py-3 text-[14.5px] leading-snug" role="status">
+              <WifiOff aria-hidden className="mt-0.5 size-[18px] flex-none text-alerta-texto" />
+              <span>
+                <b className="block font-semibold">Sin señal</b>
+                {enCola === 1 ? "Tu mensaje está guardado en el teléfono y se envía solo" : "Tus mensajes están guardados en el teléfono y se envían solos"} cuando vuelva.
+              </span>
+            </div>
+          )}
+          <h2 id="titulo-comentarios" className="px-1 text-ayuda font-bold text-texto-secundario">
             Comentarios de oficina
           </h2>
-          <ul className="flex flex-col divide-y divide-division">
-            {comentarios.map((c) => (
-              <li key={c.id} className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0">
-                <p className="text-ayuda text-texto-secundario">
-                  {c.autor} · {fechaHora(c.creadoEn)}
-                  {sobre(c) && ` · Sobre ${sobre(c)}`}
-                </p>
-                <p className="text-cuerpo whitespace-pre-line">{c.texto}</p>
-              </li>
-            ))}
-          </ul>
+          <button
+            type="button"
+            onClick={() => setChatAbierto(true)}
+            className="grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-px rounded-panel border border-division bg-panel px-3.5 py-3 text-left focus-visible:outline-3 focus-visible:outline-foco"
+          >
+            <span className="row-span-2 grid size-11 place-items-center rounded-full bg-acento/12 text-acento">
+              <Building aria-hidden className="size-[21px]" />
+            </span>
+            <b className="text-[16px] font-semibold">Oficina</b>
+            <span className={`justify-self-end text-[13px] ${nuevos > 0 ? "font-semibold text-acento" : "text-texto-secundario"}`}>{horaDelChat(ultimo.en)}</span>
+            <span className="min-w-0 truncate text-[14.5px] text-texto-secundario">
+              {ultimo.de === "tecnico" ? "Tú: " : ""}
+              {ultimo.texto}
+            </span>
+            {nuevos > 0 ? (
+              <span className="inline-grid h-[22px] min-w-[22px] place-items-center justify-self-end rounded-full bg-acento px-[7px] text-[12.5px] font-semibold text-sobre-acento" aria-label={nuevos === 1 ? "1 sin leer" : `${nuevos} sin leer`}>
+                {nuevos}
+              </span>
+            ) : (
+              <span />
+            )}
+          </button>
         </section>
       )}
-      <details open={levantamiento.estado !== "enviado" || undefined} className="group flex flex-col rounded-panel bg-panel [&[open]>summary]:mb-1">
+      <details ref={loEnviado} open={levantamiento.estado !== "enviado" || undefined} className="group flex flex-col rounded-panel border border-division bg-panel [&[open]>summary]:mb-1">
         <summary className="flex min-h-tactil cursor-pointer items-center justify-between gap-3 rounded-panel px-4 text-cuerpo font-bold focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&::-webkit-details-marker]:hidden">
-          Ver lo que enviaste
-          <ChevronDown aria-hidden className="size-5 shrink-0 text-texto-secundario transition-transform duration-200 group-open:rotate-180" />
+          {levantamiento.estado === "enviado" ? "Ver lo que enviaste" : "Ver lo capturado"}
+          <ChevronDown aria-hidden className="size-5 shrink-0 text-texto-secundario transition-transform duration-200 motion-reduce:transition-none group-open:rotate-180" />
         </summary>
         <div className="flex flex-col gap-4 px-2 pb-2 motion-safe:animate-aparecer">
       {bloques(formato, levantamiento.repeticiones ?? {}).map(({ seccion, clave, titulo }, _i, todos) =>
@@ -1405,7 +1833,8 @@ function Enviado({
             {g === 0 && todos.length > 1 && <h2 className="text-subtitulo font-extrabold">{titulo}</h2>}
             {grupo.map((campo) => {
               const valor = levantamiento.respuestas[clave]?.[campo.clave];
-              return campo.tipo === "foto" && !esNoObtenido(valor) ? (
+              // Cada dato con su id: el chat lleva al dato del que habla (ADR-0040).
+              return <div key={campo.clave} id={idDeDato(clave, campo.clave)} className="scroll-mt-4">{campo.tipo === "foto" && !esNoObtenido(valor) ? (
                 <FotosLeidas key={campo.clave} etiqueta={campo.etiqueta} ids={Array.isArray(valor) ? (valor as string[]) : []} />
               ) : campo.tipo === "cantidades" && esCantidades(valor) ? (
                 <TablaCantidades key={campo.clave} etiqueta={campo.etiqueta} lineas={valor} />
@@ -1417,7 +1846,7 @@ function Enviado({
                 <ValorLeido key={campo.clave} etiqueta={campo.etiqueta}>
                   {describirValor(campo, valor)}
                 </ValorLeido>
-              );
+              )}</div>;
             })}
           </div>
         )),

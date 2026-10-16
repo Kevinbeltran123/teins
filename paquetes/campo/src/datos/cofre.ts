@@ -80,4 +80,5 @@ export const contexto = {
   envio: (levantamientoId: string) => `envio:${levantamientoId}`,
   visita: (tecnicoId: string, id: string) => `visita:${tecnicoId}:${id}`,
   estado: (id: string) => `estado:${id}`,
+  respuesta: (llave: string) => `respuesta:${llave}`,
 };

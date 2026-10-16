@@ -6,6 +6,8 @@ export const LIMITES = {
   /** Repeticiones por sección repetible, si el formato no pide menos. */
   repeticiones: 50,
   nombreDeRepeticion: 120,
+  /** Caracteres de un decimal (medida, cantidad): los mismos que recibe protocolo, para que el teléfono no deje salir otro. */
+  decimal: 40,
 } as const;
 
 /** Bocetos (ADR-0019): suficiente para un croquis de campo, acotado para el teléfono y el servidor. */
@@ -19,8 +21,11 @@ export const LIMITES_BOCETO = {
   /** Hojas de un boceto y largo de su nombre (versión 2): pisos, cuartos y detalles de un mismo sitio. */
   hojas: 12,
   nombreDeHoja: 60,
-  /** Tamaño máximo del archivo del boceto. */
-  bytes: 2_000_000,
+  /**
+   * Tamaño máximo del archivo del boceto, el mismo de una foto (iteración 42). Con 2 MB, unos 370 trazos a mano
+   * alzada lo pasaban y el envío quedaba rechazado para siempre; el teléfono lo mide antes de enviar.
+   */
+  bytes: 10 * 1024 * 1024,
 } as const;
 
 /** Símbolos de los bocetos (iteración 19, ADR-0027): una biblioteca por organización. */

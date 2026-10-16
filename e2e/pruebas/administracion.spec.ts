@@ -76,9 +76,11 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   const sufijo = randomBytes(3).toString("hex");
   const tecnico = { usuario: `tecnico.adm.${sufijo}`, nombre: `Técnico Administrado ${sufijo}`, contrasena: "" };
   await page.getByRole("button", { name: "Nuevo usuario" }).click();
-  await page.getByLabel("Nombre completo").fill(tecnico.nombre);
-  await page.getByLabel("Usuario para iniciar sesión").fill(tecnico.usuario);
-  await page.getByRole("button", { name: "Crear usuario" }).click();
+  // Dentro de la hoja: buscar en toda la página recorre la tabla de usuarios (lento en WebKit con muchas filas).
+  const hoja = page.getByRole("dialog", { name: "Nuevo usuario" });
+  await hoja.getByLabel("Nombre completo").fill(tecnico.nombre);
+  await hoja.getByLabel("Usuario para iniciar sesión").fill(tecnico.usuario);
+  await hoja.getByRole("button", { name: "Crear usuario" }).click();
   const entrega = page.getByRole("dialog", { name: "Usuario creado" });
   await expect(entrega.getByText(tecnico.nombre)).toBeVisible();
   tecnico.contrasena = (await entrega.locator("dt:has-text('Contraseña temporal') + dd code").textContent())!;
@@ -87,12 +89,28 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   await expect(page.getByRole("row").nth(1)).toContainText(tecnico.nombre);
   await expect(page.getByRole("row").filter({ hasText: tecnico.nombre })).toContainText("Activo");
 
+  // Restablecer lista todo lo que pasa, también el segundo factor; para uno mismo no se ofrece (iteración 24c).
+  await page.getByRole("row").filter({ hasText: tecnico.nombre }).getByRole("button", { name: `Más acciones para ${tecnico.nombre}` }).click();
+  await page.getByRole("menuitem", { name: "Restablecer contraseña" }).click();
+  const restablecer = page.getByRole("dialog", { name: `¿Restablecer la contraseña de ${tecnico.nombre}?` });
+  await expect(restablecer.getByText("Se quitan su segundo factor y sus llaves de acceso")).toBeVisible();
+  await restablecer.getByRole("button", { name: "Cancelar" }).click();
+  await page.getByRole("searchbox", { name: "Buscar usuarios" }).fill(admin.usuario);
+  await expect(page.getByRole("row").filter({ hasText: admin.usuario })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Más acciones para ${admin.nombre}` })).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Buscar usuarios" }).fill("");
+
   // El técnico entra a campo con esa contraseña; su teléfono aparece en administración.
   const { cliente } = nuevaVisitaConCliente(tecnico);
   const telefono = await browser.newContext({ locale: "es-CO", viewport: { width: 390, height: 844 } });
   const t = await telefono.newPage();
   await t.goto(`${CAMPO}/`);
   await iniciarSesion(t, tecnico);
+  // Es temporal: crea la suya antes de ver sus visitas (iteración 25).
+  await t.getByLabel("Contraseña nueva", { exact: true }).fill("propia-del-tecnico");
+  await t.getByLabel("Repite la contraseña nueva").fill("propia-del-tecnico");
+  await t.getByRole("button", { name: "Guardar y entrar" }).click();
+  await t.getByRole("button", { name: "Ir a mis visitas" }).click();
   await expect(t.getByRole("region", { name: "Siguiente visita" }).getByText(cliente)).toBeVisible();
   await telefono.close();
   await page.getByRole("tab", { name: "Teléfonos de campo" }).click();
@@ -100,7 +118,7 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
 
   // Acceso del cliente al portal, con QR y clave, que sirve de una vez.
   await page.getByRole("tab", { name: "Accesos de clientes" }).click();
-  await page.getByRole("button", { name: `Crear acceso de ${cliente}` }).click();
+  await page.getByRole("row").filter({ hasText: cliente }).getByRole("button", { name: `Crear acceso de ${cliente}` }).click();
   await expect(page.getByRole("img", { name: `Código QR del acceso de ${cliente}` })).toBeVisible();
   const acceso = page.getByRole("dialog", { name: "Acceso al portal creado" });
   const claveCliente = (await acceso.locator("li:has-text('Dicte la clave') code").textContent())!;
@@ -113,8 +131,8 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   await expect(c.getByRole("heading", { name: `Informes de ${cliente}` })).toBeVisible();
 
   // Regenerar cierra la sesión abierta del cliente, y el portal le dice por qué.
-  await page.getByRole("button", { name: "Ya la entregué" }).click();
-  await page.getByRole("button", { name: `Más acciones para ${cliente}` }).click();
+  await acceso.getByRole("button", { name: "Ya la entregué" }).click();
+  await page.getByRole("row").filter({ hasText: cliente }).getByRole("button", { name: `Más acciones para ${cliente}` }).click();
   await page.getByRole("menuitem", { name: "Regenerar acceso" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Regenerar acceso" }).click();
   await expect(page.getByRole("img", { name: `Código QR del acceso de ${cliente}` })).toBeVisible();

@@ -1,9 +1,16 @@
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+
+/** La barra superior de oficina (Marco): el encabezado pone ahí dónde se está y el camino de vuelta. */
+export const DestinoBarraSuperior = createContext<HTMLElement | null>(null);
+/** La derecha de esa barra: las acciones de un documento en vivo, que ocupa todo el alto (ADR-0031). */
+export const DestinoAccionesBarra = createContext<HTMLElement | null>(null);
 
 /**
  * Encabezado de pantalla de oficina (DESIGN.md, jerarquía; prototipos/oficina). El título es la sección elegida en
  * el menú o, en un detalle, lo que se está viendo. Debajo, una línea de datos cortos (`meta`) que reemplaza a las
- * tarjetas de resumen; a la derecha, la acción principal. Una línea fina lo separa del contenido.
+ * tarjetas de resumen; a la derecha, la acción principal. Con la barra superior del marco (Precisión), la ubicación
+ * ("Levantamientos / Clínica Santa Fe") va en ella y las migas salen del encabezado.
  */
 export function EncabezadoPagina({
   titulo,
@@ -11,6 +18,8 @@ export function EncabezadoPagina({
   estado,
   descripcion,
   acciones,
+  accionesEnBarra = false,
+  transicion,
 }: {
   titulo: ReactNode;
   /** El nivel superior, como enlace con la clase `migas`: "Levantamientos", "Informes". */
@@ -21,19 +30,42 @@ export function EncabezadoPagina({
   descripcion?: ReactNode;
   /** A la derecha: la acción principal de la pantalla, y a lo sumo una secundaria. */
   acciones?: ReactNode;
+  /** En un documento en vivo, las acciones van a la barra superior (prototipos/vista-en-vivo). */
+  accionesEnBarra?: boolean;
+  /**
+   * Nombre de transición del título (nombreDeTransicion): el mismo en el enlace de la fila de la lista hace que, al
+   * abrirla, el título de la fila se convierta en el del detalle (iteración 27).
+   */
+  transicion?: string | undefined;
 }) {
+  const barra = useContext(DestinoBarraSuperior);
+  const destinoAcciones = useContext(DestinoAccionesBarra);
+  const arriba = accionesEnBarra && destinoAcciones;
   return (
     <header className="cabeza">
+      {barra &&
+        createPortal(
+          migas ? (
+            <>
+              {migas}
+              <span aria-hidden>/</span>
+              <b>{titulo}</b>
+            </>
+          ) : (
+            <b>{titulo}</b>
+          ),
+          barra,
+        )}
       <div className="cabeza-txt">
-        {migas && <nav aria-label="Migas de pan">{migas}</nav>}
+        {migas && !barra && <nav aria-label="Migas de pan">{migas}</nav>}
         {/* El estado va junto al título, pero fuera de él: el título se lee solo ("Cotización COT-2026-0017"). */}
         <div className="titulo-fila">
-          <h1>{titulo}</h1>
+          <h1 style={transicion ? { viewTransitionName: transicion } : undefined}>{titulo}</h1>
           {estado}
         </div>
         {descripcion && <div className="meta">{descripcion}</div>}
       </div>
-      {acciones && <div className="acciones">{acciones}</div>}
+      {acciones && (arriba ? createPortal(<div className="acciones">{acciones}</div>, destinoAcciones) : <div className="acciones">{acciones}</div>)}
     </header>
   );
 }

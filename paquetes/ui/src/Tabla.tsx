@@ -1,4 +1,5 @@
-import { useEffect, useRef, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { nombreDeTransicion, sinMovimiento, useNombreEnPantalla } from "./transicion";
 
 export interface Columna {
   titulo: string;
@@ -42,26 +43,49 @@ function abrirPrimerEnlace(evento: MouseEvent<HTMLTableRowElement>) {
 export function FilaTabla({
   children,
   resaltada = false,
+  marcada = false,
   abrir = false,
-  indice = 0,
   clase = "",
   id,
+  clave,
 }: {
   children: ReactNode;
-  /** Recién creada o cambiada en esta pantalla: se resalta y queda a la vista. */
+  /** Recién creada o cambiada en esta pantalla: se resalta, el resaltado se desvanece y queda a la vista. */
   resaltada?: boolean;
+  /** La que se abrió por última vez: al volver a la lista queda marcada y a la vista. */
+  marcada?: boolean;
   abrir?: boolean;
-  /** Orden de aparición: las filas suben una tras otra. */
-  indice?: number;
   clase?: string;
   id?: string;
+  /**
+   * Lo que la fila representa (su id): con él, al crear, cancelar o cambiar de pestaña dentro de una transición
+   * (conTransicion), la fila entra, sale o se mueve a su nuevo lugar y las demás se corren. Lo de adentro con
+   * `data-transicion` (el título que se convierte en el del detalle) lleva ese nombre. Los dos, solo mientras la fila
+   * está en pantalla (useNombreEnPantalla).
+   */
+  clave?: string;
 }) {
   const fila = useRef<HTMLTableRowElement>(null);
+  const enPantalla = useNombreEnPantalla<HTMLTableRowElement>(clave ? nombreDeTransicion("fila", clave) : undefined);
+  // Estable: una ref nueva en cada dibujo le quitaría el nombre a la fila justo en medio de una transición.
+  const ref = useCallback(
+    (elemento: HTMLTableRowElement | null) => {
+      fila.current = elemento;
+      return enPantalla(elemento);
+    },
+    [enPantalla],
+  );
   useEffect(() => {
-    if (resaltada) fila.current?.scrollIntoView({ block: "nearest" });
+    if (resaltada) fila.current?.scrollIntoView({ block: "nearest", behavior: sinMovimiento() ? "auto" : "smooth" });
   }, [resaltada]);
+  useEffect(() => {
+    if (marcada) fila.current?.scrollIntoView({ block: "nearest" });
+  }, [marcada]);
   return (
-    <tr ref={fila} id={id} style={{ "--i": indice } as CSSProperties} className={`${resaltada ? "resaltada" : ""} ${abrir ? "clic" : ""} ${clase}`} onClick={abrir ? abrirPrimerEnlace : undefined}>
+    <tr
+      ref={ref}
+      id={id}
+      className={`${resaltada ? "resaltada" : ""} ${marcada ? "marcada" : ""} ${abrir ? "clic" : ""} ${clase}`} onClick={abrir ? abrirPrimerEnlace : undefined}>
       {children}
     </tr>
   );

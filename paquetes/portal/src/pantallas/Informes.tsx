@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ErrorApi } from "@teins/protocolo";
-import { Aviso, Boton, Download, EsqueletoBloques, EstadoVacio, FileText, LogOut } from "@teins/ui";
+import { Aviso, Boton, Download, EsqueletoBloques, EstadoVacio, FileText, Logo, LogOut } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { olvidarSesion } from "../sesion";
 
@@ -58,7 +58,7 @@ export function Informes({ cliente: nombre, aviso }: { cliente: string; aviso?: 
     <div className="min-h-dvh bg-fondo">
       <header className="border-b border-division bg-panel">
         <div className="mx-auto flex min-h-16 max-w-3xl items-center justify-between gap-4 px-4">
-          <p className="text-cuerpo font-extrabold tracking-wide text-superficie">TEINS</p>
+          <Logo alto={30} />
           {/* En un equipo compartido, salir evita que otra persona vea los informes. */}
           <Boton variante="fantasma" tamano="pequeno" icono={LogOut} cargando={saliendo} onClick={() => void salir()}>
             Salir

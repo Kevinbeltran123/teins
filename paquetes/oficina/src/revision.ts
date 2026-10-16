@@ -1,8 +1,39 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { leerClave } from "@teins/dominio";
 import type { CuerpoEntrada } from "@teins/protocolo";
+import { conTransicion } from "@teins/ui";
 import { cliente, REFRESCO_BANDEJA_MS } from "./api";
 
 export type Estado = "enviado" | "en_revision" | "revisado";
+
+/**
+ * Lo escrito en la revisión que todavía no se guarda ni se envía: una corrección abierta, un comentario sobre un dato o
+ * general, una respuesta en una conversación, o la edición de un comentario.
+ */
+export type Escrito =
+  | { tipo: "correccion" | "comentario"; seccion: string; campo: string }
+  | { tipo: "general" }
+  | { tipo: "respuesta"; comentarioId: string }
+  | { tipo: "edicion" };
+
+/** Hay algo: un texto con letras, una corrección escrita, un comentario en edición. */
+const hayAlgo = (valor: unknown) => (typeof valor === "string" ? valor.trim() !== "" : Boolean(valor));
+
+/**
+ * Qué pasa con lo escrito al marcar revisado: las correcciones ya no se guardan, y las respuestas y la edición de un
+ * comentario tampoco, porque las conversaciones se cierran (ADR-0040). Un comentario nuevo todavía se envía, pero el
+ * técnico ya no lo puede responder.
+ */
+export function alMarcarRevisado<E extends { que: Escrito; valor: unknown }>(escritos: Iterable<E>): { sePierden: E[]; sinRespuesta: E[] } {
+  const vivos = [...escritos].filter((e) => hayAlgo(e.valor));
+  return {
+    sePierden: vivos.filter((e) => e.que.tipo === "correccion" || e.que.tipo === "respuesta" || e.que.tipo === "edicion"),
+    sinRespuesta: vivos.filter((e) => e.que.tipo === "comentario" || e.que.tipo === "general"),
+  };
+}
+
+/** La sección tiene correcciones: en ella o en sus repeticiones («tableros~id»), no en otra que empieza igual. */
+export const seccionCorregida = (claves: Iterable<string>, seccion: string) => [...claves].some((k) => leerClave(k).seccion === seccion);
 
 /** Una pestaña de la bandeja: levantamientos de un estado, del que más lleva esperando al más reciente. */
 /** `buscar`: cliente, sitio, técnico o formato; la busca el servidor, porque la bandeja llega por páginas. */
@@ -17,10 +48,14 @@ export function useBandeja(estado: Estado, buscar = "") {
   });
 }
 
-/** Después de cualquier acción de revisión, el detalle, el historial y la bandeja se vuelven a leer. */
+/**
+ * Después de cualquier acción de revisión, el detalle, el historial y la bandeja se vuelven a leer, en una
+ * transición: el estado cambia en su lugar y lo corregido destella (iteración 27).
+ */
 function useRefrescar() {
   const consultas = useQueryClient();
-  return (id: string) => Promise.all([consultas.invalidateQueries({ queryKey: ["levantamiento", id] }), consultas.invalidateQueries({ queryKey: ["bandeja"] })]);
+  return (id: string) =>
+    conTransicion(() => Promise.all([consultas.invalidateQueries({ queryKey: ["levantamiento", id] }), consultas.invalidateQueries({ queryKey: ["bandeja"] })]));
 }
 
 export function useTomar() {
@@ -52,6 +87,33 @@ export function useComentar(id: string) {
   const refrescar = useRefrescar();
   return useMutation({
     mutationFn: (cuerpo: CuerpoEntrada<"comentarLevantamiento">) => cliente.llamar("comentarLevantamiento", { parametros: { id }, cuerpo }),
+    onSuccess: () => refrescar(id),
+  });
+}
+
+/**
+ * Quien tiene la conversación a la vista la leyó (ADR-0040): se apaga su punto en la bandeja, la pestaña y el botón del
+ * panel, y el técnico ve «Leído». Sin transición: no cambia nada en pantalla.
+ */
+export function useLeerConversacion(id: string) {
+  const consultas = useQueryClient();
+  return useMutation({
+    mutationFn: () => cliente.llamar("marcarConversacionLeida", { parametros: { id } }),
+    onSuccess: () => {
+      void consultas.invalidateQueries({ queryKey: ["levantamiento", id], exact: true });
+      void consultas.invalidateQueries({ queryKey: ["bandeja"] });
+    },
+  });
+}
+
+/** Su autor corrige un comentario (ADR-0035): lo edita, lo retira o lo restaura con "Deshacer". */
+export function useCorregirComentario(id: string) {
+  const refrescar = useRefrescar();
+  return useMutation({
+    mutationFn: ({ comentarioId, accion }: { comentarioId: string; accion: { tipo: "editar"; texto: string } | { tipo: "retirar" | "restaurar" } }) =>
+      accion.tipo === "editar"
+        ? cliente.llamar("editarComentario", { parametros: { id, comentarioId }, cuerpo: { texto: accion.texto } })
+        : cliente.llamar(accion.tipo === "retirar" ? "retirarComentario" : "restaurarComentario", { parametros: { id, comentarioId } }),
     onSuccess: () => refrescar(id),
   });
 }

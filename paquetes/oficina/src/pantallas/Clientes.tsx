@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import {
   Aviso,
@@ -15,33 +15,59 @@ import {
   Buscador,
   Insignia,
   Marcado,
+  Pestanas,
+  nombreDeTransicion,
   SinResultados,
   EstadoVacio,
   FilaTabla,
   Plus,
   RefreshCw,
   Tabla,
+  useLoNuevo,
   useNotificar,
+  enfocarPrimerError,
 } from "@teins/ui";
 import { cliente } from "../api";
-import { consultasDeProgramacion, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
+import { aFechaCorta } from "../formato";
+import { sinError } from "../mensajes";
+import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
+import { useIrConPedido, usePedido } from "../pedido";
+import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
+import { useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
 
 type Cliente = Respuesta<"listarClientes">["clientes"][number];
 
 const normalizar = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 export function Clientes() {
-  const consulta = useQuery(consultasDeProgramacion.clientes());
+  // Activos o archivados (ADR-0035); "Ver en Archivados" o "Ver en Activos" desde un aviso llega con esa pestaña, también
+  // con la pantalla ya abierta: la pestaña pedida manda.
+  const [vista, setVista] = usePreferencia<"activos" | "archivados">("clientes-pestana", "activos", unoDe("activos", "archivados"));
+  usePedido("vista", setVista);
+  const consulta = useQuery(consultasDeProgramacion.clientes(vista));
+  const otra = useQuery(consultasDeProgramacion.clientes(vista === "activos" ? "archivados" : "activos"));
+  const cantidad = (v: "activos" | "archivados") => (v === vista ? consulta.data : otra.data)?.clientes.length;
+  const recuperar = useAccionDeProgramacion((c: Cliente) => cliente.llamar("recuperarCliente", { parametros: { id: c.id } }));
+  const [errorRecuperar, setErrorRecuperar] = useState<string | null>(null);
   const notificar = useNotificar();
   const [creando, setCreando] = useState(false);
+  // «Nuevo cliente» desde la búsqueda (⌘K / Ctrl + K) llega con el formulario abierto.
+  usePedido("abrir", (pedido) => {
+    if (pedido === "nuevo") setCreando(true);
+  });
   const [agregandoA, setAgregandoA] = useState<Cliente | null>(null);
   // Lo creado o cambiado en esta visita a la pantalla: va primero y resaltado (DESIGN.md, crear y editar).
   const [recientes, setRecientes] = useState<string[]>([]);
-  const [busqueda, setBusqueda] = useState("");
+  const [busqueda, setBusqueda] = useBusquedaRecordada("clientes");
   const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
+  const navegar = useNavigate();
+  const irConPedido = useIrConPedido();
 
   const todos = consulta.data?.clientes ?? [];
-  const ordenados = [...recientes.map((id) => todos.find((c) => c.id === id)).filter((c): c is Cliente => Boolean(c)), ...todos.filter((c) => !recientes.includes(c.id))];
+  // Lo que llega después de abrir la pantalla (lo recién creado) entra primero y resaltado, en la misma transición;
+  // lo cambiado (un sitio agregado) se resalta en su lugar.
+  const esNuevo = useLoNuevo(consulta.data?.clientes.map((c) => c.id));
+  const ordenados = [...todos.filter((c) => esNuevo(c.id)), ...todos.filter((c) => !esNuevo(c.id))];
   const b = normalizar(busqueda.trim());
   const visibles = b === "" ? ordenados : ordenados.filter((c) => normalizar([c.nombre, ...c.sitios.map((s) => `${s.nombre} ${s.direccion}`)].join(" ")).includes(b));
 
@@ -53,9 +79,9 @@ export function Clientes() {
           consulta.data && (
             <>
               <span>
-                <b>{todos.length}</b> {todos.length === 1 ? "cliente" : "clientes"}
+                <b>{cantidad("activos") ?? "…"}</b> {cantidad("activos") === 1 ? "cliente" : "clientes"}
               </span>
-              {todos.some((c) => c.reciben === 0) && (
+              {vista === "activos" && todos.some((c) => c.reciben === 0) && (
                 <span>
                   <b>{todos.filter((c) => c.reciben === 0).length}</b> sin nadie que reciba el informe
                 </span>
@@ -80,25 +106,36 @@ export function Clientes() {
             </Boton>
           </div>
         </Aviso>
-      ) : todos.length === 0 ? (
+      ) : todos.length === 0 && vista === "activos" && !cantidad("archivados") ? (
         <EstadoVacio icono={Building} titulo="Todavía no hay clientes">
           Cree el primero con "Nuevo cliente", con su sede principal. Después podrá programarle visitas.
         </EstadoVacio>
       ) : (
         <>
-          <BarraLista buscador={<Buscador etiqueta="Buscar cliente" ejemplo="Cliente, sitio o dirección" valor={busqueda} onCambio={setBusqueda} />} />
-          {visibles.length === 0 ? (
+          <BarraLista buscador={<Buscador etiqueta="Buscar cliente" ejemplo="Cliente, sitio o dirección" valor={busqueda} onCambio={setBusqueda} />}>
+            <Pestanas
+              etiqueta="Qué clientes ver"
+              activa={vista}
+              onCambio={setVista}
+              pestanas={[
+                { valor: "activos", etiqueta: "Activos", cantidad: cantidad("activos") },
+                { valor: "archivados", etiqueta: "Archivados", cantidad: cantidad("archivados") },
+              ]}
+            />
+          </BarraLista>
+          {errorRecuperar && <Aviso tono="error">{errorRecuperar}</Aviso>}
+          {todos.length === 0 ? (
+            <EstadoVacio icono={Building} titulo={vista === "archivados" ? "Nada archivado" : "No hay clientes activos"}>
+              {vista === "archivados" ? "Un cliente archivado aparece aquí y se recupera con un toque." : "Los clientes archivados están en su pestaña."}
+            </EstadoVacio>
+          ) : visibles.length === 0 ? (
             <SinResultados texto={busqueda.trim()} onQuitar={() => setBusqueda("")} />
           ) : (
-            <Tabla etiqueta="Clientes y sus sitios" columnas={[{ titulo: "Cliente" }, { titulo: "Sitios" }, { titulo: "Reciben el informe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
-              {visibles.map((c, k) => (
-                <FilaTabla key={c.id} resaltada={recientes.includes(c.id)} abrir indice={k}>
+            <Tabla etiqueta="Clientes y sus sitios" columnas={[{ titulo: "Cliente" }, { titulo: "Sitios" }, { titulo: vista === "archivados" ? "Archivado" : "Reciben el informe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
+              {visibles.map((c) => (
+                <FilaTabla key={c.id} resaltada={esNuevo(c.id) || recientes.includes(c.id)} abrir clave={c.id}>
                   <CeldaTabla>
-                    <Link
-                      to="/clientes/$id"
-                      params={{ id: c.id }}
-                      className="enlace"
-                    >
+                    <Link to="/clientes/$id" params={{ id: c.id }} className="enlace" data-transicion={nombreDeTransicion("nombre", c.id)}>
                       <Marcado texto={c.nombre} busqueda={busqueda} />
                     </Link>
                   </CeldaTabla>
@@ -118,7 +155,9 @@ export function Clientes() {
                   </CeldaTabla>
                   <CeldaTabla>
                     {/* "Nadie" avisa antes de publicar: ese informe solo quedaría en el portal (ADR-0028). */}
-                    {c.reciben === 0 ? (
+                    {c.archivado ? (
+                      <span className="sec">{`${aFechaCorta(c.archivado.en)} por ${c.archivado.por.nombre}`}</span>
+                    ) : c.reciben === 0 ? (
                       <Insignia tono="alerta">Nadie</Insignia>
                     ) : c.reciben === 1 ? (
                       "1 contacto"
@@ -127,9 +166,26 @@ export function Clientes() {
                     )}
                   </CeldaTabla>
                   <CeldaTabla derecha>
-                    <Boton variante="fantasma" tamano="pequeno" icono={Plus} aria-label={`Agregar sitio a ${c.nombre}`} onClick={() => setAgregandoA(c)}>
-                      Agregar sitio
-                    </Boton>
+                    {c.archivado ? (
+                      <Boton
+                        tamano="pequeno"
+                        aria-label={`Recuperar ${c.nombre}`}
+                        cargando={recuperar.isPending && recuperar.variables?.id === c.id}
+                        onClick={() => {
+                          setErrorRecuperar(null);
+                          recuperar.mutate(c, {
+                            onSuccess: () => notificar({ texto: `${c.nombre} recuperado`, accion: { texto: "Ver en Activos", alHacer: () => void irConPedido("/clientes", { vista: "activos" }) } }),
+                            onError: (e) => setErrorRecuperar(mensajeDeCliente(e)),
+                          });
+                        }}
+                      >
+                        Recuperar
+                      </Boton>
+                    ) : (
+                      <Boton variante="fantasma" tamano="pequeno" icono={Plus} aria-label={`Agregar sitio a ${c.nombre}`} onClick={() => setAgregandoA(c)}>
+                        Agregar sitio
+                      </Boton>
+                    )}
                   </CeldaTabla>
                 </FilaTabla>
               ))}
@@ -145,7 +201,11 @@ export function Clientes() {
             setCreando(false);
             setBusqueda("");
             destacar(c.id);
-            notificar({ texto: `Cliente creado: ${c.nombre}` });
+            // Ya llega con su contacto principal (iteración 29): el siguiente paso es ver el cliente o programarle.
+            notificar({
+              texto: `Cliente creado: ${c.nombre}`,
+              accion: { texto: "Ver el cliente", alHacer: () => void navegar({ to: "/clientes/$id", params: { id: c.id } }) },
+            });
           }}
         />
       )}
@@ -170,8 +230,13 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
   const [sitio, setSitio] = useState("");
   const [direccion, setDireccion] = useState("");
   const [errores, setErrores] = useState<{ nombre?: string; sitio?: string; direccion?: string }>({});
+  const [erroresContacto, setErroresContacto] = useState<ErroresDeContacto>({});
   const [error, setError] = useState<string | null>(null);
-  const crear = useAccionDeProgramacion(() => cliente.llamar("crearCliente", { cuerpo: { nombre: nombre.trim(), sitio: { nombre: sitio.trim(), direccion: direccion.trim() } } }));
+  // El contacto principal va con el cliente (iteración 29): sin él, los documentos no le llegan a nadie.
+  const contacto = useCamposDeContacto(null, { algunCanal: true, recibeCotizaciones: true });
+  const crear = useAccionDeProgramacion(() =>
+    cliente.llamar("crearCliente", { cuerpo: { nombre: nombre.trim(), sitio: { nombre: sitio.trim(), direccion: direccion.trim() }, contacto: contacto.datos() } }),
+  );
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -180,8 +245,12 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
       ...(sitio.trim() === "" ? { sitio: "Escriba el nombre del sitio." } : {}),
       ...(direccion.trim() === "" ? { direccion: "Escriba la dirección del sitio." } : {}),
     };
+    const faltanContacto = contacto.validar();
     setErrores(faltan);
-    if (Object.keys(faltan).length > 0) return;
+    setErroresContacto(faltanContacto);
+    const hayErrores = Object.keys(faltan).length > 0 || Object.keys(faltanContacto).length > 0;
+    if (hayErrores) enfocarPrimerError(formulario);
+    if (hayErrores) return;
     setError(null);
     try {
       alCrear(await crear.mutateAsync(undefined));
@@ -193,6 +262,7 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
   return (
     <Dialogo
       forma="lateral"
+      amplio
       titulo="Nuevo cliente"
       cerrable={!crear.isPending}
       alCerrar={alCerrar}
@@ -207,13 +277,22 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
         </>
       }
     >
-      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" valorInicial="" onCambio={setNombre} error={errores.nombre} />
-        <fieldset className="flex flex-col gap-4" style={{ border: 0, padding: 16, margin: 0, background: "var(--sup2)", borderRadius: 18 }}>
-          <legend className="sr-only">Sede principal</legend>
-          <span className="ayuda" style={{ fontSize: 14 }}>La sede principal, donde se programan las visitas. Después puede agregar más sitios.</span>
-          <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" valorInicial="" onCambio={setSitio} error={errores.sitio} />
-          <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={setDireccion} error={errores.direccion} />
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        <fieldset className="bloque-form">
+          <legend>Cliente</legend>
+          <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" ejemplo="Como sale en el informe" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
+        </fieldset>
+        <fieldset className="bloque-form">
+          <legend>Primer sitio</legend>
+          <div className="fila-campos">
+            <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" ejemplo="Por ejemplo: Torre A" valorInicial="" onCambio={(t) => (setSitio(t), setErrores((e) => sinError(e, "sitio")))} error={errores.sitio} />
+            <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={(t) => (setDireccion(t), setErrores((e) => sinError(e, "direccion")))} error={errores.direccion} />
+          </div>
+        </fieldset>
+        <fieldset className="bloque-form">
+          <legend>Contacto principal</legend>
+          <p className="ayuda">A quien le llegan los documentos. Puede agregar más contactos después.</p>
+          {contacto.campos(erroresContacto, setErroresContacto)}
         </fieldset>
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
@@ -236,19 +315,20 @@ export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nomb
       ...(direccion.trim() === "" ? { direccion: "Escriba la dirección." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
       await agregar.mutateAsync(undefined);
       alAgregar();
     } catch (e) {
-      setError(mensajeDeProgramacion(e));
+      setError(mensajeDeCliente(e));
     }
   }
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
       titulo="Agregar sitio"
       subtitulo={c.nombre}
       cerrable={!agregar.isPending}
@@ -265,8 +345,8 @@ export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nomb
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
-        <CampoTexto etiqueta="Nombre del sitio" valorInicial="" onCambio={setNombre} error={errores.nombre} />
-        <CampoTexto etiqueta="Dirección" valorInicial="" onCambio={setDireccion} error={errores.direccion} />
+        <CampoTexto etiqueta="Nombre del sitio" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
+        <CampoTexto etiqueta="Dirección" valorInicial="" onCambio={(t) => (setDireccion(t), setErrores((e) => sinError(e, "direccion")))} error={errores.direccion} />
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>

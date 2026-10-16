@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { leerConfig } from "../config";
 import { conectar } from "../plataforma/base-de-datos";
 import { crearIdentidad } from "../modulos/identidad";
+import { soltarRevisionesDe } from "../modulos/levantamientos";
 
 /**
  * Revoca a un usuario (regla 13, P36): pierde el acceso de inmediato y sus teléfonos borran sus datos
@@ -18,7 +19,7 @@ if (!values.usuario) {
 const config = leerConfig();
 const conexion = conectar(config.DATABASE_URL, 2);
 try {
-  const r = await crearIdentidad(conexion.bd, config).desactivarUsuario(values.usuario, { autorId: "administrador", correlacion: `consola:${randomUUID()}` });
+  const r = await crearIdentidad(conexion.bd, config, { alDesactivar: soltarRevisionesDe }).desactivarUsuario(values.usuario, { autorId: "administrador", correlacion: `consola:${randomUUID()}` });
   console.log(r === "desactivado" ? `Usuario ${values.usuario} desactivado; sus sesiones se cerraron y sus teléfonos borrarán sus datos al conectarse.` : `El usuario ${values.usuario} ya estaba desactivado.`);
 } finally {
   await conexion.cerrar();

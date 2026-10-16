@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VersionFormato } from "./formato";
-import { agregarRepeticion, crearLevantamiento, quitarRepeticion, renombrarRepeticion, responder } from "./levantamiento";
+import { agregarFoto, agregarRepeticion, crearLevantamiento, quitarRepeticion, renombrarRepeticion, responder, restaurarRepeticion, sinRespuestasHuerfanas } from "./levantamiento";
 import { validarDefinicionFormato } from "./meta-esquema";
 import { bloques, claveDeRepeticion, leerClave, nombreDeDato, rutaLegible, VERSION_APP_REPETIBLES } from "./repeticiones";
 import { corregir } from "./revision";
@@ -138,5 +138,52 @@ describe("rutas mal formadas (revisión de código)", () => {
   it("una lista de repeticiones mal formada da un solo error, no errores en cascada", () => {
     const errores = validarRespuestas(formato, { "tableros~malo": { ubicacion: "x" } }, { tableros: [{ id: "MALO", nombre: "T" }] });
     expect(errores).toEqual([{ seccion: "tableros", codigo: "tipo_invalido" }]);
+  });
+
+  it("deshacer quitar devuelve la repetición a su lugar con sus respuestas (iteración 24c)", () => {
+    let l = crearLevantamiento(formato, "l9", ahora, undefined, nuevoId);
+    l = agregarRepeticion(l, formato, "tableros", "otro0011", ahora);
+    l = agregarRepeticion(l, formato, "tableros", "otro0012", ahora);
+    l = renombrarRepeticion(l, "tableros", "otro0011", "Tablero del sótano", ahora);
+    l = responder(l, claveDeRepeticion("tableros", "otro0011"), "ubicacion", "Sótano", ahora);
+    const antes = l;
+    const quitada = l.repeticiones!.tableros![1]!;
+    const respuestas = l.respuestas[claveDeRepeticion("tableros", "otro0011")];
+    l = quitarRepeticion(l, "tableros", "otro0011", ahora);
+    l = restaurarRepeticion(l, "tableros", quitada, 1, respuestas, ahora);
+    expect(l.repeticiones).toEqual(antes.repeticiones);
+    expect(l.respuestas).toEqual(antes.respuestas);
+    // Deshacer dos veces no la duplica.
+    expect(restaurarRepeticion(l, "tableros", quitada, 1, respuestas, ahora).repeticiones?.tableros).toHaveLength(3);
+  });
+
+  it("un error de la sección repetible entera se nombra por su título, no por su clave (iteración 42)", () => {
+    expect(rutaLegible(formato, {}, "tableros")).toBe("Tableros");
+  });
+
+  it("lo que llega tarde a una repetición quitada no la revive (iteración 42)", () => {
+    let l = crearLevantamiento(formato, "l10", ahora, undefined, nuevoId);
+    l = agregarRepeticion(l, formato, "tableros", "otro0021", ahora);
+    const clave = claveDeRepeticion("tableros", "otro0021");
+    l = responder(l, clave, "ubicacion", "Sótano", ahora);
+    l = quitarRepeticion(l, "tableros", "otro0021", ahora);
+    // Un «Deshacer» de foto o de «No se pudo obtener», o una foto que terminaba de procesarse.
+    expect(responder(l, clave, "ubicacion", "Sótano", ahora)).toBe(l);
+    expect(agregarFoto(l, clave, "fotos", "a".repeat(64), ahora)).toBe(l);
+    expect(validarRespuestas(formato, l.respuestas, l.repeticiones).some((e) => e.codigo === "seccion_desconocida")).toBe(false);
+  });
+
+  it("sin respuestas huérfanas: quita solo las de repeticiones que ya no existen (iteración 42)", () => {
+    let l = crearLevantamiento(formato, "l11", ahora, undefined, nuevoId);
+    const viva = claveDeRepeticion("tableros", l.repeticiones!.tableros![0]!.id);
+    l = responder(l, viva, "ubicacion", "Sótano", ahora);
+    l = responder(l, "general", "direccion", "Calle [N]", ahora);
+    expect(sinRespuestasHuerfanas(l)).toBe(l);
+    // Así quedaba un borrador antes de la iteración 42: la respuesta de un tablero quitado, escrita tarde.
+    const atascado = { ...l, respuestas: { ...l.respuestas, [claveDeRepeticion("tableros", "quitad01")]: { ubicacion: "Piso 2" } } };
+    expect(validarRespuestas(formato, atascado.respuestas, atascado.repeticiones)).toContainEqual({ seccion: "tableros~quitad01", codigo: "seccion_desconocida" });
+    const limpio = sinRespuestasHuerfanas(atascado);
+    expect(Object.keys(limpio.respuestas).sort()).toEqual(["general", viva].sort());
+    expect(validarRespuestas(formato, limpio.respuestas, limpio.repeticiones).some((e) => e.codigo === "seccion_desconocida")).toBe(false);
   });
 });

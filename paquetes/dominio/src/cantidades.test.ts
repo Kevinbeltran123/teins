@@ -27,6 +27,9 @@ describe("cantidades (iteración 11, F9)", () => {
       expect(validarCampo(campo, [mala]), JSON.stringify(mala)).toBe("cantidades_invalidas");
     }
     expect(validarCampo(campo, [linea("a0000001"), linea("a0000001")])).toBe("cantidades_invalidas");
+    // El protocolo no recibe una cantidad más larga: el teléfono no la deja salir (iteración 42).
+    expect(validarCampo(campo, [linea("a0000001", { cantidad: "1".repeat(41) })])).toBe("cantidades_invalidas");
+    expect(validarCampo(campo, [linea("a0000001", { cantidad: "1".repeat(40) })])).toBeNull();
     expect(validarCampo(campo, "texto")).toBe("tipo_invalido");
   });
 

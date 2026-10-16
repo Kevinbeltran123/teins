@@ -1,4 +1,5 @@
-import { useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -14,6 +15,7 @@ import {
   nombreDeDato,
   normalizarDecimal,
   rutaLegible,
+  type ContenidoVersion,
   type DefinicionCampo,
   type DocumentoBoceto,
   type LineaCantidad,
@@ -23,40 +25,62 @@ import {
 } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
+  ArrowUp,
   Aviso,
   Boton,
   CampoMedida,
   CampoSeleccion,
   CampoTexto,
+  BotonIcono,
   Check,
   ChevronLeft,
+  ChevronRight,
+  DestinoAccionesBarra,
+  Dialogo,
   Confirmacion,
   EditorCantidades,
   EncabezadoPagina,
   EsqueletoLista,
   FileText,
   Firma,
+  History,
   HojasDeBoceto,
   Insignia,
   Link2,
+  LockKeyhole,
+  nombreDeTransicion,
   MarcaNoObtenido,
   MessageSquare,
+  PanelRight,
   Pencil,
   RefreshCw,
   Send,
+  sinMovimiento,
   Smartphone,
   TriangleAlert,
   UserRound,
+  useLoNuevo,
+  MenuAcciones,
+  useNotificar,
   VisorFotos,
+  type AnclaDeHoja,
   type LineaEditable,
   type LucideIcon,
 } from "@teins/ui";
 import { consultas } from "../api";
 import { consultasDeCatalogo, useVincular } from "../catalogo";
-import { aFechaCorta } from "../formato";
+import { aDiaCorto, aFechaCorta, aHora, cuantoLleva, iniciales } from "../formato";
+import { avisarConversacionAbierta } from "../conversacion";
 import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
-import { useComentar, useCorregir, useMarcarRevisado, useTomar } from "../revision";
+import { alMarcarRevisado, seccionCorregida, useBandeja, useComentar, useCorregir, useCorregirComentario, useLeerConversacion, useMarcarRevisado, useTomar, type Escrito } from "../revision";
+import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
+import { enLista } from "./Envios";
+import { BotonMostrarVista, EditorConVista, Lienzo, useVistaPrevia, VistaDeDocumento } from "./Lienzo";
+import type { Plantillas } from "../documentos";
+import { esTexto, unoDe, usePreferencia } from "../preferencias";
+import { useTeclaSuelta } from "../atajos";
+import { recienteDeLevantamiento, useAnotarReciente } from "./Paleta";
 
 type Levantamiento = Respuesta<"obtenerLevantamiento">;
 type Historial = Respuesta<"historialLevantamiento">;
@@ -78,6 +102,86 @@ const migas = (
 const claveDato = (seccion: string, campo: string) => `${seccion}|${campo}`;
 const idDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`.replace(/[^a-zA-Z0-9_-]/g, "");
 
+/** La corrección que se está escribiendo: el capítulo del informe la muestra antes de guardarla (iteración 26). */
+type EnCurso = { seccion: string; campo: string; valor: Valor | undefined };
+const CorreccionEnCurso = createContext<{ avisar: (c: EnCurso | null) => void; verCapitulo: (() => void) | null } | null>(null);
+
+type Pendiente = { que: Escrito; valor: unknown };
+/**
+ * Lo escrito y no enviado en la revisión, por destino. Vive en el detalle y no en cada campo: cambiar de pestaña del
+ * panel, ocultarlo, cerrar la hoja lateral o abrir el globo de otra fila no lo borra, y «Marcar revisado» dice qué se
+ * pierde.
+ */
+const SinEnviar = createContext<Map<string, Pendiente> | null>(null);
+
+/**
+ * Lo escrito sin enviar de cada levantamiento, fuera del detalle: Esc, el menú, Atrás o «Siguiente» lo desmontan, y al
+ * volver sigue ahí (iteración 42). Los comentarios se copian en la pestaña (`sessionStorage`) y también vuelven al
+ * recargar; de una corrección solo queda la marca de que hay una abierta, que se va con su editor.
+ */
+class LoSinEnviar extends Map<string, Pendiente> {
+  private readonly llave: string;
+  constructor(levantamientoId: string) {
+    super();
+    this.llave = `revision-sin-enviar:${levantamientoId}`;
+    try {
+      for (const [clave, pendiente] of JSON.parse(sessionStorage.getItem(this.llave) ?? "[]") as [string, Pendiente][]) super.set(clave, pendiente);
+    } catch {
+      // Sin almacenamiento de la pestaña (navegación privada estricta), lo escrito vive mientras la app esté abierta.
+    }
+  }
+  override set(clave: string, pendiente: Pendiente) {
+    super.set(clave, pendiente);
+    this.copiar();
+    return this;
+  }
+  override delete(clave: string) {
+    const habia = super.delete(clave);
+    this.copiar();
+    return habia;
+  }
+  override clear() {
+    super.clear();
+    this.copiar();
+  }
+  private copiar() {
+    try {
+      const comentarios = [...this].filter(([, p]) => p.que.tipo !== "correccion");
+      if (comentarios.length === 0) sessionStorage.removeItem(this.llave);
+      else sessionStorage.setItem(this.llave, JSON.stringify(comentarios));
+    } catch {
+      // Lleno o sin permiso: sigue en memoria.
+    }
+  }
+}
+const sinEnviarPorLevantamiento = new Map<string, LoSinEnviar>();
+const sinEnviarDe = (levantamientoId: string) => {
+  let registro = sinEnviarPorLevantamiento.get(levantamientoId);
+  if (!registro) sinEnviarPorLevantamiento.set(levantamientoId, (registro = new LoSinEnviar(levantamientoId)));
+  return registro;
+};
+const hayCorreccionAbierta = (pendientes: Iterable<Pendiente>) => [...pendientes].some((p) => p.que.tipo === "correccion");
+
+/**
+ * Un texto de la revisión que sigue ahí si su campo se desmonta y vuelve a montarse. El tercero vacía lo enviado al
+ * llegar, solo si el campo sigue diciendo eso: lo que se escribió mientras se enviaba se queda (iteración 42).
+ */
+function useSinEnviar<T>(que: Escrito, inicial: T): [T, (valor: T) => void, (enviado: T) => void] {
+  const pendientes = useContext(SinEnviar);
+  const clave = JSON.stringify(que);
+  const [valor, setValor] = useState<T>(() => (pendientes?.has(clave) ? (pendientes.get(clave)!.valor as T) : inicial));
+  const ultimo = useRef(valor);
+  const poner = (nuevo: T) => {
+    ultimo.current = nuevo;
+    setValor(nuevo);
+    pendientes?.set(clave, { que, valor: nuevo });
+  };
+  const vaciarSiSigue = (enviado: T) => {
+    if ((pendientes ? pendientes.get(clave)?.valor : ultimo.current) === enviado) poner(inicial);
+  };
+  return [valor, poner, vaciarSiSigue];
+}
+
 /** La última corrección de cada dato y su valor original, para mostrar antes y después en la fila. */
 function correccionesDe(historial: Historial | undefined) {
   const porDato = new Map<string, { original: unknown; autor: string; motivo: string | undefined }>();
@@ -92,15 +196,70 @@ function correccionesDe(historial: Historial | undefined) {
 
 /**
  * Detalle de un levantamiento (prototipos/oficina): se lee como un documento, con las secciones del recorrido de
- * campo; "Corregir" y "Comentar" aparecen al pasar por cada fila y el comentario se escribe debajo del dato. A la
- * derecha, un carril fijo con la revisión y su acción, los comentarios y el historial.
+ * campo; "Corregir" y "Comentar" aparecen al pasar por cada fila y el comentario se escribe debajo del dato. Desde la
+ * iteración 38 (prototipos/revision-al-lado) se arma como el informe: los datos a la izquierda y, a la derecha, un
+ * panel a todo el alto con el capítulo como saldrá en el informe, los comentarios y el historial. El estado y su acción
+ * van en la barra.
  */
-export function Detalle({ id }: { id: string }) {
-  const consulta = useQuery(consultas.levantamiento(id));
+type Pestana = "informe" | "comentarios" | "historial";
+
+/** Con la conversación a la vista se consulta cada 15 s (ADR-0040): lo que responde el técnico llega sin aviso. */
+const CONSULTA_CONVERSACION_MS = 15_000;
+
+/** Abre la pestaña «Comentarios» en una conversación (ADR-0040). */
+const VerConversacion = createContext<((comentarioId: string) => void) | null>(null);
+
+export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined }) {
   const sesion = useQuery(consultas.sesion());
   const historial = useQuery(consultas.historial(id));
   const [comentandoEn, setComentandoEn] = useState<string | null>(null);
-  const [pestana, setPestana] = useState<"comentarios" | "historial">("comentarios");
+  // La primera vez abre en «En el informe»: es lo que muestra cómo queda lo que se revisa.
+  const [pestana, setPestana] = usePreferencia<Pestana>("revision-pestana", "informe", unoDe("informe", "comentarios", "historial"));
+  const vista = useVistaPrevia("revision");
+  const [lateral, setLateral] = useState(false);
+  // La conversación a la vista: la pestaña «Comentarios» con el panel mostrado (o la hoja lateral abierta).
+  const conversando = pestana === "comentarios" && (vista.alLado ? !vista.oculta : lateral);
+  const consulta = useQuery({ ...consultas.levantamiento(id), refetchInterval: conversando ? CONSULTA_CONVERSACION_MS : false });
+  // El hilo al que lleva un aviso o «Ver la conversación»: la pestaña lo muestra y lo hace destellar.
+  const [enfocado, setEnfocado] = useState<{ id: string; vez: number } | null>(hilo ? { id: hilo, vez: 1 } : null);
+  const verConversacion = (comentarioId: string) => {
+    setPestana("comentarios");
+    if (vista.alLado) vista.setOculta(false);
+    else setLateral(true);
+    setEnfocado((e) => ({ id: comentarioId, vez: (e?.vez ?? 0) + 1 }));
+  };
+  useEffect(() => {
+    if (hilo) verConversacion(hilo);
+  }, [hilo]);
+  // Lo que está a la vista se da por leído; mientras se ve, sus avisos no se muestran.
+  const leer = useLeerConversacion(id);
+  const sinLeer = consulta.data?.conversacion?.sinLeer ?? false;
+  useEffect(() => {
+    if (conversando && sinLeer && !leer.isPending) leer.mutate();
+  }, [conversando, sinLeer]);
+  useEffect(() => {
+    if (!conversando) return;
+    avisarConversacionAbierta(id);
+    return () => avisarConversacionAbierta(null);
+  }, [conversando, id]);
+  // La bandeja marca la fila que se abrió al volver (prototipos/usabilidad-oficina).
+  const [, setUltima] = usePreferencia("bandeja-ultima", "", esTexto, "pestana");
+  useEffect(() => setUltima(id), [id, setUltima]);
+  const abierto = consulta.data;
+  useAnotarReciente(abierto ? recienteDeLevantamiento(abierto) : null);
+  // Esc vuelve a la bandeja, con la fila de este levantamiento marcada (iteración 37).
+  const volver = useNavigate();
+  const [enCurso, setEnCurso] = useState<EnCurso | null>(null);
+  const sinEnviar = sinEnviarDe(id);
+  // Con una corrección abierta, Esc no sale: se perdería lo escrito en ella. Recargar o cerrar la pestaña pregunta.
+  useTeclaSuelta("Escape", () => void (hayCorreccionAbierta(sinEnviar.values()) || volver({ to: "/" })));
+  useEffect(() => {
+    const alSalir = (e: BeforeUnloadEvent) => {
+      if (hayCorreccionAbierta(sinEnviar.values())) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", alSalir);
+    return () => window.removeEventListener("beforeunload", alSalir);
+  }, [sinEnviar]);
 
   if (consulta.isPending) {
     return (
@@ -110,7 +269,8 @@ export function Detalle({ id }: { id: string }) {
       </>
     );
   }
-  if (consulta.isError) {
+  // Solo si nunca cargó: un error al releer (foco, sondeo, sesión vencida) deja la revisión y lo escrito donde están.
+  if (consulta.data === undefined) {
     const noExiste = consulta.error instanceof ErrorApi && consulta.error.codigo === "no_encontrado";
     return (
       <>
@@ -132,158 +292,352 @@ export function Detalle({ id }: { id: string }) {
   const l = consulta.data;
   // Regla 4: solo quien tomó la revisión corrige, y solo mientras está en revisión.
   const mia = l.estado === "en_revision" && l.revisor?.id === sesion.data?.usuario.id;
-  const estado = ESTADOS[l.estado];
   const correcciones = correccionesDe(historial.data);
   const recargar = () => void consulta.refetch();
+  const titulo = l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : `Levantamiento de ${l.tecnico.nombre}`;
 
   // Las secciones del formato, con sus repeticiones juntas bajo el mismo título (prototipo: "Tableros").
   const todos = bloques(l.formatoDefinicion, l.repeticiones);
   const secciones = l.formatoDefinicion.secciones.map((s) => ({ seccion: s, bloques: todos.filter((b) => b.seccion.clave === s.clave) }));
-  const conCambios = (clave: string) => [...correcciones.keys()].some((k) => k.split("|")[0]!.startsWith(clave));
+  const corregidas = [...correcciones.keys()].map((k) => k.split("|")[0]!);
+  const conCambios = (clave: string) => seccionCorregida(corregidas, clave);
   const conFaltantes = (bs: typeof todos) => bs.some((b) => b.seccion.campos.some((c) => esNoObtenido(l.respuestas[b.clave]?.[c.clave])));
 
-  const irA = (seccion: string) => document.getElementById(`sec-${seccion}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const irA = (seccion: string) => document.getElementById(`sec-${seccion}`)?.scrollIntoView({ behavior: sinMovimiento() ? "auto" : "smooth", block: "start" });
   const nombreFormato = `${l.formatoDefinicion.nombre ?? l.formato} v${l.versionFormato}`;
+  // El capítulo se ve si el panel está a la vista en «En el informe»; si no, «Ver cómo queda» lo trae.
+  const capituloVisible = pestana === "informe" && vista.alLadoVisible;
+  const verCapitulo = () => {
+    setPestana("informe");
+    if (vista.alLado) vista.setOculta(false);
+    else setLateral(true);
+  };
+  const panel = (
+    <PanelDeRevision
+      l={l}
+      titulo={titulo}
+      pestana={pestana}
+      alCambiar={setPestana}
+      historial={historial}
+      correcciones={correcciones}
+      enCurso={enCurso}
+      organizacion={sesion.data?.organizacion.nombre ?? "[ORGANIZACIÓN]"}
+      usuarioId={sesion.data?.usuario.id}
+      enfocado={enfocado}
+    />
+  );
+  // Con el panel oculto, el punto de «sin leer» va en el botón que lo muestra.
+  const mostrarPanel = (
+    <span className="con-punto">
+      {vista.alLado ? <BotonMostrarVista vista={vista} etiqueta="Mostrar el panel" /> : <BotonIcono icono={PanelRight} etiqueta="Mostrar el panel" onClick={() => setLateral(true)} />}
+      {sinLeer && (vista.alLado ? vista.oculta : !lateral) && <i className="punto" aria-label="Respuesta sin leer" />}
+    </span>
+  );
 
   return (
-    <>
-      <EncabezadoPagina
-        migas={migas}
-        titulo={l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : `Levantamiento de ${l.tecnico.nombre}`}
-        estado={<Insignia tono={estado.tono}>{estado.texto}</Insignia>}
-        descripcion={
-          <>
-            <span>
-              {nombreFormato} de <b>{l.tecnico.nombre}</b>
-            </span>
-            <span>Recibido {aFechaCorta(l.recibidoEn)}</span>
-            {/* La hora del teléfono es declarativa (regla 16): la oficial es la del servidor. */}
-            <span>Enviado desde el teléfono {aFechaCorta(l.enviadoEnDispositivo)}</span>
-            {!l.visita && <span>Sin visita (capturado antes de las visitas)</span>}
-          </>
-        }
-      />
-      <div className="con-carril">
-        <div className="principal">
-          <nav className="nav-secciones" aria-label="Secciones del levantamiento">
-            {secciones.map(({ seccion, bloques: bs }) => (
-              <button key={seccion.clave} type="button" onClick={() => irA(seccion.clave)}>
-                {conCambios(seccion.clave) ? <i className="m-cambio" aria-label="con correcciones" /> : conFaltantes(bs) ? <i className="m-falta" aria-label="con datos no obtenidos" /> : null}
-                {seccion.titulo}
-              </button>
-            ))}
-          </nav>
-          <div className="doc">
-            {secciones.map(({ seccion, bloques: bs }, k) => (
-              <section key={seccion.clave} id={`sec-${seccion.clave}`} aria-labelledby={`titulo-${seccion.clave}`}>
-                <h2 id={`titulo-${seccion.clave}`}>
-                  <span className="n">{k + 1}</span>
+    <SinEnviar.Provider value={sinEnviar}>
+    <VerConversacion.Provider value={verConversacion}>
+    <CorreccionEnCurso.Provider value={{ avisar: setEnCurso, verCapitulo: capituloVisible ? null : verCapitulo }}>
+      <EditorConVista
+        vista={vista}
+        hoja={panel}
+        editor={
+          <div className="editor-doc revision-doc">
+            <EstadoDeRevision l={l} mia={mia} historial={historial.data} recargar={recargar} mostrarPanel={mostrarPanel} />
+            <EncabezadoPagina
+              migas={migas}
+              titulo={titulo}
+              transicion={nombreDeTransicion("lev", l.id)}
+              descripcion={
+                <>
+                  <span>
+                    {nombreFormato} de <b>{l.tecnico.nombre}</b>
+                  </span>
+                  <span>Recibido {aFechaCorta(l.recibidoEn)}</span>
+                  {/* La hora del teléfono es declarativa (regla 16): la oficial es la del servidor. */}
+                  <span>Enviado desde el teléfono {aFechaCorta(l.enviadoEnDispositivo)}</span>
+                  {!l.visita && <span>Sin visita (capturado antes de las visitas)</span>}
+                </>
+              }
+            />
+            <nav className="nav-secciones" aria-label="Secciones del levantamiento">
+              {secciones.map(({ seccion, bloques: bs }) => (
+                <button key={seccion.clave} type="button" onClick={() => irA(seccion.clave)}>
+                  {conCambios(seccion.clave) ? <i className="m-cambio" aria-label="con correcciones" /> : conFaltantes(bs) ? <i className="m-falta" aria-label="con datos no obtenidos" /> : null}
                   {seccion.titulo}
-                </h2>
-                {seccion.repetible && bs.length === 0 && <p className="ayuda">El técnico no agregó ninguno.</p>}
-                {bs.map((b) => (
-                  <div key={b.clave} role={b.repeticion ? "region" : undefined} aria-label={b.repeticion ? b.titulo : undefined}>
-                    {b.repeticion && <div className="rep-titulo">{b.repeticion.nombre}</div>}
-                    <div className="datos">
-                      {b.seccion.campos.map((campo) => (
-                        <FilaCampo
-                          key={campo.clave}
-                          l={l}
-                          seccion={b.clave}
-                          campo={campo}
-                          mia={mia}
-                          correccion={correcciones.get(claveDato(b.clave, campo.clave))}
-                          recargar={recargar}
-                          comentando={comentandoEn === claveDato(b.clave, campo.clave)}
-                          comentar={() => setComentandoEn(claveDato(b.clave, campo.clave))}
-                          dejarDeComentar={() => setComentandoEn(null)}
-                        />
-                      ))}
+                </button>
+              ))}
+            </nav>
+            <div className="doc">
+              {secciones.map(({ seccion, bloques: bs }, k) => (
+                <section key={seccion.clave} id={`sec-${seccion.clave}`} aria-labelledby={`titulo-${seccion.clave}`}>
+                  <h2 id={`titulo-${seccion.clave}`}>
+                    <span className="n">{k + 1}</span>
+                    {seccion.titulo}
+                  </h2>
+                  {seccion.repetible && bs.length === 0 && <p className="ayuda">El técnico no agregó ninguno.</p>}
+                  {bs.map((b) => (
+                    <div key={b.clave} role={b.repeticion ? "region" : undefined} aria-label={b.repeticion ? b.titulo : undefined}>
+                      {b.repeticion && <div className="rep-titulo">{b.repeticion.nombre}</div>}
+                      <div className="datos">
+                        {b.seccion.campos.map((campo) => (
+                          <FilaCampo
+                            key={campo.clave}
+                            l={l}
+                            seccion={b.clave}
+                            campo={campo}
+                            mia={mia}
+                            correccion={correcciones.get(claveDato(b.clave, campo.clave))}
+                            recargar={recargar}
+                            comentando={comentandoEn === claveDato(b.clave, campo.clave)}
+                            comentar={() => setComentandoEn(claveDato(b.clave, campo.clave))}
+                            dejarDeComentar={() => setComentandoEn(null)}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </section>
-            ))}
-          </div>
-        </div>
-        <aside className="carril" aria-label="Revisión y comentarios">
-          <PanelRevision l={l} mia={mia} correcciones={correcciones.size} recargar={recargar} />
-          <div className="grupo-c">
-            <div className="mini-tabs" role="tablist" aria-label="Comentarios e historial">
-              <button type="button" role="tab" aria-selected={pestana === "comentarios"} onClick={() => setPestana("comentarios")}>
-                Comentarios{l.comentarios.length > 0 ? ` · ${l.comentarios.length}` : ""}
-              </button>
-              <button type="button" role="tab" aria-selected={pestana === "historial"} onClick={() => setPestana("historial")}>
-                Historial
-              </button>
+                  ))}
+                </section>
+              ))}
             </div>
-            {pestana === "comentarios" ? <Comentarios l={l} /> : <HistorialDeCambios l={l} historial={historial} />}
           </div>
-        </aside>
-      </div>
-    </>
+        }
+      >
+        {lateral && !vista.alLado && (
+          <Dialogo forma="lateral" amplio titulo={titulo} subtitulo="El capítulo en el informe, los comentarios y el historial" alCerrar={() => setLateral(false)}>
+            {panel}
+          </Dialogo>
+        )}
+      </EditorConVista>
+    </CorreccionEnCurso.Provider>
+    </VerConversacion.Provider>
+    </SinEnviar.Provider>
   );
 }
 
-function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; mia: boolean; correcciones: number; recargar: () => void }) {
+/** El panel de la derecha (iteración 38): sus pestañas son la cabecera del lienzo, con «Ampliar» solo sobre la hoja. */
+function PanelDeRevision({
+  l,
+  titulo,
+  pestana,
+  alCambiar,
+  historial,
+  correcciones,
+  enCurso,
+  organizacion,
+  usuarioId,
+  enfocado,
+}: {
+  l: Levantamiento;
+  titulo: string;
+  pestana: Pestana;
+  alCambiar: (p: Pestana) => void;
+  historial: ReturnType<typeof useQuery<Historial>>;
+  correcciones: ReturnType<typeof correccionesDe>;
+  enCurso: EnCurso | null;
+  organizacion: string;
+  usuarioId: string | undefined;
+  enfocado: { id: string; vez: number } | null;
+}) {
+  const n = vigentes(l).length;
+  const boton = (valor: Pestana, texto: string, Icono: LucideIcon, cuantos = 0, punto = false) => (
+    <button type="button" role="tab" aria-selected={pestana === valor} onClick={() => alCambiar(valor)}>
+      <Icono aria-hidden size={14} strokeWidth={1.6} />
+      {texto}
+      {cuantos > 0 && <span className="num-p"> {cuantos}</span>}
+      {punto && <i className="punto" aria-label="Respuesta sin leer" />}
+    </button>
+  );
+  return (
+    <Lienzo
+      clase="panel-revision"
+      nota=""
+      cabecera={
+        <span className="pest-p" role="tablist" aria-label="El informe, los comentarios y el historial">
+          {boton("informe", "En el informe", FileText)}
+          {boton("comentarios", "Comentarios", MessageSquare, n, l.conversacion?.sinLeer ?? false)}
+          {boton("historial", "Historial", History)}
+        </span>
+      }
+      panel={{
+        etiqueta: "El informe, los comentarios y el historial",
+        ampliable: pestana === "informe",
+        cabeceraAmpliada: (
+          <span className="titulo-ampliado">
+            <b>{titulo}</b> · el capítulo como saldrá en el informe
+          </span>
+        ),
+        volver: "Volver a la revisión",
+      }}
+    >
+      {pestana === "informe" ? (
+        <CapituloEnVivo l={l} correcciones={correcciones} enCurso={enCurso} organizacion={organizacion} />
+      ) : pestana === "comentarios" ? (
+        <Comentarios l={l} usuarioId={usuarioId} enfocado={enfocado} />
+      ) : (
+        <HistorialDeCambios l={l} historial={historial} />
+      )}
+    </Lienzo>
+  );
+}
+
+/** "8:41 p. m." si fue hoy; si no, con el día. */
+const cuandoCorto = (iso: string) => (aDiaCorto(iso) === "hoy" ? aHora(Date.parse(iso)) : aFechaCorta(iso));
+
+type Consecuencia = { icono: LucideIcon; texto: string; detalle?: string };
+
+/**
+ * Lo escrito que «Marcar revisado» deja atrás, como consecuencias de su confirmación (DESIGN.md, tabla de confirmar o
+ * deshacer): lo que se pierde, y los comentarios sin enviar, que el técnico ya no podrá responder.
+ */
+function loEscritoAlMarcar(l: Levantamiento, pendientes: Iterable<Pendiente>): Consecuencia[] {
+  const { sePierden, sinRespuesta } = alMarcarRevisado(pendientes);
+  const dato = (seccion: string, campo: string) => `«${nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo)}»`;
+  const enConversacion = (id: string | undefined) => {
+    const raiz = l.comentarios.find((c) => c.id === id);
+    return raiz?.seccion && raiz.campo ? `sobre ${dato(raiz.seccion, raiz.campo)}` : "en la conversación general";
+  };
+  const describir = ({ que, valor }: Pendiente): string => {
+    switch (que.tipo) {
+      case "correccion":
+        return `la corrección sin guardar de ${dato(que.seccion, que.campo)}`;
+      case "respuesta":
+        return `la respuesta sin enviar ${enConversacion(que.comentarioId)}`;
+      case "edicion":
+        return `la edición sin guardar de su comentario ${enConversacion((valor as { id?: string }).id)}`;
+      case "comentario":
+        return `el comentario sin enviar sobre ${dato(que.seccion, que.campo)}`;
+      case "general":
+        return "el comentario general sin enviar";
+    }
+  };
+  const corrige = sePierden.some((e) => e.que.tipo === "correccion");
+  const conversa = sePierden.some((e) => e.que.tipo !== "correccion");
+  return [
+    ...(sePierden.length > 0
+      ? [
+          {
+            icono: TriangleAlert,
+            texto: `Se ${sePierden.length === 1 ? "pierde" : "pierden"} ${enLista(sePierden.map(describir))}`,
+            detalle: corrige && conversa ? "Ya no se corrige y las conversaciones se cierran" : corrige ? "Después ya no se corrige: guarde antes lo que necesite" : "Las conversaciones se cierran: envíe antes lo que necesite",
+          },
+        ]
+      : []),
+    ...(sinRespuesta.length > 0
+      ? [{ icono: MessageSquare, texto: `${l.tecnico.nombre} no podrá responder ${enLista(sinRespuesta.map(describir))}`, detalle: sinRespuesta.length === 1 ? "Envíelo antes si espera respuesta" : "Envíelos antes si espera respuesta" }]
+      : []),
+  ];
+}
+
+/**
+ * El estado de la revisión va en la barra, junto a su acción (iteración 38), como «Guardado» junto a «Publicar»:
+ * «● En revisión · la tomó usted» con «Marcar revisado». En la pantalla quedan «Siguiente», los errores y las
+ * confirmaciones.
+ */
+function EstadoDeRevision({ l, mia, historial, recargar, mostrarPanel }: { l: Levantamiento; mia: boolean; historial: Historial | undefined; recargar: () => void; mostrarPanel: ReactNode }) {
   const tomar = useTomar();
   const marcar = useMarcarRevisado(l.id);
+  const notificar = useNotificar();
+  const destino = useContext(DestinoAccionesBarra);
+  const sesion = useQuery(consultas.sesion());
   const [confirmando, setConfirmando] = useState<"revisado" | "reasignar" | null>(null);
+  const tomada = () => notificar({ texto: "Revisión tomada: ya puede corregir" });
   const error = tomar.error ?? marcar.error;
   const invalidos = marcar.error instanceof ErrorApi ? (marcar.error.problema.errores ?? []) : [];
   const etiqueta = (seccion: string, campo?: string) => (campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo) : rutaLegible(l.formatoDefinicion, l.repeticiones, seccion));
   const nombre = l.revisor?.nombre ?? "otra persona";
+  // Lo escrito y sin guardar ni enviar, al abrir la confirmación: sus consecuencias van primero.
+  const pendientes = useContext(SinEnviar);
+  const [loEscrito, setLoEscrito] = useState<Consecuencia[]>([]);
+  const [sePierdeAlgo, setSePierdeAlgo] = useState(false);
+  const confirmarRevisado = () => {
+    setLoEscrito(loEscritoAlMarcar(l, pendientes?.values() ?? []));
+    setSePierdeAlgo(alMarcarRevisado(pendientes?.values() ?? []).sePierden.length > 0);
+    setConfirmando("revisado");
+  };
+  // El error de tomar o marcar revisado habla de la versión en que se intentó: con otra (una corrección guardada), se va.
+  useEffect(() => {
+    tomar.reset();
+    marcar.reset();
+  }, [l.version]);
+  // Sin responsable: en revisión, pero quien la tenía fue desactivado. La toma quien llegue, sin quitársela a nadie.
+  const sinResponsable = l.estado === "en_revision" && !l.revisor;
+  // Revisar con el teclado (iteración 37): T toma y R marca revisado, con la confirmación de siempre.
+  useTeclaSuelta("t", () => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada }), (l.estado === "enviado" || sinResponsable) && !tomar.isPending);
+  useTeclaSuelta("r", confirmarRevisado, mia && l.estado === "en_revision");
 
-  let texto: ReactNode;
+  let linea: ReactNode;
   let accion: ReactNode = null;
-  if (l.estado === "enviado") {
-    texto = "Nadie ha tomado este levantamiento. Tómelo para corregirlo y marcarlo revisado.";
+  if (sinResponsable) {
+    const soltada = [...(historial?.eventos ?? [])].reverse().find((e) => e.tipo === "revision_liberada");
+    const quienLaTenia = (soltada?.anterior as { revisor?: string } | undefined)?.revisor;
+    linea = (
+      <>
+        <b>En revisión</b> · nadie la tiene{quienLaTenia ? ` desde que se desactivó a ${quienLaTenia}` : ""}
+      </>
+    );
     accion = (
-      <Boton variante="principal" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version })}>
+      <Boton variante="principal" title="Tomar para revisar · T" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada })}>
+        Tomar para revisar
+      </Boton>
+    );
+  } else if (l.estado === "enviado") {
+    linea = (
+      <>
+        <b>Esperando revisión</b> · nadie la ha tomado
+      </>
+    );
+    accion = (
+      <Boton variante="principal" title="Tomar para revisar · T" cargando={tomar.isPending} onClick={() => tomar.mutate({ id: l.id, version: l.version }, { onSuccess: tomada })}>
         Tomar para revisar
       </Boton>
     );
   } else if (l.estado === "revisado") {
-    texto = (
+    const revisadoEn = [...(historial?.eventos ?? [])].reverse().find((e) => e.tipo === "levantamiento_revisado")?.hora;
+    const quien = l.revisor?.id === sesion.data?.usuario.id ? "usted" : (l.revisor?.nombre ?? "[Sin responsable]");
+    linea = (
       <>
-        Revisado por <b>{l.revisor?.nombre ?? "[Sin responsable]"}</b>. {l.visita ? "Ya se puede incluir en el informe de su visita." : "No tiene visita, así que no entra en un informe."}
+        <b>Revisado</b> · por {quien}
+        {revisadoEn ? `, ${cuandoCorto(revisadoEn)}` : ""}
       </>
     );
-    accion = l.visita && <AbrirInforme visitaId={l.visita.id} />;
+    accion = l.visita ? <AbrirInforme visitaId={l.visita.id} /> : null;
   } else if (mia) {
-    texto = "Usted tiene la revisión. Corrija lo que haga falta y márquelo revisado cuando esté listo.";
+    linea = (
+      <>
+        <b>En revisión</b> · la tomó usted
+      </>
+    );
     accion = (
-      <Boton variante="principal" icono={Check} onClick={() => setConfirmando("revisado")}>
+      <Boton variante="principal" icono={Check} title="Marcar revisado · R" onClick={confirmarRevisado}>
         Marcar revisado
       </Boton>
     );
   } else {
-    texto = (
+    linea = (
       <>
-        La revisión la tiene <b>{nombre}</b>.
+        <b>En revisión</b> · la tiene {nombre}
       </>
     );
     accion = <Boton onClick={() => setConfirmando("reasignar")}>Tomar la revisión de {nombre}</Boton>;
   }
 
+  const barra = (
+    <div className="acciones" role="region" aria-label="Revisión">
+      {/* El estado cambia en su lugar al tomar o marcar revisado (iteración 27). */}
+      <span className={`estado-rev ${l.estado}`} role="status" style={{ viewTransitionName: nombreDeTransicion("estado", l.id) }}>
+        <i aria-hidden />
+        <span>{linea}</span>
+      </span>
+      {mostrarPanel}
+      {accion}
+    </div>
+  );
+
   return (
-    <section className="grupo-c" aria-label="Revisión">
-      <h2>Revisión</h2>
-      <p className="ayuda" style={{ fontSize: 14 }}>
-        {texto}
-      </p>
-      {accion && <div>{accion}</div>}
-      {correcciones > 0 && (
-        <span className="corregido" style={{ margin: 0 }}>
-          <Pencil aria-hidden size={13} />
-          {correcciones === 1 ? "1 dato corregido" : `${correcciones} datos corregidos`}
-        </span>
-      )}
-      {l.estado === "revisado" && (
-        <svg className="chulo" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--exito)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ "--largo": 24 } as CSSProperties} aria-hidden>
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
-      )}
+    <>
+      {destino ? createPortal(barra, destino) : barra}
+      {l.estado === "revisado" && <SiguienteEnSerie actual={l.id} />}
       {error && (
         <Aviso tono="error">
           <b>{mensajeDeError(error)}</b>
@@ -306,9 +660,31 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
         </Aviso>
       )}
       {confirmando === "revisado" && (
-        <Confirmacion nivel="consecuencia" titulo="¿Marcar revisado?" confirmar="Marcar revisado" mensajeDeError={mensajeDeError} alCerrar={() => setConfirmando(null)} accion={() => marcar.mutateAsync(l.version)}>
-          <p>Ya no se podrá corregir desde oficina, y queda listo para el informe de su visita.</p>
-        </Confirmacion>
+        <Confirmacion
+          // Con algo que se pierde, «R» y luego ↵ no lo aceptan sin leer: el foco empieza en Cancelar.
+          nivel={sePierdeAlgo ? "irreversible" : "consecuencia"}
+          titulo={`¿Marcar revisado el levantamiento de ${l.tecnico.nombre}?`}
+          confirmar="Marcar revisado"
+          consecuencias={[
+            ...loEscrito,
+            { icono: FileText, texto: l.visita ? "Queda listo para el informe de la visita" : "Queda listo para el informe", detalle: "Ya no se corrige desde la revisión" },
+            {
+              icono: Smartphone,
+              texto: `${l.tecnico.nombre} lo ve como revisado en su teléfono`,
+              ...(vigentes(l).length > 0 && { detalle: vigentes(l).length === 1 ? "Con el comentario de oficina" : `Con los ${vigentes(l).length} comentarios de oficina` }),
+            },
+            // ADR-0040: al marcar revisado, las conversaciones se cierran.
+            ...(vigentes(l).length > 0 ? [{ icono: MessageSquare, texto: "Las conversaciones se cierran", detalle: `${l.tecnico.nombre} las sigue viendo en su teléfono, pero ya no responde` }] : []),
+          ]}
+          mensajeDeError={mensajeDeError}
+          alCerrar={() => setConfirmando(null)}
+          accion={async () => {
+            await marcar.mutateAsync(l.version);
+            // Revisado: lo que quedaba sin enviar ya no se puede enviar (la confirmación lo dijo).
+            pendientes?.clear();
+          }}
+          alTerminar={() => notificar({ texto: "Marcado revisado" })}
+        />
       )}
       {confirmando === "reasignar" && (
         <Confirmacion
@@ -318,11 +694,39 @@ function PanelRevision({ l, mia, correcciones, recargar }: { l: Levantamiento; m
           mensajeDeError={mensajeDeError}
           alCerrar={() => setConfirmando(null)}
           accion={() => tomar.mutateAsync({ id: l.id, version: l.version, reasignar: true })}
+          alTerminar={tomada}
         >
           <p>Si tiene cambios sin guardar, los perderá. El cambio de responsable queda registrado.</p>
         </Confirmacion>
       )}
-    </section>
+    </>
+  );
+}
+
+/**
+ * Revisar en serie (iteración 27): al marcar revisado, el que más lleva esperando, con cuántos quedan, para seguir
+ * sin volver a la lista. Va encima de los datos (iteración 38), como fila y no como botón relleno: la acción principal
+ * es abrir el informe.
+ */
+function SiguienteEnSerie({ actual }: { actual: string }) {
+  const esperando = useBandeja("enviado");
+  const navegar = useNavigate();
+  const primera = esperando.data?.pages[0];
+  const siguiente = primera?.elementos.find((e) => e.id !== actual);
+  const quedan = primera ? primera.total - (primera.elementos.some((e) => e.id === actual) ? 1 : 0) : 0;
+  useTeclaSuelta("s", () => siguiente && void navegar({ to: "/levantamientos/$id", params: { id: siguiente.id } }), Boolean(siguiente));
+  if (esperando.isPending) return null;
+  if (!siguiente) return <span className="quedan">No queda nada esperando revisión.</span>;
+  return (
+    <button type="button" className="siguiente-fila" title="Siguiente · S" onClick={() => void navegar({ to: "/levantamientos/$id", params: { id: siguiente.id } })}>
+      <span>
+        <b>Siguiente: {siguiente.visita?.cliente ?? `Levantamiento de ${siguiente.tecnico.nombre}`}</b>
+        <small>
+          {siguiente.nombreFormato ?? siguiente.formato} de {siguiente.tecnico.nombre} · lleva {cuantoLleva(siguiente.recibidoEn).texto} · {quedan === 1 ? "queda 1" : `quedan ${quedan}`}
+        </small>
+      </span>
+      <ChevronRight aria-hidden size={16} />
+    </button>
   );
 }
 
@@ -332,7 +736,7 @@ function AbrirInforme({ visitaId }: { visitaId: string }) {
   return (
     <>
       <Boton variante="principal" icono={FileText} cargando={abrir.isPending} onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}>
-        Abrir el informe de esta visita
+        Abrir el informe
       </Boton>
       {abrir.isError && <Aviso tono="error">{mensajeDeError(abrir.error)}</Aviso>}
     </>
@@ -361,15 +765,34 @@ function FilaCampo({
   dejarDeComentar: () => void;
 }) {
   const [corrigiendo, setCorrigiendo] = useState(false);
+  // Cada corrección guardada hace destellar el dato otra vez (iteración 27).
+  const [corregido, setCorregido] = useState(0);
+  const notificar = useNotificar();
   const valor = l.respuestas[seccion]?.[campo.clave];
-  const hilo = l.comentarios.filter((c) => c.seccion === seccion && c.campo === campo.clave);
+  const hilo = vigentes(l).filter((c) => c.seccion === seccion && c.campo === campo.clave);
+  // Cuántos mensajes hay en sus conversaciones: el comentario y sus respuestas (ADR-0040).
+  const mensajes = hilo.reduce((n, c) => n + 1 + respuestasDe(l, c.id).length, 0);
+  const verConversacion = useContext(VerConversacion);
   const nombreEnFrase = campo.etiqueta.toLowerCase();
 
-  if (corrigiendo) {
+  // Marcado revisado, la corrección abierta ya no se puede guardar: se pierde, como dijo la confirmación.
+  if (corrigiendo && l.estado !== "revisado") {
     return (
       <div className="dato editando" id={idDato(seccion, campo.clave)}>
         <span className="nombre">{campo.etiqueta}</span>
-        <EditorCorreccion l={l} seccion={seccion} campo={campo} valor={valor} cerrar={() => setCorrigiendo(false)} recargar={recargar} />
+        <EditorCorreccion
+          l={l}
+          seccion={seccion}
+          campo={campo}
+          valor={valor}
+          cerrar={() => setCorrigiendo(false)}
+          alGuardar={() => {
+            setCorrigiendo(false);
+            setCorregido((n) => n + 1);
+            notificar({ texto: `Corrección guardada: ${campo.etiqueta}` });
+          }}
+          recargar={recargar}
+        />
       </div>
     );
   }
@@ -378,7 +801,7 @@ function FilaCampo({
   const corregible = mia && campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "firma";
 
   return (
-    <div className="dato" id={idDato(seccion, campo.clave)}>
+    <div key={corregido} className={`dato ${corregido > 0 ? "recien" : ""}`} id={idDato(seccion, campo.clave)}>
       <span className="nombre">
         {campo.etiqueta}
         {hilo.length > 0 && (
@@ -386,7 +809,7 @@ function FilaCampo({
             <br />
             <span className="n-com">
               <MessageSquare aria-hidden size={12} />
-              {hilo.length}
+              {mensajes}
             </span>
           </>
         )}
@@ -406,14 +829,29 @@ function FilaCampo({
       </div>
       {hilo.length > 0 && (
         <div className="hilo">
-          {hilo.map((c) => (
-            <div key={c.id} className="burbuja">
-              <small>
-                {c.autor.nombre} · {aFechaCorta(c.creadoEn)} · para el técnico
-              </small>
-              <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
-            </div>
-          ))}
+          {/* Bajo el dato, el comentario, la última respuesta y el camino a la conversación (ADR-0040). */}
+          {hilo.map((c) => {
+            const respuestas = respuestasDe(l, c.id);
+            const delTecnico = respuestas.filter((r) => r.de === "tecnico").at(-1);
+            const nueva = delTecnico && l.conversacion?.sinLeer && (!l.leidoHasta || delTecnico.creadoEn > l.leidoHasta);
+            return (
+              <button key={c.id} type="button" className="burbuja hilo-res" onClick={() => verConversacion?.(c.id)}>
+                <small>
+                  {c.autor.nombre} · {aFechaCorta(c.creadoEn)} · para el técnico{c.editadoEn ? " · Editado" : ""}
+                </small>
+                <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
+                {delTecnico && (
+                  <span className="resp-r">
+                    {nueva && <i className="punto" aria-label="Sin leer" />}
+                    <b>{delTecnico.autor.nombre}:</b> {delTecnico.texto}
+                  </span>
+                )}
+                <span className="ver-r">
+                  {respuestas.length > 0 ? `${respuestas.length === 1 ? "1 respuesta" : `${respuestas.length} respuestas`} · ` : ""}Ver la conversación
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
       {comentando && <ComentarAqui l={l} seccion={seccion} campo={campo.clave} nombre={nombreEnFrase} cerrar={dejarDeComentar} />}
@@ -497,21 +935,64 @@ function ValorDelCampo({
 }
 
 /** Corrección de un campo, con las mismas reglas del envío (QA-8: queda con valor anterior y nuevo). */
-function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: Levantamiento; seccion: string; campo: DefinicionCampo; valor: Valor | undefined; cerrar: () => void; recargar: () => void }) {
+function EditorCorreccion({
+  l,
+  seccion,
+  campo,
+  valor,
+  cerrar,
+  alGuardar,
+  recargar,
+}: {
+  l: Levantamiento;
+  seccion: string;
+  campo: DefinicionCampo;
+  valor: Valor | undefined;
+  cerrar: () => void;
+  alGuardar: () => void;
+  recargar: () => void;
+}) {
   const corregir = useCorregir(l.id);
   const noObtenidoAntes = esNoObtenido(valor);
   const [nuevo, setNuevo] = useState<Valor | undefined>(valor);
   const [valido, setValido] = useState(true);
+  // Lo que muestra el control y si se puede leer: marcar «No se pudo obtener» no lo borra, y desmarcarlo vuelve a él.
+  const delControl = useRef<{ valor: Valor | undefined; valido: boolean }>({ valor: noObtenidoAntes ? undefined : valor, valido: true });
+  const desdeElControl = (escrito: Valor | undefined, esValido = true) => {
+    delControl.current = { valor: escrito, valido: esValido };
+    setNuevo(escrito);
+    setValido(esValido);
+  };
   const [motivo, setMotivo] = useState("");
+  const [faltaMotivo, setFaltaMotivo] = useState(false);
+  const idMotivo = `motivo-${seccion}-${campo.clave}`;
   const errorDelCampo = corregir.error instanceof ErrorApi ? corregir.error.problema.errores?.find((e) => e.seccion === seccion && e.campo === campo.clave) : undefined;
   const mensajeCampo = errorDelCampo ? mensajeDeValidacion[errorDelCampo.codigo as keyof typeof mensajeDeValidacion] : undefined;
   const marcado = esNoObtenido(nuevo);
+  const enCurso = useContext(CorreccionEnCurso);
+  useEffect(() => enCurso?.avisar({ seccion, campo: campo.clave, valor: nuevo }), [nuevo]);
+  useEffect(() => () => enCurso?.avisar(null), []);
+  // Escrita y sin guardar: «Marcar revisado» dice que se pierde.
+  const pendientes = useContext(SinEnviar);
+  const escrita = motivo.trim() !== "" || JSON.stringify(nuevo ?? null) !== JSON.stringify(valor ?? null);
+  useEffect(() => {
+    const que: Escrito = { tipo: "correccion", seccion, campo: campo.clave };
+    const clave = JSON.stringify(que);
+    if (escrita) pendientes?.set(clave, { que, valor: true });
+    return () => void pendientes?.delete(clave);
+  }, [escrita]);
 
   async function guardar(evento: FormEvent) {
     evento.preventDefault();
+    // El motivo queda en el historial junto al valor anterior (regla 8): sin él, el registro no dice por qué.
+    if (!motivo.trim()) {
+      setFaltaMotivo(true);
+      document.getElementById(idMotivo)?.focus();
+      return;
+    }
     try {
-      await corregir.mutateAsync({ version: l.version, correcciones: [{ seccion, campo: campo.clave, valor: nuevo ?? null }], ...(motivo.trim() ? { motivo: motivo.trim() } : {}) });
-      cerrar();
+      await corregir.mutateAsync({ version: l.version, correcciones: [{ seccion, campo: campo.clave, valor: nuevo ?? null }], motivo: motivo.trim() });
+      alGuardar();
     } catch {
       // El error queda a la vista en el formulario.
     }
@@ -526,7 +1007,7 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
             valorInicial={typeof valor === "string" ? valor : ""}
             deshabilitado={marcado}
             error={marcado ? undefined : mensajeCampo}
-            onCambio={(texto) => setNuevo(texto === "" ? undefined : texto)}
+            onCambio={(texto) => desdeElControl(texto === "" ? undefined : texto)}
           />
         );
       case "medida": {
@@ -541,13 +1022,12 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
             error={marcado ? undefined : mensajeCampo}
             onCambio={(texto, unidad) => {
               if (texto.trim() === "") {
-                setNuevo(undefined);
-                setValido(true);
+                desdeElControl(undefined);
                 return true;
               }
+              // Una medida que no se puede leer deja el último valor bueno, pero no se guarda.
               const m = crearMedida(texto, unidad, campo.unidades);
-              if (m) setNuevo(m);
-              setValido(m !== null);
+              desdeElControl(m ?? delControl.current.valor, m !== null);
               return m !== null;
             }}
           />
@@ -555,7 +1035,7 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
       }
       case "cantidades": {
         const lineas = esCantidades(valor) ? valor : [];
-        return <CorregirCantidades etiqueta={`Líneas corregidas de ${campo.etiqueta.toLowerCase()}`} inicial={lineas} unidades={campo.unidades} deshabilitado={marcado} error={marcado ? undefined : mensajeCampo} onCambio={setNuevo} />;
+        return <CorregirCantidades etiqueta={`Líneas corregidas de ${campo.etiqueta.toLowerCase()}`} inicial={lineas} unidades={campo.unidades} deshabilitado={marcado} error={marcado ? undefined : mensajeCampo} onCambio={(v) => desdeElControl(v)} />;
       }
       default:
         return null;
@@ -571,15 +1051,33 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
           marcado={marcado}
           motivoInicial={noObtenidoAntes ? valor.motivo : ""}
           error={marcado ? mensajeCampo : undefined}
-          onMarcar={(m, motivoNoObtenido) => setNuevo(m ? { noObtenido: true, motivo: motivoNoObtenido } : undefined)}
+          // Marcar o desmarcar reinicia la validez: marcado no importa lo escrito; desmarcado, vale lo que muestra el control.
+          onMarcar={(m, motivoNoObtenido) => {
+            setNuevo(m ? { noObtenido: true, motivo: motivoNoObtenido } : delControl.current.valor);
+            setValido(m || delControl.current.valido);
+          }}
           onMotivo={(motivoNoObtenido) => setNuevo({ noObtenido: true, motivo: motivoNoObtenido })}
         />
       )}
       <div className="campo">
-        <label htmlFor={`motivo-${seccion}-${campo.clave}`}>
-          Motivo de la corrección <small className="sec" style={{ fontWeight: 700, fontSize: 12 }}>opcional</small>
+        <label htmlFor={idMotivo}>
+          Motivo de la corrección <small className="sec">obligatorio · queda en el historial</small>
         </label>
-        <input id={`motivo-${seccion}-${campo.clave}`} className="control" placeholder="Queda en el historial junto al cambio" maxLength={500} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+        <input
+          id={idMotivo}
+          className={`control ${faltaMotivo && !motivo.trim() ? "error" : ""}`}
+          placeholder="Por ejemplo: la placa dice 25 kVA"
+          maxLength={500}
+          value={motivo}
+          aria-invalid={(faltaMotivo && !motivo.trim()) || undefined}
+          aria-describedby={faltaMotivo && !motivo.trim() ? `${idMotivo}-error` : undefined}
+          onChange={(e) => setMotivo(e.target.value)}
+        />
+        {faltaMotivo && !motivo.trim() && (
+          <p id={`${idMotivo}-error`} className="msj-error">
+            Escriba el motivo: queda en el historial junto al valor anterior.
+          </p>
+        )}
       </div>
       {corregir.isError && !errorDelCampo && (
         <Aviso tono="error">
@@ -593,6 +1091,14 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
           )}
         </Aviso>
       )}
+      {enCurso &&
+        (enCurso.verCapitulo ? (
+          <Boton variante="fantasma" tamano="pequeno" icono={FileText} className="ir-capitulo" onClick={enCurso.verCapitulo}>
+            Ver cómo queda en el informe
+          </Boton>
+        ) : (
+          <p className="ayuda">El capítulo de la derecha ya muestra el valor nuevo, resaltado.</p>
+        ))}
       <div className="fila-botones">
         <Boton onClick={cerrar} disabled={corregir.isPending}>
           Cancelar
@@ -605,11 +1111,16 @@ function EditorCorreccion({ l, seccion, campo, valor, cerrar, recargar }: { l: L
   );
 }
 
-/** El comentario sobre un dato se escribe debajo de su fila: no hay que subir al carril y volver a bajar. */
+/** El comentario sobre un dato se escribe debajo de su fila: no hay que ir al panel y volver. */
 function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento; seccion: string; campo: string; nombre: string; cerrar: () => void }) {
   const comentar = useComentar(l.id);
-  const [texto, setTexto] = useState("");
+  // Abrir el globo de otra fila no lo borra: al volver a este, sigue lo escrito.
+  const [texto, setTexto] = useSinEnviar({ tipo: "comentario", seccion, campo }, "");
   const [vacio, setVacio] = useState(false);
+  const descartar = () => {
+    setTexto("");
+    cerrar();
+  };
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -619,7 +1130,7 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
     }
     try {
       await comentar.mutateAsync({ texto: texto.trim(), seccion, campo });
-      cerrar();
+      descartar();
     } catch {
       // El error queda a la vista.
     }
@@ -635,7 +1146,7 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
         // eslint-disable-next-line jsx-a11y/no-autofocus -- se abre con el globo de la fila: el foco va donde se escribe
         autoFocus
         className={`control ${vacio ? "error" : ""}`}
-        maxLength={2000}
+        maxLength={1000}
         placeholder={`Qué debe revisar el técnico sobre ${nombre}`}
         style={{ minHeight: 70 }}
         value={texto}
@@ -646,7 +1157,7 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
       />
       {comentar.isError && <Aviso tono="error">{mensajeDeError(comentar.error)}</Aviso>}
       <div className="fila-botones">
-        <Boton tamano="pequeno" onClick={cerrar}>
+        <Boton tamano="pequeno" onClick={descartar}>
           Cancelar
         </Boton>
         <Boton type="submit" tamano="pequeno" variante="principal" icono={Send} cargando={comentar.isPending}>
@@ -657,63 +1168,225 @@ function ComentarAqui({ l, seccion, campo, nombre, cerrar }: { l: Levantamiento;
   );
 }
 
-/** Todos los comentarios; cada uno lleva a su fila. El campo de aquí es para lo general. */
-function Comentarios({ l }: { l: Levantamiento }) {
+/** Las conversaciones que ve el técnico: los comentarios de oficina que no están retirados (ADR-0035, ADR-0040). */
+const vigentes = (l: Levantamiento) => l.comentarios.filter((c) => !c.retirado && !c.enRespuestaA);
+/** Las respuestas de una conversación, en orden. */
+const respuestasDe = (l: Levantamiento, comentarioId: string) => l.comentarios.filter((c) => c.enRespuestaA === comentarioId);
+
+type ComentarioDeOficina = Levantamiento["comentarios"][number];
+
+/** Mensajes seguidos de la misma persona, a menos de 10 minutos: un solo nombre y una sola hora, como en Slack. */
+const MISMO_GRUPO_MS = 10 * 60_000;
+
+/**
+ * Las conversaciones con el técnico (ADR-0040, prototipos/hilos, «Oficina · revisión»): una por comentario de oficina,
+ * separadas por una línea fina, como un hilo de Slack: el dato del que habla, el comentario, «N respuestas», lo nuevo
+ * bajo la línea «Nuevo» y el campo para responder. Se cierran al marcar revisado. Su autor edita o borra el comentario
+ * que abre la conversación hasta que está Revisado (ADR-0035): borrar no pide confirmar, queda «Comentario retirado»
+ * con «Deshacer». El campo de abajo es para un comentario general.
+ */
+function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: string | undefined; enfocado: { id: string; vez: number } | null }) {
   const comentar = useComentar(l.id);
-  const [texto, setTexto] = useState("");
-  const etiqueta = (seccion?: string, campo?: string) => (seccion && campo ? nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo, true) : undefined);
+  const corregir = useCorregirComentario(l.id);
+  const notificar = useNotificar();
+  // Lo que se escribe aquí sigue ahí al cambiar de pestaña, ocultar el panel o cerrar la hoja lateral.
+  const [editando, setEditando] = useSinEnviar<{ id: string; texto: string } | null>({ tipo: "edicion" }, null);
+  // Lo leído al abrir la pestaña: la línea «Nuevo» se queda mientras se ve.
+  const [leidoAlAbrir] = useState(l.leidoHasta);
+  const revisado = l.estado === "revisado";
+  const corregible = (c: ComentarioDeOficina) => c.autor.id === usuarioId && !revisado;
+  // «Deshacer» (en la notificación o en el comentario) restaura una sola vez: si ya no está retirado, o ya se está
+  // restaurando, no hace nada. Si no, la segunda vez el servidor respondería «no estaba retirado» como un error.
+  const ultimo = useRef(l);
+  ultimo.current = l;
+  const restaurando = useRef(new Set<string>());
+  const restaurar = (comentarioId: string) => {
+    if (restaurando.current.has(comentarioId) || !ultimo.current.comentarios.find((c) => c.id === comentarioId)?.retirado) return;
+    restaurando.current.add(comentarioId);
+    void corregir
+      .mutateAsync({ comentarioId, accion: { tipo: "restaurar" } })
+      .catch(() => undefined)
+      .finally(() => restaurando.current.delete(comentarioId));
+  };
+  const retirar = (comentarioId: string) =>
+    corregir.mutate(
+      { comentarioId, accion: { tipo: "retirar" } },
+      { onSuccess: () => notificar({ texto: "Comentario retirado", accion: { texto: "Deshacer", alHacer: () => restaurar(comentarioId) } }) },
+    );
+
+  async function guardarEdicion(evento: FormEvent) {
+    evento.preventDefault();
+    if (!editando?.texto.trim()) return;
+    try {
+      await corregir.mutateAsync({ comentarioId: editando.id, accion: { tipo: "editar", texto: editando.texto.trim() } });
+      setEditando(null);
+    } catch {
+      // El error queda a la vista.
+    }
+  }
+  // Solo lo recién llegado entra animado; lo demás no se anima otra vez al volver a la pestaña.
+  const esNuevo = useLoNuevo(l.comentarios.map((c) => c.id));
+  const [texto, setTexto, vaciarSiSigue] = useSinEnviar({ tipo: "general" }, "");
+  const raices = l.comentarios.filter((c) => !c.enRespuestaA);
 
   function irALaFila(seccion: string, campo: string) {
     const fila = document.getElementById(idDato(seccion, campo));
-    fila?.scrollIntoView({ behavior: "smooth", block: "center" });
+    fila?.scrollIntoView({ behavior: sinMovimiento() ? "auto" : "smooth", block: "center" });
     fila?.classList.remove("recien");
     void fila?.offsetWidth;
     fila?.classList.add("recien");
   }
 
+  // El hilo al que lleva un aviso o «Ver la conversación»: a la vista y destellando.
+  useEffect(() => {
+    if (!enfocado) return;
+    const hilo = document.getElementById(`hilo-${enfocado.id}`);
+    hilo?.scrollIntoView({ behavior: sinMovimiento() ? "auto" : "smooth", block: "start" });
+    hilo?.classList.remove("destella");
+    void hilo?.offsetWidth;
+    hilo?.classList.add("destella");
+  }, [enfocado?.vez]);
+
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    if (!texto.trim()) return;
+    const enviado = texto;
+    if (!enviado.trim()) return;
     try {
-      await comentar.mutateAsync({ texto: texto.trim() });
-      setTexto("");
+      await comentar.mutateAsync({ texto: enviado.trim() });
+      vaciarSiSigue(enviado);
     } catch {
       // El error queda a la vista.
     }
   }
 
-  return (
-    <section aria-label="Comentarios al técnico" className="col" style={{ gap: 10 }}>
-      <div>
-        {l.comentarios.length === 0 ? (
-          <p className="ayuda">Sin comentarios. El técnico los ve en su teléfono en la siguiente sincronización.</p>
-        ) : (
-          l.comentarios.map((c) => (
-            <div key={c.id} className="nota-c">
-              <small>
-                {c.autor.nombre} · {aFechaCorta(c.creadoEn)}
-                {c.seccion && c.campo && (
-                  <>
-                    {" · Sobre "}
-                    <button type="button" className="ir-dato" onClick={() => irALaFila(c.seccion!, c.campo!)}>
-                      {etiqueta(c.seccion, c.campo) ?? c.campo}
-                    </button>
-                  </>
-                )}
-              </small>
-              <span style={{ whiteSpace: "pre-line" }}>{c.texto}</span>
-            </div>
-          ))
-        )}
+  /** Avatar, nombre y hora una vez por grupo; los textos, planos y sin globos. */
+  function mensajes(lista: ComentarioDeOficina[]) {
+    const grupos: { autor: ComentarioDeOficina["autor"]; de: ComentarioDeOficina["de"]; en: string; textos: ComentarioDeOficina[] }[] = [];
+    for (const c of lista) {
+      const ultimo = grupos.at(-1);
+      if (ultimo && ultimo.autor.id === c.autor.id && Date.parse(c.creadoEn) - Date.parse(ultimo.textos.at(-1)!.creadoEn) < MISMO_GRUPO_MS) ultimo.textos.push(c);
+      else grupos.push({ autor: c.autor, de: c.de, en: c.creadoEn, textos: [c] });
+    }
+    return grupos.map((g) => (
+      <div key={g.textos[0]!.id} className={`grupo-m ${g.textos.some((c) => esNuevo(c.id)) ? "llega" : ""}`}>
+        <span className={`av-m ${g.de === "tecnico" ? "tec" : ""}`} aria-hidden>
+          {iniciales(g.autor.nombre)}
+        </span>
+        <div>
+          <div className="cab-m">
+            <b>{g.autor.id === usuarioId ? "Usted" : g.autor.nombre}</b>
+            <span>{cuandoCorto(g.en)}</span>
+          </div>
+          {g.textos.map((c) => (
+            <p key={c.id} className="txt-m">
+              {c.texto}
+              {/* Su autor lo corrigió (ADR-0035): se dice cuándo. */}
+              {c.editadoEn && <small className="editado-m">{`Editado ${aFechaCorta(c.editadoEn)}`}</small>}
+            </p>
+          ))}
+        </div>
       </div>
-      <form className="col" style={{ gap: 8 }} onSubmit={(e) => void enviar(e)} noValidate>
+    ));
+  }
+
+  function conversacion(raiz: ComentarioDeOficina) {
+    const respuestas = respuestasDe(l, raiz.id);
+    const definicion = raiz.seccion && raiz.campo ? campoDeRuta(l.formatoDefinicion, l.repeticiones, raiz.seccion, raiz.campo) : undefined;
+    const valor = definicion && raiz.seccion ? (l.respuestas[raiz.seccion]?.[definicion.clave] as Valor | undefined) : undefined;
+    const vacio = valor === undefined || valor === null || valor === "";
+    // Lo nuevo: lo que respondió el técnico después de lo que se leyó al abrir.
+    const primeraNueva = respuestas.findIndex((r) => r.de === "tecnico" && (!leidoAlAbrir || r.creadoEn > leidoAlAbrir));
+    const antes = primeraNueva < 0 ? respuestas : respuestas.slice(0, primeraNueva);
+    const nuevas = primeraNueva < 0 ? [] : respuestas.slice(primeraNueva);
+    return (
+      <section key={raiz.id} id={`hilo-${raiz.id}`} className="hilo-o" aria-label={definicion ? `Conversación sobre ${definicion.etiqueta}` : "Conversación general"}>
+        {definicion && raiz.seccion && raiz.campo && (
+          <button type="button" className="dato-o" title="Ir al dato" onClick={() => irALaFila(raiz.seccion!, raiz.campo!)}>
+            <small>{rutaLegible(l.formatoDefinicion, l.repeticiones, raiz.seccion)}</small>
+            <span className="fila-d">
+              <b>{definicion.etiqueta}</b>
+              {vacio ? <span className="sin">Sin dato</span> : <span>{describirValor(definicion, valor)}</span>}
+            </span>
+          </button>
+        )}
+        {raiz.retirado ? (
+          <div className="nota-c retirado">
+            <span>{`Comentario retirado por ${raiz.retirado.por.nombre} · ${aFechaCorta(raiz.retirado.en)}`}</span>
+            {corregible(raiz) && (
+              <button type="button" className="accion-envio" onClick={() => restaurar(raiz.id)}>
+                Deshacer
+              </button>
+            )}
+          </div>
+        ) : editando?.id === raiz.id ? (
+          <form className="nota-c" onSubmit={(e) => void guardarEdicion(e)} noValidate>
+            <label className="sr-only" htmlFor={`editar-${raiz.id}`}>
+              Comentario
+            </label>
+            <textarea
+              id={`editar-${raiz.id}`}
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- se abre con "Editar": el foco va donde se escribe
+              autoFocus
+              className="control"
+              maxLength={1000}
+              style={{ minHeight: 64 }}
+              value={editando.texto}
+              onChange={(e) => setEditando({ id: raiz.id, texto: e.target.value })}
+            />
+            <div className="fila-flex" style={{ justifyContent: "flex-end", gap: 6 }}>
+              <Boton tamano="pequeno" onClick={() => setEditando(null)}>
+                Cancelar
+              </Boton>
+              <Boton type="submit" tamano="pequeno" variante="principal" cargando={corregir.isPending} disabled={!editando.texto.trim() || editando.texto.trim() === raiz.texto}>
+                Guardar
+              </Boton>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="raiz-m">
+              {mensajes([raiz])}
+              {corregible(raiz) && (
+                <MenuAcciones
+                  etiqueta="Más acciones para el comentario"
+                  opciones={[
+                    { texto: "Editar", alElegir: () => setEditando({ id: raiz.id, texto: raiz.texto }) },
+                    { texto: "Borrar", peligro: true, alElegir: () => retirar(raiz.id) },
+                  ]}
+                />
+              )}
+            </div>
+            {respuestas.length > 0 && <div className="n-resp">{respuestas.length === 1 ? "1 respuesta" : `${respuestas.length} respuestas`}</div>}
+            {mensajes(antes)}
+            {nuevas.length > 0 && <div className="nuevo-o">Nuevo</div>}
+            {mensajes(nuevas)}
+            {revisado ? (
+              <p className="cerrado-h">
+                <LockKeyhole aria-hidden size={14} />
+                {`Cerrada al marcar revisado. ${l.tecnico.nombre} la sigue viendo.`}
+              </p>
+            ) : (
+              <ResponderEnHilo l={l} raiz={raiz} sobre={definicion?.etiqueta} />
+            )}
+          </>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <section aria-label="Comentarios al técnico" className="hilos">
+      <p className="nota-panel">{revisado ? "Cerradas al marcar revisado." : `Lo que escriba aquí le llega a ${l.tecnico.nombre} en su teléfono.`}</p>
+      {raices.length === 0 ? <p className="ayuda">Sin comentarios. Para uno sobre un dato, use el globo de su fila.</p> : raices.map(conversacion)}
+      {corregir.isError && <Aviso tono="error">{mensajeDeError(corregir.error)}</Aviso>}
+      <form className="col general-o" style={{ gap: 8 }} onSubmit={(e) => void enviar(e)} noValidate>
         <label className="sr-only" htmlFor="comentario-general">
           Comentario general
         </label>
         <textarea
           id="comentario-general"
           className="control"
-          maxLength={2000}
+          maxLength={1000}
           placeholder="Comentario general. Para uno sobre un dato, use el globo de su fila"
           style={{ minHeight: 76 }}
           value={texto}
@@ -727,6 +1400,52 @@ function Comentarios({ l }: { l: Levantamiento }) {
         </div>
       </form>
     </section>
+  );
+}
+
+/** Responder en una conversación (ADR-0040): ↵ envía y ⇧↵ hace otra línea. */
+function ResponderEnHilo({ l, raiz, sobre }: { l: Levantamiento; raiz: ComentarioDeOficina; sobre: string | undefined }) {
+  const comentar = useComentar(l.id);
+  // La respuesta a medias sigue ahí al cambiar de pestaña, ocultar el panel o cerrar la hoja lateral.
+  const [texto, setTexto, vaciarSiSigue] = useSinEnviar({ tipo: "respuesta", comentarioId: raiz.id }, "");
+  const vacio = !texto.trim();
+  async function enviar() {
+    if (vacio || comentar.isPending) return;
+    const enviado = texto;
+    try {
+      await comentar.mutateAsync({ texto: enviado.trim(), enRespuestaA: raiz.id });
+      vaciarSiSigue(enviado);
+    } catch {
+      // El error queda a la vista.
+    }
+  }
+  return (
+    <form
+      className="redactar-o"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void enviar();
+      }}
+    >
+      <textarea
+        rows={1}
+        maxLength={1000}
+        placeholder="Responder…"
+        aria-label={sobre ? `Responder a ${l.tecnico.nombre} sobre ${sobre}` : `Responder a ${l.tecnico.nombre}`}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            void enviar();
+          }
+        }}
+      />
+      <button type="submit" className="enviar-o" aria-label="Responder" title="Enviar · ↵ (⇧ ↵ para otra línea)" aria-disabled={vacio || comentar.isPending}>
+        <ArrowUp aria-hidden size={15} strokeWidth={2.2} />
+      </button>
+      {comentar.isError && <Aviso tono="error">{mensajeDeError(comentar.error)}</Aviso>}
+    </form>
   );
 }
 
@@ -771,7 +1490,7 @@ function CorregirCantidades({
           })),
     );
   }
-  return <EditorCantidades etiqueta={etiqueta} lineas={lineas} unidades={unidades} onCambio={cambiar} nuevoId={nuevoIdDeLinea} error={error} />;
+  return <EditorCantidades etiqueta={etiqueta} lineas={lineas} unidades={unidades} onCambio={cambiar} nuevoId={nuevoIdDeLinea} error={error} disposicion="tabla" />;
 }
 
 /**
@@ -868,9 +1587,14 @@ const QUE_PASO: Record<string, { texto: string; icono: LucideIcon }> = {
   levantamiento_enviado: { texto: "Envió el levantamiento", icono: Send },
   revision_tomada: { texto: "Tomó la revisión", icono: UserRound },
   revision_reasignada: { texto: "Tomó la revisión", icono: UserRound },
+  revision_liberada: { texto: "Dejó la revisión sin tomar", icono: UserRound },
   campo_corregido: { texto: "Corrigió", icono: Pencil },
   levantamiento_revisado: { texto: "Marcó el levantamiento revisado", icono: Check },
   comentario_agregado: { texto: "Comentó", icono: MessageSquare },
+  comentario_respondido: { texto: "Respondió", icono: MessageSquare },
+  comentario_editado: { texto: "Editó su comentario", icono: Pencil },
+  comentario_retirado: { texto: "Retiró su comentario", icono: MessageSquare },
+  comentario_restaurado: { texto: "Restauró su comentario", icono: MessageSquare },
   linea_vinculada: { texto: "Vinculó al catálogo", icono: Link2 },
 };
 
@@ -901,12 +1625,14 @@ function HistorialDeCambios({ l, historial }: { l: Levantamiento; historial: Ret
       );
     }
     if (e.tipo === "revision_reasignada" && revisorAnterior) return ` que tenía ${revisorAnterior}`;
+    if (e.tipo === "revision_liberada" && revisorAnterior) return ` al desactivar a ${revisorAnterior}`;
     if (e.tipo === "linea_vinculada") {
       const antes = e.anterior as { linea?: string; item?: string | null } | undefined;
       const despues = e.nuevo as { linea?: string; item?: string | null } | undefined;
       return ` “${descripcionDeLinea(e.seccion, e.campo, despues?.linea)}”: ${codigoDe(antes?.item)} → ${codigoDe(despues?.item)}`;
     }
-    if (e.tipo === "comentario_agregado") return ` ${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
+    if (e.tipo === "comentario_editado") return `: “${(e.anterior as { texto?: string } | undefined)?.texto ?? ""}” → “${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
+    if (e.tipo === "comentario_agregado" || e.tipo === "comentario_respondido") return ` ${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
     return null;
   }
 
@@ -1047,4 +1773,72 @@ function Fotos({ etiqueta, huellas, puestos }: { etiqueta: string; huellas: read
       {viendo !== null && <VisorFotos etiqueta={etiqueta} fotos={fotos} inicial={viendo} alCerrar={() => setViendo(null)} />}
     </>
   );
+}
+
+/**
+ * El capítulo del levantamiento como saldrá en el informe (ADR-0031), con la plantilla del PDF: lo corregido
+ * resaltado con el valor anterior debajo y, mientras se escribe una corrección, el valor nuevo enmarcado. Lo azul es
+ * de la pantalla: el PDF muestra el valor y nada más; el valor anterior queda en el historial.
+ */
+function CapituloEnVivo({ l, correcciones, enCurso, organizacion }: { l: Levantamiento; correcciones: ReturnType<typeof correccionesDe>; enCurso: EnCurso | null; organizacion: string }) {
+  const editado: Levantamiento = enCurso ? { ...l, respuestas: { ...l.respuestas, [enCurso.seccion]: conValor(l.respuestas[enCurso.seccion] ?? {}, enCurso.campo, enCurso.valor) } } : l;
+  const recursos = useRecursosDelInforme([editado]);
+  const contenido: ContenidoVersion = {
+    formatoContenido: 1,
+    numero: 1,
+    publicadaEn: new Date().toISOString(),
+    publicadaPor: "",
+    organizacion: { nombre: organizacion },
+    visita: l.visita ?? { cliente: "[Cliente]", sitio: "[Sitio]", direccion: "", motivo: "", programadaPara: l.recibidoEn.slice(0, 10) },
+    introduccion: "",
+    conclusiones: "",
+    levantamientos: [capituloDe(editado)],
+    planos: [],
+  };
+  const definiciones = bloques(l.formatoDefinicion, l.repeticiones);
+  const describir = (seccion: string, campo: string, valor: unknown) => {
+    const definicion = definiciones.find((b) => b.clave === seccion)?.seccion.campos.find((c) => c.clave === campo);
+    return definicion ? describirValor(definicion, valor as Valor | undefined) : "";
+  };
+  const claveEnCurso = enCurso ? `${enCurso.seccion}/${enCurso.campo}` : null;
+  const huellaMarcas = `${[...correcciones.keys()].join()}|${claveEnCurso ?? ""}`;
+  const marcar = useCallback(
+    (doc: Document) => {
+      doc.documentElement.classList.add("vista-capitulo");
+      const poner = (clave: string, antes: string, clase: string) => {
+        const fila = doc.querySelector(`tr[data-dato="${CSS.escape(clave)}"]`);
+        const celda = fila?.querySelector<HTMLElement>("td");
+        if (!fila || !celda) return;
+        fila.classList.add(clase);
+        celda.dataset.antes = antes;
+      };
+      for (const [k, c] of correcciones) {
+        const [seccion = "", campo = ""] = k.split("|");
+        poner(`${seccion}/${campo}`, `Antes: ${describir(seccion, campo, c.original)}`, "vista-corregido");
+      }
+      if (enCurso) poner(`${enCurso.seccion}/${enCurso.campo}`, `Antes: ${describir(enCurso.seccion, enCurso.campo, l.respuestas[enCurso.seccion]?.[enCurso.campo])} · sin guardar`, "vista-editando");
+    },
+    [huellaMarcas, l.version],
+  );
+  // Al empezar a corregir un dato, la hoja va hasta su fila.
+  const [ancla, setAncla] = useState<AnclaDeHoja | null>(null);
+  useEffect(() => {
+    if (claveEnCurso) setAncla((a) => ({ selector: `tr[data-dato="${CSS.escape(claveEnCurso)}"]`, vez: (a?.vez ?? 0) + 1 }));
+  }, [claveEnCurso]);
+  const generar = (p: Plantillas) => p.plantillaInforme(contenido, { salida: { tipo: "vista" }, ...recursos });
+  // Del ancho del panel (iteración 38); «Ampliar» la muestra a tamaño real.
+  return (
+    <>
+      <p className="nota-panel">El capítulo como saldrá en el informe. Lo azul es lo corregido y no sale en el PDF.</p>
+      <VistaDeDocumento titulo="Capítulo del informe" generar={generar} alPintar={marcar} ancla={ancla} />
+    </>
+  );
+}
+
+/** Las respuestas de una sección con un dato cambiado; sin valor, el dato sale. */
+function conValor(seccion: Record<string, Valor>, campo: string, valor: Valor | undefined): Record<string, Valor> {
+  const copia = { ...seccion };
+  if (valor === undefined) delete copia[campo];
+  else copia[campo] = valor;
+  return copia;
 }

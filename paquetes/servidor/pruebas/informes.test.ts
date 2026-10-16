@@ -7,8 +7,8 @@ import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { clientesYSitios } from "../src/modulos/clientes";
 import { crearGeneradorPdf } from "../src/modulos/informes";
 import { crearVisitas } from "../src/modulos/visitas";
-import { escapar } from "../src/plataforma/html";
-import { plantillaInforme } from "../src/modulos/informes/pdf/plantilla";
+import { recuperarTrabajosAMedias } from "../src/modulos/mantenimiento";
+import { escapar, LOGO_TEINS, plantillaInforme } from "@teins/documentos";
 import { cabecerasSync, jpegDePrueba, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
@@ -97,6 +97,30 @@ describe("bandeja (iteración 14)", () => {
   });
 });
 
+describe("estado de un plano (iteración 26, ADR-0031)", () => {
+  it("al verificarlo se cuentan las páginas que se anexan; uno que pdf-lib no puede anexar queda ilegible", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const tres = await subir(org.oficina.cookie, await planoDePrueba(3), "application/pdf");
+    const danado = await subir(org.oficina.cookie, Buffer.from(`%PDF-1.7 ${randomUUID()} sin estructura`), "application/pdf");
+    const estado = (cookie: string, huella: string) => get(cookie, `/api/archivos/${huella}/plano`);
+    // La cola es compartida con otros archivos de prueba: primero se espera a que termine lo que había (así ningún
+    // trabajo viejo pisa el estado) y después se fija el estado que se prueba, con su trabajo de nuevo en la cola.
+    await s.procesarCola();
+    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null, paginas = null where huella = $1 and organizacion_id = $2", [tres, org.organizacionId]);
+    expect((await estado(org.oficina.cookie, tres)).json()).toEqual({ estado: "verificando", paginas: null });
+    await s.propietario.pool.query("select cola.encolar('archivos.verificar', $1::jsonb, null, $2, 10)", [JSON.stringify({ organizacionId: org.organizacionId, huella: tres }), `archivos.verificar:${org.organizacionId}:${tres}`]);
+    await s.procesarCola();
+    expect((await estado(org.oficina.cookie, tres)).json()).toEqual({ estado: "listo", paginas: 3 });
+    // Empieza como un PDF y pasa la verificación de siempre, pero el informe no podría anexarlo: se avisa antes de publicar.
+    expect((await estado(org.oficina.cookie, danado)).json()).toEqual({ estado: "ilegible", paginas: null });
+
+    expect((await estado(org.tecnico.cookie, tres)).statusCode).toBe(403);
+    expect((await estado(org.oficina.cookie, "0".repeat(64))).statusCode).toBe(404);
+    const otra = await s.nuevaOrganizacionConUsuarios();
+    expect((await estado(otra.oficina.cookie, tres)).statusCode).toBe(404);
+  });
+});
+
 describe("PDF que no se puede generar", () => {
   it("un plano ilegible falla en el primer intento y sus envíos en cola quedan 'No llegó'", async () => {
     const { oficina, visitaId, revisado, informeId } = await visitaConRevisado();
@@ -152,6 +176,14 @@ describe("PDF que no se puede generar", () => {
 });
 
 describe("informe (corte 4)", () => {
+  it("una visita cancelada conserva su informe, pero no abre uno nuevo", async () => {
+    const { oficina, visitaId, informeId } = await visitaConRevisado();
+    await s.propietario.pool.query("update visitas.visitas set cancelada_en = now() where id = $1", [visitaId]);
+    expect((await post(oficina.cookie, "/api/informes", { visitaId })).json()).toEqual({ id: informeId });
+    await s.propietario.pool.query("delete from informes.informes where id = $1", [informeId]);
+    expect((await post(oficina.cookie, "/api/informes", { visitaId })).json()).toMatchObject({ codigo: "estado_invalido" });
+  });
+
   it("compone, publica y genera en segundo plano un PDF con los datos y el plano anexo, que no se vuelve a generar (QA-17)", async () => {
     const { oficina, visitaId, revisado, enviado, informeId } = await visitaConRevisado();
     // Abrir otra vez devuelve el mismo informe: uno por visita.
@@ -224,8 +256,25 @@ describe("informe (corte 4)", () => {
     expect(error).toMatch(/permission denied/);
   }, 90_000);
 
+  it("lo que oficina oculta se guarda en el borrador y no entra en la versión, ni su foto (ADR-0039)", async () => {
+    const { oficina, revisado, informeId, foto } = await visitaConRevisado();
+    const seleccion = { ocultos: [`${revisado}|cuarto_tecnico|fotos_equipo|${foto}`], mostrados: [] };
+    const guardado = await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [], seleccion });
+    expect(guardado.statusCode, guardado.body).toBe(200);
+    expect((await get(oficina.cookie, `/api/informes/${informeId}`)).json().seleccion).toEqual(seleccion);
+    // Sin la selección (una pestaña anterior), la guardada no cambia.
+    await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 2, introduccion: "Otra", conclusiones: "", levantamientos: [revisado], planos: [] });
+    expect((await get(oficina.cookie, `/api/informes/${informeId}`)).json().seleccion).toEqual(seleccion);
+
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 3 })).statusCode).toBe(201);
+    const { rows } = await s.propietario.pool.query("select contenido from informes.versiones where informe_id = $1", [informeId]);
+    const capitulo = rows[0].contenido.levantamientos[0];
+    expect(capitulo.respuestas.cuarto_tecnico).toEqual({ potencia_nominal: { valor: "12.5", unidad: "kVA" }, fotos_equipo: [] });
+    expect(JSON.stringify(rows[0].contenido)).not.toContain(foto);
+  });
+
   it("solo entran levantamientos revisados de la visita, y publicar exige alguno y planos verificados (regla 9)", async () => {
-    const { oficina, enviado, revisado, informeId } = await visitaConRevisado();
+    const { oficina, organizacionId, enviado, revisado, informeId } = await visitaConRevisado();
     const r = await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [enviado, randomUUID()], planos: [] });
     expect(r.statusCode).toBe(422);
     expect(r.json().erroresInforme.map((e: { codigo: string }) => e.codigo)).toEqual(["no_revisado", "levantamiento_desconocido"]);
@@ -234,8 +283,11 @@ describe("informe (corte 4)", () => {
       erroresInforme: [{ codigo: "sin_levantamientos" }],
     });
 
-    // Un plano que el worker todavía no verifica no entra en una versión.
+    // Un plano que el worker todavía no verifica no entra en una versión. La cola es compartida con otros archivos de
+    // prueba: se espera a que termine lo que había y se deja el plano sin verificar, para no depender de quién la procesa.
     const plano = await subir(oficina.cookie, await planoDePrueba(), "application/pdf");
+    await s.procesarCola();
+    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null, paginas = null where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
     await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [{ huella: plano, nombre: "Planta" }] });
     expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2 })).json()).toMatchObject({ codigo: "archivos_en_verificacion" });
     // Guardar con una versión vieja se rechaza.
@@ -288,14 +340,57 @@ describe("plantilla del informe", () => {
         ],
         planos: [],
       },
-      { fuente: "", fotos: new Map() },
+      { salida: { tipo: "pdf", fuente: "" }, fotos: new Map() },
     );
     expect(html).toContain("Cliente &lt;b&gt;");
     expect(html).toContain("<p>Segundo &lt;párrafo&gt;.</p>");
-    expect(html).toContain("[LOGO]");
+    // El logo oficial ya existe (DESIGN.md): va incrustado, no como marcador.
+    expect(html).toContain(`<img class="logo" src="${LOGO_TEINS}"`);
     expect(html).toContain("[FOTO]");
     expect(html).toContain("Sin dato");
     expect(html).toContain("Versión 3");
     expect(html).not.toContain("<b>");
+  });
+});
+
+describe("trabajos que quedaron a medias (ADR-0043)", () => {
+  /** Como si el trabajo se hubiera perdido: ya no está en la cola. */
+  const perderTrabajo = (llave: string) => s.propietario.pool.query("select graphile_worker.remove_job($1)", [llave]);
+  const hayTrabajo = async (llave: string) => (await s.propietario.pool.query("select 1 from graphile_worker.jobs where key = $1", [llave])).rowCount === 1;
+
+  it("un archivo subido sin verificar y un PDF que sigue «generando» vuelven a la cola pasadas 12 horas, y terminan", async () => {
+    const { oficina, organizacionId, informeId, revisado } = await visitaConRevisado();
+    const guardado = await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "Prueba", conclusiones: "Prueba", levantamientos: [revisado], planos: [] });
+    expect(guardado.statusCode, guardado.body).toBe(200);
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2 })).statusCode).toBe(201);
+    const { rows: versiones } = await s.propietario.pool.query("select id from informes.versiones where informe_id = $1", [informeId]);
+    const versionId = versiones[0].id as string;
+    const llavePdf = `informes.generarPdf:${versionId}`;
+
+    const plano = await subir(oficina.cookie, await planoDePrueba(), "application/pdf");
+    const llaveArchivo = `archivos.verificar:${organizacionId}:${plano}`;
+    // La cola es compartida con otros archivos de prueba: primero termina lo que había, para que ningún trabajo viejo
+    // pise el estado; después se pierden los trabajos y se fija lo atascado.
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    await perderTrabajo(llavePdf);
+    await perderTrabajo(llaveArchivo);
+    await s.propietario.pool.query("update informes.versiones set pdf_estado = 'generando', pdf_huella = null where id = $1", [versionId]);
+    await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null, paginas = null where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
+
+    // Dentro de su ventana de reintentos no se tocan: podrían seguir reintentando.
+    await recuperarTrabajosAMedias(s.conexionApp.bd);
+    expect(await hayTrabajo(llavePdf)).toBe(false);
+    expect(await hayTrabajo(llaveArchivo)).toBe(false);
+
+    await s.propietario.pool.query("update informes.versiones set publicada_en = now() - interval '13 hours' where id = $1", [versionId]);
+    await s.propietario.pool.query("update archivos.archivos set subido_en = now() - interval '13 hours' where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
+    // Pasadas 12 horas vuelven a la cola. Otro archivo de pruebas puede procesarlos al instante: se mira que terminen.
+    expect(await recuperarTrabajosAMedias(s.conexionApp.bd)).toBeGreaterThanOrEqual(2);
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    expect((await s.propietario.pool.query("select pdf_estado from informes.versiones where id = $1", [versionId])).rows[0].pdf_estado).toBe("listo");
+    const { rows } = await s.propietario.pool.query("select estado from archivos.archivos where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
+    expect(rows[0].estado).toBe("verificado");
   });
 });

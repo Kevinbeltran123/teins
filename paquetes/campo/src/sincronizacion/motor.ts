@@ -10,8 +10,16 @@ export const ESPERA_MAXIMA_MS = 5 * 60_000;
 const PASADAS_MAXIMAS = 3;
 /** Sin un motivo para bajar ya (abrir la app, recuperar señal, un envío recibido), se baja cada 5 minutos. */
 export const INTERVALO_BAJADA_MS = 5 * 60_000;
+/** Veces seguidas que pueden faltar archivos antes de decirle al técnico que una foto o un dibujo no sube. */
+const INTENTOS_CON_ARCHIVOS_FALTANTES = 6;
 /** Páginas por sincronización: un teléfono muy atrasado termina en la siguiente. */
 const PAGINAS_MAXIMAS = 20;
+
+/**
+ * Mientras el técnico cambia la contraseña temporal, el servidor responde 403 a todo lo demás: no es un rechazo sin
+ * remedio, se espera como un error pasajero (iteración 42). Sin esto se perdían terminaciones y respuestas en cola.
+ */
+const esperaAlCambioDeContrasena = (error: ErrorApi) => error.codigo === "cambio_de_contrasena_requerido";
 
 /**
  * Espera exponencial con variación aleatoria (ADR-0003, regla 6): muchos dispositivos que
@@ -70,6 +78,8 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
     obtenerCambios: conRed(base.obtenerCambios),
     informarDispositivo: conRed(base.informarDispositivo),
     consultarOrdenes: conRed(base.consultarOrdenes),
+    terminarVisita: conRed(base.terminarVisita),
+    responderComentario: conRed(base.responderComentario),
   };
 
   /** Alguna llamada respondió "no autenticado" en esta sincronización: puede ser una revocación. */
@@ -130,23 +140,101 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
       switch (codigo) {
         case "archivos_faltantes":
           await almacen.marcarPorSubir(problema.faltantes ?? []);
-          await almacen.actualizarEnvio(envio.levantamientoId, { estado: "pendiente", proximoIntentoEn: reloj(), ultimoError: { codigo, mensaje: error.message } });
-          return true;
+          // La primera vez se suben y se reintenta en la misma sincronización.
+          if (envio.ultimoError?.codigo !== "archivos_faltantes") {
+            await almacen.actualizarEnvio(envio.levantamientoId, { estado: "pendiente", proximoIntentoEn: reloj(), ultimoError: { codigo, mensaje: error.message } });
+            return true;
+          }
+          // Si siguen faltando, algo los rechaza: espera cada vez más y, al final, lo dice en lugar de dar vueltas.
+          if (envio.intentos + 1 >= INTENTOS_CON_ARCHIVOS_FALTANTES) {
+            await almacen.actualizarEnvio(envio.levantamientoId, { estado: "error", intentos: envio.intentos + 1, ultimoError: { codigo, mensaje: error.message } });
+            return false;
+          }
+          await reintentarDespues(envio, codigo, error.message);
+          return false;
         case "archivos_en_verificacion":
-          await reintentarDespues(envio, codigo, error.message, (problema.reintentarEnSegundos ?? 5) * 1000);
+          // Lo que pide el servidor, y cada vez más si sigue sin verificarse (el worker caído): no consulta cada 5 s sin fin.
+          await reintentarDespues(envio, codigo, error.message, Math.max((problema.reintentarEnSegundos ?? 5) * 1000, espera(envio.intentos + 1, aleatorio)));
           return false;
         case "no_autenticado":
           sesionRechazada = true;
           await almacen.actualizarEnvio(envio.levantamientoId, { estado: "requiere_sesion", ultimoError: { codigo, mensaje: error.message } });
           return false;
         case "version_protocolo_no_soportada":
-          await almacen.actualizarEnvio(envio.levantamientoId, { estado: "requiere_actualizar", ultimoError: { codigo, mensaje: error.message } });
+          await almacen.actualizarEnvio(envio.levantamientoId, { estado: "requiere_actualizar", versionAppRechazada: versionApp, ultimoError: { codigo, mensaje: error.message } });
           return false;
         default:
-          if (error.reintentable) await reintentarDespues(envio, codigo, error.message);
+          if (error.reintentable || esperaAlCambioDeContrasena(error)) await reintentarDespues(envio, codigo, error.message);
           // Error permanente (ADR-0003): no se reintenta solo; el técnico lo ve.
           else await almacen.actualizarEnvio(envio.levantamientoId, { estado: "error", ultimoError: { codigo, mensaje: error.message } });
           return false;
+      }
+    }
+  }
+
+  /**
+   * Visitas terminadas en el teléfono (ADR-0037), con la misma espera que los envíos. Sin red siguen pendientes; un
+   * rechazo sin remedio (cancelada, ya no es suya) quita la terminación local: manda lo que diga el servidor.
+   */
+  async function enviarTerminaciones(tecnicoId: string) {
+    for (const { visitaId, terminacion } of await almacen.terminacionesListas(reloj(), tecnicoId)) {
+      const { llave, en } = terminacion;
+      const intentos = terminacion.intentos + 1;
+      const despues = () => almacen.reintentarTerminacion(tecnicoId, visitaId, llave, { intentos, proximoIntentoEn: reloj() + espera(intentos, aleatorio) });
+      try {
+        const { terminada } = await transporte.terminarVisita(visitaId, { llave, en });
+        await almacen.resolverTerminacion(tecnicoId, visitaId, llave, terminada);
+        // La visita terminada baja en la misma sincronización.
+        huboRecibidos = true;
+      } catch (error) {
+        if (error instanceof ErrorDeRed) {
+          await despues();
+          throw new SinConexion();
+        }
+        if (!(error instanceof ErrorApi)) throw error;
+        if (error.codigo === "no_autenticado") {
+          // Se envía al volver a iniciar sesión.
+          sesionRechazada = true;
+          return;
+        }
+        // Una app vieja que el servidor ya no acepta también espera: la terminación sale al actualizarla.
+        if (error.reintentable || error.codigo === "version_protocolo_no_soportada" || esperaAlCambioDeContrasena(error)) await despues();
+        else await almacen.resolverTerminacion(tecnicoId, visitaId, llave, null);
+      }
+    }
+  }
+
+  /**
+   * Respuestas a oficina (ADR-0040), con la misma espera que los envíos. Sin red siguen en la cola; un rechazo sin
+   * remedio (ya revisado, el comentario ya no existe) las deja en el teléfono con su motivo y no se reintentan.
+   */
+  async function enviarRespuestas(tecnicoId: string) {
+    const detenidos = new Set<string>();
+    for (const r of await almacen.respuestasListas(reloj(), tecnicoId)) {
+      // Una que falló detiene las siguientes del mismo chat: llegan en el orden en que se escribieron.
+      if (detenidos.has(r.levantamientoId)) continue;
+      const intentos = r.intentos + 1;
+      const despues = async () => {
+        detenidos.add(r.levantamientoId);
+        await almacen.reintentarRespuesta(r.llave, { intentos, proximoIntentoEn: reloj() + espera(intentos, aleatorio) });
+      };
+      try {
+        const mensaje = await transporte.responderComentario(r.levantamientoId, r.comentarioId, { llave: r.llave, texto: r.texto });
+        await almacen.resolverRespuesta(r.llave, { enviada: { id: mensaje.id, creadoEn: mensaje.creadoEn } });
+        // La conversación con su mensaje baja en la misma sincronización.
+        huboRecibidos = true;
+      } catch (error) {
+        if (error instanceof ErrorDeRed) {
+          await despues();
+          throw new SinConexion();
+        }
+        if (!(error instanceof ErrorApi)) throw error;
+        if (error.codigo === "no_autenticado") {
+          sesionRechazada = true;
+          return;
+        }
+        if (error.reintentable || error.codigo === "version_protocolo_no_soportada" || esperaAlCambioDeContrasena(error)) await despues();
+        else await almacen.resolverRespuesta(r.llave, { rechazo: error.codigo === "estado_invalido" ? "revisado" : error.codigo === "no_encontrado" ? "no_existe" : "invalida" });
       }
     }
   }
@@ -176,9 +264,18 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
     const previa = await almacen.estadoBajada(tecnicoId);
     // Una app actualizada puede mostrar formatos que antes se saltó: baja desde cero (ADR-0015, punto 4).
     let desde = previa && previa.versionApp === versionApp ? previa.puntoDeControl : 0;
+    let epoca = previa?.epoca;
     try {
       for (let pagina = 0; pagina < PAGINAS_MAXIMAS; pagina++) {
         const bajada = await transporte.obtenerCambios(desde, versionApp);
+        // Otra época (ADR-0038): lo que bajó antes ya no existe en el servidor. Se quita y se baja todo desde cero; la
+        // primera época que ve el teléfono solo se guarda.
+        if (bajada.epoca && epoca && bajada.epoca !== epoca) {
+          await almacen.reiniciarPorEpoca(tecnicoId, bajada.epoca, versionApp);
+          epoca = bajada.epoca;
+          desde = 0;
+          continue;
+        }
         await almacen.aplicarBajada(tecnicoId, bajada, versionApp, new Date(reloj()).toISOString());
         desde = bajada.puntoDeControl;
         if (!bajada.hayMas) break;
@@ -213,6 +310,8 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
 
   async function unaVez(bajadaPedida: boolean): Promise<ResultadoSincronizacion> {
     await almacen.recuperarInterrumpidos();
+    // Lo que esperaba una app nueva sale apenas corre una versión distinta de la que el servidor rechazó.
+    await almacen.reanudarTrasActualizar(versionApp);
     sesionRechazada = false;
     huboRecibidos = false;
     try {
@@ -229,7 +328,13 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
         }
         if (!otraPasada) break;
       }
-      if (!sesionRechazada && (await tocaBajar(tecnicoId, bajadaPedida))) await bajar(tecnicoId);
+      if (!sesionRechazada) await enviarTerminaciones(tecnicoId);
+      if (!sesionRechazada) await enviarRespuestas(tecnicoId);
+      if (!sesionRechazada && (await tocaBajar(tecnicoId, bajadaPedida))) {
+        await bajar(tecnicoId);
+        // Con el estado al día, lo revisado y viejo sale del teléfono (ADR-0044).
+        await almacen.podarRevisadosAntiguos(tecnicoId, reloj());
+      }
 
       if (sesionRechazada) {
         await atenderOrdenes();

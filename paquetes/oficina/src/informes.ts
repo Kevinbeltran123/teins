@@ -1,7 +1,19 @@
+import type { TextoPropio } from "@teins/documentos";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ErrorApi, type CuerpoEntrada } from "@teins/protocolo";
+import { ErrorApi, type CuerpoEntrada, type Respuesta } from "@teins/protocolo";
 import { cliente } from "./api";
 import { textoDelServidor } from "./mensajes";
+
+type VersionPublicada = Respuesta<"obtenerInforme">["versiones"][number];
+
+/** El avance de una versión recién publicada, en una línea (iteración 27). Una retirada ya no está en el portal (ADR-0034). */
+export function resumenDelAvance(v: Pick<VersionPublicada, "pdf" | "retirada" | "envios">): string {
+  if (v.retirada) return "Retirada del portal";
+  if (v.pdf === "fallido") return "No se generó el PDF";
+  if (v.pdf !== "listo") return "Generando el PDF";
+  if (v.envios.some((e) => e.estado === "en_cola")) return "Enviando";
+  return v.envios.length > 0 ? "En el portal y enviada" : "En el portal";
+}
 
 function useRefrescar() {
   const consultas = useQueryClient();
@@ -28,7 +40,8 @@ export function useGuardarInforme(id: string) {
 export function usePublicarInforme(id: string) {
   const refrescar = useRefrescar();
   return useMutation({
-    mutationFn: ({ version, destinatarios }: { version: number; destinatarios: string[] }) => cliente.llamar("publicarInforme", { parametros: { id }, cuerpo: { version, destinatarios } }),
+    mutationFn: ({ version, destinatarios, mensaje }: { version: number; destinatarios: string[]; mensaje?: TextoPropio | undefined }) =>
+      cliente.llamar("publicarInforme", { parametros: { id }, cuerpo: { version, destinatarios, ...(mensaje && { mensaje }) } }),
     onSettled: () => refrescar(),
   });
 }

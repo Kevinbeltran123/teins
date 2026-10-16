@@ -38,14 +38,9 @@ const contar = (page: Page, tabla: string) =>
     tabla,
   );
 
-test("con el permiso local vencido la captura se bloquea sin borrar nada, y al conectarse se renueva (ADR-0009)", async ({ page, context, browserName }) => {
-  // WebKit de Playwright no recarga sin red ("internal error"); Safari real sí (corte 0, modo avión).
-  test.skip(browserName === "webkit", "Recargar sin red: se cubre en Chromium y en el iPhone");
-  const { visita } = await tecnicoConBorrador(page);
-
-  // El permiso vence: se simula moviendo su fecha al pasado, sin red para que no se renueve al abrir.
-  await context.setOffline(true);
-  await page.evaluate(
+/** Mueve al pasado la fecha del permiso de trabajo local, como si hubiera pasado demasiado tiempo sin conexión. */
+const vencerPermiso = (page: Page) =>
+  page.evaluate(
     () =>
       new Promise<void>((resolver, rechazar) => {
         const apertura = indexedDB.open("teins-campo");
@@ -66,6 +61,15 @@ test("con el permiso local vencido la captura se bloquea sin borrar nada, y al c
         };
       }),
   );
+
+test("con el permiso local vencido la captura se bloquea sin borrar nada, y al conectarse se renueva (ADR-0009)", async ({ page, context, browserName }) => {
+  // WebKit de Playwright no recarga sin red ("internal error"); Safari real sí (corte 0, modo avión).
+  test.skip(browserName === "webkit", "Recargar sin red: se cubre en Chromium y en el iPhone");
+  const { visita } = await tecnicoConBorrador(page);
+
+  // El permiso vence: se simula moviendo su fecha al pasado, sin red para que no se renueve al abrir.
+  await context.setOffline(true);
+  await vencerPermiso(page);
   await page.reload();
   await expect(page.getByText("la captura quedó bloqueada por seguridad", { exact: false })).toBeVisible();
   await visita.getByRole("button", { name: "Continuar levantamiento" }).click();
@@ -78,6 +82,22 @@ test("con el permiso local vencido la captura se bloquea sin borrar nada, y al c
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   // Vuelve editable, en su recorrido (rediseño Recorrido): el borrador ya tenía datos.
+  await expect(page.getByRole("navigation", { name: "Recorrido de la visita" })).toBeVisible({ timeout: 30_000 });
+});
+
+test("con el permiso vencido y la sesión también, el borrador ofrece iniciar sesión ahí mismo y al entrar vuelve a editarse", async ({ page, context }) => {
+  const { tecnico, visita } = await tecnicoConBorrador(page);
+  // Sin la cookie, el servidor rechaza la sesión: conectarse ya no renueva el permiso.
+  await context.clearCookies();
+  await vencerPermiso(page);
+  await page.reload();
+  await expect(page.getByText("Tu sesión venció.", { exact: false })).toBeVisible({ timeout: 30_000 });
+  await visita.getByRole("button", { name: "Continuar levantamiento" }).click();
+  await expect(page.getByText("Nada se borró: inicia sesión para seguir.")).toBeVisible();
+  await expect(page.getByText("Borrador E2E")).toBeVisible();
+  await page.getByRole("button", { name: "Iniciar sesión" }).click();
+  await iniciarSesion(page, tecnico);
+  // De vuelta en el borrador, que la bajada desbloqueó al entrar.
   await expect(page.getByRole("navigation", { name: "Recorrido de la visita" })).toBeVisible({ timeout: 30_000 });
 });
 

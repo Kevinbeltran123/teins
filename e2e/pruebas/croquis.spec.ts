@@ -113,7 +113,7 @@ test("croquis: formas enderezadas, cota, mover y duplicar, y dos hojas con nombr
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
+  await o.getByRole("button", { name: "Abrir el informe" }).click();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 1" }).click();

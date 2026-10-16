@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, pgSchema, primaryKey, text } from "drizzle-orm/pg-core";
+import { bigint, check, integer, pgSchema, primaryKey, text } from "drizzle-orm/pg-core";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 export const esquemaArchivos = pgSchema("archivos");
@@ -20,11 +20,17 @@ export const archivos = esquemaArchivos.table(
     subidoEn: marcaDeTiempo("subido_en"),
     verificadoEn: marcaDeTiempo("verificado_en"),
     motivoRechazo: text("motivo_rechazo"),
+    /**
+     * Plano (PDF de oficina): las páginas que se anexan al informe, contadas al verificarlo (iteración 26). 0: pdf-lib
+     * no puede anexarlo y el PDF del informe fallaría. Nulo: otro tipo, o verificado antes de contarlas.
+     */
+    paginas: integer("paginas"),
   },
   (t) => [
     primaryKey({ columns: [t.organizacionId, t.huella] }),
     check("archivos_estado_valido", sql`${t.estado} in ('pendiente', 'subido', 'verificado', 'rechazado')`),
     check("archivos_huella_valida", sql`${t.huella} ~ '^[0-9a-f]{64}$'`),
+    check("archivos_paginas_validas", sql`${t.paginas} >= 0`),
     aislamientoPorOrganizacion("archivos"),
   ],
 ).enableRLS();

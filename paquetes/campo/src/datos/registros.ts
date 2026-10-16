@@ -12,6 +12,9 @@ import type {
   EstadoServidorGuardado,
   LevantamientoGuardado,
   LevantamientoLocal,
+  LugarDeVisita,
+  RespuestaGuardada,
+  RespuestaPendiente,
   VisitaGuardada,
   VisitaLocal,
 } from "./modelo";
@@ -24,6 +27,8 @@ import type {
 interface ContenidoLevantamiento {
   respuestas: Respuestas;
   repeticiones: Repeticiones | null;
+  /** Desde la iteración 42; los sellados antes no lo traen. */
+  lugar?: LugarDeVisita | null;
 }
 
 /** Huellas de los archivos del levantamiento, sin abrir el sellado. */
@@ -34,18 +39,18 @@ export function referencias(g: LevantamientoGuardado): { archivos: string[]; fot
 }
 
 export async function abrirLevantamiento(db: BaseCampo, g: LevantamientoGuardado): Promise<LevantamientoLocal> {
-  const { sellado, archivos: _a, fotos: _f, rev: _r, respuestas, repeticiones, ...resto } = g;
-  if (!sellado) return { ...resto, respuestas: respuestas ?? {}, ...(repeticiones ? { repeticiones } : {}) };
+  const { sellado, archivos: _a, fotos: _f, rev: _r, respuestas, repeticiones, lugar, ...resto } = g;
+  if (!sellado) return { ...resto, respuestas: respuestas ?? {}, ...(repeticiones ? { repeticiones } : {}), ...(lugar ? { lugar } : {}) };
   const contenido = await abrirJson<ContenidoLevantamiento>(db, g.tecnicoId!, contexto.levantamiento(g.id), sellado);
-  return { ...resto, respuestas: contenido.respuestas, ...(contenido.repeticiones ? { repeticiones: contenido.repeticiones } : {}) };
+  return { ...resto, respuestas: contenido.respuestas, ...(contenido.repeticiones ? { repeticiones: contenido.repeticiones } : {}), ...(contenido.lugar ? { lugar: contenido.lugar } : {}) };
 }
 
 /** Sin responsable todavía (borradores del corte 0) no hay clave: queda a la vista hasta conocerlo. */
 export async function sellarLevantamiento(db: BaseCampo, l: LevantamientoLocal, rev: number): Promise<LevantamientoGuardado> {
-  const { respuestas, repeticiones, ...resto } = l;
+  const { respuestas, repeticiones, lugar, ...resto } = l;
   const huellas = { archivos: archivosReferenciados(respuestas), fotos: fotosReferenciadas(respuestas) };
   if (!l.tecnicoId) return { ...l, ...huellas, rev };
-  const contenido: ContenidoLevantamiento = { respuestas, repeticiones: repeticiones ?? null };
+  const contenido: ContenidoLevantamiento = { respuestas, repeticiones: repeticiones ?? null, ...(lugar ? { lugar } : {}) };
   return { ...resto, ...huellas, rev, sellado: await sellarJson(db, l.tecnicoId, contexto.levantamiento(l.id), contenido) };
 }
 
@@ -72,21 +77,29 @@ export async function sellarEnvio(db: BaseCampo, e: EnvioLocal): Promise<EnvioGu
   return { ...resto, sellado: await sellarJson(db, e.tecnicoId, contexto.envio(e.levantamientoId), comando) };
 }
 
-type DatosDeVisita = Omit<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida">;
+type DatosDeVisita = Omit<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida" | "terminacionPendiente">;
 
 export async function abrirVisita(db: BaseCampo, g: VisitaGuardada): Promise<VisitaLocal> {
-  const { sellado, id, tecnicoId, fueraDeAlcance, motivoSalida, ...resto } = g;
+  const { sellado, id, tecnicoId, fueraDeAlcance, motivoSalida, terminacionPendiente, ...resto } = g;
   const datos = sellado ? await abrirJson<DatosDeVisita>(db, tecnicoId, contexto.visita(tecnicoId, id), sellado) : (resto as DatosDeVisita);
-  return { ...datos, id, tecnicoId, ...(fueraDeAlcance ? { fueraDeAlcance } : {}), ...(motivoSalida ? { motivoSalida } : {}) };
+  return {
+    ...datos,
+    id,
+    tecnicoId,
+    ...(fueraDeAlcance ? { fueraDeAlcance } : {}),
+    ...(motivoSalida ? { motivoSalida } : {}),
+    ...(terminacionPendiente ? { terminacionPendiente } : {}),
+  };
 }
 
 export async function sellarVisita(db: BaseCampo, v: VisitaLocal): Promise<VisitaGuardada> {
-  const { id, tecnicoId, fueraDeAlcance, motivoSalida, ...datos } = v;
+  const { id, tecnicoId, fueraDeAlcance, motivoSalida, terminacionPendiente, ...datos } = v;
   return {
     id,
     tecnicoId,
     ...(fueraDeAlcance ? { fueraDeAlcance } : {}),
     ...(motivoSalida ? { motivoSalida } : {}),
+    ...(terminacionPendiente ? { terminacionPendiente } : {}),
     sellado: await sellarJson(db, tecnicoId, contexto.visita(tecnicoId, id), datos),
   };
 }
@@ -100,6 +113,19 @@ export async function abrirEstado(db: BaseCampo, g: EstadoServidorGuardado): Pro
 export async function sellarEstado(db: BaseCampo, e: EstadoServidor): Promise<EstadoServidorGuardado> {
   const { comentarios, ...resto } = e;
   return { ...resto, sellado: await sellarJson(db, e.tecnicoId, contexto.estado(e.id), comentarios ?? []) };
+}
+
+type ContenidoRespuesta = Pick<RespuestaPendiente, "comentarioId" | "texto" | "creadaEn">;
+
+/** Lo que respondió el técnico (ADR-0040): nace sellado, porque ya se sabe de quién es. */
+export async function sellarRespuesta(db: BaseCampo, r: RespuestaPendiente): Promise<RespuestaGuardada> {
+  const { comentarioId, texto, creadaEn, ...resto } = r;
+  return { ...resto, sellado: await sellarJson(db, r.tecnicoId, contexto.respuesta(r.llave), { comentarioId, texto, creadaEn } satisfies ContenidoRespuesta) };
+}
+
+export async function abrirRespuesta(db: BaseCampo, g: RespuestaGuardada): Promise<RespuestaPendiente> {
+  const { sellado, ...resto } = g;
+  return { ...resto, ...(await abrirJson<ContenidoRespuesta>(db, g.tecnicoId, contexto.respuesta(g.llave), sellado)) };
 }
 
 /**

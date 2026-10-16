@@ -15,6 +15,11 @@ export function useAccionDeCotizacion<E, R>(accion: (entrada: E) => Promise<R>) 
   return useMutation({ mutationFn: accion, onSettled: () => consultas.invalidateQueries({ queryKey: ["cotizaciones"] }) });
 }
 
+/** «Deshacer» al quitar una línea: vuelve a su lugar, sobre las líneas de ahora, y una sola vez (si ya volvió, no se duplica). */
+export function devolverLinea<T extends { id: string }>(lineas: T[], linea: T, posicion: number): T[] {
+  return lineas.some((l) => l.id === linea.id) ? lineas : [...lineas.slice(0, posicion), linea, ...lineas.slice(posicion)];
+}
+
 const EXPLICACION: Record<string, (e: { lineas?: string[] | undefined; campo?: string | undefined }) => string> = {
   sin_lineas: () => "La cotización no tiene líneas.",
   sin_precio: (e) => `${e.lineas?.length === 1 ? "Una línea no tiene" : `${e.lineas?.length ?? "Algunas"} líneas no tienen`} precio.`,

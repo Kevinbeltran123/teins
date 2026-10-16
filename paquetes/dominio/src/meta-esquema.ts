@@ -30,6 +30,8 @@ export function validarDefinicionFormato(definicion: VersionFormato): string[] {
       if ((campo.tipo === "medida" || campo.tipo === "cantidades") && new Set(campo.unidades).size !== campo.unidades.length) errores.push(`Unidades repetidas en ${ruta}`);
       if (campo.tipo === "cantidades" && campo.unidades.length === 0) errores.push(`Sin unidades en ${ruta}`);
       if (campo.tipo === "foto" && (campo.min ?? 0) > LIMITES.fotosPorCampo) errores.push(`Mínimo de fotos imposible en ${ruta}`);
+      // Sin obligatorio, un mínimo de fotos bloquea el envío y no deja marcar «No se pudo obtener» (regla 3, iteración 42).
+      if (campo.tipo === "foto" && (campo.min ?? 0) > 0 && !campo.obligatorio) errores.push(`Un mínimo de fotos exige que ${ruta} sea obligatorio`);
       if (campo.tipo === "firma" && campo.declaracion !== undefined && (campo.declaracion.trim() === "" || campo.declaracion.length > LIMITES_FIRMA.declaracion)) {
         errores.push(`Constancia vacía o demasiado larga en ${ruta}`);
       }

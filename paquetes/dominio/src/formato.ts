@@ -32,6 +32,8 @@ export interface Repetible {
 export interface DefinicionSeccion {
   clave: string;
   titulo: string;
+  /** Solo para la empresa (ADR-0039): no sale en el informe del cliente salvo que oficina la muestre. Las fotos de llegada. */
+  soloEmpresa?: boolean | undefined;
   repetible?: Repetible | undefined;
   campos: readonly DefinicionCampo[];
 }

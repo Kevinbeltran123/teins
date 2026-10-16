@@ -1,0 +1,2 @@
+ALTER TABLE "archivos"."archivos" ADD COLUMN "paginas" integer;--> statement-breakpoint
+ALTER TABLE "archivos"."archivos" ADD CONSTRAINT "archivos_paginas_validas" CHECK ("archivos"."archivos"."paginas" >= 0);

@@ -6,15 +6,15 @@ export function EtiquetaCampo({ children, obligatorio, htmlFor, id }: { children
   const contenido = (
     <>
       {children}
-      {obligatorio && <span className="ml-2 text-ayuda font-bold text-texto-secundario">obligatorio</span>}
+      {obligatorio && <span className="ml-2 text-ayuda font-normal text-texto-secundario">obligatorio</span>}
     </>
   );
   return htmlFor ? (
-    <label htmlFor={htmlFor} id={id} className="text-cuerpo font-bold">
+    <label htmlFor={htmlFor} id={id} className="text-cuerpo font-medium">
       {contenido}
     </label>
   ) : (
-    <span id={id} className="text-cuerpo font-bold">
+    <span id={id} className="text-cuerpo font-medium">
       {contenido}
     </span>
   );
@@ -22,9 +22,17 @@ export function EtiquetaCampo({ children, obligatorio, htmlFor, id }: { children
 
 export function MensajeError({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <p id={id} className="flex items-start gap-1.5 text-ayuda font-bold text-error">
+    <p id={id} className="flex items-start gap-1.5 text-ayuda font-medium text-error">
       <CircleAlert aria-hidden className="mt-[0.15em] size-[1.1em] shrink-0" />
       <span>{children}</span>
     </p>
   );
+}
+
+/**
+ * Después de validar un formulario con errores, el foco va al primer campo marcado (DESIGN.md: validar al enviar, cada
+ * campo con su mensaje). Espera al siguiente cuadro, cuando los campos ya llevan `aria-invalid`.
+ */
+export function enfocarPrimerError(formulario: string) {
+  requestAnimationFrame(() => document.getElementById(formulario)?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
 }

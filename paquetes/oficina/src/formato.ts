@@ -64,3 +64,12 @@ export function leerPesos(texto: string): number | null | undefined {
   const valor = Number(partes[1]!.replace(/\./g, ""));
   return Number.isSafeInteger(valor) && valor <= PRECIO_MAXIMO ? valor : undefined;
 }
+
+/** Iniciales de una persona para su distintivo: quien comparte computador ve de un vistazo quién es. */
+export const iniciales = (nombre: string) =>
+  nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join("");

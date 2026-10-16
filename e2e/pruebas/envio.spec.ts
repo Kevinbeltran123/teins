@@ -57,7 +57,11 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });
   // En la lista, el estado que dio el servidor en la bajada.
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
-  await expect(page.getByRole("region", { name: "Enviados" }).getByText("Recibido en oficina")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Enviados" }).getByText("Recibido", { exact: true })).toBeVisible();
+  // Era su única visita: ya no es la siguiente (iteración 40). Queda en «Atendidas hoy», por si hace falta otro formato.
+  await expect(page.getByRole("region", { name: "Siguiente visita" })).toHaveCount(0);
+  await expect(page.getByText("No tienes visitas pendientes")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Atendidas hoy" }).getByText(cliente, { exact: false })).toBeVisible();
 
   // Oficina, en su propio navegador de escritorio.
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });
@@ -74,7 +78,8 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   await expect(bandeja.getByRole("heading", { name: `${cliente} · Sede E2E`, level: 1 })).toBeVisible();
   await expect(bandeja.getByText("12,5 kVA")).toBeVisible();
   // La visita viaja con el envío desde campo.
-  await expect(bandeja.getByText(`${cliente} · Sede E2E`)).toBeVisible();
+  // En el contenido: la barra superior repite la ubicación.
+  await expect(bandeja.getByRole("main").getByText(`${cliente} · Sede E2E`)).toBeVisible();
   await expect(bandeja.getByText("Cuarto de prueba E2E")).toBeVisible();
   const foto = bandeja.getByRole("img", { name: "Foto 1 de Fotos del equipo" });
   await expect(foto).toBeVisible();

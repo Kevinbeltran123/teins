@@ -22,7 +22,7 @@ Método: patrones estratégicos y tácticos de Domain-Driven Design, adaptados a
 | **Boceto** | Dibujo a mano alzada hecho en campo sobre cuadrícula | No es un plano de ingeniería |
 | **Línea de cantidad** | Material o trabajo con descripción, cantidad, unidad y observación | No incluye precio |
 | **Ítem de catálogo** | Material estandarizado de la lista de TEINS | — |
-| **Comentario** | Nota de oficina dirigida al técnico | No modifica datos |
+| **Comentario** | Nota de oficina dirigida al técnico; abre una conversación que el técnico responde desde el teléfono (ADR-0040) | No modifica datos; se cierra al marcar revisado |
 | **Informe** | Composición de oficina a partir de levantamientos revisados, con planos y textos propios | No es el PDF |
 | **Versión publicada** | Copia congelada de un informe, con su PDF, entregada al cliente | Nunca se edita |
 | **Acceso de cliente** | Credencial (QR y clave) con la que un cliente consulta sus informes | No es un usuario interno |
@@ -86,13 +86,13 @@ erDiagram
 |---|---|---|---|
 | **Levantamiento** | Secciones, respuestas, líneas de cantidad, referencias a evidencias | Técnico en borrador; oficina después | Sube al enviar; su estado baja |
 | **Archivo** | Binario inmutable con huella digital | Quien lo crea | Sube |
-| **Comentario** | Texto, autor, fecha, referencia al campo | Oficina | Baja |
-| **Visita** | Cliente, sitio, motivo, canal de origen, técnicos asignados, fecha | Oficina, supervisor | Baja |
+| **Comentario** | Texto, autor, fecha, referencia al campo y, si es respuesta, a qué comentario responde y de qué lado (ADR-0040) | Lo abre oficina; el técnico responde | Baja con sus respuestas; las del técnico suben |
+| **Visita** | Cliente, sitio, motivo, canal de origen, técnicos asignados, fecha y horario (ADR-0037); se cierra al día siguiente de atendida (ADR-0041) | Oficina, supervisor | Baja; atendida, sale del teléfono |
 | **Formato** | Nombre, tipo de servicio, versión vigente | Administrador | No |
 | **Versión de formato** | Definición completa (ADR-0006) | Nadie tras publicarse | Baja |
 | **Ítem de catálogo** | Código, descripción, unidad por defecto, activo | Oficina, administrador | Baja |
 | **Cliente** | Datos del cliente y sus sitios | Oficina | Lo necesario, baja |
-| **Informe** | Levantamientos incluidos, planos, textos, orden | Oficina | No |
+| **Informe** | Levantamientos incluidos, planos, textos, orden y qué sale de cada uno (ADR-0039) | Oficina | No |
 | **Versión publicada** | Copia congelada de datos, planos y PDF | Nadie; solo puede retirarse | No |
 | **Acceso de cliente** | Credencial, QR, estado, registro de descargas | Administrador | No |
 | **Usuario** | Nombre, identificación, roles, estado | Administrador | Solo el propio |
@@ -121,6 +121,7 @@ Decisiones incluidas:
 - **Estado de negocio ≠ estado de sincronización.** "Pendiente de subir", "subiendo", "confirmado" y "error" viven solo en el dispositivo.
 - **Toma de revisión (I-1):** un revisor toma el levantamiento y queda visible como responsable. Otro puede reasignarse la toma explícitamente, lo que queda registrado. Cada guardado lleva la versión que el usuario tenía abierta; si otro guardó antes, se rechaza (QA-25).
 - **Llegada completa:** el servidor solo registra un envío cuando llegaron todos sus archivos con huellas correctas.
+- **Un envío que oficina nunca recibió vuelve a Borrador (ADR-0045):** si el servidor lo rechaza para siempre, en el teléfono queda «No se pudo enviar» y el técnico puede volverlo a borrador para corregirlo. Como oficina no lo tiene, sigue habiendo un solo editor. No aplica si la visita ya tiene otro borrador, ni a lo que oficina ya recibió.
 
 ### Informe
 
@@ -135,7 +136,7 @@ La versión publicada es una **copia**, no una referencia.
 
 ### Visita
 
-Su avance se **deduce** de sus levantamientos e informes. Solo *Cancelada* es explícito.
+Su avance se **deduce** de sus levantamientos e informes. Solo *Cancelada* y, desde la iteración 31, *Terminada* son explícitos: un técnico la termina desde su teléfono (ADR-0037). Su horario puede ser todo el día, de una hora a otra, o desde una hora hasta que la terminen; mientras tanto el técnico está ocupado y no se le programa otra visita que se cruce.
 
 ---
 

@@ -34,10 +34,16 @@ import {
   Smartphone,
   Tabla,
   UserRound,
+  enfocarPrimerError,
+  Bell,
+  LogOut,
+  History,
+  useNotificar,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
-import { consultasDeAdministracion, mensajeDeAdministracion, qrComoImagen, useAccion } from "../administracion";
+import { consultasDeAdministracion, credencialConQr, mensajeDeAdministracion, useAccion } from "../administracion";
 import { aFechaHora, haceCuanto } from "../formato";
+import { sinError } from "../mensajes";
 
 type Sesion = Respuesta<"obtenerSesion">;
 type Usuario = Respuesta<"listarUsuarios">["usuarios"][number];
@@ -142,7 +148,7 @@ function ActivarSegundoFactor({ alTerminar }: { alTerminar: () => void }) {
   const [etapa, setEtapa] = useState<Etapa>("contrasena");
   const [contrasena, setContrasena] = useState("");
   const [codigo, setCodigo] = useState("");
-  const [enrolamiento, setEnrolamiento] = useState<{ uri: string; codigosDeRespaldo: string[]; qr: string } | null>(null);
+  const [enrolamiento, setEnrolamiento] = useState<{ uri: string; codigosDeRespaldo: string[]; qr: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -153,7 +159,7 @@ function ActivarSegundoFactor({ alTerminar }: { alTerminar: () => void }) {
     setError(null);
     try {
       const r = await cliente.activarSegundoFactor(contrasena);
-      setEnrolamiento({ ...r, qr: await qrComoImagen(r.uri) });
+      setEnrolamiento({ ...r, qr: (await credencialConQr({ url: r.uri })).qr });
       setEtapa("escanear");
     } catch (e) {
       setError(e instanceof ErrorApi && e.codigo === "entrada_invalida" ? "La contraseña no es correcta." : mensajeDeAdministracion(e));
@@ -214,9 +220,9 @@ function ActivarSegundoFactor({ alTerminar }: { alTerminar: () => void }) {
             {enrolamiento && (
               <div className="flex flex-col gap-5">
                 <div className="flex flex-wrap items-start gap-6">
-                  <img src={enrolamiento.qr} alt="Código QR para la app autenticadora" className="qr" />
+                  {enrolamiento.qr && <img src={enrolamiento.qr} alt="Código QR para la app autenticadora" className="qr" />}
                   {secreto && (
-                    <details className="max-w-sm text-cuerpo">
+                    <details className="max-w-sm text-cuerpo" open={!enrolamiento.qr}>
                       <summary className="min-h-control cursor-pointer font-bold text-superficie">¿No puede escanearlo?</summary>
                       <div className="flex flex-col gap-3 pt-2">
                         <p className="text-texto-secundario">Escriba esta clave en la app, sin los espacios:</p>
@@ -251,7 +257,7 @@ function ActivarSegundoFactor({ alTerminar }: { alTerminar: () => void }) {
             </ul>
             <div className="flex flex-wrap gap-2">
               <a
-                href={`data:text/plain;charset=utf-8,${encodeURIComponent(`Códigos de respaldo de TEINS Oficina\n\n${codigos.join("\n")}\n`)}`}
+                href={`data:text/plain;charset=utf-8,${encodeURIComponent(`Códigos de respaldo de TEINS\n\n${codigos.join("\n")}\n`)}`}
                 download="codigos-de-respaldo-teins.txt"
                 className={claseBoton("secundaria", "pequeno")}
               >
@@ -310,16 +316,26 @@ function EntregaUnaVez({ titulo, subtitulo, icono, amplio, children, alCerrar }:
 type Rol = "tecnico" | "oficina";
 const ROL: Record<Rol, string> = { tecnico: "Técnico", oficina: "Oficina" };
 
-type Pendiente = { accion: "restablecer" | "administracion" | "desactivar"; u: Usuario };
+type Pendiente = { accion: "restablecer" | "administracion" | "desactivar" | "reactivar"; u: Usuario };
+type EntregaDeUsuario = "creado" | "restablecida" | "reactivado";
+const TITULO_DE_ENTREGA: Record<EntregaDeUsuario, string> = { creado: "Usuario creado", restablecida: "Contraseña restablecida", reactivado: "Usuario reactivado" };
 
 function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: string; creando: boolean; setCreando: (v: boolean) => void; busqueda: string }) {
   const consulta = useQuery(consultasDeAdministracion.usuarios());
   const [nuevos, setNuevos] = useState<string[]>([]);
   const [pendiente, setPendiente] = useState<Pendiente | null>(null);
-  const [credencial, setCredencial] = useState<{ nombre: string; usuario: string; contrasena: string; nuevo: boolean } | null>(null);
+  const [credencial, setCredencial] = useState<{ nombre: string; usuario: string; contrasena: string; entrega: EntregaDeUsuario } | null>(null);
+  const notificar = useNotificar();
+  // Lo cambiado queda resaltado en su lugar, sin saltar arriba, y la notificación dice qué pasó (iteración 27).
+  const [cambiados, setCambiados] = useState<string[]>([]);
+  const cambiado = (u: Usuario, texto: string) => {
+    setCambiados((c) => [u.id, ...c]);
+    notificar({ texto });
+  };
 
   const restablecer = useAccion((u: Usuario) => cliente.llamar("restablecerContrasenaAdministrada", { parametros: { id: u.id } }));
   const desactivar = useAccion((u: Usuario) => cliente.llamar("desactivarUsuarioAdministrado", { parametros: { id: u.id } }));
+  const reactivar = useAccion((u: Usuario) => cliente.llamar("reactivarUsuarioAdministrado", { parametros: { id: u.id } }));
   const marcar = useAccion((e: { u: Usuario; administrador: boolean }) => cliente.llamar("marcarAdministrador", { parametros: { id: e.u.id }, cuerpo: { administrador: e.administrador } }));
 
   return (
@@ -334,7 +350,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
             const propio = u.id === propioId;
             const activo = !u.desactivadoEn;
             return (
-              <FilaTabla key={u.id} resaltada={nuevos.includes(u.id)} indice={k}>
+              <FilaTabla key={u.id} resaltada={nuevos.includes(u.id) || cambiados.includes(u.id)} clave={u.id}>
                 <CeldaTabla>
                   <span className="fila-flex" style={{ flexWrap: "nowrap" }}>
                     <span className="avatar" aria-hidden>
@@ -361,7 +377,11 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
                 </CeldaTabla>
                 <CeldaTabla>
                   {activo ? (
-                    <Insignia tono="exito">Activo</Insignia>
+                    <>
+                      <Insignia tono="exito">Activo</Insignia>
+                      {/* Todavía no entra con una propia: si no la cambió, quizá no recibió la temporal. */}
+                      {u.debeCambiarContrasena && <span className="sub">Debe cambiar su contraseña</span>}
+                    </>
                   ) : (
                     <>
                       <Insignia tono="neutro">Desactivado</Insignia>
@@ -370,11 +390,17 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
                   )}
                 </CeldaTabla>
                 <CeldaTabla derecha>
-                  {activo && (
+                  {!activo && (
+                    <Boton tamano="pequeno" onClick={() => setPendiente({ accion: "reactivar", u })}>
+                      Reactivar usuario
+                    </Boton>
+                  )}
+                  {activo && !propio && (
                     <MenuAcciones
                       etiqueta={`Más acciones para ${u.nombre}`}
                       opciones={[
-                        { texto: "Restablecer contraseña", icono: KeyRound, alElegir: () => setPendiente({ accion: "restablecer", u }) },
+                        // La propia se cambia desde "Mi cuenta" (24d): restablecerla aquí quitaría el segundo factor de quien administra.
+                        !propio && { texto: "Restablecer contraseña", icono: KeyRound, alElegir: () => setPendiente({ accion: "restablecer", u }) },
                         u.rol === "oficina" &&
                           !(propio && u.administrador) && { texto: u.administrador ? "Quitar administración" : "Dar administración", icono: ShieldCheck, alElegir: () => setPendiente({ accion: "administracion", u }) },
                         !propio && { texto: "Desactivar usuario", peligro: true, alElegir: () => setPendiente({ accion: "desactivar", u }) },
@@ -394,7 +420,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
           alCrear={(r) => {
             setCreando(false);
             setNuevos((n) => [r.id, ...n]);
-            setCredencial({ nombre: r.nombre, usuario: r.usuario, contrasena: r.contrasena, nuevo: true });
+            setCredencial({ nombre: r.nombre, usuario: r.usuario, contrasena: r.contrasena, entrega: "creado" });
           }}
         />
       )}
@@ -408,11 +434,15 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
           alCerrar={() => setPendiente(null)}
           accion={async () => {
             const { contrasena } = await restablecer.mutateAsync(pendiente.u);
-            setCredencial({ nombre: pendiente.u.nombre, usuario: pendiente.u.usuario, contrasena, nuevo: false });
+            setCredencial({ nombre: pendiente.u.nombre, usuario: pendiente.u.usuario, contrasena, entrega: "restablecida" });
           }}
-        >
-          <p>Se genera una contraseña temporal para entregarle. Sus sesiones se cierran y sus llaves de acceso se quitan: si perdió un teléfono o un computador, ya no sirven para entrar.</p>
-        </Confirmacion>
+          consecuencias={[
+            { icono: KeyRound, texto: "Le entrega una contraseña temporal", detalle: "La cambia al entrar; se muestra una sola vez" },
+            { icono: LogOut, texto: "Se cierran sus sesiones en todos los equipos" },
+            { icono: ShieldCheck, texto: "Se quitan su segundo factor y sus llaves de acceso", detalle: pendiente.u.administrador ? "Para administrar tendrá que activar el segundo factor otra vez" : "Si perdió un teléfono o un computador, ya no sirven para entrar" },
+            { icono: Bell, texto: "Deja de recibir avisos hasta que los vuelva a activar" },
+          ]}
+        />
       )}
       {pendiente?.accion === "administracion" && (
         <Confirmacion
@@ -422,6 +452,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
           mensajeDeError={mensajeDeAdministracion}
           alCerrar={() => setPendiente(null)}
           accion={() => marcar.mutateAsync({ u: pendiente.u, administrador: !pendiente.u.administrador })}
+          alTerminar={() => cambiado(pendiente.u, pendiente.u.administrador ? `Administración quitada: ${pendiente.u.nombre}` : `Administración dada: ${pendiente.u.nombre}`)}
         >
           <p>
             {pendiente.u.administrador
@@ -438,6 +469,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
           mensajeDeError={mensajeDeAdministracion}
           alCerrar={() => setPendiente(null)}
           accion={() => desactivar.mutateAsync(pendiente.u)}
+          alTerminar={() => cambiado(pendiente.u, `Usuario desactivado: ${pendiente.u.nombre}`)}
         >
           <p>
             {pendiente.u.rol === "tecnico"
@@ -447,8 +479,31 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
         </Confirmacion>
       )}
 
+      {pendiente?.accion === "reactivar" && (
+        <Confirmacion
+          nivel="consecuencia"
+          titulo={`¿Reactivar a ${pendiente.u.nombre}?`}
+          confirmar="Reactivar usuario"
+          mensajeDeError={mensajeDeAdministracion}
+          alCerrar={() => setPendiente(null)}
+          accion={async () => {
+            const { contrasena } = await reactivar.mutateAsync(pendiente.u);
+            setCambiados((c) => [pendiente.u.id, ...c]);
+            setCredencial({ nombre: pendiente.u.nombre, usuario: pendiente.u.usuario, contrasena, entrega: "reactivado" });
+          }}
+          consecuencias={[
+            { icono: KeyRound, texto: "Le entrega una contraseña temporal", detalle: "La cambia al entrar; se muestra una sola vez" },
+            ...(pendiente.u.rol === "tecnico"
+              ? [{ icono: Smartphone, texto: "Su teléfono empieza de cero", detalle: "Lo que tenía se borró al desactivarlo; lo suyo vuelve a bajar del servidor" }]
+              : []),
+            { icono: History, texto: "Conserva su historia", detalle: "Lo que hizo y su autoría siguen en esta cuenta" },
+            { icono: ShieldCheck, texto: "No recupera sesiones, llaves ni segundo factor" },
+          ]}
+        />
+      )}
+
       {credencial && (
-        <EntregaUnaVez titulo={credencial.nuevo ? "Usuario creado" : "Contraseña restablecida"} subtitulo={credencial.nombre} icono={UserRound} alCerrar={() => setCredencial(null)}>
+        <EntregaUnaVez titulo={TITULO_DE_ENTREGA[credencial.entrega]} subtitulo={credencial.nombre} icono={UserRound} alCerrar={() => setCredencial(null)}>
           <dl className="flex flex-col gap-1">
             <dt className="text-ayuda text-texto-secundario">Usuario</dt>
             <dd className="pb-3">
@@ -460,7 +515,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
               <BotonCopiar texto={credencial.contrasena} etiqueta="Copiar la contraseña temporal" />
             </dd>
           </dl>
-          <p className="text-cuerpo text-texto-secundario">Entréguela en persona o por un medio distinto al del usuario.</p>
+          <p className="text-cuerpo text-texto-secundario">Entréguela en persona o por un medio distinto al del usuario. Al entrar, la cambia.</p>
         </EntregaUnaVez>
       )}
     </div>
@@ -485,6 +540,7 @@ function NuevoUsuario({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (r
       ...(!USUARIO_VALIDO.test(usuario.trim()) ? { usuario: "De 3 a 30 letras minúsculas, números, punto o guion, sin espacios." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
@@ -497,7 +553,7 @@ function NuevoUsuario({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (r
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
       titulo="Nuevo usuario"
       cerrable={!crear.isPending}
       alCerrar={alCerrar}
@@ -513,8 +569,8 @@ function NuevoUsuario({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (r
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <CampoTexto etiqueta="Nombre completo" nombre="nombre" valorInicial="" onCambio={setNombre} error={errores.nombre} />
-        <CampoTexto etiqueta="Usuario para iniciar sesión" nombre="nuevo-usuario" valorInicial="" onCambio={setUsuario} error={errores.usuario} />
+        <CampoTexto etiqueta="Nombre completo" nombre="nombre" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
+        <CampoTexto etiqueta="Usuario para iniciar sesión" nombre="nuevo-usuario" valorInicial="" onCambio={(t) => (setUsuario(t), setErrores((e) => sinError(e, "usuario")))} error={errores.usuario} />
         <GrupoDeOpciones etiqueta="Rol" valor={rol} onCambio={setRol} opciones={[{ valor: "tecnico", texto: "Técnico (campo)" }, { valor: "oficina", texto: "Oficina" }]} />
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
@@ -543,7 +599,8 @@ function Dispositivos() {
     <Tabla etiqueta="Teléfonos de campo y su estado" columnas={[{ titulo: "Técnico" }, { titulo: "Último contacto" }, { titulo: "Sin enviar" }, { titulo: "Almacenamiento" }, { titulo: "Estado" }]}>
       {lista.map((d) => {
         const s = d.salud;
-        const atrasado = s?.pendienteMasAntiguo ? ahora - new Date(s.pendienteMasAntiguo).getTime() > DIA_MS : false;
+        // Con orden de borrado, lo que no alcanzó a enviar ya no se acepta: no hay a quién llamar (P36).
+        const atrasado = !d.ordenDeBorradoEn && s?.pendienteMasAntiguo ? ahora - new Date(s.pendienteMasAntiguo).getTime() > DIA_MS : false;
         return (
           <FilaTabla key={`${d.id}:${d.usuario.id}`}>
             <CeldaTabla principal>{d.usuario.nombre}</CeldaTabla>
@@ -552,9 +609,9 @@ function Dispositivos() {
               <span className="sub">{`App versión ${s?.versionApp ?? "[N]"}`}</span>
             </CeldaTabla>
             <CeldaTabla>
-              {s ? (s.pendientes === 0 ? "Nada" : `${s.pendientes}`) : "[N]"}
+              {d.borradoConfirmadoEn ? "Nada" : s ? (s.pendientes === 0 ? "Nada" : `${s.pendientes}`) : "[N]"}
               {atrasado && <span className="sub" style={{ color: "var(--alerta)", fontWeight: 700 }}>{`El más antiguo espera desde ${aFechaHora(s!.pendienteMasAntiguo!)}. Llame al técnico.`}</span>}
-              {s?.ultimoError && <span className="sub">{`Último error: ${s.ultimoError}`}</span>}
+              {!d.borradoConfirmadoEn && s?.ultimoError && <span className="sub">{`Último error: ${s.ultimoError}`}</span>}
             </CeldaTabla>
             <CeldaTabla>
               {s?.persistente === false ? <span style={{ color: "var(--alerta)", fontWeight: 700 }}>No persistente: el sistema puede borrar los datos</span> : s?.persistente ? "Persistente" : "Sin dato"}
@@ -584,7 +641,7 @@ function Dispositivos() {
 
 // Accesos de clientes ----------------------------------------------------------------------------
 
-type Entrega = { cliente: string; identificador: string; clave: string; url: string; qr: string; regenerado: boolean };
+type Entrega = { cliente: string; identificador: string; clave: string; url: string; qr: string | null; regenerado: boolean };
 
 function Accesos() {
   const consulta = useQuery(consultasDeAdministracion.accesos());
@@ -596,7 +653,7 @@ function Accesos() {
 
   async function entregar(c: ClienteConAcceso, regenerar: boolean) {
     const r = await generar.mutateAsync({ c, regenerar });
-    setCredencial({ cliente: c.nombre, ...r, qr: await qrComoImagen(r.url), regenerado: regenerar });
+    setCredencial({ cliente: c.nombre, ...(await credencialConQr(r)), regenerado: regenerar });
     setRecientes((n) => [c.id, ...n]);
   }
 
@@ -685,15 +742,21 @@ function Accesos() {
         >
           <div className="grid gap-6 md:grid-cols-[232px_minmax(0,1fr)]">
             <div className="flex flex-col items-center gap-3 rounded-panel border border-division p-4">
-              <img src={credencial.qr} alt={`Código QR del acceso de ${credencial.cliente}`} className="qr" />
+              {credencial.qr ? (
+                <img src={credencial.qr} alt={`Código QR del acceso de ${credencial.cliente}`} className="qr" />
+              ) : (
+                <Aviso tono="alerta">No se pudo dibujar el QR: hay una versión nueva de TEINS. El código y la clave sí sirven; recargue la página después para descargar el QR.</Aviso>
+              )}
               <p className="flex flex-col items-center text-center">
                 <span className="text-ayuda text-texto-secundario">Código de acceso (va en el QR)</span>
                 <code className="text-cuerpo font-bold tracking-wide break-all">{credencial.identificador}</code>
               </p>
-              <a href={credencial.qr} download={`acceso-${credencial.cliente}.svg`} className={claseBoton("secundaria", "pequeno")}>
-                <Download aria-hidden />
-                Descargar el QR
-              </a>
+              {credencial.qr && (
+                <a href={credencial.qr} download={`acceso-${credencial.cliente}.svg`} className={claseBoton("secundaria", "pequeno")}>
+                  <Download aria-hidden />
+                  Descargar el QR
+                </a>
+              )}
             </div>
             <ol className="flex flex-col gap-5">
               <li className="flex flex-col gap-1">

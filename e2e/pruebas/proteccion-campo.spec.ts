@@ -43,7 +43,7 @@ test("un doble toque en «Iniciar levantamiento» y en «Agregar tablero» crea 
   const tableros = page.getByRole("region", { name: "Tableros" });
   await tableros.getByRole("button", { name: "Agregar tablero" }).dblclick();
   await expect(page.getByRole("article", { name: "Tablero 1" })).toBeVisible();
-  await page.getByRole("button", { name: "Listo este tablero" }).click();
+  await page.getByRole("button", { name: /^Listo, ver / }).click();
   await expect(tableros.getByRole("button", { name: /^Tablero/ })).toHaveCount(1);
 });
 
@@ -134,3 +134,70 @@ test("«Deshacer» de «Foto eliminada» se alcanza a tocar con el visor de foto
   await page.getByRole("button", { name: "Deshacer" }).click({ timeout: 5_000 });
   await expect(page.getByRole("dialog", { name: /^Fotos del equipo: foto \d de 2/ })).toBeVisible();
 });
+
+/** Iteración 24c: lo que se revierte no pregunta; un toque de más no duplica; atrás vuelve al paso anterior. */
+
+test("quitar un tablero es al instante y «Deshacer» lo devuelve con lo escrito", async ({ page }) => {
+  await iniciarLevantamiento(page);
+  await irAlPaso(page, "Tableros");
+  const tableros = page.getByRole("region", { name: "Tableros" });
+  await tableros.getByRole("button", { name: "Agregar tablero" }).click();
+  await page.getByRole("article", { name: "Tablero 1" }).getByRole("textbox", { name: "Ubicación del tablero" }).fill("Sótano");
+  await page.getByRole("button", { name: "Opciones de Tablero 1" }).click();
+  await page.getByRole("menuitem", { name: "Quitar tablero" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(tableros.getByRole("button", { name: /^Tablero/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Deshacer" }).click();
+  await tableros.getByRole("button", { name: /^Tablero 1/ }).click();
+  await expect(page.getByRole("article", { name: "Tablero 1" }).getByRole("textbox", { name: "Ubicación del tablero" })).toHaveValue("Sótano");
+});
+
+test("bajar un material a cero lo quita con «Deshacer»", async ({ page }) => {
+  await iniciarLevantamiento(page);
+  await irAlPaso(page, "Materiales");
+  await page.getByRole("button", { name: /agregar línea libre/i }).click();
+  await page.getByRole("textbox", { name: "Descripción de la línea 1" }).fill("Tubo EMT 3/4");
+  await page.getByRole("button", { name: "Menos de la línea 1" }).click();
+  await expect(page.getByRole("textbox", { name: "Descripción de la línea 1" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Deshacer" }).click();
+  await expect(page.getByRole("textbox", { name: "Descripción de la línea 1" })).toHaveValue("Tubo EMT 3/4");
+});
+
+test("un doble toque en «Firmar» guarda la firma una sola vez", async ({ page }) => {
+  await iniciarLevantamiento(page);
+  await irAlPaso(page, "Firma del cliente");
+  await page.getByRole("button", { name: "Entregar el teléfono" }).click();
+  const hoja = page.getByRole("dialog", { name: "Constancia de visita" });
+  await hoja.getByRole("textbox", { name: "Su nombre" }).fill("Martha Gómez");
+  const recuadro = page.getByLabel("Espacio para firmar con el dedo");
+  await recuadro.scrollIntoViewIfNeeded();
+  const caja = (await recuadro.boundingBox())!;
+  await page.mouse.move(caja.x + caja.width * 0.1, caja.y + caja.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(caja.x + caja.width * 0.8, caja.y + caja.height * 0.5, { steps: 8 });
+  await page.mouse.up();
+  // Cuenta las escrituras del levantamiento mientras se firma.
+  await page.evaluate(() => {
+    const original = IDBObjectStore.prototype.put;
+    const w = window as unknown as { escrituras: number };
+    w.escrituras = 0;
+    IDBObjectStore.prototype.put = function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore["put"]>) {
+      if (this.name === "levantamientos") w.escrituras += 1;
+      return original.apply(this, args);
+    };
+  });
+  await hoja.getByRole("button", { name: "Firmar" }).dblclick();
+  await expect(hoja).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => (window as unknown as { escrituras: number }).escrituras)).toBe(1);
+});
+
+test("el botón atrás del teléfono vuelve al paso anterior y después a mis visitas, sin salir de la app", async ({ page }) => {
+  await iniciarLevantamiento(page);
+  await irAlPaso(page, "Cuarto técnico");
+  await page.goBack();
+  await expect(page.getByRole("navigation", { name: "Recorrido de la visita" })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("region", { name: "Siguiente visita" })).toBeVisible();
+});
+

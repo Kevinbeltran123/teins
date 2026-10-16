@@ -13,6 +13,15 @@ describe("validarDefinicionFormato", () => {
     expect(validarDefinicionFormato(base)).toEqual([]);
   });
 
+  it("un mínimo de fotos exige que el campo sea obligatorio: si no, nunca se podría marcar «No se pudo obtener» (iteración 42)", () => {
+    const conMinimo = (obligatorio: boolean): VersionFormato => ({
+      ...base,
+      secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "f", etiqueta: "F", tipo: "foto", min: 2, ...(obligatorio ? { obligatorio } : {}) }] }],
+    });
+    expect(validarDefinicionFormato(conMinimo(true))).toEqual([]);
+    expect(validarDefinicionFormato(conMinimo(false))).toEqual(["Un mínimo de fotos exige que s.f sea obligatorio"]);
+  });
+
   it("rechaza claves repetidas, unidades repetidas y secciones vacías", () => {
     const mala: VersionFormato = {
       ...base,

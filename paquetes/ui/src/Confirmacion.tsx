@@ -1,16 +1,41 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Aviso } from "./Aviso";
 import { Boton } from "./Boton";
 import { Dialogo } from "./Dialogo";
-import { CircleCheck, TriangleAlert } from "./iconos";
+import { etiquetaEnter } from "./teclas";
+import type { LucideIcon } from "./iconos";
+
+type Consecuencia = { icono: LucideIcon; texto: string; detalle?: string };
+
+/** Las consecuencias de una acción, una por línea con su icono: se leen antes de decidir (DESIGN.md). */
+export function Consecuencias({ lista }: { lista: readonly Consecuencia[] }) {
+  return (
+    <ul className="consecuencias m-0 flex list-none flex-col rounded-panel border border-division p-0">
+      {lista.map(({ icono: Icono, texto, detalle }) => (
+        <li key={texto} className="grid grid-cols-[16px_minmax(0,1fr)] gap-2.5 border-division px-3 py-2.5 text-ayuda leading-snug not-first:border-t">
+          <Icono aria-hidden className="mt-0.5 size-4 text-texto-secundario" strokeWidth={1.6} />
+          <span>
+            {texto}
+            {detalle && <small className="block text-[12px] text-texto-secundario">{detalle}</small>}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 const enOficina = () => typeof document !== "undefined" && document.documentElement.dataset.superficie === "oficina";
 
 interface Props {
   /** Pregunta corta con el verbo y el objeto: "¿Desactivar a Juan Pérez?". Nunca "¿Está seguro?". */
   titulo: string;
-  /** La consecuencia, en una o dos frases, y lo que haga falta para decidir (un motivo, por ejemplo). */
-  children: ReactNode;
+  /**
+   * Las consecuencias concretas, una por línea con su icono y un detalle opcional: se leen antes de decidir
+   * (DESIGN.md, "Confirmaciones sin icono").
+   */
+  consecuencias?: readonly Consecuencia[];
+  /** La consecuencia en una o dos frases, si no va en `consecuencias`, y lo que haga falta para decidir (un motivo). */
+  children?: ReactNode;
   /** El mismo verbo del título, en el botón: "Desactivar usuario". Nunca "Aceptar" ni "Sí". */
   confirmar: string;
   /** Texto del botón que no hace nada. "Cancelar", salvo que choque con la acción ("Cancelar visita": entonces "Volver"). */
@@ -34,12 +59,20 @@ interface Props {
 
 /**
  * Confirmación de lo que tiene consecuencias (DESIGN.md: qué se confirma y qué se deshace). Mientras trabaja no se
- * puede cerrar, y el botón que no hace nada recibe el foco inicial: la acción que no se deshace nunca es la predeterminada.
+ * puede cerrar. Lo que no se deshace nunca es la acción predeterminada: el foco empieza en "Cancelar". Con
+ * consecuencias y sin nada que escribir, el foco empieza en la acción y en oficina se confirma con ↵ (Enter en Windows; prototipos/base-visual).
  */
-export function Confirmacion({ titulo, children, confirmar, descartar = "Cancelar", nivel, accion, validar, mensajeDeError, alCerrar, alTerminar, forma = "centrado" }: Props) {
+export function Confirmacion({ titulo, consecuencias, children, confirmar, descartar = "Cancelar", nivel, accion, validar, mensajeDeError, alCerrar, alTerminar, forma = "centrado" }: Props) {
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const peligro = nivel === "irreversible";
+  const idConfirmar = useId();
+  const conEnter = !peligro && !validar && forma === "centrado";
+  const atajos = forma === "centrado" && enOficina();
+  // El diálogo (hijo) ya se abrió en su efecto: aquí el botón ya puede recibir el foco.
+  useEffect(() => {
+    if (conEnter) document.getElementById(idConfirmar)?.focus();
+  }, [conEnter, idConfirmar]);
 
   async function hacer() {
     const falta = validar?.();
@@ -62,23 +95,31 @@ export function Confirmacion({ titulo, children, confirmar, descartar = "Cancela
       alCerrar={alCerrar}
       cerrable={!ocupado}
       forma={forma}
-      // El icono de la consecuencia es de oficina (prototipos/oficina); campo conserva su confirmación.
-      icono={forma === "centrado" && enOficina() ? (peligro ? TriangleAlert : CircleCheck) : undefined}
-      tono={peligro ? "peligro" : "exito"}
       // En el teléfono se abre sin anillo de foco sobre "Cancelar": se ve como si ya estuviera elegido.
       focoEnElDialogo={forma === "inferior"}
       pie={
         <>
           <Boton onClick={alCerrar} disabled={ocupado}>
             {descartar}
+            {atajos && (
+              <span aria-hidden className="kbd">
+                Esc
+              </span>
+            )}
           </Boton>
-          <Boton variante={peligro ? "peligro" : "principal"} cargando={ocupado} onClick={() => void hacer()}>
+          <Boton id={idConfirmar} variante={peligro ? "peligro" : "principal"} cargando={ocupado} onClick={() => void hacer()}>
             {confirmar}
+            {atajos && conEnter && (
+              <span aria-hidden className="kbd">
+                {etiquetaEnter()}
+              </span>
+            )}
           </Boton>
         </>
       }
     >
-      <div className="flex flex-col gap-3 text-cuerpo">{children}</div>
+      {consecuencias && consecuencias.length > 0 && <Consecuencias lista={consecuencias} />}
+      {children && <div className="flex flex-col gap-3 text-cuerpo">{children}</div>}
       {error && <Aviso tono="error">{error}</Aviso>}
     </Dialogo>
   );

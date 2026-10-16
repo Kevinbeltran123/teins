@@ -1,30 +1,42 @@
-import { lazy, Suspense, useState } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
-import { crearLevantamiento, type VersionFormato } from "@teins/dominio";
-import { Aviso, Boton, BotonSiguiente, CalendarDays, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FranjaSincronizacion, Insignia, LogOut, MapPin, Smartphone, useSinRepetir } from "@teins/ui";
+import { crearLevantamiento, fotosReferenciadas, sinRespuestasHuerfanas, type VersionFormato } from "@teins/dominio";
+import { Activity, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useMinuto, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
+import { useLecturaRecordada } from "../datos/lecturaRecordada";
 import { estadosDe, visitasDe } from "../datos/lecturas";
 import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal, UsuarioLocal, VisitaLocal } from "../datos/modelo";
 import { estaInstalada } from "../dispositivo/almacenamiento";
 import { plataforma } from "../dispositivo/instalacion";
 import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/useConexion";
-import { fechaHora } from "../formato";
 import { formatoDe, nombreDeFormato, useFormatos, vigentes } from "../formatos";
-import { claseDeTono, comentariosDeOficina, estadoDeEnvio, estadoSegunServidor } from "../mensajes";
-import { fechaDeVisita, hoyLocal, ordenarVisitas } from "../visitas";
-import { Diagnostico } from "./Diagnostico";
+import { claseDeTono, estadoCorto } from "../mensajes";
+import { armarChat, horaDelChat, sinLeer } from "../conversacion";
+import { terminarVisita } from "../datos/terminacion";
+import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
+import { agendaDeVisitas, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, terminadaEn } from "../visitas";
+import { VERSION_APP } from "../version";
+import { AvisoDeAlmacenamiento, Diagnostico } from "./Diagnostico";
 
 // Secundarias: no entran en el JavaScript inicial (ADR-0011).
 const SugerirLlave = lazy(() => import("./SugerirLlave"));
 const TarjetaAvisos = lazy(() => import("./TarjetaAvisos"));
+const HojaCambiarContrasena = lazy(() => import("./HojaCambiarContrasena"));
+// La papelera (ADR-0035): solo al abrirla, dentro de "Tu cuenta".
+const Papelera = lazy(() => import("./Papelera"));
 const GuiaDeInstalacion = lazy(() => import("./InstalarApp").then((m) => ({ default: m.GuiaDeInstalacion })));
 
 interface Props {
   usuario: UsuarioLocal;
   abrir: (id: string) => void;
+  /** El levantamiento que se acaba de cerrar: se resalta en su lista (lo enviado, en "Enviados"). */
+  recien?: string | undefined;
+  /** Cambia cuando se pide abrir la papelera desde fuera ("Ver en Descartados" al descartar). */
+  pedirPapelera?: number | undefined;
+  /** Ya se abrió: el pedido no se repite cada vez que se vuelve al inicio (iteración 42). */
+  papeleraAbierta?: () => void;
   pedirSesion: () => void;
   actualizacion: { disponible: boolean; aplicar: () => void };
 }
@@ -32,11 +44,8 @@ interface Props {
 const fotos = (n: number) => (n === 1 ? "1 foto" : `${n} fotos`);
 const levantamientos = (n: number) => (n === 1 ? "1 levantamiento" : `${n} levantamientos`);
 
-function contarFotos(l: LevantamientoLocal): number {
-  return Object.values(l.respuestas)
-    .flatMap((seccion) => Object.values(seccion))
-    .reduce<number>((total, valor) => total + (Array.isArray(valor) ? valor.length : 0), 0);
-}
+/** Solo las fotos: las líneas de materiales también son una lista y no se cuentan (iteración 42). */
+const contarFotos = (l: LevantamientoLocal) => fotosReferenciadas(sinRespuestasHuerfanas(l).respuestas).length;
 
 const cerrarSesion = () => import("../sesion/sesion").then((m) => m.cerrarSesion());
 
@@ -45,58 +54,108 @@ interface Contexto {
   formatos: VersionFormato[];
   envios: Map<string, EstadoDeEnvio>;
   servidor: Map<string, EstadoServidor>;
+  /** Por levantamiento: hasta dónde leyó el técnico su chat y cuántas respuestas esperan señal (ADR-0040). */
+  chats: { leido: Map<string, string>; enCola: Map<string, number> };
   enLinea: boolean;
+  /** Para nombrar un levantamiento por su cliente y sitio en las listas (iteración 32). */
+  visitas: ReadonlyMap<string, VisitaLocal>;
   /** Vencido el permiso de trabajo local, no se crea ni se edita nada (ADR-0009, parte 2). */
   bloqueado: boolean;
   abrir: (id: string) => void;
   iniciar: (visitaId: string, formato: VersionFormato) => void;
+  recien: string | undefined;
 }
 
-export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
-  const lista = useLiveQuery(() => repositorio.listar(usuario.id), [usuario.id]);
-  const envios = useLiveQuery(async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
-  const servidor = useLiveQuery(async () => new Map((await estadosDe(db, usuario.id)).map((e) => [e.id, e])), [usuario.id]);
-  const visitas = useLiveQuery(() => visitasDe(db, usuario.id), [usuario.id]);
-  const bajada = useLiveQuery(async () => (await db.bajadas.get(usuario.id)) ?? null, [usuario.id]);
+export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbierta, pedirSesion, actualizacion }: Props) {
+  // «Hoy», «En curso» y «Terminar visita» se recalculan con el paso del tiempo, también sin señal.
+  useMinuto();
+  // Al volver de una captura, el inicio empieza con lo que ya había leído: sin esqueleto (iteración 27).
+  const lista = useLecturaRecordada(`lista:${usuario.id}`, () => repositorio.listar(usuario.id), [usuario.id]);
+  const envios = useLecturaRecordada(`envios:${usuario.id}`, async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
+  const servidor = useLecturaRecordada(`servidor:${usuario.id}`, async () => new Map((await estadosDe(db, usuario.id)).map((e) => [e.id, e])), [usuario.id]);
+  const visitas = useLecturaRecordada(`visitas:${usuario.id}`, () => visitasDe(db, usuario.id), [usuario.id]);
+  // Sin abrir lo sellado: lo leído no lleva contenido y la cola se cuenta por lo que está a la vista.
+  const chats = useLecturaRecordada(
+    `chats:${usuario.id}`,
+    async () => {
+      const leido = new Map((await db.lecturasDeChat.where("tecnicoId").equals(usuario.id).toArray()).map((l) => [l.levantamientoId, l.leidoHasta]));
+      const enCola = new Map<string, number>();
+      for (const r of await db.respuestasPendientes.where("tecnicoId").equals(usuario.id).toArray()) if (!r.enviada && !r.rechazo) enCola.set(r.levantamientoId, (enCola.get(r.levantamientoId) ?? 0) + 1);
+      return { leido, enCola };
+    },
+    [usuario.id],
+  );
+  const bajada = useLecturaRecordada(`bajada:${usuario.id}`, async () => (await db.bajadas.get(usuario.id)) ?? null, [usuario.id]);
   const formatos = useFormatos();
-  const deOtros = useLiveQuery(() => repositorio.contarDeOtros(usuario.id), [usuario.id]);
+  const deOtros = useLecturaRecordada(`deOtros:${usuario.id}`, () => repositorio.contarDeOtros(usuario.id), [usuario.id]);
   const enLinea = useConexionDelNavegador();
   const alcanzable = useServidorAlcanzable();
   const [confirmandoSalida, setConfirmandoSalida] = useState(false);
   const [guiaAbierta, setGuiaAbierta] = useState(false);
   const [cuentaAbierta, setCuentaAbierta] = useState(false);
+  // La página de la cuenta que se ve, y hacia dónde se movió para animarla (iteración 32).
+  const [pagina, setPagina] = useState<PaginaDeCuenta | null>(null);
+  const [direccion, setDireccion] = useState<"adelante" | "atras" | null>(null);
+  const irA = (nueva: PaginaDeCuenta | null) => {
+    setDireccion(nueva ? "adelante" : "atras");
+    setPagina(nueva);
+  };
+  const abrirCuenta = (en: PaginaDeCuenta | null = null) => {
+    setPagina(en);
+    setDireccion(null);
+    setCuentaAbierta(true);
+  };
+  const descartados = useLecturaRecordada(`descartados:${usuario.id}`, async () => (await repositorio.descartados(usuario.id)).length, [usuario.id]);
+  useEffect(() => {
+    if (pedirPapelera === 0) return;
+    abrirCuenta("descartados");
+    papeleraAbierta?.();
+  }, [pedirPapelera]);
 
-  const deEnvios = [...(envios?.values() ?? [])];
+  // Lo descartado (un envío que oficina rechazó, en la papelera) ya no está por enviar.
+  const sinDescartar = new Set((lista ?? []).map((l) => l.id));
+  const deEnvios = [...(envios?.values() ?? [])].filter((e) => sinDescartar.has(e.levantamientoId));
   const porEnviar = deEnvios.filter((e) => e.estado !== "recibido").length;
+  // Un envío con error permanente no sube solo (se muestra en Enviados): no cuenta como «subiendo».
+  const porSubir = deEnvios.filter((e) => e.estado !== "recibido" && e.estado !== "error").length;
   const esperanSesion = deEnvios.some((e) => e.estado === "requiere_sesion") || Boolean(bajada?.sesionVencida);
   const esperanActualizacion = deEnvios.some((e) => e.estado === "requiere_actualizar");
   const permisoVencido = bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
-  const sinConexion = !enLinea || (!alcanzable && porEnviar > 0);
+  const sinConexion = !enLinea || (!alcanzable && porSubir > 0);
 
-  // Un doble toque crea uno solo.
+  // Un doble toque crea uno solo. Creado, no se suelta: entre abrirlo y que la captura reemplace esta pantalla,
+  // un segundo toque crearía otro.
+  const iniciado = useRef(false);
   const [iniciar] = useSinRepetir(async (visitaId: string, formato: VersionFormato) => {
+    if (iniciado.current) return;
     const levantamiento = crearLevantamiento(formato, uuidv7(), new Date(), visitaId, nuevoIdDeRepeticion);
-    await repositorio.crear(levantamiento, usuario.id);
+    // Lo nombra aunque la visita salga del teléfono cuando ya esté atendida (iteración 42).
+    const visita = visitas?.find((v) => v.id === visitaId);
+    await repositorio.crear(levantamiento, usuario.id, visita ? { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre } : undefined);
+    iniciado.current = true;
     abrir(levantamiento.id);
   });
 
   const cargando = lista === undefined || envios === undefined || servidor === undefined || visitas === undefined || bajada === undefined || formatos === undefined;
-  const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar };
+  const contexto: Contexto | undefined = cargando ? undefined : { formatos, envios, servidor, chats: chats ?? { leido: new Map(), enCola: new Map() }, visitas: new Map(visitas.map((v) => [v.id, v])), enLinea: alcanzable, bloqueado: permisoVencido, abrir, iniciar, recien };
 
   // Visitas con sus levantamientos; una reasignada solo se muestra si el técnico ya empezó algo en ella (regla 17).
   const porVisita = Map.groupBy(lista ?? [], (l) => l.visitaId ?? "");
   const visitasCon = (estado: LevantamientoLocal["estado"]) => new Set((lista ?? []).filter((l) => l.estado === estado && l.visitaId).map((l) => l.visitaId!));
-  const mostradas = ordenarVisitas(
+  // Lo atendido no es la siguiente visita (iteración 40): sin nada pendiente, no hay siguiente.
+  const { pendientes, atendidasHoy } = agendaDeVisitas(
     (visitas ?? []).filter((v) => !v.fueraDeAlcance || porVisita.has(v.id)),
     hoyLocal(),
     visitasCon("borrador"),
     visitasCon("enviado"),
   );
-  const [siguiente, ...otras] = mostradas;
-  const idsMostradas = new Set(mostradas.map((v) => v.id));
+  const [siguiente, ...otras] = pendientes;
+  const idsMostradas = new Set([...pendientes, ...atendidasHoy].map((v) => v.id));
   const sueltos = (lista ?? []).filter((l) => !l.visitaId || !idsMostradas.has(l.visitaId));
 
-  const enviados = (lista ?? []).filter((l) => l.estado === "enviado");
+  // Lo que no entró va aparte y arriba: es lo único de la lista que pide hacer algo (iteración 32).
+  const noEntraron = (lista ?? []).filter((l) => l.estado === "enviado" && envios?.get(l.id)?.estado === "error" && !servidor?.has(l.id));
+  const enviados = (lista ?? []).filter((l) => l.estado === "enviado" && !noEntraron.includes(l));
   const borradoresSueltos = sueltos.filter((l) => l.estado === "borrador");
   const primerNombre = usuario.nombre.split(" ")[0] ?? usuario.nombre;
 
@@ -110,7 +169,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
           </div>
           <button
             type="button"
-            onClick={() => setCuentaAbierta(true)}
+            onClick={() => abrirCuenta()}
             aria-label="Tu cuenta"
             className="grid size-12 shrink-0 place-items-center rounded-full bg-panel-hundido text-ayuda font-extrabold active:scale-95 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
           >
@@ -120,7 +179,7 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
       </header>
 
       <main className="mx-auto flex max-w-xl flex-col gap-4 px-4 pt-1 pb-10">
-        <FranjaSincronizacion enLinea={!sinConexion} porSubir={porEnviar} />
+        <FranjaSincronizacion enLinea={!sinConexion} porSubir={porSubir} />
         <div className="flex flex-col gap-3 empty:hidden">
           {permisoVencido && <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>}
           {esperanSesion && (
@@ -162,8 +221,8 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
           <>
             {siguiente && <VisitaFocal visita={siguiente} levantamientos={porVisita.get(siguiente.id) ?? []} contexto={contexto} />}
 
-            {mostradas.length === 0 && (
-              <EstadoVacio icono={CalendarDays} titulo="Sin visitas asignadas">
+            {pendientes.length === 0 && (
+              <EstadoVacio icono={CalendarDays} titulo={atendidasHoy.length > 0 ? "No tienes visitas pendientes" : "Sin visitas asignadas"}>
                 {!bajada?.ultimaEn && !alcanzable ? (
                   "Conéctate para descargar tus visitas y los formatos."
                 ) : !bajada?.ultimaEn ? (
@@ -172,6 +231,15 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
                   "Cuando oficina te asigne una visita, aparece aquí al tener señal."
                 )}
               </EstadoVacio>
+            )}
+
+            {noEntraron.length > 0 && (
+              <section aria-labelledby="titulo-atencion" className="flex flex-col gap-2.5">
+                <h2 id="titulo-atencion" className="pt-2 text-ayuda font-extrabold text-texto-secundario">
+                  Necesita atención
+                </h2>
+                <Filas levantamientos={noEntraron} contexto={contexto} atencion />
+              </section>
             )}
 
             {/* Bajo la siguiente visita: la acción principal de la pantalla sigue siendo la de la visita. */}
@@ -185,6 +253,18 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
                   Después
                 </h2>
                 {otras.map((v) => (
+                  <FilaVisita key={v.id} visita={v} levantamientos={porVisita.get(v.id) ?? []} contexto={contexto} />
+                ))}
+              </section>
+            )}
+
+            {/* Lo atendido hoy, aparte y al final: por si hace falta otro levantamiento en la misma visita. */}
+            {atendidasHoy.length > 0 && (
+              <section aria-labelledby="titulo-atendidas" className="flex flex-col gap-2.5">
+                <h2 id="titulo-atendidas" className="pt-2 text-ayuda font-extrabold text-texto-secundario">
+                  Atendidas hoy
+                </h2>
+                {atendidasHoy.map((v) => (
                   <FilaVisita key={v.id} visita={v} levantamientos={porVisita.get(v.id) ?? []} contexto={contexto} />
                 ))}
               </section>
@@ -222,31 +302,63 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
       </main>
 
       {cuentaAbierta && (
-        <Dialogo forma="inferior" titulo="Tu cuenta" alCerrar={() => setCuentaAbierta(false)} focoEnElDialogo>
-          <div className="flex flex-col gap-3">
-            {/* Quién está en este teléfono, como la cabecera de una ficha de ajustes. */}
-            <div className="flex items-center gap-3.5 rounded-panel bg-panel-hundido px-4 py-3.5">
-              <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-full bg-superficie text-cuerpo font-extrabold text-sobre-superficie">
-                {iniciales(usuario.nombre)}
-              </span>
-              <span className="flex min-w-0 flex-col">
-                <strong className="truncate text-cuerpo">{usuario.nombre}</strong>
-                <span className="text-ayuda text-texto-secundario">{sinConexion ? "Sin señal · lo capturado queda aquí" : "Conectado · todo al día"}</span>
-              </span>
-            </div>
-            <Diagnostico tecnicoId={usuario.id} />
-            <button
-              type="button"
-              onClick={() => {
-                setCuentaAbierta(false);
-                if (porEnviar > 0) setConfirmandoSalida(true);
-                else void cerrarSesion();
-              }}
-              className="flex min-h-tactil items-center gap-3 rounded-panel bg-panel-hundido px-4 text-left text-cuerpo font-bold text-error focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&_svg]:size-5"
-            >
-              <LogOut aria-hidden />
-              Cerrar sesión
-            </button>
+        <Dialogo
+          forma="inferior"
+          titulo={pagina ? TITULO_DE_PAGINA[pagina] : "Tu cuenta"}
+          alCerrar={() => setCuentaAbierta(false)}
+          volver={pagina ? { etiqueta: "Cuenta", alVolver: () => irA(null) } : undefined}
+          focoEnElDialogo
+        >
+          {/* Lo que se abre desde la cuenta entra en la misma hoja, como una página (iteración 32). */}
+          <div key={pagina ?? "cuenta"} className={`flex flex-col gap-4 ${direccion === "adelante" ? "motion-safe:animate-pagina-adelante" : direccion === "atras" ? "motion-safe:animate-pagina-atras" : ""}`}>
+            {pagina === "descartados" && formatos ? (
+              <Suspense fallback={<EsqueletoBloques etiqueta="Cargando los descartados" altos={["bajo"]} />}>
+                <Papelera usuarioId={usuario.id} formatos={formatos} />
+              </Suspense>
+            ) : pagina === "contrasena" ? (
+              <Suspense fallback={<EsqueletoBloques etiqueta="Cargando" altos={["alto"]} />}>
+                <HojaCambiarContrasena alTerminar={() => irA(null)} />
+              </Suspense>
+            ) : pagina === "diagnostico" ? (
+              <Diagnostico tecnicoId={usuario.id} />
+            ) : (
+              <>
+                {/* Quién está en este teléfono y cómo va lo suyo, sin caja (Luma y Shop en Mobbin). */}
+                <div className="flex items-center gap-3.5 px-0.5">
+                  <span aria-hidden className="grid size-13 shrink-0 place-items-center rounded-full bg-superficie-pista text-cuerpo font-semibold">
+                    {iniciales(usuario.nombre)}
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <strong className="truncate text-[18px] font-semibold">{usuario.nombre}</strong>
+                    <span className="flex items-center gap-2 text-ayuda text-texto-secundario">
+                      <span aria-hidden className={`size-2 rounded-full ${sinConexion ? "bg-sync-pendiente" : "bg-sync-ok"}`} />
+                      {sinConexion ? "Sin señal · lo capturado queda aquí" : porSubir > 0 ? "Conectado · enviando lo pendiente" : "Conectado · todo enviado"}
+                    </span>
+                  </span>
+                </div>
+                <AvisoDeAlmacenamiento />
+                <GrupoDeAjustes>
+                  <FilaDeTema />
+                  {/* Sin señal no se abre: el servidor es quien la cambia (ADR-0033). */}
+                  <FilaDeAjuste icono={LockKeyhole} texto="Cambiar contraseña" detalle={alcanzable ? undefined : "Necesita señal"} apagada={!alcanzable} onClick={() => irA("contrasena")} />
+                  <FilaDeAjuste icono={Trash} texto="Descartados" valor={descartados || undefined} onClick={() => irA("descartados")} />
+                  <FilaDeAjuste icono={Activity} texto="Diagnóstico del teléfono" onClick={() => irA("diagnostico")} />
+                </GrupoDeAjustes>
+                {/* Sola y al final: lejos de lo que se toca a diario. */}
+                <GrupoDeAjustes>
+                  <FilaDeAjuste
+                    texto="Cerrar sesión"
+                    peligro
+                    onClick={() => {
+                      setCuentaAbierta(false);
+                      if (porEnviar > 0) setConfirmandoSalida(true);
+                      else void cerrarSesion();
+                    }}
+                  />
+                </GrupoDeAjustes>
+                <p className="text-center text-ayuda text-texto-terciario">{`TEINS · versión ${VERSION_APP}`}</p>
+              </>
+            )}
           </div>
         </Dialogo>
       )}
@@ -276,6 +388,9 @@ export function Inicio({ usuario, abrir, pedirSesion, actualizacion }: Props) {
   );
 }
 
+type PaginaDeCuenta = "contrasena" | "descartados" | "diagnostico";
+const TITULO_DE_PAGINA: Record<PaginaDeCuenta, string> = { contrasena: "Contraseña", descartados: "Descartados", diagnostico: "Diagnóstico" };
+
 const hoyLargo = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long" });
 const iniciales = (nombre: string) =>
   nombre
@@ -286,32 +401,48 @@ const iniciales = (nombre: string) =>
     .join("");
 
 /**
- * Punto focal (DESIGN.md, Recorrido): la visita de ahora, con la barra amarilla al borde (Jobber), el avance
- * del levantamiento por pasos y la única acción principal.
+ * Punto focal (DESIGN.md; prototipos/base-visual, campo): la visita de ahora en una tarjeta de borde fino, con
+ * cuándo es en azul, el avance del levantamiento por pasos y la única acción principal.
  */
 function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal; levantamientos: LevantamientoLocal[]; contexto: Contexto }) {
   const borrador = levantamientos.find((l) => l.estado === "borrador");
   const formato = borrador ? formatoDe(contexto.formatos, borrador) : undefined;
   const resumen = borrador && formato ? resumenDeRecorrido(formato, borrador) : undefined;
+  const abierta = enCurso(visita);
+  const terminada = terminadaEn(visita);
   return (
-    <section aria-label="Siguiente visita" className="relative flex flex-col gap-4 overflow-hidden rounded-panel bg-panel py-5 pr-5 pl-6.5">
-      <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 bg-acento" />
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-acento px-3 py-1 text-ayuda font-extrabold text-sobre-acento first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
-        <span className="rounded-full bg-panel-hundido px-3 py-1 text-ayuda font-extrabold">{visita.motivo}</span>
+    // Al abrirla, esta tarjeta se convierte en la cabecera de la captura (iteración 27).
+    <section aria-label="Siguiente visita" className="flex flex-col gap-3 rounded-2xl border border-division bg-panel p-4" style={{ viewTransitionName: nombreDeTransicion("visita", visita.id) }}>
+      <div className="flex justify-between gap-3 text-[12px] font-medium text-texto-secundario">
+        <span aria-hidden>Siguiente visita</span>
+        {terminada ? (
+          <span className="flex items-center gap-1 text-sync-ok">
+            <CircleCheck aria-hidden className="size-3.5" />
+            {`Terminada ${horaDe(terminada)}`}
+          </span>
+        ) : (
+          <span className="text-superficie first-letter:uppercase">{abierta ? `En curso · desde ${horaCorta(visita.horaInicio!)}` : cuandoEs(visita)}</span>
+        )}
       </div>
-      <h2 className="text-titulo leading-tight font-extrabold">{visita.cliente.nombre}</h2>
-      <p className="-mt-2 flex items-start gap-2.5 text-cuerpo text-texto-secundario">
-        <MapPin aria-hidden className="mt-0.5 size-[18px] shrink-0" />
-        <span>
+      <h2 className="text-subtitulo leading-tight font-semibold tracking-[-0.01em]">{visita.cliente.nombre}</h2>
+      <p className="-mt-1 flex flex-col gap-0.5 text-[13px] text-texto-secundario">
+        <span className="flex items-start gap-1.5">
+          <MapPin aria-hidden className="mt-0.5 size-3.5 shrink-0" />
           {visita.sitio.nombre} · {visita.sitio.direccion}
         </span>
+        <span>{visita.motivo}</span>
+        {abierta && (
+          <span className="flex items-center gap-1.5">
+            <Clock aria-hidden className="size-3.5 shrink-0" />
+            Sin hora de fin
+          </span>
+        )}
       </p>
       {resumen && (
         <div className="flex flex-col gap-2">
           <div aria-hidden className="flex gap-1">
             {resumen.pasos.map((p, i) => (
-              <i key={p.id} className={`h-1.5 flex-1 rounded-full ${resumen.hechos[i] ? "bg-sync-ok" : p === resumen.siguiente ? "bg-acento" : "bg-panel-hundido"}`} />
+              <i key={p.id} className={`h-[3px] flex-1 rounded-full ${resumen.hechos[i] ? "bg-sync-ok" : p === resumen.siguiente ? "bg-superficie" : "bg-superficie-pista"}`} />
             ))}
           </div>
           <span className="text-ayuda text-texto-secundario">
@@ -322,24 +453,77 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
       )}
       {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} />}
       <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="principal" />
+      {/* Bajo la acción principal: terminar libera al técnico, no reemplaza capturar (ADR-0037). */}
+      {abierta && !contexto.bloqueado && <TerminarVisita visita={visita} contexto={contexto} />}
     </section>
   );
+}
+
+/** «Terminar visita» (ADR-0037), en la tarjeta principal y en cada fila: una visita en curso se termina esté donde esté. */
+function TerminarVisita({ visita, contexto }: { visita: VisitaLocal; contexto: Contexto }) {
+  const [terminando, setTerminando] = useState(false);
+  const notificar = useNotificar();
+  return (
+    <>
+      <Boton variante="secundaria" className="w-full" onClick={() => setTerminando(true)}>
+        Terminar visita
+      </Boton>
+      {terminando && (
+        <Confirmacion
+          nivel="consecuencia"
+          forma="inferior"
+          titulo={`¿Terminar la visita a ${visita.cliente.nombre}?`}
+          confirmar="Terminar visita"
+          accion={async () => {
+            await terminarVisita(db, visita.tecnicoId, visita.id, new Date());
+            sincronizarEnSegundoPlano();
+          }}
+          mensajeDeError={() => "No se pudo terminar la visita. Intenta de nuevo."}
+          alCerrar={() => setTerminando(false)}
+          // Se ve terminada al instante; sin señal, sale cuando vuelva (ADR-0037).
+          alTerminar={() => notificar({ texto: contexto.enLinea ? "Visita terminada: oficina ya te ve libre" : "Visita terminada: oficina lo sabrá cuando tengas señal" })}
+          consecuencias={[
+            { icono: Building, texto: `Oficina ve que terminaste a las ${horaDe(new Date().toISOString())}` },
+            { icono: CalendarDays, texto: "Quedas libre para otras visitas desde ya" },
+            { icono: Send, texto: "Si te falta enviar algo, lo sigues pudiendo enviar" },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
+/** "Hoy · 9:00 a. m. a 11:00 a. m.", "Mañana · Desde 2:00 p. m." o solo el día si es de todo el día. */
+function cuandoEs(visita: VisitaLocal): string {
+  const horario = horarioDeVisita(visita);
+  const dia = fechaDeVisita(visita.programadaPara, hoyLocal());
+  return horario ? `${dia} · ${horario.charAt(0).toLowerCase()}${horario.slice(1)}` : dia;
+}
+
+/** La línea de la hora en una fila: terminada, en curso o el horario; nada si es de todo el día. */
+function horaDeFila(visita: VisitaLocal): string | null {
+  const terminada = terminadaEn(visita);
+  if (terminada) return `Terminada ${horaDe(terminada)}`;
+  if (enCurso(visita)) return `En curso · desde ${horaCorta(visita.horaInicio!)}`;
+  return horarioDeVisita(visita);
 }
 
 /** Otra visita (DoorDash): el día a la izquierda, el cliente y el sitio; tocarla ofrece empezar o seguir. */
 function FilaVisita({ visita, levantamientos, contexto }: { visita: VisitaLocal; levantamientos: LevantamientoLocal[]; contexto: Contexto }) {
   const [abierta, setAbierta] = useState(false);
   return (
-    <article className="flex flex-col gap-3 rounded-panel bg-panel p-4">
-      <button type="button" onClick={() => setAbierta((a) => !a)} aria-expanded={abierta} className="flex items-center gap-3.5 text-left focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco">
-        <span className="w-16 shrink-0 text-ayuda font-extrabold text-texto-secundario first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
+    <article className="flex flex-col gap-3 border-t border-division py-3" style={{ viewTransitionName: nombreDeTransicion("visita", visita.id) }}>
+      <button type="button" onClick={() => setAbierta((a) => !a)} aria-expanded={abierta} className="flex min-h-11 items-center gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco">
+        <span className="w-16 shrink-0 text-[12px] leading-tight text-texto-secundario first-letter:uppercase">{fechaDeVisita(visita.programadaPara, hoyLocal())}</span>
         <span className="flex min-w-0 flex-col">
-          <strong className="text-cuerpo leading-snug">{`${visita.cliente.nombre} · ${visita.sitio.nombre}`}</strong>
-          <span className="text-ayuda text-texto-secundario">{visita.motivo}</span>
+          <strong className="text-[14px] leading-snug font-medium">{`${visita.cliente.nombre} · ${visita.sitio.nombre}`}</strong>
+          <span className="text-[13px] text-texto-secundario">{[horaDeFila(visita), visita.motivo].filter(Boolean).join(" · ")}</span>
         </span>
       </button>
       {visita.fueraDeAlcance && <AvisoDeSalida visita={visita} />}
       {abierta && !visita.fueraDeAlcance && <Acciones visita={visita} levantamientos={levantamientos} contexto={contexto} variante="secundaria" />}
+      {/* En curso aunque no sea la principal (un borrador viejo puede ocupar ese lugar): se termina aquí también. */}
+      {enCurso(visita) && !contexto.bloqueado && <TerminarVisita visita={visita} contexto={contexto} />}
     </article>
   );
 }
@@ -410,9 +594,9 @@ function Acciones({
   );
 }
 
-function Filas({ levantamientos, contexto }: { levantamientos: LevantamientoLocal[]; contexto: Contexto }) {
+function Filas({ levantamientos, contexto, atencion = false }: { levantamientos: LevantamientoLocal[]; contexto: Contexto; atencion?: boolean }) {
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className={`overflow-hidden rounded-panel border bg-panel [&>li+li]:border-t [&>li+li]:border-division ${atencion ? "border-error/40" : "border-division"}`}>
       {levantamientos.map((l) => (
         <li key={l.id}>
           <Fila levantamiento={l} contexto={contexto} />
@@ -422,29 +606,57 @@ function Filas({ levantamientos, contexto }: { levantamientos: LevantamientoLoca
   );
 }
 
+const ICONO_DE_TONO = { ok: CircleCheck, pendiente: Clock, error: CircleAlert, revision: Eye } as const;
+const CLASE_DE_TONO = { ...claseDeTono, revision: "text-estado-revision-texto" } as const;
+
+/**
+ * Un levantamiento en dos líneas (iteración 32): arriba de quién es y cuándo; abajo el estado en dos o tres palabras
+ * con su icono, y el formato. El estado nunca empuja el título: la explicación larga está en el detalle.
+ */
 function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLocal; contexto: Contexto }) {
   const envio = contexto.envios.get(l.id);
   const servidor = contexto.servidor.get(l.id);
-  // El estado de negocio según el servidor manda sobre el de envío del teléfono.
-  const estado = servidor ? estadoSegunServidor(servidor) : envio ? estadoDeEnvio(envio, contexto.enLinea) : null;
-  const comentarios = servidor?.comentarios?.length ?? 0;
+  const estado = l.estado === "borrador" ? { texto: "Borrador", tono: "pendiente" as const } : estadoCorto(envio, servidor, contexto.enLinea);
+  // El chat con oficina (ADR-0040): lo nuevo de oficina, o lo que el técnico respondió y espera señal.
+  const nuevos = servidor?.comentarios?.length ? sinLeer(armarChat(servidor.comentarios, []), contexto.chats.leido.get(l.id) ?? null) : 0;
+  const enCola = contexto.chats.enCola.get(l.id) ?? 0;
+  const visita = l.visitaId ? contexto.visitas.get(l.visitaId) : undefined;
+  // La visita atendida sale del teléfono al día siguiente (ADR-0041): lo enviado sigue diciendo dónde fue (iteración 42).
+  const lugar = visita ? `${visita.cliente.nombre} · ${visita.sitio.nombre}` : l.lugar ? `${l.lugar.cliente} · ${l.lugar.sitio}` : undefined;
+  const formato = nombreDeFormato(contexto.formatos, l.formato);
+  const Icono = estado ? (l.estado === "borrador" ? Pencil : ICONO_DE_TONO[estado.tono]) : undefined;
+  const enPantalla = useNombreEnPantalla<HTMLButtonElement>(nombreDeTransicion("lev", l.id));
   return (
     <button
       type="button"
       onClick={() => contexto.abrir(l.id)}
-      className="flex min-h-tactil w-full items-center gap-3.5 rounded-panel bg-panel p-4 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+      // La lista de enviados crece: la fila lleva su nombre de transición solo mientras se ve.
+      ref={enPantalla}
+      className={`grid min-h-tactil w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-3 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco ${contexto.recien === l.id ? "animate-resaltar" : ""}`}
     >
-      <span className="w-16 shrink-0 text-ayuda font-extrabold text-texto-secundario">{diaCorto(l.creadoEn)}</span>
-      <span className="flex min-w-0 grow flex-col">
-        <strong className="text-cuerpo leading-snug">{nombreDeFormato(contexto.formatos, l.formato)}</strong>
-        <span className="text-ayuda text-texto-secundario">{fotos(contarFotos(l))}</span>
-        {comentarios > 0 && <span className="text-ayuda font-bold">{comentariosDeOficina(comentarios)}</span>}
+      <strong className="truncate text-cuerpo font-semibold">{lugar ?? formato}</strong>
+      <span className="inline-flex items-center gap-1.5 text-ayuda text-texto-secundario">
+        {nuevos > 0 && <i className="size-2 rounded-full bg-acento" aria-label="Sin leer" />}
+        {diaCorto(l.creadoEn)}
       </span>
-      {/* El estado se dice una vez, en su pastilla (crítica, problema 16). */}
-      {l.estado === "borrador" ? (
-        <Insignia tono="borrador">Borrador</Insignia>
+      <span className="col-span-2 flex min-w-0 items-center gap-1.5 text-ayuda text-texto-secundario">
+        {estado && Icono && (
+          <span className={`inline-flex shrink-0 items-center gap-1.5 font-medium ${CLASE_DE_TONO[estado.tono]} [&_svg]:size-4`}>
+            <Icono aria-hidden />
+            {estado.texto}
+          </span>
+        )}
+        <span className="truncate">· {lugar ? formato : fotos(contarFotos(l))}</span>
+      </span>
+      {nuevos > 0 ? (
+        <span className="col-span-2 text-cuerpo font-semibold text-acento">Oficina te escribió</span>
       ) : (
-        estado && <span className={`shrink-0 rounded-full bg-panel-hundido px-3 py-1 text-right text-ayuda font-extrabold ${claseDeTono[estado.tono]}`}>{estado.texto}</span>
+        enCola > 0 && (
+          <span className="col-span-2 inline-flex items-center gap-1.5 text-cuerpo font-medium text-alerta-texto">
+            <Clock aria-hidden className="size-4" />
+            {enCola === 1 ? "1 respuesta por enviar" : `${enCola} respuestas por enviar`}
+          </span>
+        )
       )}
     </button>
   );
@@ -454,7 +666,7 @@ const diaCorto = (iso: string) => {
   const fecha = new Date(iso);
   const hoy = new Date();
   const ayer = new Date(hoy.getTime() - 86_400_000);
-  if (fecha.toDateString() === hoy.toDateString()) return fechaHora(iso).split(" ").slice(-2).join(" ");
+  if (fecha.toDateString() === hoy.toDateString()) return horaDelChat(iso);
   if (fecha.toDateString() === ayer.toDateString()) return "Ayer";
   return new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" }).format(fecha);
 };

@@ -1,9 +1,34 @@
 import { describe, expect, it } from "vitest";
 import { ErrorApi, tipoDeProblema } from "@teins/protocolo";
-import { errorDelCampo, mensajeDeError, textoDelServidor } from "./mensajes";
+import { errorDelCampo, mensajeDeError, sinError, textoDelServidor } from "./mensajes";
 
 const entradaInvalida = (campos?: { ruta: string; mensaje: string }[], detail = "Revise cuerpo") =>
   new ErrorApi({ type: tipoDeProblema("entrada_invalida"), title: "Entrada inválida", status: 400, codigo: "entrada_invalida", detail, ...(campos ? { campos } : {}) });
+const estadoInvalido = (detail?: string) =>
+  new ErrorApi({ type: tipoDeProblema("estado_invalido"), title: "La acción no aplica en el estado actual", status: 409, codigo: "estado_invalido", ...(detail ? { detail } : {}) });
+
+describe("un estado que cambió dice qué pasó, si el servidor lo sabe", () => {
+  it("abrir el informe de una visita cancelada lo dice, en vez de pedir recargar", () => {
+    expect(mensajeDeError(estadoInvalido("La visita está cancelada: no se abre un informe nuevo"))).toBe("La visita está cancelada: no se abre un informe nuevo");
+  });
+
+  it("sin detalle del servidor, se recarga para ver cómo quedó", () => {
+    expect(mensajeDeError(estadoInvalido())).toBe("El levantamiento cambió de estado. Recargue para ver cómo quedó.");
+  });
+});
+
+describe("al cambiar un campo, su error se va", () => {
+  it("quita los errores de ese campo y deja los demás", () => {
+    const errores: { nombre?: string; direccion?: string } = { nombre: "Escriba el nombre del sitio.", direccion: "Escriba la dirección." };
+    expect(sinError(errores, "nombre")).toEqual({ direccion: "Escriba la dirección." });
+    expect(errores.nombre).toBe("Escriba el nombre del sitio.");
+  });
+
+  it("si ese campo no tenía error, devuelve el mismo objeto: la pantalla no se vuelve a pintar", () => {
+    const errores: { nombre?: string; direccion?: string } = { direccion: "Escriba la dirección." };
+    expect(sinError(errores, "nombre")).toBe(errores);
+  });
+});
 
 describe("errores de entrada del servidor en palabras de oficina (iteración 24)", () => {
   it("nombra los datos que el servidor rechazó, en vez de «Revise cuerpo»", () => {

@@ -1,4 +1,4 @@
-import { bigserial, index, pgSchema, text } from "drizzle-orm/pg-core";
+import { bigserial, index, pgSchema, primaryKey, text } from "drizzle-orm/pg-core";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
 
 export const esquemaCambios = pgSchema("cambios");
@@ -19,5 +19,24 @@ export const registro = esquemaCambios.table(
     operacion: text("operacion").notNull(),
     registradoEn: marcaDeTiempo("registrado_en").notNull().defaultNow(),
   },
-  (t) => [index("registro_bajada_idx").on(t.organizacionId, t.secuencia), aislamientoPorOrganizacion("registro")],
+  (t) => [
+    index("registro_bajada_idx").on(t.organizacionId, t.secuencia),
+    // La bajada de un técnico lee sus cambios y los de toda la organización; compactar busca por entidad (ADR-0044).
+    index("registro_usuario_idx").on(t.organizacionId, t.usuarioId, t.secuencia),
+    index("registro_entidad_idx").on(t.organizacionId, t.entidad, t.entidadId, t.secuencia),
+    aislamientoPorOrganizacion("registro"),
+  ],
+).enableRLS();
+
+/**
+ * Época de la bajada por organización (ADR-0038). La cambia solo quien deja limpio un entorno (dejar-limpio.sql): un
+ * teléfono que ve otra época quita lo que bajó del servidor y baja todo de nuevo. Sin fila, la época es la inicial.
+ */
+export const epocas = esquemaCambios.table(
+  "epocas",
+  {
+    organizacionId: organizacionId(),
+    epoca: text("epoca").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.organizacionId] }), aislamientoPorOrganizacion("epocas")],
 ).enableRLS();

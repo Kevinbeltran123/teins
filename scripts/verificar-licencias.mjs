@@ -14,7 +14,7 @@ const PERMITIDAS = new Set([
   "BlueOak-1.0.0",
   "CC0-1.0",
   "Unlicense",
-  // Fuentes tipográficas (Atkinson Hyperlegible).
+  // Fuentes tipográficas (Geist).
   "OFL-1.1",
   // Datos (caniuse-lite y similares), no código.
   "CC-BY-4.0",

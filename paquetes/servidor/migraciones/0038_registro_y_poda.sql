@@ -1,0 +1,2 @@
+CREATE INDEX "registro_usuario_idx" ON "cambios"."registro" USING btree ("organizacion_id","usuario_id","secuencia");--> statement-breakpoint
+CREATE INDEX "registro_entidad_idx" ON "cambios"."registro" USING btree ("organizacion_id","entidad","entidad_id","secuencia");

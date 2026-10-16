@@ -5,7 +5,9 @@ import fc from "fast-check";
 import { bocetoVacio, crearLevantamiento, TIPO_ARCHIVO_BOCETO, type VersionFormato } from "@teins/dominio";
 import { abrirBase, repositorioDexie } from "../datos/dexie";
 import type { BaseCampo } from "../datos/base";
-import { estadoDe, estadosDe, visitasDe } from "../datos/lecturas";
+import { estadoDe, estadosDe, visitaDe, visitasDe } from "../datos/lecturas";
+import { terminarVisita } from "../datos/terminacion";
+import { pendientesDe, responder } from "../datos/conversacion";
 import { almacenDexie } from "./almacen";
 import { crearMotor, espera, ESPERA_MAXIMA_MS, INTERVALO_BAJADA_MS } from "./motor";
 import { servidorFalso, type Falla } from "./pruebas/servidor-falso";
@@ -164,6 +166,35 @@ describe("motor de sincronización", () => {
     expect(await motor.proximoIntento()).toBeNull();
   });
 
+  it("si la verificación no termina (el worker caído), la espera crece en vez de consultar cada 5 s (iteración 42)", async () => {
+    const { db, reloj } = await dispositivo();
+    const s = servidorFalso({ verificacionesPendientes: 4 });
+    const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+    const esperas: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      await motor.sincronizar();
+      const proximo = (await motor.proximoIntento())!;
+      esperas.push(proximo - reloj.ahora());
+      reloj.avanzar(proximo - reloj.ahora());
+    }
+    expect(esperas[0]).toBe(5000);
+    expect(esperas.at(-1)).toBeGreaterThan(5000);
+    await motor.sincronizar();
+    expect(await estados(db)).toEqual(["recibido"]);
+  });
+
+  it("mientras el técnico cambia la contraseña temporal (403), el envío espera: no queda en error (iteración 42)", async () => {
+    const { db, reloj } = await dispositivo();
+    const s = servidorFalso();
+    s.programar("enviarComando", "cambio_de_contrasena");
+    const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+    await motor.sincronizar();
+    expect(await estados(db)).toEqual(["pendiente"]);
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect(await estados(db)).toEqual(["recibido"]);
+  });
+
   it("con la sesión vencida espera a que el técnico vuelva a iniciar sesión, sin perder nada", async () => {
     const { db, reloj } = await dispositivo();
     const s = servidorFalso();
@@ -178,6 +209,44 @@ describe("motor de sincronización", () => {
 
     await almacen.reanudar("requiere_sesion");
     await motor.sincronizar();
+    expect(await estados(db)).toEqual(["recibido"]);
+  });
+
+  it("una foto que el almacenamiento rechaza no da vueltas sin fin: espera cada vez más y termina en error, con su motivo", async () => {
+    const { db, reloj } = await dispositivo(1, 1);
+    const s = servidorFalso();
+    const [foto] = await db.archivos.toCollection().primaryKeys();
+    s.rechazarSiempre(foto as string);
+    const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+
+    await motor.sincronizar();
+    const primeras = s.llamadas.filter((l) => l === "enviarComando").length;
+    // Sin esperar, no lo vuelve a intentar: antes reintentaba en cada sincronización.
+    await motor.sincronizar();
+    expect(s.llamadas.filter((l) => l === "enviarComando").length).toBe(primeras);
+    for (let i = 0; i < 12; i++) {
+      reloj.avanzar(ESPERA_MAXIMA_MS);
+      await motor.sincronizar();
+    }
+    const [envio] = await db.envios.toArray();
+    expect(envio).toMatchObject({ estado: "error", ultimoError: { codigo: "archivos_faltantes" } });
+    expect(s.llamadas.filter((l) => l === "enviarComando").length).toBeLessThan(12);
+  });
+
+  it("rechazado por versión vieja, espera la app nueva y sale al actualizarla; con la misma versión no insiste (ADR-0015)", async () => {
+    const { db, reloj } = await dispositivo();
+    const s = servidorFalso();
+    s.programar("enviarComando", "version_no_soportada");
+    const almacen = almacenDexie(db);
+    const motorDe = (versionApp: number) => crearMotor({ versionApp, almacen, transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora });
+
+    await motorDe(14).sincronizar();
+    expect(await estados(db)).toEqual(["requiere_actualizar"]);
+    await motorDe(14).sincronizar();
+    expect(s.llamadas.filter((l) => l === "enviarComando")).toHaveLength(1);
+
+    // La app se actualizó: lo que esperaba sale solo, sin que el técnico haga nada.
+    await motorDe(15).sincronizar();
     expect(await estados(db)).toEqual(["recibido"]);
   });
 
@@ -322,6 +391,56 @@ describe("bajada (ADR-0003)", () => {
     expect(await visitasDe(db, "t1")).toEqual([{ ...visita(idVisita(2)), tecnicoId: "t1", fueraDeAlcance: true }]);
   });
 
+  it("una visita atendida sale del teléfono sin aviso; con un borrador o un envío por salir se queda igual (ADR-0041)", async () => {
+    const db = abrirBase(`motor-${Math.random()}`);
+    bases.push(db);
+    const s = servidorFalso();
+    const reloj = { ahora: () => Date.now() };
+    for (const n of [4, 5, 6]) s.publicar({ tipo: "visita", visita: visita(idVisita(n)) });
+    await motorDe(db, s, reloj, 15).sincronizar();
+    const repo = repositorioDexie(db);
+    // La 4 ya se envió y llegó; la 5 tiene un borrador; la 6 tiene un envío que no ha salido.
+    const enviado = "0192f0e0-0000-7000-8000-000000000994";
+    await repo.crear(crearLevantamiento(formato, enviado, new Date(), idVisita(4)), "t1");
+    expect((await repo.enviar(enviado, formato, new Date())).ok).toBe(true);
+    await motorDe(db, s, reloj, 15).sincronizar();
+    expect((await db.envios.get(enviado))?.estado).toBe("recibido");
+    await repo.crear(crearLevantamiento(formato, "0192f0e0-0000-7000-8000-000000000995", new Date(), idVisita(5)), "t1");
+    const porSalir = "0192f0e0-0000-7000-8000-000000000996";
+    await repo.crear(crearLevantamiento(formato, porSalir, new Date(), idVisita(6)), "t1");
+    expect((await repo.enviar(porSalir, formato, new Date())).ok).toBe(true);
+    // Todavía no le toca salir: sigue pendiente sin cortar la sincronización.
+    await db.envios.update(porSalir, { proximoIntentoEn: Date.now() + 3_600_000 });
+
+    for (const n of [4, 5, 6]) s.publicar({ tipo: "fuera_de_alcance", entidad: "visita", id: idVisita(n), motivo: "atendida" });
+    await motorDe(db, s, reloj, 15).sincronizar({ bajar: true });
+    const quedan = await visitasDe(db, "t1");
+    expect(quedan.map((v) => v.id).sort()).toEqual([idVisita(5), idVisita(6)]);
+    // Se quedan como estaban: no se avisa como una reasignación.
+    expect(quedan.every((v) => !v.fueraDeAlcance && !v.motivoSalida)).toBe(true);
+    // Lo enviado no se toca (regla 5).
+    expect(await repo.obtener(enviado)).toBeDefined();
+  });
+
+  it("un borrador descartado no retiene en el teléfono una visita que el servidor ya cerró (iteración 42)", async () => {
+    const db = abrirBase(`motor-${Math.random()}`);
+    bases.push(db);
+    const s = servidorFalso();
+    const reloj = { ahora: () => Date.now() };
+    s.publicar({ tipo: "visita", visita: visita(idVisita(7)) });
+    await motorDe(db, s, reloj, 15).sincronizar();
+    const repo = repositorioDexie(db);
+    const descartado = "0192f0e0-0000-7000-8000-000000000997";
+    await repo.crear(crearLevantamiento(formato, descartado, new Date(), idVisita(7)), "t1");
+    await repo.descartar(descartado, new Date());
+
+    s.publicar({ tipo: "fuera_de_alcance", entidad: "visita", id: idVisita(7), motivo: "atendida" });
+    await motorDe(db, s, reloj, 15).sincronizar({ bajar: true });
+    expect(await visitasDe(db, "t1")).toEqual([]);
+    // El descartado sigue en la papelera (regla 5).
+    expect((await repo.descartados("t1")).map((l) => l.id)).toEqual([descartado]);
+  });
+
   it("una visita cancelada con algo empezado se queda con el motivo, para avisarle al técnico (iteración 7)", async () => {
     const db = abrirBase(`motor-${Math.random()}`);
     bases.push(db);
@@ -343,10 +462,299 @@ describe("bajada (ADR-0003)", () => {
     await motorDe(db, s, reloj).sincronizar({ bajar: true });
     const [informe] = s.informes;
     expect(informe!.secreto).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(informe!.salud).toMatchObject({ versionApp: 2, versionEsquemaLocal: 6, pendientes: 1, pendienteMasAntiguo: "2026-09-24T11:00:00.000Z", ultimoError: "error_interno" });
+    expect(informe!.salud).toMatchObject({ versionApp: 2, versionEsquemaLocal: 7, pendientes: 1, pendienteMasAntiguo: "2026-09-24T11:00:00.000Z", ultimoError: "error_interno" });
     // El mismo dispositivo en cada informe.
     await motorDe(db, s, reloj).sincronizar({ bajar: true });
     expect(new Set(s.informes.map((i) => i.id)).size).toBe(1);
+  });
+});
+
+describe("época de la bajada (ADR-0038)", () => {
+  const visita = (n: number) => ({
+    id: `0192f0e0-0000-7000-8000-${String(970 + n).padStart(12, "0")}`,
+    cliente: { nombre: "Cliente ficticio" },
+    sitio: { nombre: "Sede", direccion: "Calle [N]" },
+    motivo: "Mantenimiento",
+    programadaPara: "2026-09-30",
+  });
+  const motorDe = (db: BaseCampo, s: ReturnType<typeof servidorFalso>, reloj: { ahora: () => number }) =>
+    crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora });
+
+  it("la primera época que ve el teléfono solo se guarda: no borra nada", async () => {
+    const { db, ids, reloj } = await dispositivo();
+    const s = servidorFalso();
+    s.publicar({ tipo: "visita", visita: visita(1) });
+    await motorDe(db, s, reloj).sincronizar();
+    expect(await db.bajadas.get("t1")).toMatchObject({ epoca: "inicial" });
+    expect((await visitasDe(db, "t1")).map((v) => v.id)).toEqual([visita(1).id]);
+    expect(await db.levantamientos.get(ids[0]!)).toBeDefined();
+  });
+
+  it("otra época quita lo que el servidor ya no tiene y conserva borradores, lo que falta por enviar y sus visitas", async () => {
+    const { db, ids, reloj } = await dispositivo(1, 2);
+    const repo = repositorioDexie(db);
+    const s = servidorFalso();
+    s.publicar({ tipo: "formato", definicion: formato }, { tipo: "visita", visita: visita(1) }, { tipo: "visita", visita: visita(2) });
+    await motorDe(db, s, reloj).sincronizar();
+    const fotosEnviadas = (await db.archivos.toArray()).map((a) => a.id);
+    expect(fotosEnviadas).toHaveLength(2);
+    // Un borrador en la visita 2: es trabajo que solo existe en el teléfono.
+    const borrador = "0192f0e0-0000-7000-8000-000000000981";
+    await repo.crear(crearLevantamiento(formato, borrador, new Date(), visita(2).id), "t1");
+
+    s.limpiar();
+    await motorDe(db, s, reloj).sincronizar({ bajar: true });
+
+    // Lo enviado que oficina ya recibió y el servidor borró sale con sus fotos; la visita sin trabajo, también.
+    expect(await db.levantamientos.get(ids[0]!)).toBeUndefined();
+    expect(await db.envios.get(ids[0]!)).toBeUndefined();
+    expect(await db.archivos.bulkGet(fotosEnviadas)).toEqual([undefined, undefined]);
+    expect(await estadosDe(db, "t1")).toEqual([]);
+    // El borrador se queda, y su visita como reasignada.
+    expect(await db.levantamientos.get(borrador)).toBeDefined();
+    expect(await visitasDe(db, "t1")).toEqual([{ ...visita(2), tecnicoId: "t1", fueraDeAlcance: true }]);
+    // Los formatos se quedan y el punto de control volvió a contar desde cero con la nueva época.
+    expect(await db.formatos.count()).toBe(1);
+    expect(await db.bajadas.get("t1")).toMatchObject({ epoca: `limpieza-4`, puntoDeControl: 4 });
+    expect((await db.bajadas.get("t1"))?.podar).toBeUndefined();
+  });
+
+  it("lo que el servidor recibe después de la limpieza se queda, y una visita que sigue asignada vuelve normal", async () => {
+    const { db, reloj } = await dispositivo(0);
+    const repo = repositorioDexie(db);
+    const s = servidorFalso();
+    s.publicar({ tipo: "visita", visita: visita(3) });
+    await motorDe(db, s, reloj).sincronizar();
+    const nuevo = "0192f0e0-0000-7000-8000-000000000982";
+    await repo.crear(crearLevantamiento(formato, nuevo, new Date("2026-09-24T10:00:00Z"), visita(3).id), "t1");
+    expect((await repo.enviar(nuevo, formato, new Date("2026-09-24T11:00:00Z"))).ok).toBe(true);
+
+    // Se limpia y la visita se vuelve a asignar; el teléfono envía lo pendiente antes de bajar.
+    s.limpiar();
+    s.publicar({ tipo: "visita", visita: visita(3) });
+    await motorDe(db, s, reloj).sincronizar({ bajar: true });
+
+    expect(await db.levantamientos.get(nuevo)).toBeDefined();
+    expect((await estadosDe(db, "t1")).map((e) => e.id)).toEqual([nuevo]);
+    expect(await visitasDe(db, "t1")).toEqual([{ ...visita(3), tecnicoId: "t1" }]);
+  });
+});
+
+describe("terminar visita (ADR-0037)", () => {
+  const idVisita = "0192f0e0-0000-7000-8000-000000000950";
+  const abierta = { id: idVisita, cliente: { nombre: "Cliente ficticio" }, sitio: { nombre: "Sede", direccion: "Calle [N]" }, motivo: "Mantenimiento", programadaPara: "2026-09-24", horaInicio: "14:00", horaFin: null };
+
+  /** Un teléfono con la visita abierta ya bajada, que el técnico terminó sin señal. */
+  async function terminadaSinSenal() {
+    const db = abrirBase(`motor-${Math.random()}`);
+    bases.push(db);
+    const s = servidorFalso();
+    let ahora = Date.parse("2026-09-24T20:00:00Z");
+    const reloj = { ahora: () => ahora, avanzar: (ms: number) => void (ahora += ms) };
+    const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+    s.publicar({ tipo: "visita", visita: abierta });
+    await motor.sincronizar();
+    const { llave } = await terminarVisita(db, "t1", idVisita, new Date("2026-09-24T20:30:00Z"));
+    return { db, s, reloj, motor, llave };
+  }
+
+  it("se envía una vez con su llave, queda como dice el servidor y no se repite", async () => {
+    const { db, s, motor, llave } = await terminadaSinSenal();
+    // Un segundo toque no crea otra terminación.
+    expect((await terminarVisita(db, "t1", idVisita, new Date("2026-09-24T20:31:00Z"))).llave).toBe(llave);
+    expect(await motor.sincronizar()).toBe("completa");
+    expect(s.terminadas.get(idVisita)).toMatchObject({ en: "2026-09-24T20:30:00.000Z", llamadas: new Map([[llave, 1]]) });
+    const visita = await visitaDe(db, "t1", idVisita);
+    expect(visita).toMatchObject({ terminada: { en: "2026-09-24T20:30:00.000Z" } });
+    expect(visita?.terminacionPendiente).toBeUndefined();
+    await motor.sincronizar({ bajar: true });
+    expect(s.llamadas.filter((l) => l === "terminarVisita")).toHaveLength(1);
+    expect(await motor.proximoIntento()).toBeNull();
+  });
+
+  it("sin red queda pendiente con su espera y sale al volver la señal, con la misma llave", async () => {
+    const { db, s, reloj, motor, llave } = await terminadaSinSenal();
+    s.programar("terminarVisita", "red_antes");
+    expect(await motor.sincronizar()).toBe("sin_conexion");
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toMatchObject({ llave, intentos: 1 });
+    // No reintenta antes de tiempo, y avisa cuándo despertar.
+    const proximo = await motor.proximoIntento();
+    expect(proximo).toBeGreaterThan(reloj.ahora());
+    await motor.sincronizar();
+    expect(s.terminadas.size).toBe(0);
+    reloj.avanzar(proximo! - reloj.ahora());
+    expect(await motor.sincronizar()).toBe("completa");
+    expect(s.terminadas.get(idVisita)?.llamadas).toEqual(new Map([[llave, 1]]));
+    expect(await visitaDe(db, "t1", idVisita)).toMatchObject({ terminada: { en: "2026-09-24T20:30:00.000Z" } });
+  });
+
+  it("si la respuesta se pierde, el reintento con la misma llave no la duplica", async () => {
+    const { db, s, reloj, motor, llave } = await terminadaSinSenal();
+    s.programar("terminarVisita", "red_despues");
+    await motor.sincronizar();
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect(s.terminadas.get(idVisita)?.llamadas).toEqual(new Map([[llave, 2]]));
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toBeUndefined();
+  });
+
+  it("un rechazo sin remedio (la cancelaron) quita la terminación local: manda el servidor", async () => {
+    const { db, s, motor } = await terminadaSinSenal();
+    s.cancelar(idVisita);
+    expect(await motor.sincronizar()).toBe("completa");
+    const visita = await visitaDe(db, "t1", idVisita);
+    expect(visita?.terminacionPendiente).toBeUndefined();
+    expect(visita?.terminada ?? null).toBeNull();
+    await motor.sincronizar();
+    expect(s.llamadas.filter((l) => l === "terminarVisita")).toHaveLength(1);
+  });
+
+  it("mientras cambia la contraseña temporal (403) no la pierde: sale después (iteración 42)", async () => {
+    const { db, s, reloj, motor, llave } = await terminadaSinSenal();
+    s.programar("terminarVisita", "cambio_de_contrasena");
+    expect(await motor.sincronizar()).toBe("completa");
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toMatchObject({ llave, intentos: 1 });
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect((await visitaDe(db, "t1", idVisita))?.terminada).toMatchObject({ en: "2026-09-24T20:30:00.000Z" });
+  });
+
+  it("con un error del servidor reintenta después, sin perderla", async () => {
+    const { db, s, motor, llave } = await terminadaSinSenal();
+    s.programar("terminarVisita", "error_500");
+    expect(await motor.sincronizar()).toBe("completa");
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toMatchObject({ llave, intentos: 1 });
+  });
+
+  it("una bajada sin terminada no borra la pendiente; una con terminada deja la del servidor", async () => {
+    const { db, llave } = await terminadaSinSenal();
+    const almacen = almacenDexie(db);
+    const bajada = (visita: typeof abierta & { terminada?: { en: string } }, punto: number) => ({ cambios: [{ tipo: "visita" as const, visita }], puntoDeControl: punto, hayMas: false, permisoLocalHasta: "2026-10-01T00:00:00.000Z" });
+    await almacen.aplicarBajada("t1", bajada({ ...abierta, motivo: "Mantenimiento correctivo" }, 2), 2, "2026-09-24T20:40:00.000Z");
+    expect(await visitaDe(db, "t1", idVisita)).toMatchObject({ motivo: "Mantenimiento correctivo", terminacionPendiente: { llave } });
+    await almacen.aplicarBajada("t1", bajada({ ...abierta, terminada: { en: "2026-09-24T20:10:00.000Z" } }, 3), 2, "2026-09-24T20:41:00.000Z");
+    const visita = await visitaDe(db, "t1", idVisita);
+    expect(visita?.terminada).toEqual({ en: "2026-09-24T20:10:00.000Z" });
+    expect(visita?.terminacionPendiente).toBeUndefined();
+  });
+});
+
+describe("retención (iteración 41, ADR-0044)", () => {
+  it("lo revisado que oficina recibió hace más de 30 días sale del teléfono con sus fotos; lo reciente y lo no revisado se quedan", async () => {
+    const { db, ids, reloj } = await dispositivo(3, 1);
+    const s = servidorFalso();
+    const motor = crearMotor({ versionApp: 15, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora });
+    await motor.sincronizar();
+    const [viejoRevisado, recienteRevisado, viejoSinRevisar] = ids as [string, string, string];
+    const fotos = async (id: string) => (await repositorioDexie(db).obtener(id))!.respuestas.s?.fotos as string[];
+    const fotoDelViejo = (await fotos(viejoRevisado))[0]!;
+    const hace = (dias: number) => new Date(reloj.ahora() - dias * 86_400_000).toISOString();
+    await db.envios.update(viejoRevisado, { recibidoEn: hace(31) });
+    await db.envios.update(recienteRevisado, { recibidoEn: hace(5) });
+    await db.envios.update(viejoSinRevisar, { recibidoEn: hace(31) });
+    for (const [id, estado] of [[viejoRevisado, "revisado"], [recienteRevisado, "revisado"], [viejoSinRevisar, "en_revision"]] as const) {
+      s.publicar({ tipo: "levantamiento", id, estado, recibidoEn: hace(31), comentarios: [] });
+    }
+    await motor.sincronizar({ bajar: true });
+
+    expect(await db.levantamientos.get(viejoRevisado)).toBeUndefined();
+    expect(await db.envios.get(viejoRevisado)).toBeUndefined();
+    expect(await db.estadosServidor.get(viejoRevisado)).toBeUndefined();
+    expect(await db.archivos.get(fotoDelViejo)).toBeUndefined();
+    expect(await db.levantamientos.get(recienteRevisado)).toBeDefined();
+    expect(await db.levantamientos.get(viejoSinRevisar)).toBeDefined();
+  });
+});
+
+describe("conversaciones (ADR-0040)", () => {
+  const idLev = "0192f0e0-0000-7000-8000-000000000960";
+  const idComentario = "0192f0e0-0000-7000-8000-000000000961";
+  const comentario = { id: idComentario, texto: "¿Quién te recibe?", seccion: "s", campo: "t", autor: "Oficina", creadoEn: "2026-09-24T20:00:00.000Z" };
+  const estado = (respuestas?: { id: string; texto: string; de: "oficina" | "tecnico"; autor: string; creadoEn: string; llave?: string; leido?: boolean }[]) => ({ tipo: "levantamiento" as const, id: idLev, estado: "en_revision" as const, recibidoEn: "2026-09-24T19:00:00.000Z", comentarios: [{ ...comentario, ...(respuestas ? { respuestas } : {}) }] });
+
+  /** Un teléfono con el comentario ya bajado, en el que el técnico respondió sin señal. */
+  async function respondidaSinSenal() {
+    const db = abrirBase(`motor-${Math.random()}`);
+    bases.push(db);
+    const s = servidorFalso();
+    let ahora = Date.parse("2026-09-24T20:10:00Z");
+    const reloj = { ahora: () => ahora, avanzar: (ms: number) => void (ahora += ms) };
+    const motor = crearMotor({ versionApp: 14, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+    s.publicar(estado());
+    await motor.sincronizar();
+    const { llave } = await responder(db, "t1", { levantamientoId: idLev, comentarioId: idComentario, texto: "Nadie, estaba cerrado" }, new Date(reloj.ahora()));
+    return { db, s, reloj, motor, llave };
+  }
+
+  it("sale una vez con su llave; la bajada que la trae la saca de la cola", async () => {
+    const { db, s, motor, llave } = await respondidaSinSenal();
+    expect(await pendientesDe(db, "t1", idLev)).toMatchObject([{ llave, texto: "Nadie, estaba cerrado", comentarioId: idComentario }]);
+    expect(await motor.sincronizar()).toBe("completa");
+    expect(s.respuestas.get(llave)).toMatchObject({ veces: 1, texto: "Nadie, estaba cerrado" });
+    // Recibida pero aún sin bajar: sigue a la vista, marcada como enviada.
+    expect(await pendientesDe(db, "t1", idLev)).toMatchObject([{ llave, enviada: { id: expect.any(String) } }]);
+    s.publicar(estado([{ id: s.respuestas.get(llave)!.id, texto: "Nadie, estaba cerrado", de: "tecnico", autor: "Técnico", creadoEn: "2026-09-24T20:10:00.000Z", llave, leido: false }]));
+    await motor.sincronizar({ bajar: true });
+    expect(await pendientesDe(db, "t1", idLev)).toEqual([]);
+    expect((await estadoDe(db, idLev))?.comentarios?.[0]?.respuestas).toMatchObject([{ llave, de: "tecnico" }]);
+    expect(s.llamadas.filter((l) => l === "responderComentario")).toHaveLength(1);
+  });
+
+  it("sin señal queda en el teléfono con su espera y sale al volver, con la misma llave y en orden", async () => {
+    const { db, s, reloj, motor, llave } = await respondidaSinSenal();
+    const segunda = await responder(db, "t1", { levantamientoId: idLev, comentarioId: idComentario, texto: "La placa estaba tapada" }, new Date(reloj.ahora() + 1000));
+    s.programar("responderComentario", "red_antes");
+    expect(await motor.sincronizar()).toBe("sin_conexion");
+    expect(await pendientesDe(db, "t1", idLev)).toMatchObject([{ llave, intentos: 1 }, { llave: segunda.llave, intentos: 0 }]);
+    const proximo = await motor.proximoIntento();
+    expect(proximo).toBeGreaterThan(reloj.ahora());
+    reloj.avanzar(proximo! - reloj.ahora());
+    expect(await motor.sincronizar()).toBe("completa");
+    expect([...s.respuestas.values()].map((r) => r.texto)).toEqual(["Nadie, estaba cerrado", "La placa estaba tapada"]);
+  });
+
+  it("si la respuesta se pierde, el reintento con la misma llave no la duplica", async () => {
+    const { s, reloj, motor, llave } = await respondidaSinSenal();
+    s.programar("responderComentario", "red_despues");
+    await motor.sincronizar();
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect(s.respuestas.size).toBe(1);
+    expect(s.respuestas.get(llave)?.veces).toBe(2);
+  });
+
+  it("mientras cambia la contraseña temporal (403) la respuesta espera en la cola: no queda rechazada (iteración 42)", async () => {
+    const { db, s, reloj, motor, llave } = await respondidaSinSenal();
+    s.programar("responderComentario", "cambio_de_contrasena");
+    await motor.sincronizar();
+    expect(await pendientesDe(db, "t1", idLev)).toMatchObject([{ llave, intentos: 1 }]);
+    expect((await pendientesDe(db, "t1", idLev))[0]?.rechazo).toBeUndefined();
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect(s.respuestas.get(llave)).toMatchObject({ veces: 1 });
+  });
+
+  it("si oficina ya lo marcó revisado, no se reintenta y el mensaje queda en el teléfono (regla 5)", async () => {
+    const { db, s, reloj, motor, llave } = await respondidaSinSenal();
+    s.marcarRevisado(idLev);
+    expect(await motor.sincronizar()).toBe("completa");
+    expect(await pendientesDe(db, "t1", idLev)).toMatchObject([{ llave, rechazo: "revisado", texto: "Nadie, estaba cerrado" }]);
+    reloj.avanzar(ESPERA_MAXIMA_MS);
+    await motor.sincronizar();
+    expect(s.llamadas.filter((l) => l === "responderComentario")).toHaveLength(1);
+    expect(await motor.proximoIntento()).toBeNull();
+  });
+
+  it("otra época no toca lo que falta por enviar (ADR-0038)", async () => {
+    const { db, llave } = await respondidaSinSenal();
+    await almacenDexie(db).reiniciarPorEpoca("t1", "otra", 14);
+    expect(await pendientesDe(db, "t1", idLev)).toMatchObject([{ llave }]);
+  });
+
+  it("la orden de borrado también borra la cola de quien se revoca (QA-5)", async () => {
+    const { db } = await respondidaSinSenal();
+    await almacenDexie(db).borrarDatosDe("t1", "2026-09-24T21:00:00.000Z");
+    expect(await db.respuestasPendientes.count()).toBe(0);
   });
 });
 

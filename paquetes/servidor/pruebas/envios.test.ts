@@ -7,7 +7,7 @@ import { clientesYSitios } from "../src/modulos/clientes";
 import { crearVisitas } from "../src/modulos/visitas";
 import { crearEnvios, proveedoresSegunConfig, RechazoDefinitivo, type ProveedorDeCorreo, type ProveedorDeWhatsapp } from "../src/modulos/envios";
 import { firmaMetaValida, firmaSvixValida } from "../src/modulos/envios/eventos";
-import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "../src/modulos/envios/mensajes";
+import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "@teins/documentos";
 import type { CorreoSaliente, WhatsappSaliente } from "../src/modulos/envios/proveedores";
 import { cabecerasSync, configDePrueba, servidorDePrueba } from "./ayudas";
 
@@ -190,6 +190,58 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     expect(await bandeja()).toMatchObject({ envioSinEntregar: false });
   }, 90_000);
 
+  it("lo que no llegó deja de contar como sin entregar si oficina quita al contacto o deja de enviarle por ese canal", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const jorge = (await crearContacto(oficina.cookie, clienteId, JORGE)).find((c) => c.nombre === "Jorge Pardo")!;
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [jorge.id] });
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    const bandeja = async () => (await get(oficina.cookie, "/api/informes")).json().elementos.find((e: { id: string }) => e.id === informeId);
+    expect(await bandeja()).toMatchObject({ envioSinEntregar: true });
+
+    // Ya no recibe por correo: «Volver a enviar» por ese canal no se puede, así que no queda nada pendiente.
+    const sinCorreo = await post(oficina.cookie, `/api/clientes/${clienteId}/contactos/${jorge.id}`, { ...JORGE, recibeCorreo: false, celular: "+573005550121", recibeWhatsapp: true, whatsappAutorizado: true });
+    expect(sinCorreo.statusCode, sinCorreo.body).toBe(200);
+    expect(await bandeja()).toMatchObject({ envioSinEntregar: false });
+    // Vuelve a recibir por correo en la misma dirección: lo que no le llegó vuelve a estar pendiente.
+    expect((await post(oficina.cookie, `/api/clientes/${clienteId}/contactos/${jorge.id}`, JORGE)).statusCode).toBe(200);
+    expect(await bandeja()).toMatchObject({ envioSinEntregar: true });
+
+    // Quitado, ya no es contacto del cliente: la alerta no se podría quitar nunca.
+    expect((await post(oficina.cookie, `/api/clientes/${clienteId}/contactos/${jorge.id}/quitar`)).statusCode).toBe(200);
+    expect(await bandeja()).toMatchObject({ envioSinEntregar: false });
+    // El intento se conserva como constancia.
+    expect((await enviosDe(oficina.cookie, informeId)).map((e) => [e.contacto.nombre, e.estado])).toEqual([["Jorge Pardo", "fallido"]]);
+  }, 90_000);
+
+  it("el correo sale con el asunto y el texto que escribió oficina; el WhatsApp, con su plantilla (ADR-0036)", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.propio@cliente.example", celular: "+573005550118" });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    const mensaje = { asunto: "Informe de su UPS", texto: "Le dejamos el informe de la visita.\n\nCualquier duda <nos escribe>." };
+    const r = await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }], llave: randomUUID(), mensaje });
+    expect(r.statusCode, r.body).toBe(200);
+    await s.procesarCola();
+    const envios = (await get(oficina.cookie, `/api/informes/${informeId}`)).json().versiones[0].envios as { id: string; canal: string; personalizado: boolean }[];
+    expect(envios.map((e) => [e.canal, e.personalizado]).sort()).toEqual([
+      ["correo", true],
+      ["whatsapp", false],
+    ]);
+    const alCorreo = correos.find((c) => c.para === "ana.propio@cliente.example")!;
+    expect(alCorreo.asunto).toBe("Informe de su UPS");
+    expect(alCorreo.texto).toContain("Hola, Ana:\n\nLe dejamos el informe de la visita.");
+    expect(alCorreo.html).toContain("Cualquier duda &lt;nos escribe&gt;.");
+    // El portal y el pie los sigue poniendo la plantilla.
+    expect(alCorreo.html).toContain("https://portal.example.com");
+    const alWhatsapp = whatsapps.find((m) => m.para === "+573005550118")!;
+    expect(alWhatsapp.plantilla).toBe("informe_publicado");
+
+    // Un asunto vacío no se acepta: no saldría nada que oficina no escribió.
+    const vacio = await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }], llave: randomUUID(), mensaje: { asunto: " ", texto: "Hola" } });
+    expect(vacio.statusCode).toBe(400);
+  }, 90_000);
+
   it("el mismo pedido con su llave (doble clic, respuesta perdida) sale una sola vez; otra llave es otra decisión (regla 4)", async () => {
     const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
     const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.llave@cliente.example" });
@@ -346,6 +398,90 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     await envios.enviar({ organizacionId, envioId, pdfRuta: claveDeObjeto(organizacionId, rows[0].pdf_huella) }, { ultimoIntento: false });
     expect(salidaAlLeer).toEqual([null]);
     expect((await enviosDe(oficina.cookie, informeId))[0]).toMatchObject({ estado: "enviado" });
+  }, 90_000);
+});
+
+describe("cancelar un envío en cola (ADR-0034)", () => {
+  const url = (informeId: string, envio: string, accion: "cancelar" | "reanudar") => `/api/informes/${informeId}/versiones/1/envios/${envio}/${accion}`;
+
+  it("un envío cancelado mientras espera el PDF nunca sale; queda quién lo canceló y se puede reanudar", async () => {
+    const { oficina, tecnico, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.cancelada@cliente.example" });
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [ana!.id] })).statusCode).toBe(201);
+    const [porWhatsapp, porCorreo] = [...(await enviosDe(oficina.cookie, informeId))].sort((a, b) => b.canal.localeCompare(a.canal));
+
+    // El técnico no corrige envíos; otro id no existe en esta versión.
+    expect((await post(tecnico.cookie, url(informeId, porCorreo!.id, "cancelar"))).statusCode).toBe(403);
+    expect((await post(oficina.cookie, url(informeId, randomUUID(), "cancelar"))).json()).toMatchObject({ codigo: "no_encontrado" });
+
+    const cancelado = await post(oficina.cookie, url(informeId, porCorreo!.id, "cancelar"));
+    expect(cancelado.statusCode, cancelado.body).toBe(200);
+    expect(cancelado.json().envios.find((e: { id: string }) => e.id === porCorreo!.id)).toMatchObject({ estado: "cancelado", cancelado: { por: { nombre: "Oficina de prueba" } } });
+    expect((await post(oficina.cookie, url(informeId, porCorreo!.id, "cancelar"))).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    await s.esperarPdf({ informeId });
+    await s.procesarCola();
+    expect(correos.some((c) => c.para === "ana.cancelada@cliente.example")).toBe(false);
+    expect(Object.fromEntries((await enviosDe(oficina.cookie, informeId)).map((e) => [e.canal, e.estado]))).toEqual({ correo: "cancelado", whatsapp: "enviado" });
+    // Lo que ya salió no se cancela: el WhatsApp se fue.
+    expect((await post(oficina.cookie, url(informeId, porWhatsapp!.id, "cancelar"))).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    // "Deshacer" con el PDF ya listo: vuelve a la cola y sale.
+    const reanudado = await post(oficina.cookie, url(informeId, porCorreo!.id, "reanudar"));
+    expect(reanudado.statusCode, reanudado.body).toBe(200);
+    expect(reanudado.json().envios.find((e: { id: string }) => e.id === porCorreo!.id)).toMatchObject({ estado: "en_cola", cancelado: null });
+    await s.procesarCola();
+    expect(correos.filter((c) => c.para === "ana.cancelada@cliente.example")).toHaveLength(1);
+    expect((await post(oficina.cookie, url(informeId, porCorreo!.id, "reanudar"))).json()).toMatchObject({ codigo: "estado_invalido" });
+
+    const { rows } = await s.propietario.pool.query(
+      "select tipo_evento from auditoria.registros where organizacion_id = $1 and tipo_evento in ('envio_cancelado', 'envio_reanudado') order by secuencia",
+      [organizacionId],
+    );
+    expect(rows.map((r) => r.tipo_evento)).toEqual(["envio_cancelado", "envio_reanudado"]);
+  }, 90_000);
+
+  it("cancelar mientras la copia sale no la detiene: salió, y la app lo dice", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, recibeWhatsapp: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }] });
+    const [envio] = await enviosDe(oficina.cookie, informeId);
+
+    let cancelacion: unknown;
+    alSalir = async () => {
+      alSalir = undefined;
+      cancelacion = (await post(oficina.cookie, url(informeId, envio!.id, "cancelar"))).json();
+    };
+    await s.procesarCola();
+    expect(cancelacion).toMatchObject({ codigo: "estado_invalido" });
+    expect(await enviosDe(oficina.cookie, informeId)).toEqual([expect.objectContaining({ estado: "enviado" })]);
+  }, 90_000);
+
+  it("cancelado justo antes de que el worker lo tome, no sale aunque su trabajo ya esté en la cola", async () => {
+    const { oficina, clienteId, informeId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, correo: "ana.en.cola@cliente.example", recibeWhatsapp: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    // Con el PDF listo, enviar encola el trabajo de una vez; se cancela antes de que el worker corra.
+    await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }] });
+    const [envio] = await enviosDe(oficina.cookie, informeId);
+    expect((await post(oficina.cookie, url(informeId, envio!.id, "cancelar"))).statusCode).toBe(200);
+    await s.procesarCola();
+    expect(correos.some((c) => c.para === "ana.en.cola@cliente.example")).toBe(false);
+    expect((await enviosDe(oficina.cookie, informeId))[0]).toMatchObject({ estado: "cancelado" });
+  }, 90_000);
+
+  it("una versión retirada no reanuda sus envíos", async () => {
+    const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, recibeWhatsapp: false });
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [ana!.id] });
+    const [envio] = await enviosDe(oficina.cookie, informeId);
+    expect((await post(oficina.cookie, url(informeId, envio!.id, "cancelar"))).statusCode).toBe(200);
+    const admin = await s.nuevoAdministrador(organizacionId);
+    expect((await post(admin.cookie, `/api/informes/${informeId}/versiones/1/retirar`, { motivo: "Tenía un error" })).statusCode).toBe(200);
+    expect((await post(oficina.cookie, url(informeId, envio!.id, "reanudar"))).json()).toMatchObject({ codigo: "estado_invalido" });
   }, 90_000);
 });
 

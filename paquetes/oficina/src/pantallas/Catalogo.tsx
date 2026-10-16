@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Respuesta } from "@teins/protocolo";
 import {
@@ -8,13 +8,13 @@ import {
   Buscador,
   CampoTexto,
   CeldaTabla,
-  Confirmacion,
   Dialogo,
   EncabezadoPagina,
   EsqueletoLista,
   EstadoVacio,
   FilaTabla,
-    Insignia,
+    Info,
+  Insignia,
   MenuAcciones,
   Package,
   Pencil,
@@ -27,13 +27,15 @@ import {
   Tabla,
   Upload,
   useNotificar,
+  enfocarPrimerError,
+  useLoNuevo,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { mensajeDeAdministracion } from "../administracion";
 import { aFecha, aFechaHora, leerPesos, pesos } from "../formato";
 import { consultasDeCatalogo, useAccionDeCatalogo } from "../catalogo";
 import { leerCatalogo, type CatalogoLeido } from "../csv";
-import { mensajeDeError } from "../mensajes";
+import { mensajeDeError, sinError } from "../mensajes";
 
 type Item = Respuesta<"listarCatalogo">["items"][number];
 
@@ -45,12 +47,15 @@ const normalizar = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLo
 /** Catálogo de ítems (iteración 11, P28): con él oficina vincula las líneas que anota el técnico. */
 export function Catalogo() {
   const consulta = useQuery(consultasDeCatalogo.items());
+  // Los ítems de ahora, para «Deshacer»: en sus 10 s pudo cambiar la descripción o la unidad, y volver a activar no la
+  // devuelve a la de antes (iteración 42).
+  const vigentes = useRef(consulta.data);
+  vigentes.current = consulta.data;
   const notificar = useNotificar();
   const [busqueda, setBusqueda] = useState("");
   const [creando, setCreando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [editando, setEditando] = useState<Item | null>(null);
-  const [desactivando, setDesactivando] = useState<Item | null>(null);
   const [cambiandoPrecio, setCambiandoPrecio] = useState<Item | null>(null);
   const [soloSinPrecio, setSoloSinPrecio] = useState(false);
   // Cambiar precios es de administración (ADR-0029): el resto de oficina los ve.
@@ -61,7 +66,9 @@ export function Catalogo() {
   const [errorFila, setErrorFila] = useState<string | null>(null);
 
   const todos = consulta.data?.items ?? [];
-  const ordenados = [...recientes.map((id) => todos.find((i) => i.id === id)).filter((i): i is Item => Boolean(i)), ...todos.filter((i) => !recientes.includes(i.id))];
+  // Lo creado (o importado) después de abrir la pantalla va primero y resaltado; lo cambiado se resalta en su lugar.
+  const esNuevo = useLoNuevo(consulta.data?.items.map((i) => i.id));
+  const ordenados = [...todos.filter((i) => esNuevo(i.id)), ...todos.filter((i) => !esNuevo(i.id))];
   const b = normalizar(busqueda.trim());
   const sinPrecio = todos.filter((i) => i.activo && i.precio === null).length;
   const filtrados = (b === "" ? ordenados : ordenados.filter((i) => normalizar(`${i.codigo} ${i.descripcion}`).includes(b))).filter((i) => !soloSinPrecio || i.precio === null);
@@ -120,7 +127,7 @@ export function Catalogo() {
                 columnas={[{ titulo: "Código" }, { titulo: "Descripción" }, { titulo: "Unidad" }, { titulo: "Precio sin IVA", derecha: true }, { titulo: "Estado" }, { titulo: "Acciones", oculto: true, derecha: true }]}
               >
                 {filtrados.slice(0, VISIBLES).map((i, k) => (
-                  <FilaTabla key={i.id} indice={k} resaltada={recientes.includes(i.id)}>
+                  <FilaTabla key={i.id} clave={i.id} resaltada={esNuevo(i.id) || recientes.includes(i.id)}>
                     <CeldaTabla principal>{i.codigo}</CeldaTabla>
                     <CeldaTabla>
                       <span className={i.activo ? "" : "sec"}>{i.descripcion}</span>
@@ -149,7 +156,27 @@ export function Catalogo() {
                         opciones={[
                           { texto: "Editar", icono: Pencil, alElegir: () => setEditando(i) },
                           i.activo
-                            ? { texto: "Desactivar", peligro: true, alElegir: () => setDesactivando(i) }
+                            ? {
+                                texto: "Desactivar",
+                                // Se revierte con un toque: al instante y con "Deshacer", sin preguntar (DESIGN.md, iteración 24c).
+                                alElegir: () => {
+                                  setErrorFila(null);
+                                  activar.mutate(i, {
+                                    onSuccess: () =>
+                                      notificar({
+                                        texto: `${i.codigo} desactivado`,
+                                        accion: {
+                                          texto: "Deshacer",
+                                          alHacer: () => {
+                                            const ahora = vigentes.current?.items.find((x) => x.id === i.id) ?? i;
+                                            activar.mutate({ ...ahora, activo: false }, { onSuccess: () => destacar(i.id), onError: (e) => setErrorFila(`No se pudo volver a activar ${i.codigo}. ${mensajeDeError(e)}`) });
+                                          },
+                                        },
+                                      }),
+                                    onError: (e) => setErrorFila(`No se pudo desactivar ${i.codigo}. ${mensajeDeError(e)}`),
+                                  });
+                                },
+                              }
                             : {
                                 texto: "Activar",
                                 alElegir: () => {
@@ -198,19 +225,6 @@ export function Catalogo() {
           }}
         />
       )}
-      {desactivando && (
-        <Confirmacion
-          nivel="consecuencia"
-          titulo={`¿Desactivar ${desactivando.codigo}?`}
-          confirmar="Desactivar ítem"
-          mensajeDeError={mensajeDeError}
-          alCerrar={() => setDesactivando(null)}
-          alTerminar={() => notificar({ texto: `${desactivando.codigo} desactivado` })}
-          accion={() => activar.mutateAsync(desactivando)}
-        >
-          <p>Deja de ofrecerse al vincular líneas nuevas. Las líneas ya vinculadas lo conservan, y se puede volver a activar.</p>
-        </Confirmacion>
-      )}
       {importando && <ImportarCatalogo administrador={administrador} alCerrar={() => setImportando(false)} alImportar={(texto) => notificar({ texto })} />}
       {cambiandoPrecio && (
         <CambiarPrecio
@@ -227,6 +241,13 @@ export function Catalogo() {
   );
 }
 
+/** Las unidades del catálogo por frecuencia (hasta ocho). */
+function unidadesUsadas(items: readonly Item[]): string[] {
+  const cuenta = new Map<string, number>();
+  for (const i of items) cuenta.set(i.unidad, (cuenta.get(i.unidad) ?? 0) + 1);
+  return [...cuenta].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([u]) => u);
+}
+
 /** Crear (sin `item`) o editar un ítem; el código no cambia porque identifica al ítem en las líneas vinculadas. */
 function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: () => void; alGuardar: (i: Item) => void }) {
   const formulario = useId();
@@ -235,6 +256,8 @@ function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: 
   const [unidad, setUnidad] = useState(item?.unidad ?? "");
   const [errores, setErrores] = useState<{ codigo?: string; descripcion?: string; unidad?: string }>({});
   const [error, setError] = useState<string | null>(null);
+  // Las unidades que ya usa el catálogo, de la más usada a la menos, como atajo: la unidad se sigue escribiendo libre.
+  const usadas = useQuery({ ...consultasDeCatalogo.items(), select: (d) => unidadesUsadas(d.items) }).data ?? [];
   const guardar = useAccionDeCatalogo(() =>
     item
       ? cliente.llamar("actualizarItemCatalogo", { parametros: { id: item.id }, cuerpo: { descripcion: descripcion.trim(), unidad: unidad.trim(), activo: item.activo } })
@@ -249,6 +272,7 @@ function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: 
       ...(unidad.trim() === "" ? { unidad: "Escriba la unidad." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
@@ -260,7 +284,7 @@ function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: 
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
       titulo={item ? `Editar ${item.codigo}` : "Nuevo ítem"}
       cerrable={!guardar.isPending}
       alCerrar={alCerrar}
@@ -275,10 +299,22 @@ function FormularioItem({ item, alCerrar, alGuardar }: { item?: Item; alCerrar: 
         </>
       }
     >
-      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        {!item && <CampoTexto etiqueta="Código" valorInicial="" onCambio={setCodigo} error={errores.codigo} />}
-        <CampoTexto etiqueta={item ? `Descripción de ${item.codigo}` : "Descripción"} valorInicial={descripcion} onCambio={setDescripcion} error={errores.descripcion} />
-        <CampoTexto etiqueta={item ? `Unidad de ${item.codigo}` : "Unidad"} valorInicial={unidad} onCambio={setUnidad} error={errores.unidad} />
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        <CampoTexto etiqueta="Descripción" ejemplo="Como sale en la cotización" valorInicial={descripcion} onCambio={(t) => (setDescripcion(t), setErrores((e) => sinError(e, "descripcion")))} error={errores.descripcion} />
+        <div className="fila-campos">
+          {item ? (
+            <CampoTexto etiqueta="Código" valorInicial={item.codigo} onCambio={() => undefined} deshabilitado />
+          ) : (
+            <CampoTexto etiqueta="Código" ejemplo="Por ejemplo: UTP-6A" valorInicial="" onCambio={(t) => (setCodigo(t), setErrores((e) => sinError(e, "codigo")))} error={errores.codigo} />
+          )}
+          <CampoTexto etiqueta="Unidad" valorInicial={unidad} onCambio={(t) => (setUnidad(t), setErrores((e) => sinError(e, "unidad")))} error={errores.unidad} sugerencias={usadas} />
+        </div>
+        {item && (
+          <p className="nota-capa">
+            <Info aria-hidden />
+            Las cotizaciones publicadas conservan la descripción con que salieron.
+          </p>
+        )}
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>
@@ -310,8 +346,8 @@ function CambiarPrecio({ item, alCerrar, alGuardar }: { item: Item; alCerrar: ()
 
   return (
     <Dialogo
-      forma="lateral"
-      titulo={`Precio de ${item.codigo}`}
+      forma="formulario"
+      titulo={`Cambiar precio de ${item.codigo}`}
       subtitulo={`${item.descripcion} · ${item.unidad}`}
       cerrable={!guardar.isPending}
       alCerrar={alCerrar}
@@ -327,8 +363,11 @@ function CambiarPrecio({ item, alCerrar, alGuardar }: { item: Item; alCerrar: ()
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <CampoTexto etiqueta="Precio unitario sin IVA" nombre="precio" valorInicial={texto} onCambio={setTexto} error={errorCampo} />
-        <Aviso>Rige desde hoy para las cotizaciones nuevas y los borradores. Las versiones ya publicadas conservan su precio.</Aviso>
+        <CampoTexto etiqueta="Precio unitario sin IVA" nombre="precio" valorInicial={texto} onCambio={(t) => (setTexto(t), setErrorCampo(undefined))} error={errorCampo} />
+        <p className="nota-capa">
+          <Info aria-hidden />
+          Rige desde hoy para las cotizaciones nuevas y los borradores; lo publicado no cambia.
+        </p>
         {guardar.isError && <Aviso tono="error">{mensajeDeAdministracion(guardar.error)}</Aviso>}
       </form>
       <section aria-labelledby={`${formulario}-historia`} className="col" style={{ gap: 8 }}>

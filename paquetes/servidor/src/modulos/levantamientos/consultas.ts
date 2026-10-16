@@ -1,9 +1,10 @@
-import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, max, or, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { EstadoRevision } from "@teins/dominio";
 import { Uuid } from "@teins/protocolo";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
-import { comentarios, levantamientos, lineasCantidad } from "./esquema";
+import { comentarios, lecturas, levantamientos, lineasCantidad } from "./esquema";
 
 /** Cursor opaco de paginación por llave (ADR-0014): estable aunque lleguen envíos nuevos. */
 function leerCursor(cursor: string | undefined): { recibidoEn: Date; id: string } | null {
@@ -76,20 +77,86 @@ export async function comentariosDe(tx: TxOrganizacion, ids: readonly string[]) 
       seccion: comentarios.seccion,
       campo: comentarios.campo,
       creadoEn: comentarios.creadoEn,
+      editadoEn: comentarios.editadoEn,
+      retiradoEn: comentarios.retiradoEn,
+      retiradoPor: comentarios.retiradoPor,
+      enRespuestaA: comentarios.enRespuestaA,
+      de: comentarios.de,
+      llave: comentarios.llave,
     })
     .from(comentarios)
     .where(inArray(comentarios.levantamientoId, [...ids]))
     .orderBy(asc(comentarios.creadoEn), asc(comentarios.id));
 }
 
-/** Estado y comentarios de los levantamientos propios del técnico, para la bajada. */
+/** Hasta cuándo leyó esta persona las conversaciones de un levantamiento (ADR-0040); nulo si nunca las abrió. */
+export async function leidoHastaDe(tx: TxOrganizacion, id: string, usuarioId: string) {
+  const [fila] = await tx.select({ en: lecturas.leidoHasta }).from(lecturas).where(and(eq(lecturas.levantamientoId, id), eq(lecturas.usuarioId, usuarioId)));
+  return fila?.en ?? null;
+}
+
+/**
+ * La última respuesta del técnico de cada levantamiento y si quien consulta tiene alguna sin leer (ADR-0040). Cada
+ * respuesta es de quien revisa o, si nadie lo ha tomado, de quien escribió el comentario que la abrió.
+ */
+export async function conversacionesDe(tx: TxOrganizacion, filas: readonly { id: string; revisorId: string | null }[], usuarioId: string) {
+  const resultado = new Map<string, { sinLeer: boolean; ultima: { autorId: string; en: Date } }>();
+  if (filas.length === 0) return resultado;
+  const ids = filas.map((f) => f.id);
+  const raiz = alias(comentarios, "raiz");
+  const respuestas = await tx
+    .select({ levantamientoId: comentarios.levantamientoId, autorId: comentarios.autorId, creadoEn: comentarios.creadoEn, autorRaiz: raiz.autorId })
+    .from(comentarios)
+    .innerJoin(raiz, eq(comentarios.enRespuestaA, raiz.id))
+    .where(and(inArray(comentarios.levantamientoId, ids), eq(comentarios.de, "tecnico"), isNull(raiz.retiradoEn)))
+    .orderBy(asc(comentarios.creadoEn));
+  const leidas = new Map((await tx.select().from(lecturas).where(and(inArray(lecturas.levantamientoId, ids), eq(lecturas.usuarioId, usuarioId)))).map((l) => [l.levantamientoId, l.leidoHasta]));
+  const revisorDe = new Map(filas.map((f) => [f.id, f.revisorId]));
+  for (const r of respuestas) {
+    const leido = leidas.get(r.levantamientoId);
+    const mia = (revisorDe.get(r.levantamientoId) ?? r.autorRaiz) === usuarioId;
+    const sinLeer = (resultado.get(r.levantamientoId)?.sinLeer ?? false) || (mia && (!leido || r.creadoEn > leido));
+    resultado.set(r.levantamientoId, { sinLeer, ultima: { autorId: r.autorId, en: r.creadoEn } });
+  }
+  return resultado;
+}
+
+/**
+ * Estado y comentarios de los levantamientos propios del técnico, para la bajada. Cada comentario de oficina lleva su
+ * conversación (ADR-0040); lo del técnico, si alguien de oficina ya lo leyó.
+ */
 export async function estadosDe(tx: TxOrganizacion, ids: readonly string[], tecnicoId: string) {
   if (ids.length === 0) return [];
   const filas = await tx
     .select({ id: levantamientos.id, estado: levantamientos.estado, recibidoEn: levantamientos.recibidoEn })
     .from(levantamientos)
     .where(and(inArray(levantamientos.id, [...ids]), eq(levantamientos.tecnicoId, tecnicoId)));
-  const porLevantamiento = Map.groupBy(await comentariosDe(tx, filas.map((f) => f.id)), (c) => c.levantamientoId);
+  const delAlcance = filas.map((f) => f.id);
+  const todos = await comentariosDe(tx, delAlcance);
+  const leidoHasta =
+    delAlcance.length === 0
+      ? new Map<string, Date>()
+      : new Map(
+          (await tx.select({ id: lecturas.levantamientoId, en: max(lecturas.leidoHasta) }).from(lecturas).where(inArray(lecturas.levantamientoId, delAlcance)).groupBy(lecturas.levantamientoId)).flatMap((l) =>
+            l.en ? [[l.id, l.en] as const] : [],
+          ),
+        );
+  const respuestasDe = Map.groupBy(
+    todos.filter((c) => c.enRespuestaA),
+    (c) => c.enRespuestaA!,
+  );
+  // Lo retirado no le llega al técnico (ADR-0035), ni la conversación que abría.
+  const raices = todos.filter((c) => !c.enRespuestaA && !c.retiradoEn);
+  const porLevantamiento = Map.groupBy(
+    raices.map((c) => ({
+      ...c,
+      respuestas: (respuestasDe.get(c.id) ?? []).map((r) => {
+        const leido = leidoHasta.get(r.levantamientoId);
+        return { ...r, de: r.de as "oficina" | "tecnico", leido: r.de === "tecnico" ? Boolean(leido && leido >= r.creadoEn) : undefined };
+      }),
+    })),
+    (c) => c.levantamientoId,
+  );
   return filas.map((f) => ({ ...f, estado: f.estado as EstadoRevision, comentarios: porLevantamiento.get(f.id) ?? [] }));
 }
 

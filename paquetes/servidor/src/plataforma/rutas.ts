@@ -34,7 +34,24 @@ export interface Entrada<N extends NombreOperacion> {
   correlacion: string;
   /** Cabecera Origin del navegador. En las que modifican, el servidor ya rechazó los orígenes ajenos. */
   origen: string | undefined;
+  /**
+   * Lo mínimo de HTTP que necesita una operación que llama a la autenticación por dentro (ADR-0033): la IP que
+   * resolvió Fastify, las cabeceras de la solicitud y cómo devolver las cookies de una sesión nueva.
+   */
+  http: ContextoHttp;
 }
+
+export interface ContextoHttp {
+  ip: string;
+  cabeceras: FastifyRequest["headers"];
+  ponerCookies(cookies: readonly string[]): void;
+}
+
+const contextoHttp = (solicitud: FastifyRequest, respuesta: FastifyReply): ContextoHttp => ({
+  ip: solicitud.ip,
+  cabeceras: solicitud.headers,
+  ponerCookies: (cookies) => void (cookies.length > 0 && respuesta.header("set-cookie", [...cookies])),
+});
 
 export type Manejador<N extends NombreOperacion> = (entrada: Entrada<N>) => Promise<RespuestaServidor<N>>;
 
@@ -151,6 +168,7 @@ export function registrarOperacionDelPortal<N extends NombreOperacion, S>(app: F
         consulta: validar(op.consulta, solicitud.query, "consulta") as Consulta<N>,
         correlacion: solicitud.id,
         origen: solicitud.headers.origin,
+        http: contextoHttp(solicitud, respuesta),
         sesion: sesion as S,
         portal,
       });
@@ -183,36 +201,10 @@ function registrar<N extends NombreOperacion, A>(
         actor,
         correlacion: solicitud.id,
         origen: solicitud.headers.origin,
+        http: contextoHttp(solicitud, respuesta),
       });
       respuesta.status(op.estadoExito);
       return op.respuesta.parse(resultado);
-    },
-  });
-}
-
-/**
- * Un documento HTML para un marco de la propia superficie (la vista previa de una cotización), fuera del contrato
- * JSON. Lleva su propia CSP: solo sus estilos y fuentes incrustadas, sin scripts, conexiones ni formularios, y solo
- * dentro de la superficie. La autorización va antes de validar, como en las operaciones.
- */
-export function registrarDocumento<P extends z.ZodType>(
-  app: FastifyInstance,
-  opciones: { ruta: string; politica: Extract<Politica, { tipo: "roles" }>; parametros: P; manejar: (entrada: { parametros: z.output<P>; actor: Actor }) => Promise<string> },
-): void {
-  app.route({
-    method: "GET",
-    url: rutaFastify(opciones.ruta),
-    config: { politica: opciones.politica },
-    handler: async (solicitud, respuesta) => {
-      const actor = await app.resolverActor(solicitud, respuesta);
-      const decision = evaluar(opciones.politica, actor);
-      if (decision !== "permitido") throw problema(decision);
-      const html = await opciones.manejar({ parametros: validar(opciones.parametros, solicitud.params, "parametros") as z.output<P>, actor: actor! });
-      return respuesta
-        .header("content-type", "text/html; charset=utf-8")
-        .header("cache-control", "no-store")
-        .header("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox")
-        .send(html);
     },
   });
 }

@@ -12,7 +12,11 @@ export type Falla =
   /** El servidor procesa y confirma, pero la respuesta se pierde (ADR-0018, nivel 3). */
   | "red_despues"
   | "error_500"
-  | "sesion_vencida";
+  | "sesion_vencida"
+  /** El servidor ya no acepta esta versión del protocolo (ADR-0015). */
+  | "version_no_soportada"
+  /** La sesión existe pero debe cambiar la contraseña temporal: 403 a todo lo demás. */
+  | "cambio_de_contrasena";
 
 type Operacion = keyof Transporte;
 
@@ -33,13 +37,25 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
   let verificacionesPendientes = opciones.verificacionesPendientes ?? 0;
   let reloj = 0;
   /** Registro de cambios del servidor: la posición + 1 es la secuencia. */
-  const cambios: Cambio[] = [];
+  const cambios: (Cambio | null)[] = [];
+  /** Época de la bajada (ADR-0038): la cambia `limpiar`. */
+  let epoca = "inicial";
   const informes: { id: string; secreto: string; salud: SaludDispositivo }[] = [];
   /** Revocado: toda operación con sesión responde "no autenticado"; la consulta con secreto devuelve la orden. */
   const revocados = new Set<string>();
   const confirmados: string[] = [];
   let permisoLocalHasta = "2026-10-01T00:00:00.000Z";
   let tamanoDePagina = 100;
+  /** Visitas terminadas desde el teléfono, con cuántas llamadas llegaron con cada llave (ADR-0037). */
+  const terminadas = new Map<string, { en: string; llamadas: Map<string, number> }>();
+  /** Visitas canceladas: terminarlas responde "estado inválido". */
+  const canceladas = new Set<string>();
+  /** Respuestas a oficina por llave, con cuántas llamadas llegaron (ADR-0040). */
+  const respuestas = new Map<string, { id: string; texto: string; veces: number }>();
+  /** Levantamientos revisados: su conversación está cerrada. */
+  const revisados = new Set<string>();
+  /** Archivos que el almacenamiento rechaza siempre. */
+  const rechazadas = new Set<string>();
 
   function aplicarFalla<T>(op: Operacion, ejecutar: () => T): T {
     llamadas.push(op);
@@ -48,6 +64,8 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     if (revocados.size > 0 && op !== "subir" && op !== "consultarOrdenes") throw error("no_autenticado", 401);
     if (falla === "error_500") throw error("error_interno", 500);
     if (falla === "sesion_vencida") throw error("no_autenticado", 401);
+    if (falla === "version_no_soportada") throw error("version_protocolo_no_soportada", 426);
+    if (falla === "cambio_de_contrasena") throw error("cambio_de_contrasena_requerido", 403);
     const resultado = ejecutar();
     if (falla === "red_despues") throw new ErrorDeRed(new TypeError("Network connection was lost"));
     return resultado;
@@ -66,6 +84,8 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     async subir(url, _cabeceras, datos) {
       return aplicarFalla("subir", () => {
         const huella = url.split("/").at(-1)!;
+        // Un archivo que el almacenamiento rechaza siempre (por ejemplo, demasiado grande).
+        if (rechazadas.has(huella)) throw new ErrorDeSubida(413);
         const contenido = Buffer.from(datos);
         // Como el almacenamiento real: rechaza un contenido que no corresponde a la huella firmada.
         if (createHash("sha256").update(contenido).digest("hex") !== huella) throw new ErrorDeSubida(400);
@@ -107,7 +127,7 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     async obtenerCambios(desde) {
       return aplicarFalla("obtenerCambios", () => {
         const pagina = cambios.slice(desde, desde + tamanoDePagina);
-        return { cambios: pagina, puntoDeControl: desde + pagina.length, hayMas: desde + pagina.length < cambios.length, permisoLocalHasta };
+        return { cambios: pagina.filter((c) => c !== null), puntoDeControl: desde + pagina.length, hayMas: desde + pagina.length < cambios.length, permisoLocalHasta, epoca };
       });
     },
     async informarDispositivo(cuerpo) {
@@ -123,6 +143,27 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
         return { borrar: [...revocados].filter((u) => !confirmados.includes(u)) };
       });
     },
+    async terminarVisita(visitaId, { llave, en }) {
+      return aplicarFalla("terminarVisita", () => {
+        if (canceladas.has(visitaId)) throw error("estado_invalido", 409);
+        // Como el real: repetirla devuelve la primera, con cualquier llave.
+        const previa = terminadas.get(visitaId) ?? { en, llamadas: new Map<string, number>() };
+        previa.llamadas.set(llave, (previa.llamadas.get(llave) ?? 0) + 1);
+        terminadas.set(visitaId, previa);
+        return { terminada: { en: previa.en } };
+      });
+    },
+    async responderComentario(levantamientoId, _comentarioId, { llave, texto }) {
+      return aplicarFalla("responderComentario", () => {
+        // Como el real: un reintento con la misma llave devuelve el mismo mensaje, aunque ya esté revisado.
+        const previa = respuestas.get(llave);
+        if (!previa && revisados.has(levantamientoId)) throw error("estado_invalido", 409);
+        const mensaje = previa ?? { id: crypto.randomUUID(), texto, veces: 0 };
+        mensaje.veces++;
+        respuestas.set(llave, mensaje);
+        return { id: mensaje.id, texto, de: "tecnico" as const, autor: "Técnico", creadoEn: new Date(reloj).toISOString(), llave, leido: false };
+      });
+    },
   };
 
   return {
@@ -136,6 +177,17 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
       archivos.delete(huella);
     },
     recibidos,
+    terminadas,
+    respuestas,
+    marcarRevisado(levantamientoId: string) {
+      revisados.add(levantamientoId);
+    },
+    rechazarSiempre(huella: string) {
+      rechazadas.add(huella);
+    },
+    cancelar(visitaId: string) {
+      canceladas.add(visitaId);
+    },
     almacenamiento,
     /** Con qué tipo pidió subir cada archivo el teléfono. */
     tipos,
@@ -154,6 +206,15 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     },
     paginasDe(n: number) {
       tamanoDePagina = n;
+    },
+    /**
+     * Como dejar-limpio.sql (ADR-0038): borra del registro las visitas, los levantamientos y el catálogo (la secuencia
+     * sigue, quedan huecos), conserva formatos y símbolos y cambia la época.
+     */
+    limpiar() {
+      for (const [i, c] of cambios.entries()) if (c && c.tipo !== "formato" && c.tipo !== "simbolo") cambios[i] = null;
+      recibidos.clear();
+      epoca = `limpieza-${cambios.length}`;
     },
   };
 }

@@ -4,7 +4,7 @@ import conformidad from "../conformidad/validacion.json" with { type: "json" };
 import type { DefinicionCampo, VersionFormato } from "./formato";
 import type { Respuestas, Valor } from "./levantamiento";
 import { normalizarDecimal } from "./medida";
-import { DECIMAL_CANONICO, fotosReferenciadas, validarRespuestas } from "./validacion";
+import { DECIMAL_CANONICO, fotosReferenciadas, LIMITES, validarCampo, validarRespuestas } from "./validacion";
 
 const ordenar = <T extends { seccion: string; campo?: string }>(e: T[]) =>
   [...e].sort((a, b) => `${a.seccion}/${a.campo ?? ""}`.localeCompare(`${b.seccion}/${b.campo ?? ""}`));
@@ -45,7 +45,7 @@ function valorValido(c: DefinicionCampo): fc.Arbitrary<Valor> {
     c.tipo === "texto"
       ? fc.string({ minLength: 1, maxLength: 60 }).filter((t) => t.trim() !== "")
       : c.tipo === "medida"
-        ? fc.record({ valor: fc.stringMatching(DECIMAL_CANONICO), unidad: fc.constantFrom(...c.unidades) })
+        ? fc.record({ valor: fc.stringMatching(DECIMAL_CANONICO).filter((v) => v.length <= LIMITES.decimal), unidad: fc.constantFrom(...c.unidades) })
         : c.tipo === "foto"
           ? fc.uniqueArray(huella, { minLength: Math.max(c.min ?? 0, c.obligatorio ? 1 : 0), maxLength: 5 })
           : fc.record({ boceto: huella });
@@ -88,6 +88,12 @@ describe("propiedades del validador", () => {
         expect(Array.isArray(validarRespuestas(formato, respuestas as Respuestas))).toBe(true);
       }),
     );
+  });
+
+  it("una medida más larga que la que recibe el protocolo es inválida: el teléfono no la deja salir (iteración 42)", () => {
+    const medida: DefinicionCampo = { clave: "m", etiqueta: "M", tipo: "medida", unidades: ["m"] };
+    expect(validarCampo(medida, { valor: "1".repeat(LIMITES.decimal), unidad: "m" })).toBeNull();
+    expect(validarCampo(medida, { valor: "1".repeat(LIMITES.decimal + 1), unidad: "m" })).toBe("medida_invalida");
   });
 
   it("todo decimal normalizado es canónico", () => {

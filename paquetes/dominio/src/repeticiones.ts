@@ -64,7 +64,9 @@ export function bloqueDe(formato: VersionFormato, repeticiones: Repeticiones, cl
 export function rutaLegible(formato: VersionFormato, repeticiones: Repeticiones, seccion: string, campo?: string): string {
   const bloque = bloqueDe(formato, repeticiones, seccion);
   const etiqueta = campo ? bloque?.seccion.campos.find((c) => c.clave === campo)?.etiqueta ?? campo : undefined;
-  return [bloque?.titulo ?? seccion, etiqueta].filter(Boolean).join(" · ");
+  // Una sección repetible sola ("faltan tableros") no es un bloque: se nombra por su título, no por su clave (iteración 42).
+  const titulo = bloque?.titulo ?? formato.secciones.find((s) => s.clave === seccion)?.titulo ?? seccion;
+  return [titulo, etiqueta].filter(Boolean).join(" · ");
 }
 
 /**

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { index, integer, jsonb, pgPolicy, pgSchema, text, unique, uuid } from "drizzle-orm/pg-core";
-import type { ContenidoVersion, Plano } from "@teins/dominio";
+import type { ContenidoVersion, Plano, SeleccionInforme } from "@teins/dominio";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId, rolPortal } from "../../plataforma/esquema-comun";
 
 export const esquemaInformes = pgSchema("informes");
@@ -16,6 +16,8 @@ export const informes = esquemaInformes.table(
     conclusiones: text("conclusiones").notNull().default(""),
     levantamientos: uuid("levantamientos").array().notNull().default([]),
     planos: jsonb("planos").$type<Plano[]>().notNull().default([]),
+    /** Qué sale de cada levantamiento (ADR-0039): lo que oficina ocultó y lo que volvió a mostrar. */
+    seleccion: jsonb("seleccion").$type<SeleccionInforme>().notNull().default({ ocultos: [], mostrados: [] }),
     /** Concurrencia optimista (ADR-0005): dos personas componiendo no se pisan. */
     version: integer("version").notNull().default(1),
     creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),

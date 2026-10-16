@@ -6,10 +6,11 @@ import { crearAvisos, enviadorSegunConfig } from "./modulos/avisos";
 import { crearGeneradorPdfDeCotizaciones } from "./modulos/cotizaciones";
 import { crearEnvios, proveedoresSegunConfig } from "./modulos/envios";
 import { crearGeneradorPdf } from "./modulos/informes";
+import { podarVencido, recuperarTrabajosAMedias } from "./modulos/mantenimiento";
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
 import { cerrarNavegador } from "./plataforma/pdf";
-import { definirTareas } from "./tareas";
+import { definirTareas, periodicas } from "./tareas";
 
 /**
  * Rol worker (ADR-0001, ADR-0012). La cola usa la conexión del dueño (sus funciones lo exigen);
@@ -33,12 +34,17 @@ const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
   registro[metodo]({ ...alcance, ...meta }, mensaje);
 });
 
+/** La tarea periódica (ADR-0043, ADR-0044): recupera lo que quedó a medias y poda lo vencido. */
+const mantener = async (bds: { negocio: typeof negocio.bd; propietario: typeof cola.bd }) => {
+  await recuperarTrabajosAMedias(bds.negocio);
+  await podarVencido(bds);
+};
+
 const corredor = await run({
   pgPool: cola.pool,
-  taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones }),
+  taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones, mantenimiento: { recuperar: () => mantener({ negocio: negocio.bd, propietario: cola.bd }) } }),
   concurrency: 4,
-  // Las tareas periódicas (ADR-0012, regla 5) se declaran aquí cuando existan; nunca en un archivo suelto.
-  crontab: "",
+  parsedCronItems: periodicas(),
   noHandleSignals: true,
   logger,
 });

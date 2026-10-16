@@ -1,7 +1,7 @@
-import { useId, useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useId, useState, type FormEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import type { Respuesta } from "@teins/protocolo";
+import { ErrorApi, ErrorDeRed, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
   BarraLista,
@@ -18,7 +18,9 @@ import {
   CampoTextoLargo,
   Casilla,
   CeldaTabla,
+  Insignia,
   Confirmacion,
+  conTransicion,
   Dialogo,
   Download,
   EncabezadoPagina,
@@ -34,12 +36,22 @@ import {
   Tabla,
   Users,
   useNotificar,
+  enfocarPrimerError,
+  Smartphone,
+  TriangleAlert,
+  useMinuto,
 } from "@teins/ui";
 import { cliente } from "../api";
 import { csvDetalle, csvResumen, descargar } from "../csv";
 import { aFechaHora } from "../formato";
 import { useAbrirInformeDeVisita } from "../informes";
-import { consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
+import { mensajeDeError, sinError } from "../mensajes";
+import { cambiosAlReasignar, consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
+import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../horario";
+import { useIrConPedido, usePedido } from "../pedido";
+import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
+import { enLista } from "./Envios";
+import { CuandoVisita, resumenDeHorario, TecnicosDisponibles } from "./HorarioDeVisita";
 
 type Visita = Respuesta<"listarVisitas">["visitas"][number];
 type Tecnico = Respuesta<"listarTecnicos">["tecnicos"][number];
@@ -90,23 +102,51 @@ function tituloDia(aaaaMmDd: string, hoy: string) {
  * sitio o técnico (la lista llega completa, se busca aquí) y el avance de los levantamientos en una barra.
  */
 export function Visitas() {
-  const [vista, setVista] = useState<Vista>("proximas");
-  const [busqueda, setBusqueda] = useState("");
+  // Abierta toda la noche, «Hoy» y «En curso» siguen al reloj (iteración 41).
+  useMinuto();
+  // Dónde quedó la persona (prototipos/usabilidad-oficina): la pestaña, en el equipo; la búsqueda, mientras dure la pestaña.
+  const [vista, setVista] = usePreferencia<Vista>("visitas-pestana", "proximas", unoDe("proximas", "anteriores", "canceladas"));
+  const [busqueda, setBusqueda] = useBusquedaRecordada("visitas");
   const [programando, setProgramando] = useState(false);
+  // «Programar visita» desde la búsqueda (⌘K / Ctrl + K) llega con el formulario abierto.
+  usePedido("abrir", (pedido) => {
+    if (pedido === "programar") setProgramando(true);
+  });
   const [edicion, setEdicion] = useState<Edicion | null>(null);
   const [recientes, setRecientes] = useState<string[]>([]);
+  // Lo que no se pudo hacer desde una fila («Abrir el informe»): encima de la lista, como en el catálogo.
+  const [errorFila, setErrorFila] = useState<string | null>(null);
+  // En otra pestaña la fila del aviso ya no está a la vista: el aviso se va con ella (iteración 42).
+  useEffect(() => setErrorFila(null), [vista]);
   const notificar = useNotificar();
+  const irConPedido = useIrConPedido();
   const hoy = hoyLocal();
   const consulta = useQuery(consultasDeProgramacion.visitas(vista, hoy));
   const proximas = useQuery(consultasDeProgramacion.visitas("proximas", hoy));
+  // Los técnicos activos: un asignado que ya no lo está se marca en la fila (nadie más la ve en su teléfono).
+  const tecnicos = useQuery(consultasDeProgramacion.tecnicos());
+  const activos = tecnicos.data && new Set(tecnicos.data.tecnicos.map((t) => t.id));
+  const consultas = useQueryClient();
   const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
   const cerrarEdicion = () => setEdicion(null);
+  /** Lo destacado queda en la pestaña donde quedó la visita: si es otra, se cambia a ella (con lo nuevo ya leído). */
+  const mostrarEn = (destino: Vista, id: string) =>
+    void conTransicion(async () => {
+      if (destino !== vista) await consultas.fetchQuery(consultasDeProgramacion.visitas(destino, hoy)).catch(() => undefined);
+      setVista(destino);
+      setBusqueda("");
+      destacar(id);
+    });
+  // «Ver en Canceladas» llega aquí también si ya se salió de Visitas: el aviso dura 10 s y sigue a la vista.
+  usePedido("mostrarVisita", (pedido) => mostrarEn(pedido.vista, pedido.id));
 
   const todas = consulta.data?.visitas ?? [];
   const filtradas = todas.filter((v) => coincide(busqueda, v.cliente.nombre, v.sitio.nombre, v.sitio.direccion, ...v.tecnicos.map((t) => t.nombre)));
   // Por día, en el orden en que llegan (el servidor ya las ordena).
   const dias: { fecha: string; visitas: Visita[] }[] = [];
-  for (const v of filtradas) {
+  // Dentro de cada día, por hora de inicio; las de todo el día al final (ADR-0037). El orden de los días lo da el servidor.
+  const enOrden = vista === "canceladas" ? filtradas : [...filtradas].sort((a, b) => (a.programadaPara === b.programadaPara ? ordenDelDia(a, b) : 0));
+  for (const v of enOrden) {
     const clave = vista === "canceladas" ? "canceladas" : v.programadaPara;
     const grupo = dias.at(-1);
     if (grupo?.fecha === clave) grupo.visitas.push(v);
@@ -114,7 +154,17 @@ export function Visitas() {
   }
   const deHoy = proximas.data?.visitas.filter((v) => v.programadaPara === hoy).length;
   const cantidadProximas = proximas.data?.visitas.length;
-  let k = 0;
+  /**
+   * Tras un conflicto la lista ya se volvió a leer: el diálogo sigue abierto con la visita vigente y el reintento va sobre
+   * su versión nueva (la persona ya vio el aviso). Antes, sigue con la que abrió: un cambio ajeno no se pisa sin avisar.
+   */
+  const releer = () =>
+    setEdicion((e) => {
+      if (!e) return e;
+      const leidas = consultas.getQueriesData<Respuesta<"listarVisitas">>({ queryKey: ["programacion", "visitas"] }).flatMap(([, d]) => d?.visitas ?? []);
+      const vigente = leidas.filter((x) => x.id === e.v.id).sort((a, b) => b.version - a.version)[0];
+      return vigente && vigente.version > e.v.version ? { ...e, v: vigente } : e;
+    });
 
   return (
     <>
@@ -150,6 +200,7 @@ export function Visitas() {
           ]}
         />
       </BarraLista>
+      {errorFila && <Aviso tono="error">{errorFila}</Aviso>}
       <div role="tabpanel" aria-label={{ proximas: "Próximas", anteriores: "Anteriores", canceladas: "Canceladas" }[vista]}>
         {consulta.isPending ? (
           <EsqueletoLista etiqueta="Cargando visitas" />
@@ -174,6 +225,7 @@ export function Visitas() {
             etiqueta="Visitas"
             agrupada
             columnas={[
+              { titulo: "Hora" },
               { titulo: "Cliente y sitio" },
               { titulo: "Técnicos" },
               { titulo: "Motivo" },
@@ -184,12 +236,12 @@ export function Visitas() {
             {dias.map((d) => (
               <CuerpoTabla key={d.fecha}>
                 <tr>
-                  <td colSpan={5} className={`dia ${d.fecha === hoy ? "hoy" : ""}`}>
+                  <td colSpan={6} className={`dia ${d.fecha === hoy ? "hoy" : ""}`}>
                     {vista === "canceladas" ? "Canceladas" : tituloDia(d.fecha, hoy)}
                   </td>
                 </tr>
                 {d.visitas.map((v) => (
-                  <FilaVisita key={v.id} visita={v} indice={k++} busqueda={busqueda} resaltada={recientes.includes(v.id)} editar={(tipo) => setEdicion({ tipo, v })} />
+                  <FilaVisita key={v.id} visita={v} hoy={hoy} busqueda={busqueda} resaltada={recientes.includes(v.id)} activos={activos} alFallar={setErrorFila} editar={(tipo) => setEdicion({ tipo, v })} />
                 ))}
               </CuerpoTabla>
             ))}
@@ -203,14 +255,16 @@ export function Visitas() {
           alCerrar={() => setProgramando(false)}
           alProgramar={(v) => {
             setProgramando(false);
-            destacar(v.id);
-            notificar({ texto: `Visita programada: ${v.cliente}, ${dia(v.programadaPara)}` });
+            if (vista === "proximas") destacar(v.id);
+            else mostrarEn("proximas", v.id);
+            notificar({ texto: `Visita programada: ${v.cliente}, ${dia(v.programadaPara)}${v.horaInicio ? `, ${hora12(v.horaInicio)}` : ""}`, accion: { texto: "Programar otra", alHacer: () => void irConPedido("/visitas", { abrir: "programar" }) } });
           }}
         />
       )}
       {edicion?.tipo === "reasignar" && (
         <Reasignar
           v={edicion.v}
+          releer={releer}
           alCerrar={cerrarEdicion}
           alGuardar={() => {
             cerrarEdicion();
@@ -222,6 +276,7 @@ export function Visitas() {
       {edicion?.tipo === "reprogramar" && (
         <Reprogramar
           v={edicion.v}
+          releer={releer}
           alCerrar={cerrarEdicion}
           alGuardar={(fecha) => {
             cerrarEdicion();
@@ -230,7 +285,17 @@ export function Visitas() {
           }}
         />
       )}
-      {edicion?.tipo === "cancelar" && <Cancelar v={edicion.v} alCerrar={cerrarEdicion} alCancelar={() => notificar({ texto: `Visita cancelada: ${edicion.v.cliente.nombre}` })} />}
+      {edicion?.tipo === "cancelar" && (
+        <Cancelar
+          v={edicion.v}
+          releer={releer}
+          alCerrar={cerrarEdicion}
+          alCancelar={() => {
+            const id = edicion.v.id;
+            notificar({ texto: `Visita cancelada: ${edicion.v.cliente.nombre}`, accion: { texto: "Ver en Canceladas", alHacer: () => void irConPedido("/visitas", { mostrarVisita: { vista: "canceladas", id } }) } });
+          }}
+        />
+      )}
       {edicion?.tipo === "exportar" && <ExportarCantidades v={edicion.v} alCerrar={cerrarEdicion} />}
     </>
   );
@@ -252,9 +317,41 @@ function Avance({ v }: { v: Visita }) {
   );
 }
 
-function FilaVisita({ visita: v, indice, busqueda, resaltada, editar }: { visita: Visita; indice: number; busqueda: string; resaltada: boolean; editar: (tipo: Edicion["tipo"]) => void }) {
+function FilaVisita({
+  visita: v,
+  hoy,
+  busqueda,
+  resaltada,
+  activos,
+  alFallar,
+  editar,
+}: {
+  visita: Visita;
+  hoy: string;
+  busqueda: string;
+  resaltada: boolean;
+  activos: ReadonlySet<string> | undefined;
+  alFallar: (texto: string | null) => void;
+  editar: (tipo: Edicion["tipo"]) => void;
+}) {
+  const { hora, detalle } = horarioTexto(v);
+  // Un técnico desactivado ya no la ve en su teléfono: en una visita por hacer se dice, y si no queda ninguno, nadie la hará.
+  const inactivos = activos && !v.cancelada && v.programadaPara >= hoy ? v.tecnicos.filter((t) => !activos.has(t.id)) : [];
   return (
-    <FilaTabla resaltada={resaltada} indice={indice}>
+    <FilaTabla resaltada={resaltada} clave={v.id}>
+      <CeldaTabla>
+        <span className="hora-visita">
+          {hora}
+          {!v.cancelada && enCurso(v, hoy) ? (
+            <span className="en-curso">
+              <i aria-hidden />
+              En curso
+            </span>
+          ) : (
+            detalle && <small>{detalle}</small>
+          )}
+        </span>
+      </CeldaTabla>
       <CeldaTabla>
         <span className="fuerte">
           <Marcado texto={v.cliente.nombre} busqueda={busqueda} />
@@ -265,6 +362,12 @@ function FilaVisita({ visita: v, indice, busqueda, resaltada, editar }: { visita
       </CeldaTabla>
       <CeldaTabla>
         <Marcado texto={v.tecnicos.map((t) => t.nombre).join(", ")} busqueda={busqueda} />
+        {inactivos.length > 0 && (
+          <span className="sub">
+            {inactivos.length === v.tecnicos.length && <Insignia tono="alerta">Sin técnico</Insignia>}{" "}
+            {`Se desactivó a ${enLista(inactivos.map((t) => t.nombre))}`}
+          </span>
+        )}
       </CeldaTabla>
       <CeldaTabla clase="sec">{v.motivo}</CeldaTabla>
       <CeldaTabla>
@@ -280,7 +383,7 @@ function FilaVisita({ visita: v, indice, busqueda, resaltada, editar }: { visita
       <CeldaTabla derecha>
         {!v.cancelada && (
           <div className="fila-flex" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
-            {v.levantamientos.revisados > 0 && <AbrirInforme visitaId={v.id} cliente={v.cliente.nombre} />}
+            {v.levantamientos.revisados > 0 && <AbrirInforme visitaId={v.id} cliente={v.cliente.nombre} alFallar={alFallar} />}
             <MenuAcciones
               etiqueta={`Más acciones para la visita de ${v.cliente.nombre}`}
               opciones={[
@@ -297,7 +400,7 @@ function FilaVisita({ visita: v, indice, busqueda, resaltada, editar }: { visita
   );
 }
 
-function AbrirInforme({ visitaId, cliente: nombre }: { visitaId: string; cliente: string }) {
+function AbrirInforme({ visitaId, cliente: nombre, alFallar }: { visitaId: string; cliente: string; alFallar: (texto: string | null) => void }) {
   const abrir = useAbrirInformeDeVisita();
   const navegar = useNavigate();
   return (
@@ -307,7 +410,11 @@ function AbrirInforme({ visitaId, cliente: nombre }: { visitaId: string; cliente
       icono={FileText}
       aria-label={`Abrir el informe de ${nombre}`}
       cargando={abrir.isPending}
-      onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}
+      // Si no abre (sin conexión, la visita se canceló), se dice: antes el botón dejaba de girar y no pasaba nada.
+      onClick={() => {
+        alFallar(null);
+        abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }), onError: (e) => alFallar(`No se pudo abrir el informe de ${nombre}. ${porQueNoAbrio(e)}`) });
+      }}
     >
       Abrir el informe
     </Boton>
@@ -316,24 +423,7 @@ function AbrirInforme({ visitaId, cliente: nombre }: { visitaId: string; cliente
 
 // Programar -------------------------------------------------------------------------------------
 
-function ElegirTecnicos({ tecnicos, elegidos, onCambio, error }: { tecnicos: Tecnico[]; elegidos: string[]; onCambio: (ids: string[]) => void; error?: string | undefined }) {
-  if (tecnicos.length === 0) return <Aviso tono="alerta">No hay técnicos activos. Quien administra los crea en Administración.</Aviso>;
-  return (
-    <fieldset className="casillas-filas flex flex-col gap-1">
-      <legend className="mb-1.5 text-cuerpo font-bold">Técnicos</legend>
-      <div className="flex flex-col">
-        {tecnicos.map((t) => (
-          <Casilla key={t.id} marcada={elegidos.includes(t.id)} onCambio={(m) => onCambio(m ? [...elegidos, t.id] : elegidos.filter((x) => x !== t.id))}>
-            {t.nombre}
-          </Casilla>
-        ))}
-      </div>
-      {error && <p className="text-ayuda font-bold text-error">{error}</p>}
-    </fieldset>
-  );
-}
-
-function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar: () => void; alProgramar: (v: { id: string; cliente: string; programadaPara: string }) => void }) {
+function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar: () => void; alProgramar: (v: { id: string; cliente: string; programadaPara: string; horaInicio: string | null }) => void }) {
   const formulario = useId();
   const clientes = useQuery(consultasDeProgramacion.clientes());
   const tecnicos = useQuery(consultasDeProgramacion.tecnicos());
@@ -341,28 +431,31 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
   const [sitioId, setSitioId] = useState("");
   const [motivo, setMotivo] = useState<Motivo>("Mantenimiento");
   const [fecha, setFecha] = useState(hoy);
+  // Por omisión, de 9 a 11: lo más común; "Todo el día" y "No sé cuánto dura" están a un toque.
+  const [horario, setHorario] = useState<Horario>({ horaInicio: "09:00", horaFin: "11:00" });
   const [elegidos, setElegidos] = useState<string[]>([]);
-  const [errores, setErrores] = useState<{ cliente?: string; sitio?: string; fecha?: string; tecnicos?: string }>({});
+  const [errores, setErrores] = useState<{ cliente?: string; sitio?: string; tecnicos?: string }>({});
   const [error, setError] = useState<string | null>(null);
-  const programar = useAccionDeProgramacion(() => cliente.llamar("programarVisita", { cuerpo: { clienteId, sitioId, motivo, programadaPara: fecha, tecnicos: elegidos } }));
+  const programar = useAccionDeProgramacion(() => cliente.llamar("programarVisita", { cuerpo: { clienteId, sitioId, motivo, programadaPara: fecha, ...horario, tecnicos: elegidos } }));
 
   const lista = clientes.data?.clientes ?? [];
   const sitios = lista.find((c) => c.id === clienteId)?.sitios ?? [];
+  const nombres = (tecnicos.data?.tecnicos ?? []).filter((t) => elegidos.includes(t.id)).map((t) => t.nombre);
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     const faltan = {
       ...(!clienteId ? { cliente: "Elija el cliente." } : {}),
       ...(clienteId && !sitioId ? { sitio: "Elija el sitio." } : {}),
-      ...(!fecha ? { fecha: "Elija la fecha." } : {}),
-      ...(elegidos.length === 0 ? { tecnicos: "Asigne al menos un técnico." } : {}),
+      ...(elegidos.length === 0 ? { tecnicos: "Elija al menos un técnico libre." } : {}),
     };
     setErrores(faltan);
+    if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
     if (Object.keys(faltan).length > 0) return;
     setError(null);
     try {
       const v = await programar.mutateAsync(undefined);
-      alProgramar({ id: v.id, cliente: lista.find((c) => c.id === clienteId)?.nombre ?? "", programadaPara: fecha });
+      alProgramar({ id: v.id, cliente: lista.find((c) => c.id === clienteId)?.nombre ?? "", programadaPara: fecha, horaInicio: horario.horaInicio });
     } catch (e) {
       setError(mensajeDeProgramacion(e));
     }
@@ -391,42 +484,57 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
     );
   } else {
     contenido = (
-      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <CampoSeleccion
-          etiqueta="Cliente"
-          vacio="Elija un cliente"
-          valor={clienteId}
-          error={errores.cliente}
-          onCambio={(id) => {
-            setClienteId(id);
-            // Con un solo sitio, queda elegido.
-            const deEse = lista.find((c) => c.id === id)?.sitios ?? [];
-            setSitioId(deEse.length === 1 ? deEse[0]!.id : "");
-          }}
-          opciones={lista.map((c) => ({ valor: c.id, texto: c.nombre }))}
-        />
-        <CampoSeleccion
-          etiqueta="Sitio"
-          vacio={clienteId ? "Elija un sitio" : "Primero elija el cliente"}
-          valor={sitioId}
-          error={errores.sitio}
-          onCambio={setSitioId}
-          deshabilitado={!clienteId}
-          opciones={sitios.map((s) => ({ valor: s.id, texto: `${s.nombre} · ${s.direccion}` }))}
-        />
-        <CampoTexto etiqueta="Fecha" tipo="date" nombre="fecha" valorInicial={hoy} onCambio={setFecha} error={errores.fecha} />
-        <div className="opciones-pastilla">
-          <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+      <form id={formulario} onSubmit={enviar} noValidate className="dos-col">
+        <div className="col-f">
+          <div className="fila-campos">
+            <CampoSeleccion
+              etiqueta="Cliente"
+              vacio="Elija un cliente"
+              valor={clienteId}
+              error={errores.cliente}
+              onCambio={(id) => {
+                setClienteId(id);
+                // Con un solo sitio, queda elegido.
+                const deEse = lista.find((c) => c.id === id)?.sitios ?? [];
+                setSitioId(deEse.length === 1 ? deEse[0]!.id : "");
+                // El sitio era del cliente anterior: su error tampoco describe lo que hay.
+                setErrores((e) => sinError(e, "cliente", "sitio"));
+              }}
+              opciones={lista.map((c) => ({ valor: c.id, texto: c.nombre }))}
+            />
+            <CampoSeleccion
+              etiqueta="Sitio"
+              vacio={clienteId ? "Elija un sitio" : "Primero el cliente"}
+              valor={sitioId}
+              error={errores.sitio}
+              onCambio={(id) => (setSitioId(id), setErrores((e) => sinError(e, "sitio")))}
+              deshabilitado={!clienteId}
+              opciones={sitios.map((x) => ({ valor: x.id, texto: x.nombre }))}
+            />
+          </div>
+          <div className="opciones-pastilla">
+            <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
+          </div>
+          <CuandoVisita fecha={fecha} horario={horario} hoy={hoy} alCambiar={(f, h) => (setFecha(f), setHorario(h))} />
+          {nombres.length > 0 && (
+            <p className="nota-capa">
+              <Smartphone aria-hidden />
+              {`${nombres.join(" y ")} ${nombres.length > 1 ? "la ven" : "la ve"} en su teléfono al sincronizar.`}
+            </p>
+          )}
+          {error && <Aviso tono="error">{error}</Aviso>}
         </div>
-        <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} error={errores.tecnicos} />
-        {error && <Aviso tono="error">{error}</Aviso>}
+        <div className="col-f">
+          <TecnicosDisponibles tecnicos={tecnicos.data.tecnicos} fecha={fecha} horario={horario} elegidos={elegidos} alCambiar={(ids) => (setElegidos(ids), setErrores((e) => sinError(e, "tecnicos")))} error={errores.tecnicos} />
+        </div>
       </form>
     );
   }
 
   return (
     <Dialogo
-      forma="lateral"
+      forma="formulario"
+      ancho="doble"
       titulo="Programar visita"
       cerrable={!programar.isPending}
       alCerrar={alCerrar}
@@ -436,7 +544,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
             Cancelar
           </Boton>
           <Boton type="submit" form={formulario} variante="principal" cargando={programar.isPending} disabled={lista.length === 0}>
-            Programar la visita
+            {nombres.length === 1 ? `Programar con ${nombres[0]!.split(" ")[0]}` : "Programar la visita"}
           </Boton>
         </>
       }
@@ -448,19 +556,31 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
 
 // Una visita -------------------------------------------------------------------------------------
 
-const deLaVisita = (v: Visita) => `${v.cliente.nombre} · ${dia(v.programadaPara)}`;
+const deLaVisita = (v: Visita) => `${v.cliente.nombre} · ${dia(v.programadaPara)} · ${resumenDeHorario(v)}`;
+const esConflicto = (e: unknown) => e instanceof ErrorApi && e.codigo === "conflicto_de_version";
 
-function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void; alGuardar: () => void }) {
+/** Por qué no se abrió el informe: lo que explica el servidor (una visita cancelada), o qué hacer; no «No se pudo guardar». */
+const porQueNoAbrio = (e: unknown) =>
+  e instanceof ErrorApi && e.codigo === "estado_invalido" ? mensajeDeError(e) : e instanceof ErrorDeRed ? "Revise la conexión e intente de nuevo." : "Intente de nuevo.";
+
+function Reasignar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: () => void; alCerrar: () => void; alGuardar: () => void }) {
   const formulario = useId();
   const tecnicos = useQuery(consultasDeProgramacion.tecnicos());
   const [elegidos, setElegidos] = useState(v.tecnicos.map((t) => t.id));
   const [errorCampo, setErrorCampo] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
-  const accion = useAccionDeProgramacion(() => cliente.llamar("reasignarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, tecnicos: elegidos } }));
+  // Lo que cambia, antes de guardarlo (iteración 24c): quién deja de ver la visita, quién la recibe y quién sale por no
+  // estar activo (no se puede quitar desde la lista, que solo trae a los activos).
+  const cambios = cambiosAlReasignar(v.tecnicos, elegidos, tecnicos.data && new Set(tecnicos.data.tecnicos.map((t) => t.id)));
+  const accion = useAccionDeProgramacion(() => cliente.llamar("reasignarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, tecnicos: cambios.finales } }));
+
+  const nombreDe = (id: string) => tecnicos.data?.tecnicos.find((t) => t.id === id)?.nombre ?? v.tecnicos.find((t) => t.id === id)?.nombre ?? "Un técnico";
+  const [salen, entran, inactivos] = [cambios.salen.map(nombreDe), cambios.entran.map(nombreDe), cambios.inactivos.map(nombreDe)];
+  const verbo = entran.length > 0 ? `Reasignar a ${enLista(entran)}` : salen.length + inactivos.length > 0 ? `Quitar a ${enLista([...salen, ...inactivos])}` : "Guardar técnicos";
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    if (elegidos.length === 0) return setErrorCampo("Asigne al menos un técnico.");
+    if (cambios.finales.length === 0) return setErrorCampo("Asigne al menos un técnico.");
     setErrorCampo(undefined);
     setError(null);
     try {
@@ -468,12 +588,15 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
       alGuardar();
     } catch (e) {
       // Tras un conflicto la lista ya se volvió a leer: el diálogo sigue abierto y reintenta con la versión nueva.
+      if (esConflicto(e)) releer();
       setError(mensajeDeProgramacion(e));
     }
   }
 
   return (
     <Dialogo
+      forma="formulario"
+      ancho="ancho"
       titulo="Reasignar técnicos"
       subtitulo={deLaVisita(v)}
       cerrable={!accion.isPending}
@@ -483,8 +606,8 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
           <Boton onClick={alCerrar} disabled={accion.isPending}>
             Cancelar
           </Boton>
-          <Boton type="submit" form={formulario} variante="principal" cargando={accion.isPending}>
-            Guardar técnicos
+          <Boton type="submit" form={formulario} variante="principal" cargando={accion.isPending} disabled={salen.length + entran.length + inactivos.length === 0}>
+            {verbo}
           </Boton>
         </>
       }
@@ -495,38 +618,59 @@ function Reasignar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void
         ) : tecnicos.isError ? (
           <Aviso tono="error">No se pudieron cargar los técnicos.</Aviso>
         ) : (
-          <ElegirTecnicos tecnicos={tecnicos.data.tecnicos} elegidos={elegidos} onCambio={setElegidos} error={errorCampo} />
+          <TecnicosDisponibles tecnicos={tecnicos.data.tecnicos} fecha={v.programadaPara} horario={v} elegidos={elegidos} alCambiar={(ids) => (setElegidos(ids), setErrorCampo(undefined))} excluir={v.id} error={errorCampo} />
         )}
-        <p className="text-ayuda text-texto-secundario">Quien deja la visita la pierde de su teléfono; lo que ya empezó se conserva y lo puede enviar.</p>
+        {(inactivos.length > 0 || (cambios.finales.length > 0 && salen.length + entran.length > 0)) && (
+          <ul aria-label="Lo que cambia" className="flex flex-col gap-1.5 rounded-control bg-panel-hundido px-3 py-2.5 text-ayuda">
+            {inactivos.map((n) => (
+              <li key={`inactivo-${n}`}>
+                Se desactivó a <b className="font-medium">{n}</b>: sale de la visita.
+              </li>
+            ))}
+            {cambios.finales.length > 0 &&
+              salen.map((n) => (
+                <li key={`sale-${n}`}>
+                  <b className="font-medium">{n}</b> deja de verla en su teléfono. Lo que ya empezó se conserva y lo puede enviar.
+                </li>
+              ))}
+            {cambios.finales.length > 0 &&
+              entran.map((n) => (
+                <li key={`entra-${n}`}>
+                  <b className="font-medium">{n}</b> la recibe en su teléfono.
+                </li>
+              ))}
+          </ul>
+        )}
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>
   );
 }
 
-function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => void; alGuardar: (fecha: string) => void }) {
+function Reprogramar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: () => void; alCerrar: () => void; alGuardar: (fecha: string) => void }) {
   const formulario = useId();
-  const [fecha, setFecha] = useState(v.programadaPara);
+  const hoy = hoyLocal();
+  const [fecha, setFecha] = useState(v.programadaPara < hoy ? hoy : v.programadaPara);
+  const [horario, setHorario] = useState<Horario>({ horaInicio: v.horaInicio, horaFin: v.horaFin });
   const [motivo, setMotivo] = useState<Motivo>(motivoConocido(v.motivo));
-  const [errorFecha, setErrorFecha] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
-  const accion = useAccionDeProgramacion(() => cliente.llamar("reprogramarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, programadaPara: fecha, motivo } }));
+  const accion = useAccionDeProgramacion(() => cliente.llamar("reprogramarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, programadaPara: fecha, ...horario, motivo } }));
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    if (!fecha) return setErrorFecha("Elija la fecha.");
-    setErrorFecha(undefined);
     setError(null);
     try {
       await accion.mutateAsync(undefined);
       alGuardar(fecha);
     } catch (e) {
+      if (esConflicto(e)) releer();
       setError(mensajeDeProgramacion(e));
     }
   }
 
   return (
     <Dialogo
+      forma="formulario"
       titulo="Reprogramar visita"
       subtitulo={deLaVisita(v)}
       cerrable={!accion.isPending}
@@ -543,9 +687,8 @@ function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => vo
       }
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
-        <div className="max-w-xs">
-          <CampoTexto etiqueta="Fecha nueva" tipo="date" valorInicial={v.programadaPara} onCambio={setFecha} error={errorFecha} />
-        </div>
+        <CuandoVisita fecha={fecha} horario={horario} hoy={hoy} alCambiar={(f, h) => (setFecha(f), setHorario(h))} />
+        {v.tecnicos.length > 0 && <p className="nota-capa">{`${v.tecnicos.map((t) => t.nombre).join(" y ")} ${v.tecnicos.length > 1 ? "reciben" : "recibe"} el cambio en su teléfono. Si a esa hora tienen otra visita, no se guarda.`}</p>}
         <div className="opciones-pastilla">
           <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
         </div>
@@ -555,7 +698,7 @@ function Reprogramar({ v, alCerrar, alGuardar }: { v: Visita; alCerrar: () => vo
   );
 }
 
-function Cancelar({ v, alCerrar, alCancelar }: { v: Visita; alCerrar: () => void; alCancelar: () => void }) {
+function Cancelar({ v, releer, alCerrar, alCancelar }: { v: Visita; releer: () => void; alCerrar: () => void; alCancelar: () => void }) {
   const [motivo, setMotivo] = useState("");
   const accion = useAccionDeProgramacion(() => cliente.llamar("cancelarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, motivo: motivo.trim() } }));
   return (
@@ -566,14 +709,26 @@ function Cancelar({ v, alCerrar, alCancelar }: { v: Visita; alCerrar: () => void
       nivel="irreversible"
       validar={() => (motivo.trim() === "" ? "Escriba por qué se cancela: queda en el registro." : null)}
       mensajeDeError={mensajeDeProgramacion}
-      accion={() => accion.mutateAsync(undefined)}
+      accion={async () => {
+        try {
+          await accion.mutateAsync(undefined);
+        } catch (e) {
+          // El diálogo sigue abierto con el aviso: el reintento va sobre la versión que dejó la otra persona.
+          if (esConflicto(e)) releer();
+          throw e;
+        }
+      }}
       alCerrar={alCerrar}
       alTerminar={alCancelar}
+      consecuencias={[
+        {
+          icono: Smartphone,
+          texto: `La visita del ${dia(v.programadaPara)} sale del teléfono de ${v.tecnicos.map((t) => t.nombre).join(" y ") || "sus técnicos"}`,
+          detalle: "Lo que ya empezaron se conserva y lo pueden enviar",
+        },
+        { icono: TriangleAlert, texto: "No se puede deshacer", detalle: "Si hace falta, programe otra visita" },
+      ]}
     >
-      <p>
-        La visita del {dia(v.programadaPara)} sale de los teléfonos de sus técnicos; lo que ya empezaron se conserva y lo pueden enviar. No se puede deshacer: si hace falta, programe
-        otra.
-      </p>
       <CampoTextoLargo etiqueta="Motivo de la cancelación" valor={motivo} onCambio={setMotivo} maximo={500} />
     </Confirmacion>
   );

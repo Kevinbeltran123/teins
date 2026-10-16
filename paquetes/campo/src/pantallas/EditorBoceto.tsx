@@ -38,6 +38,7 @@ import {
   Trash,
   Type,
   Undo2,
+  useCapaQueSale,
 } from "@teins/ui";
 import { ajustarAngulo, enderezar, pegarA, type Forma } from "../dibujo/enderezar";
 import { cajaDe, centroDe, duplicar, elementoEn, escalar, girar, mover } from "../dibujo/transformar";
@@ -119,6 +120,7 @@ export default function EditorBoceto({
   guardar,
   cerrar,
   listo,
+  entrar = true,
 }: {
   etiqueta: string;
   inicial: DocumentoBoceto | null;
@@ -127,9 +129,13 @@ export default function EditorBoceto({
   simbolos: readonly SimboloLocal[] | undefined;
   guardar: (documento: DocumentoBoceto) => Promise<void>;
   cerrar: () => void;
-  /** Como paso del recorrido (rediseño): "Listo" abajo al centro sigue al paso siguiente. */
+  /** Como paso del recorrido (rediseño): "Listo", abajo a la derecha, sigue al paso siguiente. */
   listo?: (() => void) | undefined;
+  /** false: ya subió la capa que lo esperaba (el paso del croquis); no sube otra vez. */
+  entrar?: boolean;
 }) {
+  // Sube al abrirse y baja al cerrarse (iteración 27).
+  const [saliendo, salir] = useCapaQueSale(cerrar);
   // Un boceto nuevo espera a medir la pantalla: su primera hoja tiene el alto del espacio libre.
   const [hojas, setHojas] = useState<readonly HojaBoceto[] | null>(() => (inicial ? aVersion2(inicial).hojas : null));
   const [actual, setActual] = useState(() => Math.max(0, Math.min(hojaInicial, (inicial ? aVersion2(inicial).hojas.length : 1) - 1)));
@@ -570,11 +576,11 @@ export default function EditorBoceto({
       aria-modal="true"
       aria-label={`Boceto: ${etiqueta}`}
       data-tema="claro"
-      className="fixed inset-0 z-50 flex flex-col bg-fondo pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] select-none [-webkit-touch-callout:none]"
+      className={`fixed inset-0 z-50 flex flex-col bg-fondo pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] select-none [-webkit-touch-callout:none] ${saliendo ? "animate-hoja-baja" : entrar ? "motion-safe:animate-hoja-sube" : ""}`}
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2 py-1.5 max-[383px]:gap-0.5 max-[383px]:px-1.5 max-[383px]:[&_button]:size-10">
         <Pastilla>
-          <BotonHerramienta icono={ChevronLeft} etiqueta="Volver a la captura" onClick={cerrar} />
+          <BotonHerramienta icono={ChevronLeft} etiqueta="Volver a la captura" onClick={salir} />
         </Pastilla>
         <Pastilla role="group" aria-label="Deshacer y rehacer">
           <BotonHerramienta icono={Undo2} etiqueta="Deshacer" disabled={historial.deshacer.length === 0} onClick={deshacerUno} />
@@ -645,7 +651,7 @@ export default function EditorBoceto({
                         pathLength={100}
                         strokeDasharray="100"
                         transform={`rotate(-90 ${anillo[0]} ${anillo[1]})`}
-                        className="animate-llenar-anillo fill-none stroke-superficie"
+                        className="fill-none stroke-superficie motion-safe:animate-llenar-anillo"
                         strokeWidth={unidades(4)}
                         strokeLinecap="round"
                       />
@@ -698,7 +704,7 @@ export default function EditorBoceto({
           <>
             {menuHojas && <div aria-hidden className="absolute inset-0" onPointerDown={() => setMenuHojas(false)} />}
             {menuHojas && (
-              <div role="menu" aria-label="Hojas del boceto" className="absolute bottom-16 left-1/2 flex w-[min(320px,calc(100%-16px))] -translate-x-1/2 flex-col gap-0.5 rounded-capa bg-panel p-2 shadow-capa motion-safe:animate-aparecer">
+              <div role="menu" aria-label="Hojas del boceto" className="absolute bottom-2 left-2 flex w-[min(320px,calc(100%-16px))] -translate-x-1/2 flex-col gap-0.5 rounded-capa bg-panel p-2 shadow-capa motion-safe:animate-aparecer">
                 {hojas.map((h, i) => (
                   <button
                     key={i}
@@ -742,47 +748,11 @@ export default function EditorBoceto({
                 )}
               </div>
             )}
-            <button
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={menuHojas}
-              aria-label={`Hojas: ${hoja.nombre}, hoja ${actual + 1} de ${hojas.length}`}
-              className={`absolute bottom-2.5 flex h-control-sm items-center gap-1.5 rounded-panel ${listo ? "left-2 max-w-[34%]" : "left-1/2 max-w-[calc(100%-160px)] -translate-x-1/2"} border border-division bg-panel pr-2.5 pl-3.5 text-ayuda font-bold whitespace-nowrap shadow-menu [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:text-texto-secundario`}
-              onClick={() => setMenuHojas((abierto) => !abierto)}
-            >
-              <span className="truncate">{hoja.nombre}</span>
-              <span className="font-normal text-texto-secundario">
-                {actual + 1}/{hojas.length}
-              </span>
-              {menuHojas ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
-            </button>
-            <button
-              type="button"
-              aria-label="Símbolos"
-              aria-expanded={biblioteca}
-              className="absolute right-2 bottom-2.5 flex size-12 items-center justify-center rounded-panel border border-division bg-panel text-superficie shadow-menu [&_svg]:size-6"
-              onClick={() => {
-                setMenuHojas(false);
-                setBiblioteca(true);
-              }}
-            >
-              <Shapes aria-hidden />
-            </button>
-            {listo && (
-              <button
-                type="button"
-                onClick={listo}
-                className="absolute bottom-2.5 left-1/2 flex h-13 -translate-x-1/2 items-center gap-2 rounded-control bg-superficie px-5.5 text-cuerpo font-extrabold text-sobre-superficie shadow-menu active:scale-95 [&_svg]:size-5"
-              >
-                Listo
-                <Check aria-hidden />
-              </button>
-            )}
             {vista.escala > 1 && (
               <button
                 type="button"
                 aria-label="Ver la hoja completa"
-                className={`absolute left-2 h-control-sm rounded-panel border border-division bg-panel px-3 text-ayuda font-bold shadow-menu ${listo ? "bottom-16" : "bottom-2.5"}`}
+                className="absolute bottom-2.5 left-2 h-control-sm rounded-panel border border-division bg-panel px-3 text-ayuda font-bold shadow-menu"
                 onClick={() => setVista(VISTA_COMPLETA)}
               >
                 {Math.round(vista.escala * 100)} %
@@ -791,6 +761,50 @@ export default function EditorBoceto({
           </>
         )}
       </div>
+
+      {/*
+        La barra de abajo (iteración 32): fija y fuera del lienzo, para no tapar el plano. Hojas y símbolos a la izquierda,
+        "Listo" a la derecha, donde termina el pulgar (Pinterest y eBay en Mobbin). Fuera de la captura, sin "Listo".
+      */}
+      {hojas && hoja && (
+        <div className="flex shrink-0 items-center gap-2 border-t border-division bg-panel px-3 pt-2.5 pb-2.5">
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuHojas}
+            aria-label={`Hojas: ${hoja.nombre}, hoja ${actual + 1} de ${hojas.length}`}
+            className="flex h-control-sm max-w-[45%] items-center gap-1.5 rounded-control bg-panel-hundido pr-2.5 pl-3.5 text-[15px] font-medium whitespace-nowrap [&_svg]:size-[17px] [&_svg]:shrink-0 [&_svg]:text-texto-secundario"
+            onClick={() => setMenuHojas((abierto) => !abierto)}
+          >
+            <span className="truncate">{hoja.nombre}</span>
+            <span className="font-normal text-texto-secundario">
+              {actual + 1}/{hojas.length}
+            </span>
+            {menuHojas ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
+          </button>
+          <button
+            type="button"
+            aria-label="Símbolos"
+            aria-expanded={biblioteca}
+            className="flex size-control-sm shrink-0 items-center justify-center rounded-control bg-panel-hundido text-superficie [&_svg]:size-[22px]"
+            onClick={() => {
+              setMenuHojas(false);
+              setBiblioteca(true);
+            }}
+          >
+            <Shapes aria-hidden />
+          </button>
+          {listo && (
+            <button
+              type="button"
+              onClick={listo}
+              className="ml-auto h-control-sm shrink-0 rounded-control bg-superficie px-5 text-cuerpo font-semibold text-sobre-superficie active:scale-95 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+            >
+              Listo
+            </button>
+          )}
+        </div>
+      )}
 
       {biblioteca && <HojaSimbolos simbolos={simbolos} elegir={ponerSimbolo} cerrar={() => setBiblioteca(false)} />}
 

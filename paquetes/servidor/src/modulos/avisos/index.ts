@@ -12,41 +12,68 @@ import { suscripciones } from "./esquema";
 
 /** Hechos que merecen un aviso (ADR-0023): cada uno pide una acción de quien lo recibe. */
 export type Aviso =
-  | { tipo: "visita_asignada" | "visita_cancelada" | "visita_retirada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; programadaPara: string }
-  | { tipo: "visita_reprogramada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; antes: string; despues: string }
-  | { tipo: "comentario" | "levantamiento_revisado"; organizacionId: string; tecnicoId: string; levantamientoId: string; creadoEn: Date }
+  | { tipo: "visita_asignada" | "visita_cancelada" | "visita_retirada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; programadaPara: string; horaInicio?: string | null }
+  | { tipo: "visita_reprogramada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; antes: string; despues: string; horaAntes?: string | null; horaDespues?: string | null }
+  | { tipo: "levantamiento_revisado"; organizacionId: string; tecnicoId: string; levantamientoId: string; creadoEn: Date }
+  /** Oficina escribió en una conversación (ADR-0040): con el cliente y el texto, por decisión de Kevin. */
+  | { tipo: "mensaje_de_oficina"; organizacionId: string; tecnicoId: string; levantamientoId: string; cliente: string | null; texto: string }
+  /** El técnico respondió (ADR-0040): solo a quien revisa o, si nadie lo ha tomado, a quien escribió el comentario. */
+  | { tipo: "respuesta_del_tecnico"; organizacionId: string; usuarioId: string; levantamientoId: string; comentarioId: string; tecnico: string; cliente: string | null; sobre: string | null }
   | { tipo: "levantamiento_enviado"; organizacionId: string; levantamientoId: string; tecnico: string }
   /** A quien publicó o pidió el envío: una copia del informe no llegó al cliente (ADR-0028). */
   | { tipo: "envio_fallido"; organizacionId: string; usuarioId: string; versionId: string; documento: "informe" | "cotizacion" };
 
-/** Lo que se ve en el aviso. Nunca lleva datos del cliente: se lee con el teléfono bloqueado (R5). */
+/**
+ * Lo que se ve en el aviso. No lleva datos del cliente: se lee con el teléfono bloqueado (R5). La excepción son las
+ * conversaciones (ADR-0040): el cliente y el texto, por decisión de Kevin.
+ */
 export interface Contenido {
   titulo: string;
   cuerpo: string;
   /** Agrupa por entidad: un aviso nuevo de la misma visita reemplaza al anterior. */
   etiqueta: string;
+  /** A dónde lleva al tocarlo, dentro de la superficie; sin ella, al inicio. */
+  ruta?: string | undefined;
 }
+
+/** Un aviso muestra pocas líneas: el texto largo se corta. */
+const recortar = (texto: string, largo = 160) => (texto.length > largo ? `${texto.slice(0, largo - 1).trimEnd()}…` : texto);
 
 const ZONA = "America/Bogota";
 const formatoDia = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-/** "sáb, 3 de oct": la visita tiene día, no hora. */
+/** "sáb, 3 de oct". */
 const dia = (aaaaMmDd: string) => formatoDia.format(new Date(`${aaaaMmDd}T00:00:00Z`));
+/** "14:00" → "2:00 p. m." (ADR-0037). */
+const hora12 = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number) as [number, number];
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h >= 12 ? "p. m." : "a. m."}`;
+};
+const aLas = (hora: string | null | undefined) => (hora ? `, a las ${hora12(hora)}` : "");
 const diaDe = (momento: Date) => dia(momento.toLocaleDateString("en-CA", { timeZone: ZONA }));
 
 export function contenidoDe(aviso: Aviso): Contenido {
   switch (aviso.tipo) {
     case "visita_asignada":
-      return { titulo: "Visita nueva", cuerpo: `Para el ${dia(aviso.programadaPara)}. Ábrela para ver el cliente y el sitio.`, etiqueta: `visita:${aviso.visitaId}` };
+      return { titulo: "Visita nueva", cuerpo: `Para el ${dia(aviso.programadaPara)}${aLas(aviso.horaInicio)}. Ábrela para ver el cliente y el sitio.`, etiqueta: `visita:${aviso.visitaId}` };
     case "visita_reprogramada":
-      return aviso.antes === aviso.despues
-        ? { titulo: "Visita cambiada", cuerpo: `Oficina cambió el motivo de la visita del ${dia(aviso.despues)}.`, etiqueta: `visita:${aviso.visitaId}` }
-        : { titulo: "Visita reprogramada", cuerpo: `La del ${dia(aviso.antes)} pasó al ${dia(aviso.despues)}.`, etiqueta: `visita:${aviso.visitaId}` };
+      return aviso.antes !== aviso.despues
+        ? { titulo: "Visita reprogramada", cuerpo: `La del ${dia(aviso.antes)} pasó al ${dia(aviso.despues)}${aLas(aviso.horaDespues)}.`, etiqueta: `visita:${aviso.visitaId}` }
+        : (aviso.horaAntes ?? null) !== (aviso.horaDespues ?? null)
+          ? { titulo: "Visita reprogramada", cuerpo: `La del ${dia(aviso.despues)} ${aviso.horaDespues ? `ahora es a las ${hora12(aviso.horaDespues)}` : "ahora es todo el día"}.`, etiqueta: `visita:${aviso.visitaId}` }
+          : { titulo: "Visita cambiada", cuerpo: `Oficina cambió el motivo de la visita del ${dia(aviso.despues)}.`, etiqueta: `visita:${aviso.visitaId}` };
     case "visita_cancelada":
       return { titulo: "Visita cancelada", cuerpo: `Oficina canceló la visita del ${dia(aviso.programadaPara)}.`, etiqueta: `visita:${aviso.visitaId}` };
     case "visita_retirada":
       return { titulo: "Visita asignada a otra persona", cuerpo: `Ya no tienes la visita del ${dia(aviso.programadaPara)}.`, etiqueta: `visita:${aviso.visitaId}` };
-    case "comentario":
-      return { titulo: "Comentario de oficina", cuerpo: `En tu levantamiento del ${diaDe(aviso.creadoEn)}.`, etiqueta: `levantamiento:${aviso.levantamientoId}` };
+    case "mensaje_de_oficina":
+      return { titulo: aviso.cliente ? `Oficina · ${aviso.cliente}` : "Oficina", cuerpo: recortar(aviso.texto), etiqueta: `conversacion:${aviso.levantamientoId}`, ruta: `/?conversacion=${aviso.levantamientoId}` };
+    case "respuesta_del_tecnico":
+      return {
+        titulo: `${aviso.tecnico} respondió`,
+        cuerpo: [aviso.cliente, aviso.sobre ? `sobre ${aviso.sobre}` : null].filter(Boolean).join(" · ") || "Abra la conversación para leer su respuesta.",
+        etiqueta: `conversacion:${aviso.levantamientoId}`,
+        ruta: `/levantamientos/${aviso.levantamientoId}?hilo=${aviso.comentarioId}`,
+      };
     case "levantamiento_revisado":
       return { titulo: "Levantamiento revisado", cuerpo: `Oficina revisó tu levantamiento del ${diaDe(aviso.creadoEn)}.`, etiqueta: `levantamiento:${aviso.levantamientoId}` };
     case "levantamiento_enviado":
@@ -63,8 +90,9 @@ function destinatarios(aviso: Aviso) {
     case "levantamiento_enviado":
       return eq(suscripciones.superficie, "oficina");
     case "envio_fallido":
+    case "respuesta_del_tecnico":
       return and(eq(suscripciones.superficie, "oficina"), eq(suscripciones.usuarioId, aviso.usuarioId));
-    case "comentario":
+    case "mensaje_de_oficina":
     case "levantamiento_revisado":
       return and(eq(suscripciones.superficie, "campo"), eq(suscripciones.usuarioId, aviso.tecnicoId));
     default:
@@ -96,7 +124,7 @@ export async function olvidarSuscripciones(tx: TxOrganizacion, usuarioId: string
 export const cargaDeclarativa = (contenido: Contenido, origen: string) =>
   JSON.stringify({
     web_push: 8030,
-    notification: { title: contenido.titulo, body: contenido.cuerpo, navigate: new URL("/", origen).href, tag: contenido.etiqueta, lang: "es-CO", dir: "ltr", silent: false },
+    notification: { title: contenido.titulo, body: contenido.cuerpo, navigate: new URL(contenido.ruta ?? "/", origen).href, tag: contenido.etiqueta, lang: "es-CO", dir: "ltr", silent: false },
   });
 
 /** Un aviso que no llega en un día ya no sirve: la bajada trae el estado de todos modos. */

@@ -6,7 +6,8 @@ import type { Actor, Rol } from "./actor";
  */
 export type Politica =
   | { tipo: "publica"; motivo: string }
-  | { tipo: "roles"; roles: readonly Rol[]; administrador?: true }
+  /** `conContrasenaTemporal`: la ruta sirve también a quien todavía tiene la contraseña temporal (ADR-0033). */
+  | { tipo: "roles"; roles: readonly Rol[]; administrador?: true; conContrasenaTemporal?: true }
   /** Sin sesión: el manejador verifica el secreto del dispositivo (órdenes de borrado, ADR-0009). */
   | { tipo: "secreto_de_dispositivo" }
   /** Sesión del portal del cliente, con su propia cookie y su propio rol de base de datos (ADR-0009). */
@@ -16,17 +17,21 @@ export const politicas = {
   /** Sin sesión. Solo para salud, contrato y autenticación; el motivo queda escrito. */
   publica: (motivo: string): Politica => ({ tipo: "publica", motivo }),
   autenticado: { tipo: "roles", roles: ["tecnico", "oficina"] } satisfies Politica,
+  /** Leer la propia sesión y cambiar la contraseña: lo único que puede quien tiene la temporal (ADR-0033). */
+  autenticadoConContrasenaTemporal: { tipo: "roles", roles: ["tecnico", "oficina"], conContrasenaTemporal: true } satisfies Politica,
   tecnico: { tipo: "roles", roles: ["tecnico"] } satisfies Politica,
   oficina: { tipo: "roles", roles: ["oficina"] } satisfies Politica,
   /** Persona de oficina con la marca de administrador y el segundo factor activo (ADR-0009). */
   administrador: { tipo: "roles", roles: ["oficina"], administrador: true } satisfies Politica,
 } as const;
 
-export type ResultadoPolitica = "permitido" | "no_autenticado" | "sin_permiso" | "segundo_factor_requerido";
+export type ResultadoPolitica = "permitido" | "no_autenticado" | "sin_permiso" | "segundo_factor_requerido" | "cambio_de_contrasena_requerido";
 
 export function evaluar(politica: Politica, actor: Actor | null): ResultadoPolitica {
   if (politica.tipo === "publica" || politica.tipo === "secreto_de_dispositivo" || politica.tipo === "sesion_de_portal") return "permitido";
   if (!actor) return "no_autenticado";
+  // Antes que cualquier permiso: con la contraseña temporal no se hace nada más que cambiarla (ADR-0033).
+  if (actor.debeCambiarContrasena && !politica.conContrasenaTemporal) return "cambio_de_contrasena_requerido";
   if (!politica.roles.includes(actor.rol)) return "sin_permiso";
   if (politica.administrador && !actor.administrador) return "sin_permiso";
   if (politica.administrador && !actor.segundoFactor) return "segundo_factor_requerido";

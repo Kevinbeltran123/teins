@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Config } from "../../config";
 import { claveDeObjeto, type Almacenamiento } from "../../plataforma/almacenamiento";
@@ -269,9 +269,11 @@ export function crearAccesosDeClientes(bd: BaseDeDatos) {
       await enOrganizacion(bd, organizacionId, async (tx) => {
         const [actual] = await tx.select({ id: accesosDeClientes.id }).from(accesosDeClientes).where(eq(accesosDeClientes.clienteId, clienteId));
         if (actual) await bloquearAcceso(tx, actual.id);
+        // Con el nombre vigente: una copia que quedó vieja se pone al día.
+        const cliente = await clientesYSitios.obtener(tx, clienteId);
         const [acceso] = await tx
           .update(accesosDeClientes)
-          .set({ identificador: credenciales.identificador, claveHash, regeneradoEn: new Date() })
+          .set({ identificador: credenciales.identificador, claveHash, regeneradoEn: new Date(), ...(cliente ? { clienteNombre: cliente.nombre } : {}) })
           .where(eq(accesosDeClientes.clienteId, clienteId))
           .returning({ id: accesosDeClientes.id });
         if (!acceso) throw problema("no_encontrado", "El cliente no tiene acceso: créelo primero");
@@ -281,4 +283,17 @@ export function crearAccesosDeClientes(bd: BaseDeDatos) {
       return credenciales;
     },
   };
+}
+
+/**
+ * Se corrigió el nombre del cliente (ADR-0035): su acceso guarda una copia porque el rol del portal no lee los
+ * clientes. Va en la transacción de quien lo corrigió, así el portal nunca muestra el anterior.
+ */
+export async function renombrarClienteDelPortal(tx: TxOrganizacion, clienteId: string, nombre: string): Promise<void> {
+  await tx.update(accesosDeClientes).set({ clienteNombre: nombre }).where(eq(accesosDeClientes.clienteId, clienteId));
+}
+
+/** Sesiones del portal vencidas antes de `antesDe` (ADR-0044), en la organización de la transacción. */
+export async function podarSesionesDelPortal(tx: TxOrganizacion, antesDe: Date): Promise<number> {
+  return (await tx.delete(sesionesDelPortal).where(lt(sesionesDelPortal.expiraEn, antesDe)).returning({ accesoId: sesionesDelPortal.accesoId })).length;
 }

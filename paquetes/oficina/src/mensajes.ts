@@ -21,6 +21,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   boceto_invalido: "El boceto no tiene la forma esperada",
   cantidades_invalidas: "Cada línea necesita descripción, una cantidad mayor que cero y una unidad permitida",
   firma_invalida: "La firma no tiene sus trazos, el nombre de quien firmó, la fecha o la constancia",
+  archivo_muy_grande: "El archivo pesa más de lo que se puede recibir.",
 };
 
 /** Los datos que envían las pantallas de oficina, como se nombran en ellas (las claves de los esquemas de protocolo). */
@@ -82,8 +83,29 @@ export function errorDelCampo(error: unknown, clave: string): string | undefined
   return error.problema.campos?.some((c) => claveDeRuta(c.ruta) === clave) ? "Revise este dato: no tiene la forma esperada." : undefined;
 }
 
+/**
+ * Al cambiar un campo, su error se va: ya no describe lo que hay. Los de los demás campos se quedan hasta corregirlos.
+ * Sin error en esos campos, devuelve el mismo objeto y la pantalla no se vuelve a pintar.
+ */
+export function sinError<E extends object>(errores: E, ...campos: (keyof E)[]): E {
+  if (!campos.some((c) => errores[c] !== undefined)) return errores;
+  const resto: Partial<E> = { ...errores };
+  for (const c of campos) delete resto[c];
+  return resto as E;
+}
+
+export const MENSAJE_VERSION_NUEVA ="Hay una versión nueva de TEINS: recargue la página e intente de nuevo.";
+
+/**
+ * Una pestaña abierta desde antes de un despliegue pide archivos que ya cambiaron de nombre: el navegador lanza un
+ * TypeError al cargar una pieza aparte (el QR, las plantillas). No es un error de la acción: se arregla recargando.
+ */
+export const esVersionVieja = (error: unknown) =>
+  error instanceof TypeError && /dynamically imported module|module script failed|loading dynamically imported/i.test(error.message);
+
 /** Lo que una persona de oficina necesita saber de un error al guardar. */
 export function mensajeDeError(error: unknown): string {
+  if (esVersionVieja(error)) return MENSAJE_VERSION_NUEVA;
   if (error instanceof ErrorDeRed) return "Sin conexión con el servidor. No se guardó nada; intente de nuevo al recuperar la conexión.";
   if (!(error instanceof ErrorApi)) return "No se pudo guardar. Intente de nuevo.";
   switch (error.codigo) {
@@ -94,7 +116,8 @@ export function mensajeDeError(error: unknown): string {
     case "no_tomado":
       return "Ya no tiene la revisión de este levantamiento: otra persona la tomó.";
     case "estado_invalido":
-      return "El levantamiento cambió de estado. Recargue para ver cómo quedó.";
+      // Si el servidor sabe qué pasó («La visita está cancelada…»), lo dice: recargar no lo cambiaría.
+      return error.problema.detail ?? "El levantamiento cambió de estado. Recargue para ver cómo quedó.";
     case "respuestas_invalidas":
       return "Hay datos que no cumplen el formato. Revise los campos marcados.";
     case "no_autenticado":

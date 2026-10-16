@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { nuevaVisita, nuevoUsuario, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, guardadoSolo, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
 
 /**
  * Iteración 20 (ADR-0028): contactos del cliente y el informe publicado por correo y WhatsApp.
@@ -76,11 +76,10 @@ test("oficina registra los contactos del cliente, publica con el PDF para ellos 
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
+  await o.getByRole("button", { name: "Abrir el informe" }).click();
   await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
-  await o.getByRole("button", { name: "Guardar borrador" }).click();
-  await expect(o.getByText("Todo guardado")).toBeVisible();
+  await guardadoSolo(o);
 
   // Publicar: quienes reciben el informe vienen marcados.
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
@@ -142,15 +141,18 @@ test("si el PDF no se pudo generar, el envío no se ofrece otra vez: se publica 
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
+  await o.getByRole("button", { name: "Abrir el informe" }).click();
   await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   // Empieza como un PDF, así que se verifica, pero no se puede anexar: el PDF del informe falla.
   await o.locator("input[type=file]").setInputFiles({ name: "Plano dañado.pdf", mimeType: "application/pdf", buffer: Buffer.from(`%PDF-1.7 ${randomUUID()} sin estructura`) });
   await expect(o.getByRole("textbox", { name: "Nombre del plano 1" })).toHaveValue("Plano dañado");
-  await o.getByRole("button", { name: "Guardar borrador" }).click();
-  await expect(o.getByText("Todo guardado")).toBeVisible();
+  // Al verificarlo, el servidor ve que no se puede anexar: lo dicen la fila, la ficha de la hoja y la confirmación.
+  await expect(o.getByText("No se puede anexar al informe", { exact: false })).toBeVisible({ timeout: 30_000 });
+  await expect(o.frameLocator('iframe[title^="Vista previa del informe"]').locator(".vista-anexo.ilegible")).toContainText("no se puede anexar");
+  await guardadoSolo(o);
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
+  await expect(o.getByRole("dialog").getByText("El plano «Plano dañado» no se puede anexar")).toBeVisible();
   await expect(async () => {
     await o.getByRole("dialog").getByRole("button", { name: /^Publicar/ }).click();
     await expect(o.getByText("Versión 1 vigente")).toBeVisible({ timeout: 3_000 });

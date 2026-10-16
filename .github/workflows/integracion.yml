@@ -90,10 +90,17 @@ jobs:
         run: pnpm --filter @teins/servidor test
 
   extremo-a-extremo:
-    name: Extremo a extremo en Chromium y WebKit
+    name: Extremo a extremo en ${{ matrix.nombre }}
     needs: calidad
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Un navegador por trabajo, en paralelo: los dos juntos ya pasaban de los 30 minutos (iteración 42).
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { navegador: chromium, nombre: Chromium }
+          - { navegador: webkit, nombre: WebKit }
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -107,15 +114,16 @@ jobs:
       - name: Configuración del servidor para la prueba (datos ficticios, secreto de un solo uso)
         working-directory: paquetes/servidor
         run: sed "s|^AUTH_SECRETO=$|AUTH_SECRETO=$(openssl rand -base64 32)|" .env.example > .env
+      # Chromium siempre: el worker imprime los PDF con él, también en el trabajo de WebKit.
       - name: Navegadores
-        run: pnpm --filter @teins/e2e exec playwright install --with-deps chromium webkit
+        run: pnpm --filter @teins/e2e exec playwright install --with-deps chromium ${{ matrix.navegador }}
       - name: Pruebas
-        run: pnpm --filter @teins/e2e test
+        run: pnpm --filter @teins/e2e test --project=${{ matrix.navegador }}
       - name: Reporte de la prueba
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: reporte-e2e
+          name: reporte-e2e-${{ matrix.navegador }}
           path: |
             e2e/playwright-report
             e2e/test-results

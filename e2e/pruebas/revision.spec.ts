@@ -46,13 +46,23 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   const a = await oficina(browser, ana);
   await abrirLevantamientoDe(a, tecnico, "Esperando revisión");
   await a.getByRole("button", { name: "Tomar para revisar" }).click();
-  await expect(a.getByText("Usted tiene la revisión.", { exact: false })).toBeVisible();
+  await expect(a.getByRole("region", { name: "Revisión" }).getByText("la tomó usted")).toBeVisible();
   await a.getByRole("button", { name: "Corregir potencia nominal" }).click();
   await a.getByRole("textbox", { name: "Nuevo valor de potencia nominal" }).fill("12,5");
+  // Antes de guardar, el capítulo del informe ya muestra el valor nuevo y el anterior (ADR-0031): el panel abre en
+  // «En el informe» la primera vez (iteración 38).
+  const capitulo = a.frameLocator('iframe[title="Capítulo del informe"]');
+  await expect(capitulo.getByText("12,5 kVA")).toBeVisible();
+  await expect(capitulo.locator('td[data-antes="Antes: 10 kVA · sin guardar"]')).toHaveCount(1);
+  // Sin motivo no se guarda: queda en el historial junto al valor anterior (iteración 24c).
+  await a.getByRole("button", { name: "Guardar corrección" }).click();
+  await expect(a.getByText("Escriba el motivo: queda en el historial junto al valor anterior.")).toBeVisible();
+  await expect(a.getByRole("textbox", { name: "Motivo de la corrección" })).toBeFocused();
   await a.getByRole("textbox", { name: "Motivo de la corrección" }).fill("La placa dice 12,5 kVA");
   await a.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(a.getByText("12,5 kVA", { exact: true })).toBeVisible();
-  // El historial va en su pestaña del carril.
+  await expect(capitulo.locator('tr.vista-corregido td[data-antes="Antes: 10 kVA"]')).toHaveCount(1);
+  // El historial va en su pestaña del panel.
   await a.getByRole("tab", { name: "Historial" }).click();
   const historial = a.getByRole("region", { name: "Historial de cambios" });
   await expect(historial.getByText("potencia nominal: 10 kVA → 12,5 kVA")).toBeVisible();
@@ -60,11 +70,26 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await expect(historial.getByText("Historial íntegro")).toBeVisible();
 
   await a.getByRole("button", { name: "Comentar potencia nominal" }).click();
-  await a.getByRole("textbox", { name: "Nuevo comentario" }).fill("Revisa la placa: la potencia estaba mal");
+  await a.getByRole("textbox", { name: "Nuevo comentario" }).fill("Revisa la placa: la potencia esta mal");
   // Se escribe debajo de la fila: el primer "Enviar comentario" es el de esa fila.
   await a.getByRole("button", { name: "Enviar comentario" }).first().click();
   await a.getByRole("tab", { name: /^Comentarios/ }).click();
-  await expect(a.getByRole("region", { name: "Comentarios al técnico" }).getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();
+  const comentarios = a.getByRole("region", { name: "Comentarios al técnico" });
+  await expect(comentarios.getByText("Revisa la placa: la potencia esta mal")).toBeVisible();
+
+  // Su autora lo corrige (ADR-0035): editar deja la hora; borrar no pregunta, queda "Comentario retirado" con "Deshacer".
+  await comentarios.getByRole("button", { name: "Más acciones para el comentario" }).click();
+  await a.getByRole("menuitem", { name: "Editar" }).click();
+  await comentarios.getByRole("textbox", { name: "Comentario", exact: true }).fill("Revisa la placa: la potencia estaba mal");
+  await comentarios.getByRole("button", { name: "Guardar" }).click();
+  await expect(comentarios.getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();
+  await expect(comentarios.getByText(/^Editado /)).toBeVisible();
+  await a.getByRole("textbox", { name: "Comentario general" }).fill("Comentario equivocado (E2E)");
+  await comentarios.getByRole("button", { name: "Enviar comentario" }).click();
+  await comentarios.getByRole("region", { name: "Conversación general" }).filter({ hasText: "Comentario equivocado (E2E)" }).getByRole("button", { name: "Más acciones para el comentario" }).click();
+  await a.getByRole("menuitem", { name: "Borrar" }).click();
+  await expect(comentarios.getByText(`Comentario retirado por ${ana.nombre}`, { exact: false })).toBeVisible();
+  await expect(a.getByRole("tab", { name: "Comentarios 1" })).toBeVisible();
 
   // Luis se lleva la revisión pidiéndolo; el guardado que Ana tenía en curso se rechaza y se avisa (QA-25).
   await a.getByRole("button", { name: "Corregir descripción del sitio" }).click();
@@ -72,19 +97,23 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await abrirLevantamientoDe(b, tecnico, "En revisión");
   await b.getByRole("button", { name: `Tomar la revisión de ${ana.nombre}` }).click();
   await b.getByRole("dialog").getByRole("button", { name: "Tomar la revisión" }).click();
-  await expect(b.getByText("Usted tiene la revisión.", { exact: false })).toBeVisible();
+  await expect(b.getByRole("region", { name: "Revisión" }).getByText("la tomó usted")).toBeVisible();
 
   await a.getByRole("textbox", { name: "Nuevo valor de descripción del sitio" }).fill("Cambio que no debe quedar");
+  await a.getByRole("textbox", { name: "Motivo de la corrección" }).fill("Prueba de conflicto E2E");
   await a.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(a.getByText("recargue para ver la versión actual", { exact: false }).or(a.getByText("Ya no tiene la revisión", { exact: false }))).toBeVisible();
   await a.getByRole("button", { name: "Recargar" }).click();
-  await expect(a.getByText(`La revisión la tiene ${luis.nombre}.`)).toBeVisible();
+  await expect(a.getByRole("region", { name: "Revisión" }).getByText(`la tiene ${luis.nombre}`)).toBeVisible();
   await expect(a.getByText("Cambio que no debe quedar")).toHaveCount(0);
 
   // Luis la marca revisada.
   await b.getByRole("button", { name: "Marcar revisado" }).click();
   await b.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await expect(b.getByText(`Revisado por ${luis.nombre}.`, { exact: false })).toBeVisible();
+  // El estado cambia en su lugar, en la barra: quién lo revisó, y una notificación (iteraciones 27 y 38).
+  const revision = b.getByRole("region", { name: "Revisión" });
+  await expect(revision.getByText("por usted", { exact: false })).toBeVisible();
+  await expect(b.getByRole("status").getByText("Marcado revisado")).toBeVisible();
   await b.getByRole("tab", { name: "Historial" }).click();
   await expect(b.getByRole("region", { name: "Historial de cambios" }).getByText(`que tenía ${ana.nombre}`, { exact: false })).toBeVisible();
 
@@ -92,11 +121,16 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   const esta = page.getByRole("region", { name: "Enviados" });
-  await expect(esta.getByText("Revisado por oficina")).toBeVisible({ timeout: 30_000 });
-  await expect(esta.getByText("1 comentario de oficina")).toBeVisible();
+  await expect(esta.getByText("Revisado", { exact: true })).toBeVisible({ timeout: 30_000 });
+  // El comentario abre el chat con oficina (ADR-0040): la fila dice que oficina escribió.
+  await expect(esta.getByText("Oficina te escribió")).toBeVisible();
   await esta.getByRole("button").first().click();
   await expect(page.getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();
-  await expect(page.getByText("Sobre potencia nominal", { exact: false })).toBeVisible();
+  // En el chat, el comentario lleva el dato del que habla; revisado, la conversación está cerrada (ADR-0040).
+  await page.getByRole("button", { name: /^Oficina/ }).click();
+  const chat = page.getByRole("dialog", { name: "Chat con oficina" });
+  await expect(chat.getByRole("button", { name: /Tu respuesta · Cuarto técnico.*Potencia nominal/ })).toBeVisible();
+  await expect(chat.getByText("La conversación quedó cerrada")).toBeVisible();
 
   await a.context().close();
   await b.context().close();

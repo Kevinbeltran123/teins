@@ -3,7 +3,7 @@
   "tailwindcss" y después este archivo; las clases solo existen para tokens.
 */
 @import "../tokens.css";
-@import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
+@import "@fontsource-variable/geist/wght.css";
 
 @theme inline {
   --color-*: initial;
@@ -22,6 +22,7 @@
   --color-panel-hundido: var(--t-panel-hundido);
   --color-texto: var(--t-texto);
   --color-texto-secundario: var(--t-texto-secundario);
+  --color-texto-terciario: var(--t-texto-terciario);
   --color-division: var(--t-division);
   --color-borde-suave: var(--t-borde-suave);
   --color-borde-control: var(--t-borde-control);
@@ -40,6 +41,7 @@
   --color-alerta-fondo: var(--t-alerta-fondo);
   --color-alerta-texto: var(--t-alerta-texto);
   --color-notificacion: var(--t-notificacion);
+  --color-enlace-notificacion: var(--t-enlace-notificacion);
   --color-velo: var(--t-velo);
   --color-visor: var(--t-visor);
   --color-estado-enviado-fondo: var(--t-estado-enviado-fondo);
@@ -52,6 +54,12 @@
   --color-estado-anulado-texto: var(--t-estado-anulado-texto);
 
   --font-texto: var(--t-fuente-texto);
+  /* Precisión: pesos de 400 a 600. Las clases de más peso de las pantallas caen en 600 sin tocarlas. */
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+  --font-weight-black: 600;
 
   --text-cuerpo: var(--t-texto-cuerpo);
   --text-ayuda: var(--t-texto-ayuda);
@@ -65,6 +73,7 @@
 
   --shadow-capa: var(--t-sombra-capa);
   --shadow-menu: var(--t-sombra-menu);
+  --shadow-boton: var(--t-sombra-boton);
 
   --spacing-tactil: var(--t-tactil);
   --spacing-control: var(--t-control);
@@ -82,6 +91,17 @@
   --animate-hoja-siguiente: hoja-siguiente var(--t-duracion-estandar) var(--t-curva) both;
   --animate-hoja-anterior: hoja-anterior var(--t-duracion-estandar) var(--t-curva) both;
   --animate-llenar-anillo: llenar-anillo 350ms linear both;
+  /* Lo que entra y sale de abajo (notificaciones) y las capas de campo que suben a pantalla completa. */
+  --animate-entra-abajo: entra-abajo var(--t-duracion-estandar) var(--t-curva) both;
+  --animate-sale-abajo: sale-abajo var(--t-duracion-estandar) var(--t-curva) both;
+  --animate-hoja-sube: hoja-sube var(--t-duracion-pantalla) var(--t-curva-hoja) both;
+  --animate-hoja-baja: hoja-baja var(--t-duracion-estandar) var(--t-curva-hoja) both;
+  /* Hojas de campo (iteración 32): desde el borde, con el velo fundiéndose a la vez; lo que se abre desde una hoja
+     entra en la misma hoja como una página. */
+  --animate-hoja-entra: hoja-sube var(--t-duracion-hoja) var(--t-curva-hoja) both;
+  --animate-pagina-adelante: pagina-adelante var(--t-duracion-hoja) var(--t-curva) both;
+  --animate-pagina-atras: pagina-atras var(--t-duracion-hoja) var(--t-curva) both;
+  --animate-fundir: fundir var(--t-duracion-estandar) ease-out both;
 }
 
 @layer base {
@@ -90,6 +110,7 @@
     color: var(--t-texto);
     background: var(--t-fondo);
     font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
   }
   /* Tailwind 4 deja el cursor de flecha en los botones: en escritorio, un botón debe verse accionable. */
   button:not(:disabled),
@@ -169,34 +190,89 @@
   }
 }
 
-/* El chulo de enviado se dibuja (ChuloDeExito). */
+/* El chulo de enviado se dibuja cuando oficina lo recibe (ProcesoDeEnvio). */
 @keyframes trazo {
   from { stroke-dashoffset: 100; }
   to { stroke-dashoffset: 0; }
 }
 
 /*
-  Pasar de un paso a otro en campo (DESIGN.md, Recorrido): el navegador captura las dos pantallas
-  (View Transitions) y este CSS las mueve. Adelante, la nueva entra por la derecha; atrás, por la izquierda.
+  Cambios de estado como View Transitions (DESIGN.md, movimiento; iteración 27). El navegador toma una foto antes
+  y otra después y anima entre las dos solo lo que tiene nombre: la página no se mueve. Sin soporte o con
+  movimiento reducido, el cambio es instantáneo (conTransicion).
+  - Adelante y atrás son cortos (iteración 32): la pantalla anterior se va en 120 ms y la nueva entra 24 px con
+    fundido en 220 ms; barrer un cuarto del ancho se sentía lento en el teléfono.
+  - Con dirección (data-direccion), se mueve la raíz: lo que se ve en la ventana, menos lo que tiene nombre propio. Su
+    foto es del tamaño de la ventana, nunca del documento entero: una lista de miles de filas o un levantamiento con
+    fotos no congelan la transición (en WebKit, el iPhone, una foto del documento entero sí).
+    adelante y atrás la deslizan (pasar de paso en campo, el siguiente levantamiento en oficina); seccion la
+    desvanece y la nueva sube un poco; fundido la cruza (abrir y cerrar una captura, de la lista al detalle).
+  - Lo que tiene nombre se queda en su lugar o va de su lugar al nuevo: la cabecera y la barra del paso, el menú y la
+    barra de oficina, el título de una fila, un estado, una fila de una lista.
 */
-::view-transition-old(root),
-::view-transition-new(root) {
+:root { view-transition-name: none; }
+:root[data-direccion] { view-transition-name: root; }
+::view-transition-group(*) {
   animation-duration: var(--t-duracion-pantalla);
   animation-timing-function: var(--t-curva);
 }
-:root[data-direccion="adelante"]::view-transition-old(root) { animation-name: paso-sale-izquierda; }
-:root[data-direccion="adelante"]::view-transition-new(root) { animation-name: paso-entra-derecha; }
-:root[data-direccion="atras"]::view-transition-old(root) { animation-name: paso-sale-derecha; }
-:root[data-direccion="atras"]::view-transition-new(root) { animation-name: paso-entra-izquierda; }
-@keyframes paso-sale-izquierda { to { transform: translateX(-25%); opacity: 0; } }
-@keyframes paso-entra-derecha { from { transform: translateX(100%); } }
-@keyframes paso-sale-derecha { to { transform: translateX(100%); } }
-@keyframes paso-entra-izquierda { from { transform: translateX(-25%); opacity: 0; } }
-
-/* Entregar el teléfono para la firma: el icono gira como quien lo pasa (HojaDeFirma). */
-@keyframes entregar {
-  to { transform: rotate(-90deg); }
+::view-transition-old(*),
+::view-transition-new(*) { animation-duration: var(--t-duracion-estandar); }
+::view-transition-group(root) { overflow: clip; }
+:root[data-direccion="adelante"]::view-transition-old(root) { animation: vt-sale-izquierda var(--t-duracion-rapida) ease-in both; }
+:root[data-direccion="adelante"]::view-transition-new(root) { animation: vt-entra-derecha 220ms var(--t-curva) 20ms both; }
+:root[data-direccion="atras"]::view-transition-old(root) { animation: vt-sale-derecha var(--t-duracion-rapida) ease-in both; }
+:root[data-direccion="atras"]::view-transition-new(root) { animation: vt-entra-izquierda 220ms var(--t-curva) 20ms both; }
+:root[data-direccion="seccion"]::view-transition-old(root) { animation: vt-desvanece var(--t-duracion-rapida) linear both; }
+:root[data-direccion="seccion"]::view-transition-new(root) { animation: vt-sube 240ms var(--t-curva) both; }
+@keyframes vt-sale-izquierda { to { transform: translateX(-12px); opacity: 0; } }
+@keyframes vt-entra-derecha { from { transform: translateX(24px); opacity: 0; } }
+@keyframes vt-sale-derecha { to { transform: translateX(12px); opacity: 0; } }
+@keyframes vt-entra-izquierda { from { transform: translateX(-24px); opacity: 0; } }
+@keyframes vt-sube { from { transform: translateY(8px); opacity: 0; } }
+@keyframes vt-desvanece { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
 }
+
+/*
+  Lo que se va también sale (iteración 27): un diálogo o una notificación que se quita queda 200 ms saliendo.
+  Dialogo deja una copia inerte (capa-saliendo) con la forma del diálogo que se cerró.
+*/
+dialog.capa-saliendo[data-forma] {
+  position: fixed;
+  inset-block: 0;
+  z-index: 60;
+  pointer-events: none;
+  max-width: calc(100% - 6px - 2em);
+}
+dialog.capa-saliendo[data-forma="centrado"], dialog.capa-saliendo[data-forma="formulario"] { animation: sale-centro var(--t-duracion-estandar) var(--t-curva) both; }
+dialog.capa-saliendo[data-forma="lateral"] { max-width: 100%; animation: sale-lado var(--t-duracion-estandar) var(--t-curva) both; }
+dialog.capa-saliendo[data-forma="inferior"],
+dialog.capa-saliendo[data-forma="hoja"] { max-width: 100%; animation: hoja-baja var(--t-duracion-estandar) var(--t-curva-hoja) both; }
+dialog.capa-inferior[open]::backdrop,
+dialog.capa-hoja[open]::backdrop { animation: velo-entra var(--t-duracion-estandar) ease-out both; }
+.velo-saliendo {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  pointer-events: none;
+  background: var(--t-velo);
+  animation: velo-sale var(--t-duracion-estandar) var(--t-curva) both;
+}
+@keyframes sale-centro { to { opacity: 0; scale: 0.97; } }
+@keyframes sale-lado { to { opacity: 0; transform: translateX(32px); } }
+@keyframes hoja-sube { from { transform: translateY(100%); } }
+@keyframes hoja-baja { to { transform: translateY(100%); } }
+@keyframes velo-sale { to { opacity: 0; } }
+@keyframes velo-entra { from { opacity: 0; } }
+@keyframes pagina-adelante { from { transform: translateX(28px); opacity: 0; } }
+@keyframes pagina-atras { from { transform: translateX(-28px); opacity: 0; } }
+@keyframes fundir { from { opacity: 0; } }
+@keyframes entra-abajo { from { opacity: 0; transform: translateY(10px); } }
+@keyframes sale-abajo { to { opacity: 0; transform: translateY(10px); } }
 
 /* Cola de subida en Enviado: una franja que recorre la barra mientras hay señal. */
 @keyframes cargando {

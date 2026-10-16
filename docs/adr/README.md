@@ -52,8 +52,23 @@ Sistema de levantamientos técnicos en campo, revisión en oficina y entrega de 
 | [0026](0026-bocetos-con-formas.md) | Bocetos versión 2: hojas con nombre, formas enderezadas, cotas y mover, en un editor a pantalla completa | Aceptada |
 | [0027](0027-simbolos-de-los-bocetos.md) | Símbolos de los bocetos: biblioteca como datos de la organización, copiada en el boceto que la usa | Aceptada |
 | [0028](0028-envio-del-informe-al-cliente.md) | Envío del informe al cliente por correo (Resend) y WhatsApp (Cloud API de Meta), con contactos del cliente y estado por envío | Aceptada |
-| [0029](0029-cotizaciones.md) | Cotizaciones desde las cantidades revisadas, con lista de precios con historia, IVA o AIU y versiones inmutables | Aceptada |
+| [0029](0029-cotizaciones.md) | Cotizaciones desde las cantidades revisadas, con lista de precios con historia, IVA o AIU y versiones inmutables | Aceptada (retirar versiones: reemplazado por 0034) |
 | [0030](0030-presupuesto-de-campo-para-el-rediseno.md) | El presupuesto de JavaScript inicial de campo sube a 135 KB para el rediseño Recorrido | Aceptada |
+| [0031](0031-vista-en-vivo-de-los-documentos.md) | Vista en vivo de los documentos desde las mismas plantillas del PDF, en un paquete compartido | Aceptada |
+| [0032](0032-soltar-reabrir-y-devolver-una-revision.md) | Soltar, reabrir y devolver una revisión (estado "Devuelto") | Propuesta, aplazada |
+| [0033](0033-reactivar-usuarios-y-cuenta-propia.md) | Reactivar usuarios y administrar la cuenta propia | Aceptada |
+| [0034](0034-cancelar-envios-y-retirar-cotizaciones.md) | Cancelar un envío en cola y retirar una versión de cotización (reemplaza a 0029 en un punto) | Aceptada |
+| [0035](0035-archivar-clientes-comentarios-y-borradores.md) | Editar y archivar clientes, sitios y comentarios, y descartar borradores en campo | Aceptada |
+| [0036](0036-correo-que-escribe-oficina.md) | El correo de un envío lo puede escribir oficina, sobre la vista previa (amplía 0028) | Aceptada |
+| [0037](0037-visitas-con-horario.md) | Visitas con horario: todo el día, de una hora a otra o hasta que el técnico la termine | Aceptada |
+| [0038](0038-epoca-de-la-bajada.md) | Época de la bajada: el teléfono se entera de que el servidor se dejó limpio | Aceptada |
+| [0039](0039-que-sale-en-el-informe.md) | Qué sale en el informe: oficina oculta partes de cada levantamiento | Aceptada |
+| [0040](0040-conversaciones-entre-oficina-y-campo.md) | Conversaciones entre oficina y campo: el técnico responde los comentarios (amplía 0003, 0014 y 0023) | Aceptada |
+| [0041](0041-visitas-atendidas-salen-del-telefono.md) | Las visitas atendidas salen del teléfono al día siguiente (amplía 0003) | Aceptada |
+| [0042](0042-reprogramar-reabre-una-visita-cerrada.md) | Reprogramar reabre una visita cerrada (amplía 0041) | Aceptada |
+| [0043](0043-recuperar-trabajos-a-medias.md) | Una tarea periódica recupera los trabajos que quedaron a medias (amplía 0012) | Aceptada |
+| [0044](0044-retencion-y-poda.md) | Retención en el teléfono y poda en el servidor (amplía 0003) | Aceptada |
+| [0045](0045-volver-a-borrador-un-envio-rechazado.md) | Un envío que oficina nunca recibió vuelve a borrador para corregirlo (amplía 0035) | Aceptada |
 
 ### Estados
 

@@ -1,10 +1,24 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { admiteLlaves, ErrorApi, ErrorDeRed, esLlaveCancelada } from "@teins/protocolo";
-import { Aviso, Boton, Eye, EyeOff, KeyRound, LoaderCircle, TramaDePuntos } from "@teins/ui";
+import {
+  Aviso,
+  Boton,
+  CampoDeIngreso,
+  claseBotonIngreso,
+  enfocarPrimerError,
+  KeyRound,
+  LoaderCircle,
+  MarcoDeIngreso,
+  RequisitosDeContrasena,
+  SeparadorIngreso,
+  validarContrasenaNueva,
+  type ErroresDeContrasena,
+} from "@teins/ui";
 import { db } from "../datos/instancia";
 import { useConexionDelNavegador } from "../dispositivo/useConexion";
-import { completarCierrePendiente, iniciarSesion, iniciarSesionConLlave, RolNoPermitido } from "../sesion/sesion";
+import { errorDeCuenta } from "../sesion/cuenta";
+import { cambiarContrasenaTemporal, completarCierrePendiente, ContrasenaTemporal, entrarConLaNueva, iniciarSesion, iniciarSesionConLlave, RolNoPermitido, salirSinCambiar } from "../sesion/sesion";
 
 function mensajeDeError(error: unknown, conLlave = false): string {
   if (error instanceof ErrorDeRed) return "Necesitas conexión para iniciar sesión.";
@@ -28,6 +42,8 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
   const [contrasena, setContrasena] = useState("");
   const [estado, setEstado] = useState<{ tipo: "listo" } | { tipo: "enviando" } | { tipo: "error"; mensaje: string }>({ tipo: "listo" });
   const [conLlave, setConLlave] = useState(false);
+  // La temporal con la que acaba de entrar: se manda como la actual al crear la propia (ADR-0033).
+  const [temporal, setTemporal] = useState<string | null>(null);
   useEffect(() => void admiteLlaves().then(setConLlave), []);
   // Una sesión cerrada sin señal se cierra también en el servidor en cuanto vuelve.
   useEffect(() => {
@@ -56,99 +72,145 @@ export function IniciarSesion({ alCancelar }: { alCancelar?: () => void }) {
       await iniciarSesion(usuario, contrasena);
       alCancelar?.();
     } catch (error) {
-      setEstado({ tipo: "error", mensaje: mensajeDeError(error) });
+      if (error instanceof ContrasenaTemporal) {
+        setTemporal(contrasena);
+        setEstado({ tipo: "listo" });
+      } else setEstado({ tipo: "error", mensaje: mensajeDeError(error) });
     }
   }
 
+  if (temporal !== null) {
+    return (
+      <CrearContrasena
+        temporal={temporal}
+        alEntrar={() => alCancelar?.()}
+        alSalir={() => {
+          setTemporal(null);
+          setContrasena("");
+        }}
+      />
+    );
+  }
+
   return (
-    <main className="flex min-h-dvh flex-col bg-[#070A10]">
-      {/* La franja de la marca: la trama quieta de oficina, en horizontal. No cambia de alto al escribir: si se movería, el toque en "Ingresar" caería fuera. */}
-      <div aria-hidden className="relative h-[34dvh] min-h-[190px] shrink-0 overflow-hidden px-[22px] pt-[max(58px,calc(env(safe-area-inset-top)+24px))]">
-        <TramaDePuntos ancho={390} alto={300} paso={11} radio={4.6} />
-        <span className="relative text-[34px] leading-none font-extrabold tracking-[0.14em] text-[#F3F5F9]">TEINS</span>
-      </div>
-      <div className="relative -mt-[26px] flex grow flex-col gap-4 rounded-t-[28px] border-t border-borde-suave bg-fondo px-[22px] pt-7 pb-[max(1.625rem,env(safe-area-inset-bottom))]">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-[26px] leading-tight font-extrabold">Ingresar</h1>
-          <p className="text-[15px] text-texto-secundario">Usa tu usuario de TEINS.</p>
-        </div>
-        {accesoCerrado && <Aviso tono="alerta">Se cerró el acceso de {accesoCerrado.nombre} en este teléfono y se borraron sus datos.</Aviso>}
-        {alCancelar && <Aviso tono="alerta">Tu sesión venció. Inicia sesión para enviar lo pendiente; lo capturado sigue en este teléfono.</Aviso>}
-        {!enLinea && <Aviso tono="alerta">Sin conexión. Iniciar sesión necesita señal la primera vez.</Aviso>}
-        <form onSubmit={enviar} noValidate className="flex flex-col gap-4">
-          <Campo etiqueta="Usuario" nombre="usuario" autoComplete="username" valor={usuario} onCambio={setUsuario} />
-          <Campo etiqueta="Contraseña" nombre="contrasena" tipo="password" autoComplete="current-password" valor={contrasena} onCambio={setContrasena} />
-          {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
-          <button
-            type="submit"
-            aria-busy={estado.tipo === "enviando" || undefined}
-            className="flex h-[58px] items-center justify-center gap-2.5 rounded-[14px] bg-[#F3F5F9] text-[17px] font-extrabold text-[#0B0F17] active:scale-[0.98] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
-          >
-            {estado.tipo === "enviando" && <LoaderCircle aria-hidden className="size-5 motion-safe:animate-spin" />}
-            Ingresar
+    <MarcoDeIngreso titulo="Ingresar" debajo="¿Problemas para entrar? Habla con oficina.">
+      {accesoCerrado && <Aviso tono="alerta">Se cerró el acceso de {accesoCerrado.nombre} en este teléfono y se borraron sus datos.</Aviso>}
+      {alCancelar && <Aviso tono="alerta">Tu sesión venció. Inicia sesión para enviar lo pendiente; lo capturado sigue en este teléfono.</Aviso>}
+      {!enLinea && <Aviso tono="alerta">Sin conexión. Iniciar sesión necesita señal la primera vez.</Aviso>}
+      <form onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        <CampoDeIngreso etiqueta="Usuario" nombre="usuario" autoComplete="username" valor={usuario} onCambio={setUsuario} />
+        <CampoDeIngreso
+          etiqueta="Contraseña"
+          nombre="contrasena"
+          tipo="password"
+          autoComplete="current-password"
+          valor={contrasena}
+          onCambio={setContrasena}
+          olvido={{ pregunta: "¿La olvidaste?", respuesta: "Pídele a oficina que la restablezca." }}
+        />
+        {estado.tipo === "error" && <Aviso tono="error">{estado.mensaje}</Aviso>}
+        <button type="submit" aria-busy={estado.tipo === "enviando" || undefined} className={claseBotonIngreso(true)}>
+          {estado.tipo === "enviando" && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
+          Ingresar
+        </button>
+      </form>
+      {conLlave && (
+        <>
+          <SeparadorIngreso />
+          <button type="button" onClick={() => void entrarConLlave()} disabled={estado.tipo === "enviando"} className={claseBotonIngreso(false)}>
+            <KeyRound aria-hidden />
+            Ingresar con llave de acceso
           </button>
-          {conLlave && (
-            <>
-              <div aria-hidden className="flex items-center gap-3 text-[14px] font-bold text-texto-secundario">
-                <span className="h-px grow bg-borde-suave" />o<span className="h-px grow bg-borde-suave" />
-              </div>
-              <button
-                type="button"
-                onClick={() => void entrarConLlave()}
-                disabled={estado.tipo === "enviando"}
-                className="flex h-[58px] items-center justify-center gap-2.5 rounded-[14px] border border-borde-suave text-[17px] font-extrabold active:scale-[0.98] disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-5"
-              >
-                <KeyRound aria-hidden />
-                Ingresar con llave de acceso
-              </button>
-            </>
-          )}
-        </form>
-        <p className="mt-auto pt-4 text-center text-[14px] text-texto-secundario">¿Olvidaste tu contraseña? Pídele a oficina que la restablezca.</p>
-        {alCancelar && (
-          <Boton variante="fantasma" onClick={alCancelar}>
-            Seguir sin enviar
-          </Boton>
-        )}
-      </div>
-    </main>
+        </>
+      )}
+      {alCancelar && (
+        <Boton variante="fantasma" onClick={alCancelar}>
+          Seguir sin enviar
+        </Boton>
+      )}
+    </MarcoDeIngreso>
   );
 }
 
-/** Campo con la etiqueta encima; la contraseña empieza oculta y el ojo la muestra (prototipos/campo, "Ingresar"). */
-function Campo({ etiqueta, tipo = "text", autoComplete, nombre, valor, onCambio }: { etiqueta: string; tipo?: "text" | "password"; autoComplete: string; nombre: string; valor: string; onCambio: (v: string) => void }) {
-  const id = useId();
-  const [visible, setVisible] = useState(false);
+const FORMULARIO = "crear-contrasena";
+
+/**
+ * La que le entregaron es temporal: la cambia antes de cualquier otra cosa (ADR-0033). Necesita señal, como el
+ * ingreso. El teléfono no guarda el usuario hasta que la cambie: si cierra la app, vuelve a entrar con la temporal.
+ */
+function CrearContrasena({ temporal, alEntrar, alSalir }: { temporal: string; alEntrar: () => void; alSalir: () => void }) {
+  const [nueva, setNueva] = useState("");
+  const [repetir, setRepetir] = useState("");
+  const [errores, setErrores] = useState<ErroresDeContrasena>({});
+  const [general, setGeneral] = useState<string | null>(null);
+  const [estado, setEstado] = useState<"listo" | "enviando" | "cambiada" | "entrando">("listo");
+
+  async function guardar(evento: FormEvent) {
+    evento.preventDefault();
+    const encontrados = validarContrasenaNueva({ actual: temporal, nueva, repetir, pideActual: false, tu: true });
+    setErrores(encontrados);
+    setGeneral(null);
+    if (Object.keys(encontrados).length > 0) return enfocarPrimerError(FORMULARIO);
+    setEstado("enviando");
+    try {
+      await cambiarContrasenaTemporal(temporal, nueva);
+      setEstado("cambiada");
+    } catch (error) {
+      setEstado("listo");
+      const { campo, mensaje } = errorDeCuenta(error);
+      if (campo === "nueva") {
+        setErrores({ nueva: mensaje });
+        enfocarPrimerError(FORMULARIO);
+      } else setGeneral(campo === "actual" ? "La contraseña temporal ya no sirve. Vuelve a ingresar." : mensaje);
+    }
+  }
+
+  async function entrar() {
+    setEstado("entrando");
+    try {
+      await entrarConLaNueva();
+      alEntrar();
+    } catch (error) {
+      setEstado("cambiada");
+      setGeneral(error instanceof ErrorDeRed ? "Necesitas señal para descargar tus visitas. Intenta de nuevo." : "No se pudo abrir tu cuenta. Intenta de nuevo.");
+    }
+  }
+
+  if (estado === "cambiada" || estado === "entrando") {
+    return (
+      <MarcoDeIngreso titulo="Listo" debajo="¿Problemas para entrar? Habla con oficina.">
+        <p className="text-center text-[14px] text-texto-secundario">Ya puedes trabajar. La próxima vez entra con tu contraseña nueva.</p>
+        {general && <Aviso tono="error">{general}</Aviso>}
+        <button type="button" className={claseBotonIngreso(true)} aria-busy={estado === "entrando" || undefined} onClick={() => void entrar()}>
+          {estado === "entrando" && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
+          Ir a mis visitas
+        </button>
+      </MarcoDeIngreso>
+    );
+  }
+
+  const enviando = estado === "enviando";
   return (
-    <div className="flex flex-col gap-[7px]">
-      <label htmlFor={id} className="text-[15px] font-bold">
-        {etiqueta}
-      </label>
-      <div className="relative">
-        <input
-          id={id}
-          name={nombre}
-          type={tipo === "password" && !visible ? "password" : "text"}
-          autoComplete={autoComplete}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          value={valor}
-          onChange={(e) => onCambio(e.target.value)}
-          className={`h-[58px] w-full rounded-[14px] border border-borde-suave bg-[#0F141E] px-4 text-[17px] text-texto outline-none focus:border-foco focus:shadow-[0_0_0_3px_rgb(255_194_26/0.2)] ${tipo === "password" ? "pr-14" : ""}`}
-        />
-        {tipo === "password" && (
-          <button
-            type="button"
-            onClick={() => setVisible((v) => !v)}
-            aria-label={visible ? "Ocultar lo escrito" : "Mostrar lo escrito"}
-            aria-pressed={visible}
-            className="absolute top-1.5 right-1.5 grid size-[46px] place-items-center rounded-xl text-texto-secundario focus-visible:outline-3 focus-visible:outline-foco [&_svg]:size-5"
-          >
-            {visible ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
-          </button>
-        )}
-      </div>
-    </div>
+    <MarcoDeIngreso titulo="Crea tu contraseña" debajo="¿Problemas para entrar? Habla con oficina.">
+      <form id={FORMULARIO} onSubmit={guardar} noValidate className="flex flex-col gap-4">
+        <p className="text-center text-[14px] text-texto-secundario">La que te entregaron es temporal. Escoge una que solo tú sepas.</p>
+        {general && <Aviso tono="error">{general}</Aviso>}
+        <CampoDeIngreso etiqueta="Contraseña nueva" nombre="nueva" tipo="password" autoComplete="new-password" valor={nueva} onCambio={setNueva} mensajeError={errores.nueva} />
+        <CampoDeIngreso etiqueta="Repite la contraseña nueva" nombre="repetir" tipo="password" autoComplete="new-password" valor={repetir} onCambio={setRepetir} mensajeError={errores.repetir} />
+        <RequisitosDeContrasena actual={temporal} nueva={nueva} repetir={repetir} />
+        <button type="submit" aria-busy={enviando || undefined} className={claseBotonIngreso(true)}>
+          {enviando && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
+          Guardar y entrar
+        </button>
+        <button
+          type="button"
+          disabled={enviando}
+          onClick={() => void salirSinCambiar().then(alSalir)}
+          className="min-h-tactil self-center rounded px-2 text-[14px] text-texto-secundario focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco"
+        >
+          Cerrar sesión
+        </button>
+      </form>
+    </MarcoDeIngreso>
   );
 }

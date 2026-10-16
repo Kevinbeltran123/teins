@@ -39,7 +39,7 @@ export function CampoMedida({ etiqueta, unidades, valorInicial, unidadInicial, o
         </EtiquetaCampo>
       </legend>
       {/* En campo, la cifra y su unidad van en una sola caja grande (rediseño Recorrido); en oficina, un campo normal. */}
-      <div className={`flex items-center gap-2 rounded-[var(--t-medida-radio)] border-2 border-transparent bg-[var(--t-medida-fondo)] py-[var(--t-medida-margen)] pr-[var(--t-medida-margen)] pl-[calc(var(--t-medida-margen)*2)] transition-colors focus-within:border-[var(--t-medida-foco)] ${mensaje ? "border-error!" : ""}`}>
+      <div className={`flex items-center gap-2 rounded-[var(--t-medida-radio)] border border-[var(--t-medida-borde)] bg-[var(--t-medida-fondo)] py-[var(--t-medida-margen)] pr-[var(--t-medida-margen)] pl-[calc(var(--t-medida-margen)*2)] transition-colors focus-within:border-[var(--t-medida-foco)] focus-within:shadow-[0_0_0_3px_var(--t-medida-halo)] ${mensaje ? "border-error!" : ""}`}>
         <input
           aria-labelledby={`${id}-etiqueta`}
           inputMode="decimal"

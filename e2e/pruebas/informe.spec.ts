@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { nuevaVisita, nuevoUsuario, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar, pdfDePrueba } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, guardadoSolo, iniciarSesion, irAlPaso, irARevisar, pdfDePrueba } from "./ayudas";
 
 async function enviarDesdeCampo(page: Page, tecnico: Usuario, cliente: string) {
   await page.goto(`${CAMPO}/`);
@@ -41,7 +41,7 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
   await o.getByRole("button", { name: "Tomar para revisar" }).click();
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
-  await o.getByRole("button", { name: "Abrir el informe de esta visita" }).click();
+  await o.getByRole("button", { name: "Abrir el informe" }).click();
   await expect(o.getByRole("heading", { name: `Informe de ${cliente}` })).toBeVisible();
 
   // Composición: el levantamiento revisado, una introducción y un plano.
@@ -49,8 +49,30 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
   await o.getByRole("textbox", { name: "Introducción" }).fill("Primera versión del informe E2E.");
   await o.locator("input[type=file]").setInputFiles({ name: "Planta del cuarto.pdf", mimeType: "application/pdf", buffer: pdfDePrueba() });
   await expect(o.getByRole("textbox", { name: "Nombre del plano 1" })).toHaveValue("Planta del cuarto");
-  await o.getByRole("button", { name: "Guardar borrador" }).click();
-  await expect(o.getByText("Todo guardado")).toBeVisible();
+  // Al lado, el informe como lo recibe el cliente, al escribir (ADR-0031): la introducción, el capítulo y el plano
+  // como ficha, porque no se dibuja.
+  const hoja = o.frameLocator('iframe[title^="Vista previa del informe"]');
+  await expect(hoja.getByText("Primera versión del informe E2E.")).toBeVisible();
+  await expect(hoja.getByText("Levantamiento 1 de 1")).toBeVisible();
+  // El servidor cuenta sus páginas al verificarlo: la fila y la ficha dicen cuántas anexa.
+  await expect(o.getByText("1 página", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(hoja.locator(".vista-anexo").filter({ hasText: "Planta del cuarto" })).toContainText("1 página, se anexa al final del PDF");
+  // Qué sale (ADR-0039): la llegada es solo para la empresa y no sale; una foto se oculta sobre la hoja.
+  const queSale = o.getByRole("group", { name: /^Qué sale de/ });
+  await expect(queSale.getByRole("switch", { name: "Llegada en el informe" })).toHaveAttribute("aria-checked", "false");
+  await expect(hoja.locator(".vista-oculto").filter({ hasText: "Llegada" })).toContainText("solo para la empresa");
+  // La hoja no ejecuta scripts: una capa encima recibe el puntero, así que se toca como lo haría una persona.
+  const foto = hoja.locator(".fotos figure").first();
+  await foto.scrollIntoViewIfNeeded();
+  const caja = (await foto.boundingBox())!;
+  await o.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+  const boton = foto.locator(".vista-ocultar");
+  await expect(boton).toBeVisible();
+  const ocultar = (await boton.boundingBox())!;
+  await o.mouse.click(ocultar.x + ocultar.width / 2, ocultar.y + ocultar.height / 2);
+  await expect(hoja.locator(".vista-foto-oculta")).toHaveCount(1);
+  await expect(queSale).toContainText("No salen: Llegada, 1 foto");
+  await guardadoSolo(o);
 
   // El worker verifica el plano en segundos; publicar antes lo avisa y se reintenta.
   // El error queda en el diálogo de confirmación, que sigue abierto: se reintenta desde ahí.
@@ -65,6 +87,7 @@ test("oficina compone el informe de la visita, lo publica con un plano y descarg
 
   // Versión 2 con otra introducción: la 1 sigue ahí, con su PDF.
   await o.getByRole("textbox", { name: "Introducción" }).fill("Segunda versión del informe E2E.");
+  await expect(hoja.getByText("Segunda versión del informe E2E.")).toBeVisible();
   await o.getByRole("button", { name: "Publicar versión 2" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 2" }).click();
   await expect(o.getByText("Versión 2 vigente")).toBeVisible();

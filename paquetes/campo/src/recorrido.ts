@@ -1,4 +1,4 @@
-import { leerClave, validarRespuestas, type DefinicionCampo, type DefinicionSeccion, type VersionFormato } from "@teins/dominio";
+import { leerClave, sinRespuestasHuerfanas, validarRespuestas, type DefinicionCampo, type DefinicionSeccion, type VersionFormato } from "@teins/dominio";
 import type { LevantamientoLocal } from "./datos/modelo";
 
 /**
@@ -38,7 +38,9 @@ export function pasosDe(formato: VersionFormato): Paso[] {
 /** Cuántos pasos están hechos y cuál sigue, para la tarjeta de la visita en Mis visitas. */
 export function resumenDeRecorrido(formato: VersionFormato, l: LevantamientoLocal) {
   const pasos = pasosDe(formato);
-  const errores = validarRespuestas(formato, l.respuestas, l.repeticiones);
+  // Lo de un tablero quitado no cuenta: no se puede completar y no sale al enviar (iteración 42).
+  const limpio = sinRespuestasHuerfanas(l);
+  const errores = validarRespuestas(formato, limpio.respuestas, limpio.repeticiones);
   const hechos = pasos.map((p) => {
     const falta = errores.some((e) => leerClave(e.seccion).seccion === p.seccion.clave && (p.seccion.repetible || !e.campo || p.campos.some((c) => c.clave === e.campo)));
     const tocado = p.seccion.repetible ? (l.repeticiones?.[p.seccion.clave]?.length ?? 0) > 0 : p.campos.some((c) => l.respuestas[p.seccion.clave]?.[c.clave] !== undefined);

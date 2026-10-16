@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, type LucideIcon } from "./iconos";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowRight, Camera, Check, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleCheck, type LucideIcon } from "./iconos";
 
 /**
  * Piezas de la dirección Recorrido (DESIGN.md, campo): la captura sigue el orden de la visita y cada paso
@@ -16,6 +16,7 @@ export function EncabezadoDePaso({
   etiquetaVolver,
   contador,
   alContador,
+  transicion,
 }: {
   contexto: string;
   /** De 0 a 1. */
@@ -24,15 +25,20 @@ export function EncabezadoDePaso({
   etiquetaVolver: string;
   contador?: string | undefined;
   alContador?: (() => void) | undefined;
+  /**
+   * Nombre de transición (iteración 27): el mismo que la tarjeta de la visita en el inicio, para que la tarjeta se
+   * convierta en esta cabecera. Entre pasos, la cabecera se queda y solo crece la barra de avance.
+   */
+  transicion?: string | undefined;
 }) {
   return (
-    <header className="sticky top-0 z-20 bg-fondo/95 pt-[env(safe-area-inset-top)] backdrop-blur">
+    <header className="sticky top-0 z-20 bg-fondo/95 pt-[env(safe-area-inset-top)] backdrop-blur" style={transicion ? { viewTransitionName: transicion } : undefined}>
       <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-2.5">
         <BotonRedondo icono={ChevronLeft} etiqueta={etiquetaVolver} onClick={volver} />
         <div className="flex min-w-0 grow flex-col gap-1.5">
           <span className="truncate text-ayuda font-bold text-texto-secundario">{contexto}</span>
-          <div className="h-1.5 overflow-hidden rounded-full bg-panel-hundido" role="progressbar" aria-label="Avance del levantamiento" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(avance * 100)}>
-            <div className="h-full rounded-full bg-superficie transition-[width] duration-500 ease-t" style={{ width: `${Math.round(avance * 100)}%` }} />
+          <div className="h-[3px] overflow-hidden rounded-full bg-superficie-pista" role="progressbar" aria-label="Avance del levantamiento" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(avance * 100)}>
+            <div className="h-full rounded-full bg-superficie transition-[width] duration-500 ease-t motion-reduce:transition-none" style={{ width: `${Math.round(avance * 100)}%`, viewTransitionName: "progreso" }} />
           </div>
         </div>
         {contador && alContador && (
@@ -58,17 +64,20 @@ export function BotonRedondo({ icono: Icono, etiqueta, onClick }: { icono: Lucid
       onClick={onClick}
       aria-label={etiqueta}
       title={etiqueta}
-      className="grid size-12 shrink-0 place-items-center rounded-full bg-panel-hundido active:scale-95 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-6"
+      className="grid size-11 shrink-0 place-items-center rounded-full bg-panel shadow-[inset_0_0_0_1px_var(--t-borde-suave)] active:scale-95 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-6"
     >
       <Icono aria-hidden />
     </button>
   );
 }
 
-/** La acción del paso, abajo y al alcance del pulgar. El degradado deja ver que el contenido sigue. */
+/**
+ * La acción del paso, abajo y al alcance del pulgar. El degradado deja ver que el contenido sigue. Entre pasos no se
+ * desliza: se queda en su lugar (iteración 27).
+ */
 export function BarraDePaso({ children }: { children: ReactNode }) {
   return (
-    <div data-barra-inferior className="fixed inset-x-0 bottom-0 z-20 bg-linear-to-t from-fondo from-70% to-transparent">
+    <div data-barra-inferior className="fixed inset-x-0 bottom-0 z-20 bg-linear-to-t from-fondo from-70% to-transparent" style={{ viewTransitionName: "barra-paso" }}>
       <div className="mx-auto flex max-w-xl gap-3 px-4 pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">{children}</div>
     </div>
   );
@@ -82,7 +91,7 @@ export function BotonSiguiente({ children, onClick, icono: Icono = ArrowRight, c
       disabled={disabled}
       onClick={onClick}
       aria-busy={cargando || undefined}
-      className="inline-flex min-h-15 grow items-center justify-center gap-2.5 rounded-control bg-superficie px-5 text-cuerpo font-extrabold text-sobre-superficie transition-transform active:scale-[0.97] disabled:opacity-50 aria-busy:opacity-80 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-[1.2em]"
+      className="inline-flex min-h-[50px] grow items-center justify-center gap-2.5 rounded-control bg-superficie px-5 text-cuerpo font-medium text-sobre-superficie shadow-[inset_0_1px_0_rgb(255_255_255/0.18),var(--t-sombra-boton)] transition-transform active:scale-[0.97] disabled:opacity-50 aria-busy:opacity-80 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-[1.2em]"
     >
       {children}
       <Icono aria-hidden />
@@ -138,44 +147,67 @@ export function PasoDelRecorrido({
   );
 }
 
-/** Un elemento repetido (un tablero) resumido: su nombre, su estado y tres datos. Tocarlo lo abre. */
-export function TarjetaResumen({
+/**
+ * Un elemento repetido (un tablero) en su lista (iteración 32, prototipos/ajustes-campo): la primera foto, el nombre, lo
+ * que lo identifica en una línea y cuánto lleva. Tocarlo lo abre.
+ */
+export function FilaDeRepeticion({
   titulo,
-  estado,
-  completo,
-  datos,
+  detalle,
+  foto,
+  faltan,
+  avance,
   onClick,
-  etiqueta,
+  nueva = false,
 }: {
   titulo: string;
-  estado: string;
-  completo: boolean;
-  datos: readonly { etiqueta: string; valor: string }[];
+  /** Lo que lo identifica, ya unido: "Sótano · 208 V · 3 fotos". */
+  detalle: string;
+  /** La primera foto, si tiene. */
+  foto?: string | undefined;
+  faltan: number;
+  /** De 0 a 1: los obligatorios que ya tienen dato. */
+  avance: number;
   onClick: () => void;
-  etiqueta?: string;
+  /** Recién agregada a la vista: entra animada. Las que ya estaban no se animan otra vez al volver (iteración 27). */
+  nueva?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={etiqueta}
-      className="flex w-full animate-subir flex-col gap-3 rounded-panel bg-panel px-4.5 py-4 text-left active:scale-[0.99] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
-    >
-      <span className="flex items-center gap-3">
-        <strong className="min-w-0 grow text-subtitulo leading-tight font-extrabold">{titulo}</strong>
-        <span className={`shrink-0 rounded-full px-3 py-1 text-ayuda font-extrabold whitespace-nowrap ${completo ? "bg-exito-fondo text-exito-texto" : "bg-alerta-fondo text-alerta-texto"}`}>{estado}</span>
-      </span>
-      {datos.length > 0 && (
-        <span className="grid grid-cols-3 gap-2">
-          {datos.map((d) => (
-            <span key={d.etiqueta} className="flex min-w-0 flex-col rounded-control bg-panel-hundido px-3 py-2">
-              <b className="truncate text-cuerpo tabular-nums">{d.valor}</b>
-              <small className="truncate text-ayuda text-texto-secundario">{d.etiqueta}</small>
-            </span>
-          ))}
+    <li className={nueva ? "motion-safe:animate-resaltar" : undefined}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="grid w-full grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 py-2.5 pr-3 pl-2.5 text-left active:bg-encima focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco"
+      >
+        {foto ? (
+          <img src={foto} alt="" className="size-13 rounded-control object-cover" />
+        ) : (
+          <span aria-hidden className="grid size-13 place-items-center rounded-control bg-panel-hundido text-texto-terciario [&_svg]:size-5">
+            <Camera />
+          </span>
+        )}
+        <span className="flex min-w-0 flex-col">
+          <strong className="truncate text-cuerpo font-semibold">{titulo}</strong>
+          <span className="truncate text-ayuda text-texto-secundario">{detalle}</span>
+          <span aria-hidden className="mt-2 h-1 overflow-hidden rounded-full bg-superficie-pista">
+            <span className={`block h-full rounded-full ${faltan > 0 ? "bg-sync-pendiente" : "bg-sync-ok"}`} style={{ width: `${Math.round(avance * 100)}%` }} />
+          </span>
         </span>
-      )}
-    </button>
+        <span className="flex shrink-0 items-center gap-0.5 text-ayuda">
+          {faltan > 0 ? <span className="font-medium text-alerta-texto">{`Faltan ${faltan}`}</span> : <><Check aria-hidden className="size-5 text-exito-texto" /><span className="sr-only">Completo</span></>}
+          <ChevronRight aria-hidden className="size-[18px] text-texto-terciario" />
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** La lista de repeticiones: una sola caja con líneas. */
+export function ListaDeRepeticiones({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
+  return (
+    <ul aria-label={etiqueta} className="overflow-hidden rounded-panel border border-division bg-panel [&>li+li]:border-t [&>li+li]:border-division">
+      {children}
+    </ul>
   );
 }
 
@@ -186,7 +218,7 @@ export function BotonAgregar({ children, onClick, disabled, icono: Icono }: { ch
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex min-h-15 w-full items-center justify-center gap-2 rounded-panel border-2 border-dashed border-borde-suave text-cuerpo font-extrabold disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-5"
+      className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-panel border border-dashed border-borde-suave text-[14px] font-medium text-texto-secundario disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco [&_svg]:size-5"
     >
       <Icono aria-hidden />
       {children}
@@ -194,63 +226,80 @@ export function BotonAgregar({ children, onClick, disabled, icono: Icono }: { ch
   );
 }
 
-/** Una fila del repaso antes de enviar: qué es, cómo quedó y "Editar". */
-export function FilaDeRepaso({ titulo, detalle, falta, onEditar }: { titulo: string; detalle: string; falta?: boolean; onEditar: () => void }) {
+/**
+ * Una sección en el repaso antes de enviar (iteración 32): lo que realmente lleva, con un visto o lo que falta en
+ * ámbar. Toda la fila se toca para editar (Vestiaire Collective y Airbnb en Mobbin).
+ */
+export function FilaDeRepaso({ titulo, detalle, falta, vacio = false, onEditar, children }: { titulo: string; detalle: string; falta?: string | undefined; vacio?: boolean; onEditar: () => void; children?: ReactNode }) {
   return (
-    <li className="flex items-center gap-3 border-t border-division px-4.5 py-3.5 first:border-t-0">
-      <span className="flex min-w-0 grow flex-col">
-        <strong className="text-cuerpo">{titulo}</strong>
-        <span className={`text-ayuda ${falta ? "font-bold text-alerta-texto" : "text-texto-secundario"}`}>{detalle}</span>
-      </span>
+    <li className="border-t border-division first:border-t-0">
       <button
         type="button"
         onClick={onEditar}
         aria-label={`Editar ${titulo}`}
-        className="h-10 shrink-0 rounded-full border-[1.5px] border-borde-suave px-4 text-ayuda font-extrabold focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
+        className="grid w-full grid-cols-[22px_minmax(0,1fr)_auto] items-start gap-x-3 py-3 pr-3 pl-3.5 text-left active:bg-encima focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco [&>svg]:mt-px [&>svg]:size-[22px]"
       >
-        Editar
+        {/* Sin datos y sin nada obligatorio: ni visto ni alerta, para no decir que está hecho. */}
+        {falta ? <CircleAlert aria-hidden className="text-alerta-texto" /> : vacio ? <Circle aria-hidden className="text-texto-terciario" /> : <CircleCheck aria-hidden className="text-exito-texto" />}
+        <span className="flex min-w-0 flex-col">
+          <strong className="text-cuerpo font-semibold">{titulo}</strong>
+          <span className="truncate text-ayuda text-texto-secundario">{detalle}</span>
+          {falta && <span className="text-ayuda font-medium text-alerta-texto">{falta}</span>}
+          {children}
+        </span>
+        <ChevronRight aria-hidden className="size-[18px] self-center text-texto-terciario" />
       </button>
     </li>
   );
 }
 
+/** Las cifras de lo que se envía, en una fila (fotos, tableros, materiales). */
+export function CifrasDeRepaso({ cifras }: { cifras: readonly { valor: number; texto: string }[] }) {
+  return (
+    <dl className="grid auto-cols-fr grid-flow-col rounded-panel border border-division bg-panel">
+      {cifras.map((c) => (
+        <div key={c.texto} className="flex flex-col-reverse gap-px border-l border-division px-3 py-3 first:border-l-0">
+          <dt className="text-ayuda text-texto-secundario">{c.texto}</dt>
+          <dd className="text-[22px] leading-tight font-semibold tracking-tight tabular-nums">{c.valor}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function Repaso({ children, etiqueta }: { children: ReactNode; etiqueta: string }) {
   return (
-    <ul aria-label={etiqueta} className="overflow-hidden rounded-panel bg-panel">
+    <ul aria-label={etiqueta} className="overflow-hidden rounded-panel border border-division bg-panel">
       {children}
     </ul>
   );
 }
 
-/** Enviado: el chulo se dibuja (CSS) y dice qué pasó; lo que sigue va debajo. */
-export function ChuloDeExito({ titulo, children }: { titulo: string; children?: ReactNode }) {
-  return (
-    <div className="flex flex-col items-center gap-3 py-4 text-center">
-      <svg viewBox="0 0 120 120" className="size-24" aria-hidden>
-        <circle cx="60" cy="60" r="52" pathLength={100} fill="none" className="stroke-sync-ok [stroke-dasharray:100] motion-safe:animate-[trazo_700ms_var(--t-curva)_both]" strokeWidth="6" />
-        <path d="M36 62l16 16 32-34" pathLength={100} fill="none" className="stroke-sync-ok [stroke-dasharray:100] motion-safe:animate-[trazo_420ms_520ms_var(--t-curva)_both]" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <h2 className="text-titulo leading-tight font-extrabold">{titulo}</h2>
-      {children}
-    </div>
-  );
-}
-
 /**
  * Franja de sincronización (VSCO, Mobbin): una línea que dice si todo está a salvo, sin estorbar. Sin señal,
- * el punto late y dice que se puede seguir.
+ * el punto late y dice que se puede seguir. Cuando la cola se vacía a la vista, dice «Todo subido» en verde
+ * (iteración 27).
  */
 export function FranjaSincronizacion({ enLinea, porSubir, guardado }: { enLinea: boolean; porSubir: number; guardado?: string | undefined }) {
+  const antes = useRef(porSubir);
+  const [recienSubido, setRecienSubido] = useState(false);
+  useEffect(() => {
+    if (antes.current > 0 && porSubir === 0) setRecienSubido(true);
+    if (porSubir > 0) setRecienSubido(false);
+    antes.current = porSubir;
+  }, [porSubir]);
   const pendiente = porSubir === 1 ? "1 levantamiento espera" : `${porSubir} levantamientos esperan`;
   const texto = enLinea
     ? porSubir > 0
       ? `${guardado ?? "Guardado en el teléfono"} · subiendo ${porSubir === 1 ? "1 levantamiento" : `${porSubir} levantamientos`}`
-      : `${guardado ?? "Guardado en el teléfono"} · todo subido`
+      : recienSubido
+        ? "Todo subido"
+        : `${guardado ?? "Guardado en el teléfono"} · todo subido`
     : porSubir > 0
       ? `Sin señal · ${pendiente} para subir. Puedes seguir.`
       : `Sin señal · ${guardado ? guardado.charAt(0).toLowerCase() + guardado.slice(1) : "todo queda en el teléfono"}. Puedes seguir.`;
   return (
-    <p role="status" className="flex items-center gap-2 rounded-control bg-panel px-3 py-2 text-ayuda font-bold text-texto-secundario">
+    <p role="status" className={`flex items-center gap-2 rounded-control border border-division bg-panel px-3 py-2 text-ayuda font-bold ${enLinea && recienSubido ? "text-exito-texto" : "text-texto-secundario"}`}>
       <span aria-hidden className={`size-2 shrink-0 rounded-full ${enLinea ? "bg-sync-ok" : "bg-sync-pendiente motion-safe:animate-pulse"}`} />
       {texto}
     </p>
@@ -306,6 +355,8 @@ export function ListaFaltantes({ datos, sacudir = 0, titulo }: { datos: readonly
 
 export type EstadoDeProceso = "enviando" | "esperando" | "listo" | "error";
 export interface EtapaDeProceso {
+  /** Fija aunque el texto cambie ("1 de 3", "2 de 3"): la etapa no se vuelve a montar ni a animar. */
+  clave: string;
   texto: string;
   estado: "hecho" | "en_curso" | "espera" | "error";
 }
@@ -346,7 +397,7 @@ export function ProcesoDeEnvio({
             pathLength={100}
             strokeDasharray="100"
             strokeDashoffset={medido === null ? 72 : 100 - Math.max(4, medido * 100)}
-            className={`${color} transition-[stroke-dashoffset,stroke] duration-700 ease-t`}
+            className={`${color} transition-[stroke-dashoffset,stroke] duration-700 ease-t motion-reduce:transition-none`}
           />
         </svg>
         <span aria-hidden className="absolute inset-0 grid place-items-center">
@@ -365,9 +416,9 @@ export function ProcesoDeEnvio({
           {detalle}
         </p>
       </div>
-      <ol className="flex w-full flex-col gap-1 rounded-panel bg-panel p-2 text-left">
+      <ol className="flex w-full flex-col gap-1 rounded-panel border border-division bg-panel p-2 text-left">
         {etapas.map((e) => (
-          <li key={e.texto} className="flex items-center gap-3 rounded-control px-3 py-2.5">
+          <li key={e.clave} className="flex items-center gap-3 rounded-control px-3 py-2.5">
             <span
               aria-hidden
               className={`grid size-7 shrink-0 place-items-center rounded-full [&_svg]:size-4 ${

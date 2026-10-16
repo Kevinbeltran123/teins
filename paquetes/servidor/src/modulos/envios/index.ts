@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, or } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp, type TextoPropio } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
 import type { Config } from "../../config";
 import { leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
@@ -12,7 +13,6 @@ import { avisar } from "../avisos";
 import { contactosDelCliente } from "../clientes";
 import { envios, type CanalDeEnvio, type FilaEnvio, type MensajeDeEnvio } from "./esquema";
 import { eventoDeResend, eventosDeWhatsapp, firmaMetaValida, firmaSvixValida, type EventoDeEnvio } from "./eventos";
-import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp } from "./mensajes";
 import { NoAceptado, RechazoDefinitivo, type Proveedores } from "./proveedores";
 
 export type { MensajeDeCotizacion, MensajeDeEnvio, MensajeDeInforme } from "./esquema";
@@ -35,6 +35,8 @@ export interface Programacion {
   pdfRuta?: string | undefined;
   /** La decisión de enviar (regla 4): si ya se programó con esta llave, no se programa otra vez. */
   llave?: string | undefined;
+  /** El asunto y el texto que escribió oficina (ADR-0036): se copian al envío por correo; WhatsApp va con su plantilla. */
+  personal?: TextoPropio | undefined;
 }
 
 /**
@@ -52,10 +54,17 @@ export async function programarEnvios(tx: TxOrganizacion, p: Programacion): Prom
   const destinatarios = await contactosDelCliente.paraEnviar(tx, p.clienteId, p.destinos);
   for (const d of destinatarios) {
     const id = randomUUID();
-    await tx.insert(envios).values({ id, organizacionId: p.organizacionId, versionId: p.versionId, contactoId: d.contactoId, contactoNombre: d.nombre, canal: d.canal, destino: d.destino, mensaje: p.mensaje, creadoPor: p.por, llave: p.llave ?? null });
+    const mensaje = d.canal === "correo" && p.personal ? { ...p.mensaje, personal: { asunto: p.personal.asunto, texto: p.personal.texto } } : p.mensaje;
+    await tx.insert(envios).values({ id, organizacionId: p.organizacionId, versionId: p.versionId, contactoId: d.contactoId, contactoNombre: d.nombre, canal: d.canal, destino: d.destino, mensaje, creadoPor: p.por, llave: p.llave ?? null });
     if (p.pdfRuta) await encolarEnvio(tx, { organizacionId: p.organizacionId, envioId: id, pdfRuta: p.pdfRuta });
   }
   return destinatarios.length;
+}
+
+/** Versiones con envíos que llevan más de `antesDe` en cola (ADR-0043): su dueño los vuelve a lanzar si el PDF está listo. */
+export async function versionesConEnviosAtascados(tx: TxOrganizacion, antesDe: Date): Promise<string[]> {
+  const filas = await tx.selectDistinct({ versionId: envios.versionId }).from(envios).where(and(eq(envios.estado, "en_cola"), lt(envios.actualizadoEn, antesDe)));
+  return filas.map((f) => f.versionId);
 }
 
 /** El PDF de la versión quedó listo: salen sus envíos en cola, en la misma transacción que lo marca (ADR-0012). */
@@ -78,6 +87,38 @@ export async function cancelarEnviosDeVersion(tx: TxOrganizacion, versionId: str
     .where(and(eq(envios.versionId, versionId), eq(envios.estado, "en_cola")));
 }
 
+/**
+ * Cancelar un envío que espera en cola (ADR-0034). Solo si todavía no empezó a salir: el worker marca la salida
+ * (`enviadoEn`) con un UPDATE condicionado al mismo estado, así que entre cancelar y salir gana el que llega primero a
+ * la fila y un cancelado nunca sale. Devuelve qué pasó para que quien llama lo diga.
+ */
+export async function cancelarEnvio(tx: TxOrganizacion, { versionId, envioId, por }: { versionId: string; envioId: string; por: string }): Promise<"cancelado" | "ya_salio" | "ya_cancelado" | "no_existe"> {
+  const [cancelado] = await tx
+    .update(envios)
+    .set({ estado: "cancelado", canceladoPor: por, canceladoEn: new Date(), actualizadoEn: new Date() })
+    .where(and(eq(envios.id, envioId), eq(envios.versionId, versionId), eq(envios.estado, "en_cola"), isNull(envios.enviadoEn)))
+    .returning({ id: envios.id });
+  if (cancelado) return "cancelado";
+  const [fila] = await tx.select({ estado: envios.estado }).from(envios).where(and(eq(envios.id, envioId), eq(envios.versionId, versionId)));
+  if (!fila) return "no_existe";
+  return fila.estado === "cancelado" ? "ya_cancelado" : "ya_salio";
+}
+
+/**
+ * Deshacer la cancelación: vuelve a "En cola" y, si el PDF ya está listo (`pdfRuta`), sale de nuevo por el mismo
+ * trabajo, con su misma llave. Solo un cancelado se reanuda.
+ */
+export async function reanudarEnvio(tx: TxOrganizacion, { organizacionId, versionId, envioId, pdfRuta }: { organizacionId: string; versionId: string; envioId: string; pdfRuta: string | undefined }): Promise<boolean> {
+  const [reanudado] = await tx
+    .update(envios)
+    .set({ estado: "en_cola", canceladoPor: null, canceladoEn: null, actualizadoEn: new Date() })
+    .where(and(eq(envios.id, envioId), eq(envios.versionId, versionId), eq(envios.estado, "cancelado")))
+    .returning({ id: envios.id });
+  if (!reanudado) return false;
+  if (pdfRuta) await encolarEnvio(tx, { organizacionId, envioId, pdfRuta });
+  return true;
+}
+
 /** El proveedor lo aceptó o lo entregó: vale para uno en cola y para uno que el retiro alcanzó cuando ya salía. */
 const puedeSalir = or(eq(envios.estado, "en_cola"), and(eq(envios.estado, "fallido"), eq(envios.error, RETIRADA_ANTES_DE_SALIR)));
 
@@ -89,7 +130,10 @@ export async function fallarEnviosDeVersion(tx: TxOrganizacion, versionId: strin
 
 const encolarEnvio = (tx: TxOrganizacion, datos: Trabajos["envios.enviar"]) => encolar(tx, "envios.enviar", datos, { llave: `envios.enviar:${datos.envioId}`, intentosMaximos: 5 });
 
-const comoEnvio = (f: Pick<FilaEnvio, "id" | "contactoId" | "contactoNombre" | "canal" | "destino" | "estado" | "error" | "creadoEn" | "enviadoEn">): EnvioDeVersion => ({
+const comoEnvio = (
+  f: Pick<FilaEnvio, "id" | "contactoId" | "contactoNombre" | "canal" | "destino" | "estado" | "error" | "creadoEn" | "enviadoEn" | "canceladoPor" | "canceladoEn" | "mensaje">,
+  nombres: Map<string, string>,
+): EnvioDeVersion => ({
   id: f.id,
   contacto: { id: f.contactoId, nombre: f.contactoNombre },
   canal: f.canal,
@@ -98,14 +142,21 @@ const comoEnvio = (f: Pick<FilaEnvio, "id" | "contactoId" | "contactoNombre" | "
   error: f.error,
   creadoEn: f.creadoEn.toISOString(),
   enviadoEn: f.enviadoEn?.toISOString() ?? null,
+  cancelado: f.estado === "cancelado" && f.canceladoEn ? { en: f.canceladoEn.toISOString(), por: { id: f.canceladoPor ?? "", nombre: nombres.get(f.canceladoPor ?? "") ?? "[Usuario no disponible]" } } : null,
+  personalizado: f.mensaje.personal !== undefined,
 });
 
+/** Nombres de las personas, para decir quién canceló un envío (los da la identidad, a través de quien llama). */
+export type NombresDePersonas = (ids: string[]) => Promise<Map<string, string>>;
+
 /** Envíos por versión, del más reciente al más antiguo. */
-export async function enviosDeVersiones(tx: TxOrganizacion, versionIds: readonly string[]): Promise<Map<string, EnvioDeVersion[]>> {
+export async function enviosDeVersiones(tx: TxOrganizacion, versionIds: readonly string[], nombres: NombresDePersonas): Promise<Map<string, EnvioDeVersion[]>> {
   const mapa = new Map<string, EnvioDeVersion[]>();
   if (versionIds.length === 0) return mapa;
   const filas = await tx.select().from(envios).where(inArray(envios.versionId, [...versionIds])).orderBy(desc(envios.creadoEn), envios.contactoNombre, envios.canal);
-  for (const f of filas) mapa.set(f.versionId, [...(mapa.get(f.versionId) ?? []), comoEnvio(f)]);
+  const quienes = [...new Set(filas.flatMap((f) => (f.estado === "cancelado" && f.canceladoPor ? [f.canceladoPor] : [])))];
+  const conNombre = quienes.length > 0 ? await nombres(quienes) : new Map<string, string>();
+  for (const f of filas) mapa.set(f.versionId, [...(mapa.get(f.versionId) ?? []), comoEnvio(f, conNombre)]);
   return mapa;
 }
 
@@ -116,13 +167,15 @@ export async function enviosDeVersiones(tx: TxOrganizacion, versionIds: readonly
 export async function versionesConEnvioSinEntregar(tx: TxOrganizacion, versionIds: readonly string[]): Promise<Set<string>> {
   if (versionIds.length === 0) return new Set();
   const ultimos = tx
-    .selectDistinctOn([envios.versionId, envios.contactoId, envios.canal], { versionId: envios.versionId, estado: envios.estado })
+    .selectDistinctOn([envios.versionId, envios.contactoId, envios.canal], { versionId: envios.versionId, contactoId: envios.contactoId, canal: envios.canal, estado: envios.estado })
     .from(envios)
     .where(inArray(envios.versionId, [...versionIds]))
     .orderBy(envios.versionId, envios.contactoId, envios.canal, desc(envios.creadoEn))
     .as("ultimos");
-  const filas = await tx.select({ versionId: ultimos.versionId }).from(ultimos).where(eq(ultimos.estado, "fallido"));
-  return new Set(filas.map((f) => f.versionId));
+  const filas = await tx.select({ versionId: ultimos.versionId, contactoId: ultimos.contactoId, canal: ultimos.canal }).from(ultimos).where(eq(ultimos.estado, "fallido"));
+  // Solo cuenta lo que se puede volver a enviar: a un contacto que oficina quitó, o que ya no recibe por ese canal, no.
+  const canales = await contactosDelCliente.canales(tx, [...new Set(filas.map((f) => f.contactoId))]);
+  return new Set(filas.filter((f) => canales.get(f.contactoId)?.includes(f.canal)).map((f) => f.versionId));
 }
 
 async function marcarEnviado(tx: TxOrganizacion, envioId: string, proveedorId: string | null): Promise<void> {
@@ -132,8 +185,11 @@ async function marcarEnviado(tx: TxOrganizacion, envioId: string, proveedorId: s
     .where(and(eq(envios.id, envioId), puedeSalir));
 }
 
-/** "No llegó": queda el motivo y se avisa a quien lo pidió. Un rebote de correo marca al contacto. */
-async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string, rebote = false): Promise<void> {
+/**
+ * "No llegó": queda el motivo y se avisa a quien lo pidió. Un rebote de correo marca al contacto. Sin `avisarle` no se
+ * avisa: lo decidió oficina (quitó el contacto o su canal) y no hay nada que volver a enviar (iteración 42).
+ */
+async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string, rebote = false, avisarle = true): Promise<void> {
   const [cambiado] = await tx
     .update(envios)
     .set({ estado: "fallido", error: motivo.slice(0, 500), actualizadoEn: new Date() })
@@ -141,6 +197,7 @@ async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string
     .returning({ id: envios.id });
   if (!cambiado) return;
   if (rebote && fila.canal === "correo") await contactosDelCliente.marcarRebote(tx, fila.contactoId, fila.destino, motivo);
+  if (!avisarle) return;
   await avisar(tx, { tipo: "envio_fallido", organizacionId: fila.organizacionId, usuarioId: fila.creadoPor, versionId: fila.versionId, documento: fila.mensaje.documento ?? "informe" });
 }
 
@@ -218,7 +275,7 @@ export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { 
         if (!fila || fila.estado !== "en_cola") return undefined;
         // Mientras esperaba el PDF, el contacto pudo quitarse o dejar de recibir por este canal (ADR-0028, parte 5).
         if (!(await contactosDelCliente.sigueRecibiendo(tx, fila.contactoId, fila.canal, fila.destino))) {
-          await marcarFallido(tx, fila, "El contacto ya no recibe por este canal");
+          await marcarFallido(tx, fila, "El contacto ya no recibe por este canal", false, false);
           return undefined;
         }
         // Un intento anterior llegó al proveedor sin saberse el resultado. El correo repite con la misma

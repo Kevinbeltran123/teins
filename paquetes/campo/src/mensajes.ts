@@ -21,6 +21,7 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   boceto_invalido: "El boceto está dañado. Vuelve a dibujarlo.",
   cantidades_invalidas: "Revisa las líneas: cada una necesita descripción, una cantidad mayor que cero y una unidad.",
   firma_invalida: "La firma quedó incompleta. Pide que vuelvan a firmar.",
+  archivo_muy_grande: "El dibujo pesa demasiado para enviarlo. Borra los trazos que sobren y vuelve a intentarlo.",
 };
 
 export type Tono = "ok" | "pendiente" | "error";
@@ -60,14 +61,16 @@ export function porQueNoEntro(codigo: string | undefined): string {
     case "respuestas_invalidas":
     case "entrada_invalida":
       return "Oficina no pudo aceptar algunos datos.";
+    case "archivos_faltantes":
+      return "Una foto o un dibujo no se pudo subir.";
     default:
       return "Oficina no pudo recibirlo.";
   }
 }
 
-/** Qué hacer con un rechazo: nada se perdió, oficina ya lo ve y se reintenta cuando lo resuelva. */
+/** Qué hacer con un rechazo: nada se perdió, oficina ya lo ve y se reintenta cuando lo resuelva, o se corrige (ADR-0045). */
 export const QUE_HACER_CON_EL_RECHAZO =
-  "Lo capturado sigue guardado en este teléfono. Avísale a oficina: ya ven el error en «Teléfonos de campo». Cuando te digan que está resuelto, toca «Reintentar envío».";
+  "Lo capturado sigue guardado en este teléfono. Avísale a oficina: ya ven el error en «Teléfonos de campo». Cuando te digan que está resuelto, toca «Reintentar envío»; si hay algo que corregir, vuelve a borrador.";
 
 /** Estado de negocio según el servidor (bajada). */
 export function estadoSegunServidor(estado: EstadoServidor): { texto: string; tono: Tono } {
@@ -81,7 +84,33 @@ export function estadoSegunServidor(estado: EstadoServidor): { texto: string; to
   }
 }
 
-export const comentariosDeOficina = (n: number) => (n === 1 ? "1 comentario de oficina" : `${n} comentarios de oficina`);
+/**
+ * El estado en dos o tres palabras, para la lista del inicio (iteración 32): la explicación larga queda en el detalle.
+ * El servidor manda sobre lo que sabe el teléfono.
+ */
+export function estadoCorto(envio: EstadoDeEnvio | undefined, servidor: EstadoServidor | undefined, enLinea: boolean): { texto: string; tono: Tono | "revision" } | null {
+  if (servidor) {
+    if (servidor.estado === "en_revision") return { texto: "En revisión", tono: "revision" };
+    return { texto: servidor.estado === "revisado" ? "Revisado" : "Recibido", tono: "ok" };
+  }
+  if (!envio) return null;
+  switch (envio.estado) {
+    case "recibido":
+      return { texto: "Recibido", tono: "ok" };
+    case "enviando":
+      return { texto: "Enviando…", tono: "pendiente" };
+    case "requiere_sesion":
+      return { texto: "Inicia sesión para enviar", tono: "pendiente" };
+    case "requiere_actualizar":
+      return { texto: "Actualiza la app", tono: "pendiente" };
+    case "error":
+      return { texto: "No se pudo enviar", tono: "error" };
+    case "pendiente":
+      if (!enLinea || envio.ultimoError?.codigo === "sin_conexion") return { texto: "Se envía al tener señal", tono: "pendiente" };
+      if (envio.ultimoError?.codigo === "archivos_en_verificacion") return { texto: "Verificando fotos", tono: "pendiente" };
+      return { texto: "Por enviar", tono: "pendiente" };
+  }
+}
 
 export const claseDeTono: Record<Tono, string> = {
   ok: "text-sync-ok",

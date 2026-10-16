@@ -41,12 +41,14 @@ test("catálogo en el teléfono: el técnico elige el material del catálogo y l
   // Materiales es su propio paso: el catálogo en una hoja alta, "Agregar" se vuelve − 1 + (rediseño Recorrido).
   await irAlPaso(page, "Materiales");
   await page.getByRole("button", { name: "Buscar en el catálogo" }).click();
-  const hoja = page.getByRole("dialog", { name: "Catálogo" });
+  const hoja = page.getByRole("dialog", { name: "Agregar del catálogo" });
   await hoja.getByRole("searchbox", { name: "Buscar en el catálogo" }).fill(`cable categoria ${sufijo.toLowerCase()}`);
   await expect(hoja.getByRole("status")).toHaveText("1 ítem");
   await hoja.getByRole("button", { name: `Agregar ${descripcion}` }).click();
   await expect(hoja.getByRole("button", { name: `Más ${descripcion}` })).toBeVisible();
-  await hoja.getByRole("button", { name: /^Listo · 1 material/ }).click();
+  // Abajo dice lo que ya pasó y a dónde lleva (iteración 32).
+  await expect(hoja.getByRole("status").filter({ hasText: "1 agregado" })).toBeVisible();
+  await hoja.getByRole("button", { name: "Ver materiales" }).click();
   await expect(hoja).toHaveCount(0);
   const linea = page.getByRole("group", { name: "Línea 1" });
   await expect(linea.getByText(descripcion)).toBeVisible();

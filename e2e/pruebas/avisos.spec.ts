@@ -78,11 +78,12 @@ test("el técnico activa los avisos en su teléfono y oficina en su navegador (A
   await o.goto(`${OFICINA}/`);
   await iniciarSesion(o, revisora);
   await o.getByRole("link", { name: /^Mi cuenta/ }).click();
-  const avisos = o.getByRole("region", { name: /^Avisos en este navegador/ });
+  // Los avisos son una fila de Preferencias, con botón secundario (iteración 29).
+  const avisos = o.getByRole("region", { name: "Preferencias" });
   const deOficina = alSuscribirse(o);
   await avisos.getByRole("button", { name: "Activar avisos" }).click();
   expect((await deOficina).status()).toBe(200);
-  await expect(avisos.getByText("Activos", { exact: true })).toBeVisible();
+  await expect(avisos.getByText("Activos en este navegador")).toBeVisible();
   await avisos.getByRole("button", { name: "Desactivar" }).click();
   await expect(avisos.getByRole("button", { name: "Activar avisos" })).toBeVisible();
   await escritorio.close();

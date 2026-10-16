@@ -4,8 +4,9 @@
 -- No se deshace: correr solo en el entorno de pruebas, nunca en producción.
 -- Uso (desde la raíz, con la CLI enlazada a teins-pruebas):
 --   railway ssh -s Postgres -- sh -c 'psql -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1' < infra/limpieza/dejar-limpio.sql
--- Los teléfonos conservan lo que ya bajaron (visitas, levantamientos, catálogo): la bajada solo quita lo que se
--- anuncia, y este borrado no se anuncia. Después, borrar la app en cada teléfono de prueba y volver a instalarla.
+-- Cambia la época de la bajada (ADR-0038): en su siguiente bajada, cada teléfono (app 13 o posterior) quita lo que
+-- había bajado (visitas, enviados ya recibidos, estados, catálogo) y baja todo de nuevo. Lo capturado y no enviado
+-- se queda. Una app anterior no conoce la época: ahí sigue haciendo falta borrar la app y volver a instalarla.
 
 begin;
 
@@ -36,6 +37,11 @@ truncate auditoria.registros;
 -- Del registro de cambios sale solo lo borrado. Los formatos y los símbolos se conservan, y sus entradas son
 -- la única vía por la que un teléfono que baja desde cero los recibe (ADR-0003).
 delete from cambios.registro where entidad in ('visita', 'levantamiento', 'item_catalogo');
+
+-- Época nueva (ADR-0038): así se enteran los teléfonos de que lo borrado ya no existe.
+insert into cambios.epocas (organizacion_id, epoca)
+select id, gen_random_uuid()::text from identidad.organizaciones
+on conflict (organizacion_id) do update set epoca = excluded.epoca;
 
 -- Trabajos pendientes del worker (PDF, envíos, avisos) de lo que se borró.
 delete from graphile_worker._private_jobs;

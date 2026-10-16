@@ -1,97 +1,71 @@
-# DESIGN.md · Recorrido
+# DESIGN.md · Precisión
 
-Dirección visual de TEINS: Consola desde la iteración 14; Recorrido en campo desde la iteración 22 y en oficina desde la iteración 23 (el portal sigue con Consola). Todo trabajo de interfaz parte de este archivo y pasa después por el filtro antislop (ver `AGENTS.md`). Los valores de código viven en [`paquetes/ui/tokens.css`](paquetes/ui/tokens.css) y los componentes en [`paquetes/ui`](paquetes/ui/README.md); este archivo explica qué son y por qué.
+Dirección visual de TEINS: **Precisión** desde el 2026-09-29, en campo, oficina y portal. Antes fueron Consola (iteración 14) y Recorrido (iteraciones 22 y 23). Todo trabajo de interfaz parte de este archivo y pasa después por el filtro antislop (ver `AGENTS.md`). Los valores de código viven en [`paquetes/ui/tokens.css`](paquetes/ui/tokens.css) y los componentes en [`paquetes/ui`](paquetes/ui/README.md); este archivo explica qué son y por qué.
 
-Lienzo de referencia: https://claude.ai/artifact/A77tYXi713xNbTMacNzM8v (privado), página "v0.3 · Direcciones", dirección A. La página "v0.2 · Marquilla" guarda la dirección anterior.
+Prototipo de referencia: `prototipos/base-visual/prototipo.html` (https://claude.ai/artifact/MkRSHwecL2gXCZQ8zfHCrY). Sus bloques `.app[data-tema=…]` son los valores de los tokens; sus seis pantallas (bandeja, detalle con confirmación, cotización, inicio de sesión y dos de campo) son la referencia visual. Cada pantalla de la app se compara con él en capturas del mismo tamaño.
 
 ## Lectura del diseño
 
-Herramienta de trabajo para técnicos de Transporte de Datos y Transporte de Energía y su oficina. Calmada y clara: el contenido manda y la interfaz se retira. Se parece a las consolas que la gente de oficina ya conoce (menú lateral, tablas, diálogos), y en campo prioriza la lectura bajo el sol y el pulgar.
+Herramienta de trabajo para técnicos de Transporte de Datos y Transporte de Energía y su oficina. Precisa y sobria, como el software profesional que la gente de oficina ya usa: el contenido manda, la interfaz se retira y el color se reserva para la acción y el estado.
 
 **Niveles:** ENERGÍA 1 · RITMO 2 · MOVIMIENTO 2.
 
-**Por qué cambió (iteración 14):** la dirección Marquilla dejaba botones de tamaños distintos, confirmaciones metidas en filas, resultados lejos de la acción que los producía y ninguna capa (diálogo, menú, notificación). Se compararon tres direcciones en el lienzo y se eligió Consola.
+**Por qué cambió (2026-09-29):** Kevin dijo que la app "parece de juguete". Recorrido tenía pesos de 800, radios de 20 a 28 px, campos rellenos y amarillo en todo lo actual. Se compararon tres bases en un prototipo y eligió Precisión.
 
-## Campo · dirección Recorrido (desde el 2026-09-27)
+## Identidad Precisión
 
-Kevin juzgó la interfaz de campo "demasiado fea": todo era una lista larga de campos. Lo único que le gustaba era el croquis. Se hizo una línea base (21 problemas), una crítica con impeccable y un prototipo navegable con ideas de Mobbin (`prototipos/campo/prototipo.html`, publicado en https://claude.ai/artifact/7w6dwx24fDUraW8EkWbNxj). Kevin aprobó la mezcla B+A: **la estructura sigue el recorrido de la visita y el lenguaje visual es el del croquis.** Oficina y portal siguen con Consola.
+- **Color.** Grises fríos casi neutros y el azul de TEINS solo en la acción principal, lo seleccionado y el foco. Los estados llevan su propio tono, siempre con texto. Nada de amarillo: el foco es azul.
+- **Tipografía.** Una sola familia, Geist (variable), con pesos de 400 a 600. Títulos con interletrado de -0,02 em. Cifras tabulares siempre.
+- **Forma.** Radios de 7 a 12 px, bordes y divisiones de 1 px, capas sutiles. Los controles se delimitan con un borde fino (una sombra interior de 1 px), no con relleno.
+- **Iconos.** Lucide con trazo de 1,6, de 16 px en oficina.
+- **Tema.** Claro, oscuro y del sistema, con un selector en la cuenta que se recuerda en el equipo. Por omisión, el del sistema. Lo que se dibuja o se firma (croquis, firma, hoja del PDF) va siempre en papel claro (`data-tema="claro"`).
+- **Confirmaciones sin icono.** El título es la pregunta con el verbo; debajo, una lista con borde de las consecuencias concretas (cada una con su icono y una línea secundaria); el pie, un escalón más oscuro, con "Cancelar" y la acción, y los atajos Esc y ↵ en oficina (en Windows, «Enter»).
+- **Inicio de sesión.** El logo arriba, "Ingresar" y una tarjeta de 400 px con borde fino, campos de 46 px, "¿La olvidó?" junto a la etiqueta y la llave de acceso como alternativa bajo un separador "o". Debajo de la tarjeta, "¿Problemas para entrar? Hable con administración." Al fondo, un degradado vertical quieto con los azules de TEINS en la mitad de abajo. Nada se mueve.
 
-- **La visita como recorrido.** La captura ya no es un solo desplazamiento. Un levantamiento nuevo abre en su primer paso; uno con datos, en el recorrido. El recorrido muestra cada sección del formato como un paso unido por una línea: hechos en verde, el actual resaltado con "Sigue aquí", los demás en espera, y al final "Revisar y enviar". Los pasos salen de las secciones del formato (regla 6): un formato nuevo tiene su recorrido sin escribir código.
-- **Un paso por pantalla.** Arriba: volver al recorrido, "Paso N de M", la barra de avance y el contador de pasos hechos. Abajo, fija: "Siguiente: …" hacia el paso que sigue. Avanzar no se bloquea: lo que falta se ve en el recorrido y en Revisar.
-- **Lo repetido son tarjetas.** Cada tablero se resume en una tarjeta con su estado ("Completo" o "Faltan N datos") y dos datos; tocarla la abre en su propia pantalla, con "Listo" abajo y "Quitar" al final.
-- **Revisar antes de enviar.** Un aviso de lo que no se podrá cambiar, cada sección con su estado y "Editar", y "Enviar a oficina" como única acción. Los datos que faltan se listan y cada uno lleva a su paso.
-- **Enviado.** Un chulo que se dibuja, "Levantamiento enviado" y "Puedes salir de esta pantalla".
-- **Oscuro, con papel claro.** Campo usa una paleta oscura (`[data-superficie="campo"]` en `tokens.css`): fondo casi negro, paneles un escalón más claros, la marca aclarada (#6E9BFF) con texto oscuro en los botones principales. Lo que se dibuja o se firma (croquis, firma, miniaturas de bocetos) conserva la paleta clara con `data-tema="claro"`, porque la tinta es negra. **Por decidir:** la lectura bajo sol directo se prueba en el iPhone; si el oscuro no se lee, se cambia solo en los tokens.
-- **Forma.** Radios más grandes (16 en controles, 22 en paneles, 28 en capas), botones redondos de icono como los del croquis, el botón que avanza de 60 px de alto. La unidad elegida (kVA, m, A) se pinta con el color del texto, no con el azul de la acción principal.
-- **Mis visitas.** La visita de hoy con una barra amarilla al borde y la fecha en una pastilla. El aviso de instalar es una línea que no empuja la visita, y un levantamiento enviado dice su estado una sola vez.
-- **Movimiento, todo CSS (regla 10).** Entre pasos, View Transitions del navegador: adelante, la pantalla nueva entra por la derecha; atrás, por la izquierda (`tema.css`). Las tarjetas nuevas suben al aparecer y el chulo de enviado se dibuja. Con movimiento reducido, nada se mueve.
-- **Componentes.** `EncabezadoDePaso`, `BarraDePaso`, `BotonSiguiente`, `ListaRecorrido`, `PasoDelRecorrido`, `TarjetaResumen`, `BotonAgregar`, `Repaso`, `FilaDeRepaso` y `ChuloDeExito`, en `paquetes/ui/src/Recorrido.tsx`.
-- **Peso.** El JavaScript inicial de campo puede llegar a 135 KB (ADR-0030); hoy mide 122,7 KB.
-- **Igual al prototipo (Kevin lo pidió así el 2026-09-27):**
-  - Saludo con la fecha, botón de cuenta (con el diagnóstico y "Cerrar sesión") y franja de sincronización.
-  - Cifra grande con la unidad en la misma caja y valores comunes en pastillas.
-  - Fotos por puesto con nombre, y "No se pudo obtener" como enlace.
-  - Tableros con tres datos.
-  - Materiales con − y +, "Agregar nota", pastilla con el total y catálogo en hoja alta, donde "Agregar" se vuelve − 1 +.
-  - Croquis como paso a pantalla completa, con "Listo".
-  - Firma con "Entrega el teléfono a quien te recibió".
-  - Revisar con "Sale ahora a oficina", y enviado con la cola de subida y "Siguiente visita".
-  - Inicio de sesión e instalación con la marca arriba y la acción abajo.
-  - Los valores comunes y los puestos son datos del formato (`valoresComunes`, `puestos`, `largo`; formato de prueba v8).
+## Estructura que se conserva
 
-## Oficina · identidad Recorrido (desde el 2026-09-27, iteración 23)
+Precisión cambia la piel, no el orden de las pantallas. Se conserva lo que se decidió con Recorrido:
 
-Kevin pidió llevar la identidad de campo a oficina. El primer prototipo repetía el error de Consola: cada bloque en su propio recuadro, y la pantalla se volvía agobiante. Se rehízo al revés: **primero se ordenó la información por lo que hace la persona en cada pantalla, y solo después se buscaron referencias en Mobbin para validar.** El prototipo aprobado es `prototipos/oficina/prototipo.html` (https://claude.ai/artifact/XwTGDmPxCJ1wFFpqcBGycX); cada pantalla dice qué hace ahí la persona, cómo se ordenó y de dónde sale. La app es igual al prototipo: su CSS vive en `paquetes/ui/oficina.css`, que solo importa oficina.
+- **Campo, la visita como recorrido.** Cada sección del formato es un paso (regla 6): arriba, "Paso N de M" con la barra de avance; abajo, fija, "Siguiente: …". Lo repetido son tarjetas con su estado; se revisa antes de enviar; el enviado muestra la cola de subida real. Componentes en `paquetes/ui/src/Recorrido.tsx`.
+- **Oficina, la página es la superficie.** Se agrupa con espacio, títulos y líneas finas; solo flota lo que es una capa (hojas, confirmaciones, menús, notificaciones) o un objeto (una foto, un croquis, una firma). El encabezado resume en una línea de datos cortos. Las listas: pestañas subrayadas con su contador y el buscador en la misma barra. Los documentos: el contenido a la izquierda y un carril a la derecha. Los que recibe el cliente (cotización, informe) cambian el carril por la hoja en vivo (iteración 26, `prototipos/vista-en-vivo`): el editor a la izquierda y el documento a la derecha, a todo el alto y cada uno con su desplazamiento; las acciones van en la barra superior y las versiones publicadas al final del editor. Bajo 1280 px la hoja no cabe al lado: "Vista previa" la abre en una hoja lateral ancha.
+- **Movimiento.** En campo todo es CSS (regla 10): pasos con View Transitions, hojas que suben, el chulo que se dibuja. Con movimiento reducido, nada se mueve.
 
-- **La página es la superficie.** Se agrupa con espacio, títulos y líneas finas. Solo flota lo que es una capa (hojas laterales, confirmaciones, menús, notificaciones) o un objeto (una foto, un croquis, una firma). Nada de tarjetas para agrupar.
-- **El encabezado resume.** Debajo del título, una línea de datos cortos ("4 esperan revisión · el más antiguo lleva 2 días") reemplaza a las tarjetas de resumen; a la derecha, la acción de la pantalla y, en los documentos, el estado de guardado.
-- **Las listas:** pestañas subrayadas con su contador y el buscador a la derecha, en la misma barra; la tabla sobre el fondo; el texto que coincide con la búsqueda, resaltado; si en otra pestaña hay coincidencias, se dice cuántas. La bandeja busca en el servidor (llega por páginas, `buscar` en `listarLevantamientos`); las demás listas llegan completas y se buscan en la pantalla.
-- **Los documentos** (levantamiento, informe, cotización): el contenido a la izquierda y un carril fijo a la derecha, separado por una línea. El levantamiento se lee como documento con las secciones del recorrido de campo y "Corregir" y "Comentar" al pasar por la fila; el comentario se escribe debajo del dato. El informe sigue el orden del PDF (introducción, levantamientos, conclusiones, planos). La cotización es la cotización: líneas, "+ Agregar línea" como última fila y los totales bajo la columna Total. Los envíos van dentro de su versión.
-- **El inicio de sesión:** el formulario sobre el fondo y, a la derecha, el plano de un cuarto eléctrico dibujado en luz (UPS, baterías, tablero y la energía por la bandeja), sin textos más allá de "TEINS" (`PlanoEnLuz`).
-- **Tema:** oscuro, con la paleta de campo. El prototipo tiene también un claro con el azul de TEINS como acción, listo si algún día se pide.
+## Color
 
-## Identidad visual Recorrido (la de campo, llevada a oficina en la iteración 23)
+Valores en `paquetes/ui/tokens.css`. Cada token lleva su valor claro y oscuro con `light-dark()`: el tema lo decide `color-scheme`, así que una isla `data-tema="claro"` dentro del oscuro se ve clara sin repetir la paleta.
 
-Kevin aprobó el resultado de campo el 2026-09-27 y pidió dejar anotada la identidad para aplicarla después a oficina; se aplicó en la iteración 23 (sección anterior). Esta es la identidad, en el orden en que se decide:
+| Papel | Claro | Oscuro | Uso |
+|---|---|---|---|
+| Fondo | `#FAFAFB` | `#0A0B0D` | La página |
+| Superficie | `#FFFFFF` | `#111316` | Tablas, tarjetas, diálogos, campos |
+| Superficie 2 | `#F3F4F6` | `#17191D` | Fila al pasar, elemento activo del menú, pies de diálogo |
+| Superficie 3 | `#E9EBEF` | `#1E2126` | Avatares, pistas de segmentos y barras de avance |
+| Línea / línea fuerte | `#E5E7EB` / `#D5D8DE` | `#23262C` / `#2E323A` | Divisiones / bordes de controles |
+| Texto / secundario / terciario | `#111317` / `#5E646E` / `#6F7580` | `#EDEEF0` / `#8B9099` / `#7C828C` | |
+| Marca (acción) | `#2F5FE8` | `#3B6FF5` | Acción principal, selección, foco. Texto blanco |
+| Hecho / pendiente / peligro / revisión | `#188A5B` / `#A15C00` / `#D22F34` / `#6B4FD3` | `#3DBE8B` / `#E8A33D` / `#E5484D` / `#A38BFA` | Estados y avisos |
 
-**Método.** Primero una línea base de la pantalla actual con sus problemas numerados. Después una crítica con impeccable, referencias de Mobbin y un prototipo navegable en un artifact que Kevin aprueba. Solo entonces se construye, y la app debe quedar igual al prototipo, sin recortar nada. Cada pantalla se compara lado a lado con el prototipo antes de mostrarla.
+**Estados del documento** (iguales para toda organización, ADR-0020), como insignias de 22 px: un punto y el texto del color del estado sobre ese color al 12 %. Borrador en gris, Enviado y Publicado en la marca, En revisión en violeta, Revisado en verde, Anulado en rojo. Cada estado lleva siempre su **texto**; el color nunca es la única señal.
 
-**Carácter.** Una herramienta, no un formulario. El modelo es el croquis: el contenido grande, los controles redondos y rellenos, un trabajo por pantalla y las capas que suben cuando hacen falta.
+## Tipografía
 
-**Color (tema oscuro).**
+**Una sola familia en toda la interfaz: Geist** (variable, alojada localmente con `@fontsource-variable/geist` para funcionar sin conexión). Nunca dos familias en la misma pantalla; claves y códigos también van en Geist, con `tabular-nums` y espacio entre letras. Pesos: 400 texto, 500 etiquetas, pestañas y botones, 600 títulos.
 
-| Papel | Valor |
-|---|---|
-| Fondo | `#0B0F17` |
-| Panel (tarjetas, campos) | `#151B26` |
-| Panel hundido (segmentos, filas dentro de un panel) | `#1E2634` |
-| Texto / secundario | `#F3F5F9` / `#AEB6C6` |
-| Acción principal | `#6E9BFF` con texto `#0B0F17` |
-| Acento (lo actual, el foco, "Sigue aquí") | `#FFC21A` |
-| Hecho / pendiente / error | `#3DD68C` / `#FFB547` / `#FF8A8A` |
+| Nivel | Oficina | Campo |
+|---|---|---|
+| Título de pantalla | 22, 600 | 26, 600 |
+| Título de sección o panel | 13, 500, secundario | 20, 600 |
+| Texto, pestañas, botones | 13 a 14 | 14 a 16 |
+| Ayuda, encabezados de tabla, contadores | 12 | 13 |
+| Cifra de un total | 18, 600 | 18, 600 |
 
-Lo que se dibuja o se firma va sobre papel claro (`data-tema="claro"`). Una opción elegida (unidad, valor común) se pinta con el color del texto, nunca con el azul de la acción.
+## Forma y espacio
 
-**Forma.** Radios de 16 en controles, 22 en paneles y 28 en capas. Campos rellenos sin borde que al enfocarse muestran borde amarillo. Botones redondos de icono de 48 px. El botón que avanza mide 60 px de alto, lleva flecha y va abajo en una barra con degradado.
-
-**Tipografía.** Una sola familia (Atkinson Hyperlegible Next). Títulos de 30/800. Etiquetas de 17/700 con "obligatorio" pequeño al lado, sin paréntesis. Cifras de 40/800 con números tabulares. Las etiquetas de grupo son pequeñas, en negrita y secundarias ("Después", "Enviados").
-
-**Patrones y de dónde salen (Mobbin).**
-- Tarjeta focal con barra amarilla al borde (Jobber).
-- Pasos unidos por una línea: hechos en verde, actual resaltado (Lloyds, Bloom).
-- Cifra con unidad en una caja y valores comunes en pastillas (Yazio, Up).
-- Fotos por puesto con nombre (eBay, Grailed).
-- Lo repetido como tarjetas con tres datos y su estado (Hevy, Runna).
-- "Agregar" que se vuelve − 1 + y una pastilla con el total (Gojek).
-- Datos faltantes en rojo en el campo, con una hoja que dice cuáles faltan (Cleo, Tesla, BitePal).
-- Revisar con aviso y "Editar" por sección (Vestiaire, Cash App).
-- Envío con avance real, etapas y chulo solo al recibir (Fiverr, Mindvalley).
-- Entrada con marca centrada, campos con etiqueta flotante y la llave de acceso como alternativa (Rocket Money, Remote, Oportun).
-- Cuenta como lista de ajustes.
-
-**Movimiento (siempre CSS).** Pantallas que entran por el lado de la dirección (View Transitions). Hojas que suben. Tarjetas y filas que suben al aparecer, una tras otra. Una sacudida en lo que falta y un latido en el contador de faltantes. El anillo que avanza y el chulo que se dibuja. Con movimiento reducido, nada se mueve.
-
-**Para oficina, cuando toque.** Escritorio y claro u oscuro, por decidir con Kevin. Se conserva lo que ya funciona de Consola (menú lateral, tablas, hojas laterales), con la forma, el color de acción, los campos rellenos, los faltantes animados y el cuidado del detalle de campo. El primer paso es la línea base de cotizaciones, donde Totales y Publicación hoy se parten en columnas de 150 px.
+- Base de 4 px.
+- Radios: 7 px en botones y campos de oficina, 10 px en paneles y listas de consecuencias, 12 px en diálogos; en campo, 12 a 16 px en tarjetas y botones grandes.
+- **Sombras solo en capas** (diálogos, hojas, menús, notificaciones) y una sombra de 1 px bajo los botones. El único degradado es el del inicio de sesión.
+- Alto de controles: en oficina 32 px (40 px el grande); en el inicio de sesión 46 px; en campo 50 px el botón de la barra de abajo y 40 px los demás. Ninguna zona táctil de campo mide menos de 44 px.
+- Oficina: menú lateral de 208 px con el logo arriba y la cuenta abajo, barra superior de 48 px con la ruta, filas de tabla de 44 px.
 
 ## La regla: todo se justifica
 
@@ -107,61 +81,9 @@ Cada elemento de una pantalla responde a una pregunta: **¿qué decisión o acci
 
 **Oficina.** El menú lateral son las secciones. El título de la pantalla (el `h1`, lo más grande después de la cifra focal) es **la sección elegida en el menú**; las pestañas son sus subsecciones, más pequeñas. En un detalle, el título es lo que se está viendo y unas migas llevan al nivel superior ("Levantamientos", "Informes"); el estado va junto al título.
 
-| Nivel | Oficina | Campo |
-|---|---|---|
-| Título de pantalla | 28, 800 | 26, 800 |
-| Subtítulo de sección o panel | 18, 800 | 21, 800 |
-| Texto, etiquetas, pestañas | 15 (etiquetas 700) | 17 (etiquetas 700) |
-| Ayuda, migas, encabezados de tabla | 13 | 15 |
-| Cifra focal | 56 | 44 |
+Los tamaños y pesos de cada nivel están en "Tipografía".
 
 **Una acción principal por región.** La de la pantalla va a la derecha del encabezado ("Nuevo cliente", "Programar visita"); la de un panel, al final del panel; la de un diálogo, al final del pie, a la derecha, con "Cancelar" a su izquierda. En campo, la acción de la pantalla va abajo, en una barra fija, al alcance del pulgar.
-
-## Color
-
-Paleta del logo de TEINS con un acento de señal.
-
-| Token | Valor | Uso |
-|---|---|---|
-| Superficie de marca | `#002B81` | Acción principal, selección, sección activa del menú, bordes de campos activos |
-| Superficie suave | marca al 10 % | Fondo del elemento activo (menú, paso actual, icono de diálogo) |
-| Acento señal | `#FFC21A` | **Solo** foco, resaltado de lo recién creado e insignia "Nuevo". Ya no pinta botones |
-| Fondo | `#F5F6F8` | Fondo de oficina, campo y portal |
-| Panel | `#FFFFFF` | Tablas, paneles, diálogos |
-| Panel hundido | `#F8F9FB` | Encabezados de tabla y pies de diálogo |
-| Texto | `#15171A` | Texto principal |
-| Texto secundario | `#525152` | Gris del logo: 7,9:1 sobre blanco, sirve en campo |
-| División | `#E1E4EA` | Líneas y bordes de paneles |
-| Borde suave | `#C9CED8` | Botones secundarios (su texto ya los identifica) |
-| Borde de control | `#8C93A3` | Campos de texto: 3:1 sobre blanco, porque el borde es lo único que los delimita |
-| Peligro | `#B42318` | Solo el botón que confirma algo que no se deshace |
-
-Éxito, alerta y peligro tienen un fondo teñido para avisos e insignias. En un aviso el texto va siempre en el color de texto (7:1 sobre el fondo teñido) y el tono lo lleva el icono; el texto de color solo va en insignias (palabras cortas en negrita, 6:1 o más).
-
-**Estados del documento** (iguales para toda organización, ADR-0020), como insignias:
-
-| Estado | Fondo | Texto |
-|---|---|---|
-| Borrador | superficie pista | blanco |
-| Enviado | `#E3ECFA` | `#1C4E9E` |
-| En revisión | `#EEE6F7` | `#5B2E91` |
-| Revisado | `#DDF1EB` | `#0B5E50` |
-| Publicado | superficie de marca | blanco |
-| Anulado | `#F8E0E4` | `#8E1D33` |
-
-Cada estado lleva siempre su **texto**; el color nunca es la única señal. Mínimo en campo: **7:1** para texto corrido. En oficina: 4,5:1 (WCAG AA).
-
-## Tipografía
-
-**Una sola familia en toda la interfaz: Atkinson Hyperlegible Next** (variable, 400 a 800). Nunca dos familias en la misma pantalla. Distingue 0/O y 1/I/l, así que sirve también para códigos y claves. La jerarquía sale del tamaño y el grosor (tabla de Jerarquía). Se aloja localmente para funcionar sin conexión. Cifras siempre con `font-variant-numeric: tabular-nums`. Claves y códigos que se dictan se muestran en bloques de cuatro con espacio entre letras.
-
-## Forma y espacio
-
-- Base de 4 px.
-- Radio 8 px en controles, 12 px en paneles, 16 px en diálogos.
-- **Sombras solo en capas** (diálogos, hojas, menús, notificaciones). **Sin degradados. Sin fondos de cuadrícula.**
-- Alto de controles: en oficina 40 px normal y 32 px pequeño (filas, barras de herramientas); en campo 58 px normal y 44 px pequeño. Zonas táctiles de campo: mínimo 58 px, salvo en el editor de bocetos: allí la hoja manda y la barra es compacta, de iconos de 44 px (ADR-0026).
-- Oficina: menú lateral de 248 px (se reduce a iconos bajo 1024 px) y contenido de hasta 1200 px; los detalles usan dos columnas, contenido y panel lateral fijo con el estado y la acción.
 
 ## Componentes y cuándo usarlos
 
@@ -178,9 +100,10 @@ Todos viven en `paquetes/ui`; ninguna pantalla define colores ni estilos propios
 | `Tabla` | Listas de oficina. Toda la fila abre el detalle cuando lo hay; el primer dato es un enlace real para el teclado |
 | `Insignia` | Estados: una o dos palabras con su color |
 | `Aviso` | Algo que la persona debe leer y quizá resolver, junto a lo que lo causó. Los errores van siempre aquí, nunca en una notificación |
-| Notificación (`useNotificar`) | Confirma algo ya hecho y no exige respuesta: "Cliente creado", "Foto eliminada · Deshacer". 5 s, 10 s con acción |
+| Notificación (`useNotificar`) | Confirma algo ya hecho y no exige respuesta: "Cliente creado", "Foto eliminada · Deshacer". 5 s, 10 s con acción. La acción es texto, sin borde (iteración 29) |
 | `Dialogo` centrado | Confirmaciones y lo que se entrega una sola vez |
-| `Dialogo` lateral | Crear o editar en oficina: la lista sigue visible detrás |
+| `Dialogo` de formulario (`forma="formulario"`) | Crear o editar algo corto en oficina (iteración 29): centrado, del alto de su contenido, con su equis. `ancho`: 480 (por omisión), 560 (`ancho`, dos columnas de campos), 880 (`doble`, Programar visita) o 1040 (`previa`, con la vista previa al lado) |
+| `Dialogo` lateral | Crear o editar algo largo, o lo que se arma mirando la lista: Nuevo cliente, Nueva cotización, Importar |
 | `Dialogo` inferior | Confirmaciones en campo, al alcance del pulgar |
 | `Confirmacion` | Lo que tiene consecuencias (ver abajo) |
 | `EstadoVacio` | Lista sin nada: qué aparecerá y cómo llega |
@@ -189,6 +112,7 @@ Todos viven en `paquetes/ui`; ninguna pantalla define colores ni estilos propios
 | `Pastilla` y `BotonHerramienta` | La barra del editor de bocetos, como GoodNotes: iconos sin texto, la herramienta elegida con la superficie de marca |
 | `HojasDeBoceto` | Leer un boceto (captura, revisión): las hojas de a dos, cada una con su nombre si hay varias |
 | `BotonCopiar` | Claves y códigos que se entregan o se guardan |
+| `HojaEnVivo` | El documento que recibe el cliente, mientras se escribe (ADR-0031): siempre en papel claro, con la advertencia "Vista previa: el PDF puede partir las páginas distinto". En la revisión, lo corregido va resaltado con el valor anterior; ese azul no sale en el PDF |
 
 ## Qué se confirma y qué se deshace
 
@@ -196,19 +120,42 @@ Confirmar lo que se hace a menudo entrena a aceptar sin leer. Por eso hay tres n
 
 | Nivel | Ejemplos | Cómo |
 |---|---|---|
-| Se deshace fácil | Quitar una foto, una línea de cantidades | Se hace al instante y la notificación ofrece "Deshacer" |
-| Tiene consecuencias | Desactivar un usuario, restablecer una contraseña, dar o quitar administración, desactivar un ítem, marcar revisado, tomar una revisión ajena, quitar una llave, quitar una sección repetida, enviar a oficina, cerrar sesión con envíos pendientes, volver a firmar | `Confirmacion`: el título es una pregunta con el verbo ("¿Desactivar a Juan Pérez?"), el cuerpo dice la consecuencia, el botón repite el verbo. "Cancelar" recibe el foco |
-| No se deshace | Publicar un informe, retirar una versión, cancelar una visita, regenerar un acceso | Igual, con el botón de peligro, y el motivo escrito cuando queda en el registro |
+| Se deshace fácil | Quitar una foto, una línea de cantidades o un material, una sección repetida (un tablero); desactivar un ítem del catálogo; marcar "No se pudo obtener" | Se hace al instante y la notificación ofrece "Deshacer". En el croquis, el "Deshacer" de su barra |
+| Tiene consecuencias | Restablecer una contraseña, dar o quitar administración, marcar revisado, tomar una revisión ajena, quitar una llave, quitar un contacto, enviar a otro contacto, enviar a oficina, cerrar sesión con envíos pendientes, volver a firmar | `Confirmacion`: el título es una pregunta con el verbo ("¿Desactivar a Juan Pérez?"), las consecuencias concretas en su lista (`consecuencias`), el botón repite el verbo. Si no hay nada que escribir, la acción recibe el foco y en oficina se confirma con ↵ |
+| No se deshace | Publicar un informe o una cotización, retirar una versión, cancelar una visita, regenerar un acceso, desactivar un usuario (ordena borrar los datos de su teléfono) | Igual, con el botón de peligro, el motivo escrito cuando queda en el registro y el foco en "Cancelar": nunca es la acción predeterminada, y no lleva ↵ |
 
 En el código, `Confirmacion` exige `nivel`: `consecuencia` o `irreversible` (botón de peligro). Lo que se deshace fácil no usa `Confirmacion`.
 
-Los formularios con cambios sin guardar avisan antes de salir (`useSalidaProtegida` en oficina).
+El informe y la cotización se guardan solos (iteración 36): no hay "Guardar borrador" ni aviso al salir (ver "Guardado, atajos y lo que se recuerda").
+
+Lo que se hace en una hoja lateral (reasignar técnicos, reprogramar, importar) no lleva un segundo diálogo: la hoja ya es el paso deliberado, y dice antes del botón qué va a pasar ("Juan Pérez deja de verla en su teléfono"); el botón lo repite con el nombre ("Reasignar a María Gómez").
+
+Corregir un dato exige el motivo: queda en el historial junto al valor anterior. En los formularios, cada campo dice qué le falta, el foco va al primero con error y los de correo y teléfono abren su teclado.
+
+En campo, el botón atrás del teléfono hace lo que la flecha de la pantalla; en el inicio, sale de la app.
 
 ## Crear y editar
 
-- En oficina, "Nuevo…" abre una **hoja lateral**. Al guardar, la hoja se cierra, lo nuevo aparece **primero** en la lista, resaltado en amarillo que se desvanece en unos 2 s, y una notificación lo confirma. Con movimiento reducido, el resaltado queda fijo.
+- En oficina, un formulario de hasta unos cuatro campos que no necesita ver la lista (nuevo ítem, precio, sitio, contacto, usuario, contraseña) va en un **diálogo centrado del alto de su contenido**; la hoja lateral queda para lo largo o lo que se arma mirando la lista (iteración 29: la hoja a todo el alto para tres campos dejaba media pantalla en blanco). Un formulario se ve entero al abrirse, sin bajar: si no cabe en una columna, va en dos (Programar visita).
+- Al guardar, la capa se cierra, lo nuevo aparece **primero** en la lista con un tinte de la marca al 8 % que se va en 1,2 s, sin barra ni negrita, y una notificación lo confirma. Con movimiento reducido, el tinte queda fijo.
+- Un campo que se escribe libre (la unidad del catálogo) puede ofrecer debajo, como atajos pequeños, los valores que ya se usan; nunca limita lo que se escribe.
+- Ninguna fecha ni hora se elige con el control del navegador en oficina: van en selectores propios (calendario y rejilla de horas), que siguen los tokens.
+- Un panel del carril no lleva botones estirados a todo su ancho: la acción de la pantalla va en la barra superior ("Marcar revisado", "Publicar") y el panel dice el estado en una línea.
 - Los formularios de creación nunca quedan abiertos encima de las listas.
 - Validar al enviar: cada campo con su mensaje, no un mensaje general.
+
+## Guardado, atajos y lo que se recuerda (oficina)
+
+Iteración 36, `prototipos/usabilidad-oficina`:
+
+- **Guardado automático** del informe y la cotización: 1,5 s después de dejar de escribir y al salir de la pantalla, con la revisión de versión de siempre. En la barra, junto a «Publicar», una sola línea: «Sin guardar», «Guardando», «Guardado», «Sin conexión · se guarda al volver» o «No se guardó» (con «Reintentar» si fue un error). Mientras no se guarda, lo escrito queda también en el equipo de la persona y vuelve al abrir el documento. Si otra persona guardó antes, no se pisa nada: un aviso ofrece «Guardar la mía encima» o «Cargar la guardada», y «Publicar» espera a que se elija. Publicar guarda primero lo pendiente y necesita conexión.
+- **Atajos** con la tecla del sistema: en Mac «⌘K», «⌘B» y «↵»; en Windows «Ctrl + K», «Ctrl + B» y «Enter». Nunca se muestra ⌘ a quien usa Windows (`etiquetaAtajo`, `etiquetaEnter`, `esAtajo` en `paquetes/ui`). En Mac no se toma Ctrl: en los campos, Ctrl + K borra hasta el final de la línea. **Solo «Buscar» muestra su atajo a la vista** («⌘K», como en Vercel, Linear o GitHub); los demás van en la ayuda al pasar el cursor («Marcar revisado · R») y en la lista de «?», para no llenar de teclas la pantalla de quien no las usa (Kevin, 2026-10-04). Las teclas de una letra no hacen nada mientras se escribe en un campo.
+- **Lo que se recuerda**, por persona y en el equipo: la pestaña de cada lista (Levantamientos, Clientes, Visitas) y la del carril de la revisión, el menú plegado, y si la vista previa va oculta y su ancho. Las búsquedas de las listas duran lo que dura la pestaña del navegador (al día siguiente no esconden filas sin que se note). Al volver de un levantamiento, la bandeja marca la fila que se abrió. Nada de esto va al servidor.
+- **Menú plegable** a 60 px con iconos: un icono junto al logo (plegado, debajo del símbolo) o ⌘B / Ctrl + B. El pie del menú es solo la cuenta.
+- **Vista previa** al lado del editor: «Ampliar» (a toda la ventana, a tamaño real; Esc vuelve) y «Ocultar» en su cabecera, y un divisor que se arrastra (o se mueve con las flechas; doble clic vuelve al ancho de siempre). La hoja no baja de 360 px ni el editor de 520 (660 en la cotización, por su tabla). La ampliación no se recuerda.
+- **Buscar en todo** (iteración 37): ⌘K / Ctrl + K o «Buscar» arriba en el menú. Vacía, lo último que se abrió y las acciones; al escribir, por grupos (acciones, secciones, clientes, visitas, levantamientos, informes, cotizaciones), hasta cuatro por grupo, cada palabra en el título o el detalle. Ve lo mismo que las listas: usa sus consultas.
+- **Revisar con el teclado** (iteración 37): en la bandeja, J y K (o ↓ y ↑) mueven la fila marcada, Enter la abre y «/» va a la búsqueda; en la revisión, T toma, R marca revisado (con su confirmación) y S abre el siguiente; Esc vuelve a la bandeja; «?» (o «Atajos del teclado» en la búsqueda) abre la lista de atajos. No valen con un diálogo abierto, y Enter sobre un botón o un enlace hace lo de ese botón o enlace.
+- **Ordenar arrastrando** (`ListaOrdenable`): un asa a la izquierda de la fila; con el teclado, Espacio la toma, las flechas la mueven, Espacio la suelta y Esc la devuelve. No hay flechas de subir y bajar.
 
 ## Lo que se entrega una sola vez
 
@@ -230,10 +177,11 @@ Cuatro pasos numerados en una misma pantalla: confirmar la contraseña; escanear
 | Pantalla | Punto focal |
 |---|---|
 | Campo · Mis visitas | La siguiente visita, en la primera tarjeta, con la fecha grande y la única acción principal |
-| Campo · Captura | El dato que se está llenando, con el halo amarillo del foco, y la barra de envío abajo |
+| Campo · Captura | El dato que se está llenando, con el anillo azul del foco, y la barra de envío abajo |
 | Campo · Boceto | La hoja, en toda la pantalla: una barra de iconos arriba y, abajo, la hoja en que se está |
 | Oficina · Levantamientos | "Esperando revisión": cuántos hay, el que más lleva esperando y "Tomar para revisar" |
-| Oficina · Visitas | Las próximas visitas, empezando por las de hoy, con "Programar visita" |
+| Oficina · Visitas | Las próximas visitas, empezando por las de hoy y por hora, con "Programar visita"; las que siguen abiertas, "En curso" |
+| Oficina · Mi cuenta | Una columna de 680 px centrada: cada fila con su icono, nombre, estado y una acción secundaria; ninguna es principal |
 | Oficina · Administración | La tabla de la pestaña elegida; al crear una credencial, el diálogo que la entrega |
 | Portal | El informe más reciente y su "Descargar" |
 
@@ -241,20 +189,42 @@ Todo lo demás en la pantalla es visiblemente secundario.
 
 ## Movimiento
 
-Cada animación tiene un propósito escrito. En `campo` **todo el movimiento es CSS** (cero JavaScript de animación); Motion solo se usa en `oficina`.
+Cada animación tiene un propósito escrito. Desde la iteración 27 (`prototipos/flujos/`), cuatro reglas:
+
+1. **Lo que cambia se queda en su sitio y se transforma.** Un estado que pasa de "Enviado" a "En revisión" cambia ahí; la tarjeta de la visita se convierte en la cabecera de la captura; el título de la fila, en el del detalle.
+2. **Lo que entra o sale se ve entrar o salir.** Un diálogo, una hoja o una notificación también salen (200 ms); una fila nueva entra arriba y las demás se corren; la que se cancela se cierra.
+3. **Solo lo nuevo se anima.** Lo que ya estaba no vuelve a entrar al volver a una pantalla o a una pestaña (`useLoNuevo`).
+4. **Cada acción termina diciendo qué pasó y qué sigue:** la notificación lleva el siguiente paso ("Agregar contactos", "Ver en Canceladas") y los flujos en serie ofrecen el siguiente ("Siguiente: …", "Ver la siguiente visita").
+
+**Cómo:** View Transitions en las dos superficies (`conTransicion` en `paquetes/ui`; el enrutador de oficina con `defaultViewTransition`). El navegador toma una foto antes y otra después y anima solo lo que tiene `view-transition-name`; la página no se mueve. Sin soporte, el cambio es instantáneo. **Sin Motion:** el movimiento es CSS en `campo` y en `oficina`; el JavaScript solo dice cuándo empieza una transición.
 
 | Momento | Movimiento | Propósito |
 |---|---|---|
-| Diálogo o menú que se abre | Aparece con un leve desplazamiento | Mostrar de dónde viene la capa |
-| Hoja lateral | Entra desde la derecha | Mostrar que la lista sigue detrás |
-| Lo recién creado | Resaltado amarillo que se desvanece | Encontrarlo sin buscarlo |
+| Cambiar de sección (oficina) | El contenido se desvanece y el nuevo sube 8 px; el menú y la barra no se mueven | Que la ubicación cambie sin perder el marco |
+| Abrir un detalle desde la lista | El título de la fila se convierte en el del detalle | Saber qué se abrió |
+| Siguiente levantamiento de la serie | El cuerpo se desliza; el carril de la revisión se queda | Revisar en serie sin volver a la lista |
+| Pasar de paso (campo) | Solo se mueve el cuerpo: el anterior se va en 120 ms y el nuevo entra 24 px con fundido (220 ms); la cabecera y la barra se quedan y la barra de avance crece | Mostrar hacia dónde se fue sin barrer la pantalla (iteración 32) |
+| Abrir una visita (campo) | La tarjeta de la visita se convierte en la cabecera de la captura | Que la captura salga de la visita |
+| Estado que cambia en su lugar | La pastilla pasa de un estado al otro; el dato corregido destella | Ver qué cambió sin buscarlo |
+| Diálogo o menú | Aparece con un leve desplazamiento; al cerrarse sale igual (200 ms) | Mostrar de dónde viene y a dónde se va la capa |
+| Hoja lateral | Entra desde la derecha y sale hacia ella | Mostrar que la lista sigue detrás |
+| Hoja de campo (abajo) | Entra desde el borde y frena al final (260 ms) con el velo fundiéndose a la vez; sale igual en 200 ms | Que no se abra de golpe ni se sienta lenta (iteración 32) |
+| Página dentro de una hoja | Lo que se abre desde una hoja (Descartados, Contraseña) entra en la misma hoja, 28 px de lado, con «‹ Cuenta» para volver | No cerrar una hoja para abrir otra |
+| Croquis y firma | Suben una sola vez al abrirse (también mientras cargan) y bajan al cerrarse; de la entrega a la firma, fundido | Que se lean como capas encima de la captura, sin un fondo vacío antes |
+| Notificación | Sube al llegar y baja al irse | Que no desaparezca de golpe |
+| Lo recién creado | Entra arriba resaltado; el resaltado se desvanece | Encontrarlo sin buscarlo |
+| Lo que cambia en la hoja en vivo | Destello azul que se desvanece | Ver dónde cayó lo que se escribió |
+| Pestañas | El subrayado se desliza a la elegida | Ver de dónde a dónde se cambió |
+| Avance de un proceso (publicar, enviar) | Cada paso se marca con un chulo que se dibuja cuando se cumple a la vista | Decir el estado real, paso a paso |
 | Cargando | Esqueleto con la forma real | Evitar saltos |
 | Error de validación | Sacudida corta del campo | Señalar dónde está |
 | Trabajando | Giro del icono en el botón | Mostrar que la acción corre |
 | Pasar de hoja (boceto) | La hoja entra desde su lado | Mostrar hacia dónde se fue |
 | Dedo quieto al dibujar | Un anillo que se llena en medio segundo | Avisar que el trazo se va a enderezar |
 
-**Duraciones:** 120 ms (pulsación), 200 ms (capas), 280 ms (hojas), 2,4 s (resaltado). **Curva:** `cubic-bezier(0.2, 0, 0, 1)`. Con `prefers-reduced-motion`, todo se desactiva.
+**Qué se mueve:** con dirección (`adelante`, `atras`, `seccion`, `fundido`) se mueve lo que se ve en la ventana, menos lo que tiene nombre propio; la foto es del tamaño de la ventana, nunca del documento entero, para que una lista larga o un levantamiento con fotos no congelen la transición (en el iPhone sí lo harían). Se quedan quietos por su nombre: `menu` y `barra-oficina` (oficina), `barra-paso` y `progreso` (campo) y `carril` (la revisión). Van de su lugar al nuevo, por elemento: `visita-<id>`, `lev-<id>`, `estado-<id>`, `nombre-<id>`, `fila-<id>` e `indicador-<id>` (`nombreDeTransicion`). Las filas de una lista larga llevan su nombre solo mientras se ven (`useNombreEnPantalla`). Un nombre se repite en una pantalla solo si es el mismo elemento.
+
+**Duraciones:** 120 ms (pulsación), 200 ms (capas y salidas), 220 ms (pasos de campo), 260 ms (hojas de campo, `--t-duracion-hoja`), 280 ms (pantallas), 1,2 s (resaltado, desde la iteración 29). Más lento se siente como si la app tuviera retraso (Kevin, iteración 32). **Curvas:** `cubic-bezier(0.2, 0, 0, 1)`; las hojas y capas que suben, `cubic-bezier(0.32, 0.72, 0, 1)` (`--t-curva-hoja`). **Con `prefers-reduced-motion`, nada se mueve:** los cambios son instantáneos, las capas se quitan sin salir y lo resaltado queda fijo.
 
 ## Iconos
 
@@ -272,7 +242,9 @@ Una sola familia: **Lucide**, exportada desde `@teins/ui` (ninguna superficie im
 
 Toda vista con datos diseña **vacío, cargando, error y sin conexión**. En campo, además: **pendiente de enviar** y **enviando**.
 
-## Logo
+## Nombre público y logo
 
-- A color (`#002B81`, `#1773B0`, `#76AADB`, gris `#525152`) sobre fondos claros: con la dirección Consola, todas las superficies son claras.
-- **Pendiente:** obtener de TEINS el logo en vector. Mientras tanto, la palabra "TEINS" en la superficie de marca.
+- **El producto se llama "TEINS"**, sin más. Campo, oficina y portal son nombres internos de la arquitectura: nunca se muestran (títulos, `<title>`, etiquetas accesibles, nombres de archivo, correos).
+- **Donde va la marca va el logo oficial** (`paquetes/ui/src/logo-teins.png`, PNG transparente de 292 × 90: los anillos azules, "teins" y la razón social): inicio de sesión, menú de oficina y PDF. No se escribe "TEINS" al lado del logo ni se repite en la misma pantalla.
+- En el tema oscuro, el logo se pinta en blanco con un filtro (`--t-filtro-logo`).
+- **Pendiente:** de TEINS, el logo en vector y su versión en negativo.

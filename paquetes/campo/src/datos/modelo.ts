@@ -18,16 +18,37 @@ export interface ClaveLocal {
  * Levantamiento en el dispositivo, con su responsable (regla 1). Un teléfono puede compartirse:
  * solo se envía con la sesión de quien lo creó. Los del corte 0 no tienen responsable hasta el primer inicio de sesión.
  */
-export type LevantamientoLocal = Levantamiento & { tecnicoId?: string | undefined };
+export type LevantamientoLocal = Levantamiento & {
+  tecnicoId?: string | undefined;
+  /**
+   * Descartado por el técnico (ADR-0035): sale de Mis visitas y queda en la papelera del teléfono, de donde se recupera
+   * durante 30 días; después se borra con sus fotos. A la vista, sin sellar: la papelera no necesita abrirlo.
+   */
+  descartadoEn?: string | undefined;
+  /**
+   * Cliente y sitio de su visita, copiados al crearlo o al enviarlo (iteración 42): la visita atendida sale del teléfono
+   * al día siguiente (ADR-0041) y lo enviado sigue diciendo dónde fue. Va sellado con las respuestas.
+   */
+  lugar?: LugarDeVisita | undefined;
+};
+
+export interface LugarDeVisita {
+  cliente: string;
+  sitio: string;
+}
+
+/** Días que un levantamiento descartado se puede recuperar antes de borrarse del teléfono (ADR-0035). */
+export const DIAS_EN_LA_PAPELERA = 30;
 
 /**
- * Como se guarda (ADR-0022): respuestas y repeticiones van selladas; a la vista queda lo que necesitan
+ * Como se guarda (ADR-0022): respuestas, repeticiones y lugar van sellados; a la vista queda lo que necesitan
  * los índices y las transacciones (ids, estado, fechas, responsable y las huellas de sus archivos).
  * Sin `sellado`, es un registro de antes del cifrado o sin responsable todavía: se sella al conocerlo.
  */
-export type LevantamientoGuardado = Omit<LevantamientoLocal, "respuestas" | "repeticiones"> & {
+export type LevantamientoGuardado = Omit<LevantamientoLocal, "respuestas" | "repeticiones" | "lugar"> & {
   respuestas?: Respuestas | undefined;
   repeticiones?: Repeticiones | undefined;
+  lugar?: LugarDeVisita | undefined;
   sellado?: Sellado | undefined;
   /** Huellas de todos sus archivos y solo de sus fotos: para subir y borrar sin abrir el sellado. */
   archivos?: string[] | undefined;
@@ -83,6 +104,8 @@ export interface EnvioLocal {
   ultimoError?: { codigo: string; mensaje: string } | undefined;
   recibidoEn?: string;
   creadoEn: string;
+  /** La versión de la app que el servidor rechazó: con otra versión, el envío vuelve a la cola (ADR-0015). */
+  versionAppRechazada?: number | undefined;
 }
 
 /** Lo que muestran las pantallas de un envío: su estado, sin el comando. */
@@ -139,11 +162,42 @@ export type VisitaLocal = VisitaAsignada & {
   fueraDeAlcance?: true;
   /** Por qué salió (desde la iteración 7); sin él, se trata como reasignada. */
   motivoSalida?: "reasignada" | "cancelada";
+  /** El técnico la terminó en este teléfono y falta que el servidor lo sepa (ADR-0037). */
+  terminacionPendiente?: TerminacionPendiente | undefined;
 };
 
-/** Como se guarda: cliente, sitio, dirección y motivo van sellados. */
-export type VisitaGuardada = Pick<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida"> &
-  Partial<Omit<VisitaLocal, "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida">> & { sellado?: Sellado | undefined };
+/**
+ * "Terminar visita" sin señal (ADR-0037): se ve terminada al instante y el motor la envía con su llave, con la misma
+ * espera que los envíos. Vive en la visita y no en el outbox: es un dato de la visita, no un levantamiento. Va a la
+ * vista, sin sellar: una hora y una llave no dicen nada del cliente, y así la bajada la conserva sin abrir el sellado.
+ */
+export interface TerminacionPendiente {
+  llave: string;
+  /** Hora del teléfono al tocar "Terminar visita": declarativa, la que ve oficina. */
+  en: string;
+  intentos: number;
+  /** Milisegundos desde época: no se intenta antes. */
+  proximoIntentoEn: number;
+}
+
+/** Lo que va a la vista en una visita guardada; lo demás (cliente, sitio, dirección, motivo, horario) va sellado. */
+type AlaVistaDeVisita = "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida" | "terminacionPendiente";
+
+/** Como se guarda: cliente, sitio, dirección, motivo y horario van sellados. */
+export type VisitaGuardada = Pick<VisitaLocal, AlaVistaDeVisita> & Partial<Omit<VisitaLocal, AlaVistaDeVisita>> & { sellado?: Sellado | undefined };
+
+/** Un mensaje de la conversación de un comentario (ADR-0040), como lo dejó el servidor. */
+export interface MensajeDeConversacion {
+  id: string;
+  texto: string;
+  de: "oficina" | "tecnico";
+  autor: string;
+  creadoEn: string;
+  /** Los del técnico: la llave con que salió de este u otro teléfono. */
+  llave?: string | undefined;
+  /** Los del técnico: alguien de oficina lo leyó («Leído»). */
+  leido?: boolean | undefined;
+}
 
 /** Nota de oficina sobre un levantamiento enviado (corte 3). No modifica datos. */
 export interface ComentarioDeOficina {
@@ -153,6 +207,40 @@ export interface ComentarioDeOficina {
   campo?: string | undefined;
   autor: string;
   creadoEn: string;
+  /** Oficina lo corrigió (ADR-0035). */
+  editadoEn?: string | undefined;
+  /** La conversación que abre (ADR-0040). Va sellada con el resto del estado. */
+  respuestas?: MensajeDeConversacion[] | undefined;
+}
+
+/**
+ * Lo que el técnico respondió y todavía no está en la bajada (ADR-0040). Sale solo cuando hay señal, con la espera de
+ * los envíos; recibido, queda como enviado hasta que la bajada lo trae. Un rechazo sin remedio (ya revisado) lo deja
+ * en el teléfono con su motivo: nunca se borra (regla 5).
+ */
+export interface RespuestaPendiente {
+  llave: string;
+  tecnicoId: string;
+  levantamientoId: string;
+  comentarioId: string;
+  texto: string;
+  /** Hora del teléfono al escribirlo: ordena el chat mientras no llega la del servidor. */
+  creadaEn: string;
+  intentos: number;
+  proximoIntentoEn: number;
+  enviada?: { id: string; creadoEn: string } | undefined;
+  rechazo?: "revisado" | "no_existe" | "invalida" | undefined;
+}
+
+/** Lo que va a la vista; el texto, el comentario y la hora van sellados (ADR-0022). */
+type AlaVistaDeRespuesta = "llave" | "tecnicoId" | "levantamientoId" | "intentos" | "proximoIntentoEn" | "enviada" | "rechazo";
+export type RespuestaGuardada = Pick<RespuestaPendiente, AlaVistaDeRespuesta> & { sellado: Sellado };
+
+/** Hasta cuándo leyó el técnico el chat de un levantamiento (ADR-0040). Sin contenido: no se sella. */
+export interface LecturaDeChat {
+  tecnicoId: string;
+  levantamientoId: string;
+  leidoHasta: string;
 }
 
 /** Estado de negocio de un levantamiento propio según el servidor. Distinto del estado de envío. */
@@ -178,6 +266,10 @@ export interface BajadaLocal {
   permisoLocalHasta: string;
   /** El servidor rechazó la sesión y no hay orden de borrado: hay que iniciar sesión. */
   sesionVencida?: boolean | undefined;
+  /** La última época de la bajada que vio este teléfono (ADR-0038); sin ella, la primera se adopta sin reiniciar. */
+  epoca?: string | undefined;
+  /** Cambió la época y se baja todo de nuevo: al terminar, sale lo enviado que el servidor ya no conoce (ADR-0038). */
+  podar?: boolean | undefined;
 }
 
 /** Identidad del teléfono ante el servidor. El secreto autentica la consulta de órdenes de borrado. */

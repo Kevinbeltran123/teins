@@ -1,24 +1,25 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+import { nombreDelPdfDeInforme, piePagina, plantillaInforme, type HojaDelInforme } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
-import { bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
+import { aplicarSeleccion, bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
 import { claveDeObjeto, leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } from "../../plataforma/base-de-datos";
 import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
+import type { Actor } from "../../plataforma/actor";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Archivos } from "../archivos";
 import { registrar } from "../auditoria";
-import { cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, type MensajeDeInforme } from "../envios";
+import { cancelarEnvio, cancelarEnviosDeVersion, enviarAlQuedarListo, enviosDeVersiones, reanudarEnvio, fallarEnviosDeVersion, programarEnvios, versionesConEnvioSinEntregar, versionesConEnviosAtascados, type MensajeDeInforme } from "../envios";
 import type { Formatos } from "../formatos";
 import type { Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
 import type { Visitas } from "../visitas";
 import { fuenteIncrustada, imprimirPdf, PlanoIlegible } from "../../plataforma/pdf";
-import { piePagina, plantillaInforme, type HojaDelInforme } from "./pdf/plantilla";
 import { informes, versionesPublicadas, type EstadoPdf } from "./esquema";
 
 interface Dependencias {
@@ -27,7 +28,7 @@ interface Dependencias {
   config: Config;
   archivos: Pick<Archivos, "estados">;
   levantamientos: Pick<Levantamientos, "deVisita">;
-  visitas: Pick<Visitas, "existe" | "resumenes" | "clienteDe">;
+  visitas: Pick<Visitas, "existe" | "resumenes" | "clienteDe" | "canceladas">;
   identidad: Pick<Identidad, "nombres" | "nombreDeOrganizacion">;
   formatos: Pick<Formatos, "obtener">;
 }
@@ -41,13 +42,6 @@ export interface VersionVigente {
 
 /** La visita tal como quedó congelada en la versión: de la misma fila, sin otra consulta. */
 const visitaDeLaVersion = sql<ContenidoVersion["visita"]>`${versionesPublicadas.contenido} -> 'visita'`;
-
-/**
- * Nombre con que se guarda el PDF al descargarlo: quien lo recibe lo encuentra después en su carpeta de
- * descargas por el cliente, el sitio y la versión. Sin los caracteres que un sistema de archivos no admite.
- */
-const nombreDelPdf = (visita: { cliente: string; sitio: string }, numero: number) =>
-  `Informe ${visita.cliente} - ${visita.sitio} - versión ${numero}.pdf`.replace(/[/\\:*?"<>|]/g, "-");
 
 /**
  * Lo que el portal lee, siempre con la transacción del portal: la seguridad por fila ya restringe a
@@ -74,7 +68,7 @@ export const informesParaElPortal = {
       .where(eq(versionesPublicadas.informeId, informeId))
       .orderBy(desc(versionesPublicadas.numero))
       .limit(1);
-    return fila?.huella ? { numero: fila.numero, huella: fila.huella, nombre: nombreDelPdf(fila.visita, fila.numero) } : undefined;
+    return fila?.huella ? { numero: fila.numero, huella: fila.huella, nombre: nombreDelPdfDeInforme(fila.visita, fila.numero) } : undefined;
   },
 };
 
@@ -119,7 +113,7 @@ const mensajeDe = (c: ContenidoVersion): MensajeDeInforme => ({
   motivo: c.visita.motivo,
   programadaPara: c.visita.programadaPara,
   numero: c.numero,
-  nombreArchivo: nombreDelPdf(c.visita, c.numero),
+  nombreArchivo: nombreDelPdfDeInforme(c.visita, c.numero),
 });
 
 const invalido = (errores: ErrorInforme[]) => problema("informe_invalido", "El informe no cumple sus reglas", { erroresInforme: errores.map((e) => ({ ...e })) });
@@ -153,7 +147,7 @@ export function crearGeneradorPdf({ bd, almacenamiento, config }: Pick<Dependenc
         for (const p of c.planos) planos.push(await leerTodo(almacenamiento, claveDeObjeto(organizacionId, p.huella)));
 
         const pdf = await imprimirPdf({
-          html: plantillaInforme(c, { fuente: fuenteIncrustada(), fotos, bocetos, firmas }),
+          html: plantillaInforme(c, { salida: { tipo: "pdf", fuente: fuenteIncrustada() }, fotos, bocetos, firmas }),
           pie: piePagina(c),
           planos,
           metadatos: { titulo: `Informe técnico · ${c.visita.cliente} · versión ${c.numero}`, autor: c.organizacion.nombre, fecha: new Date(c.publicadaEn) },
@@ -239,6 +233,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               .from(versionesPublicadas)
               .where(isNull(versionesPublicadas.retiradaEn))
               .orderBy(desc(versionesPublicadas.numero));
+            const conVersiones = new Set((await tx.selectDistinct({ informeId: versionesPublicadas.informeId }).from(versionesPublicadas)).map((v) => v.informeId));
             const vigentes = new Map<string, { id: string; numero: number; pdf: EstadoPdf }>();
             for (const v of publicadas) if (!vigentes.has(v.informeId)) vigentes.set(v.informeId, v);
             const sinEntregar = await versionesConEnvioSinEntregar(tx, [...vigentes.values()].map((v) => v.id));
@@ -253,6 +248,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
                           id: f.id,
                           visita: { cliente: v.cliente.nombre, sitio: v.sitio.nombre, direccion: v.sitio.direccion, motivo: v.motivo, programadaPara: v.programadaPara },
                           vigente: vigentes.get(f.id)?.numero ?? null,
+                          todasRetiradas: !vigentes.has(f.id) && conVersiones.has(f.id),
                           pdf: vigentes.get(f.id)?.pdf ?? null,
                           envioSinEntregar: sinEntregar.has(vigentes.get(f.id)?.id ?? ""),
                         },
@@ -269,15 +265,19 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
         manejar: async ({ cuerpo: { visitaId }, actor }) =>
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
             if (!(await visitas.existe(tx, visitaId))) throw problema("no_encontrado", "La visita no existe");
-            // Uno por visita (P26, supuesto): abrir dos veces devuelve el mismo.
+            // Uno por visita (P26, supuesto): abrir dos veces devuelve el mismo. El de una visita cancelada se sigue
+            // consultando, pero una cancelada no abre uno nuevo.
+            const [existente] = await tx.select({ id: informes.id }).from(informes).where(eq(informes.visitaId, visitaId));
+            if (existente) return existente;
+            if ((await visitas.canceladas(tx, [visitaId])).has(visitaId)) throw problema("estado_invalido", "La visita está cancelada: no se abre un informe nuevo");
             const [creado] = await tx
               .insert(informes)
               .values({ id: randomUUID(), organizacionId: actor.organizacionId, visitaId })
               .onConflictDoNothing()
               .returning({ id: informes.id });
             if (creado) return creado;
-            const [existente] = await tx.select({ id: informes.id }).from(informes).where(eq(informes.visitaId, visitaId));
-            return existente!;
+            const [otro] = await tx.select({ id: informes.id }).from(informes).where(eq(informes.visitaId, visitaId));
+            return otro!;
           }),
       });
 
@@ -294,7 +294,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               if (!nombresDeFormato.has(k)) nombresDeFormato.set(k, (await formatos.obtener(tx, l.formato, l.versionFormato))?.nombre ?? l.formato);
             }
             const versiones = await versionesDe(tx, id);
-            return { informe, visita, lista, nombresDeFormato, versiones, clienteId: await visitas.clienteDe(tx, informe.visitaId), envios: await enviosDeVersiones(tx, versiones.map((v) => v.id)) };
+            return { informe, visita, lista, nombresDeFormato, versiones, clienteId: await visitas.clienteDe(tx, informe.visitaId), envios: await enviosDeVersiones(tx, versiones.map((v) => v.id), (ids) => identidad.nombres(actor.organizacionId, ids, tx)) };
           });
           if (!r.visita) throw problema("no_encontrado", "La visita del informe no existe");
           const nombres = await identidad.nombres(actor.organizacionId, [
@@ -310,6 +310,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             conclusiones: r.informe.conclusiones,
             levantamientos: r.informe.levantamientos,
             planos: r.informe.planos,
+            seleccion: { ocultos: [...r.informe.seleccion.ocultos], mostrados: [...r.informe.seleccion.mostrados] },
             candidatos: r.lista.map((l) => ({
               id: l.id,
               formato: r.nombresDeFormato.get(`${l.formato}@${l.versionFormato}`) ?? l.formato,
@@ -328,12 +329,19 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const informe = await leerInforme(tx, id);
             if (informe.version !== cuerpo.version) throw problema("conflicto_de_version", "Otra persona guardó este informe mientras usted lo tenía abierto", { versionActual: informe.version });
-            const borrador: BorradorInforme = { introduccion: cuerpo.introduccion, conclusiones: cuerpo.conclusiones, levantamientos: cuerpo.levantamientos, planos: cuerpo.planos };
+            // Una pestaña anterior al ADR-0039 no manda la selección: se conserva la guardada.
+            const borrador: BorradorInforme = { introduccion: cuerpo.introduccion, conclusiones: cuerpo.conclusiones, levantamientos: cuerpo.levantamientos, planos: cuerpo.planos, seleccion: cuerpo.seleccion ?? informe.seleccion };
             const errores = validarBorrador(informe.visitaId, borrador, (await candidatosDe(tx, informe.visitaId)).mapa);
             if (errores.length > 0) throw invalido(errores);
             const guardado = await tx
               .update(informes)
-              .set({ ...borrador, levantamientos: [...borrador.levantamientos], planos: [...borrador.planos], version: sql`${informes.version} + 1` })
+              .set({
+                ...borrador,
+                levantamientos: [...borrador.levantamientos],
+                planos: [...borrador.planos],
+                seleccion: { ocultos: [...borrador.seleccion.ocultos], mostrados: [...borrador.seleccion.mostrados] },
+                version: sql`${informes.version} + 1`,
+              })
               .where(and(eq(informes.id, id), eq(informes.version, cuerpo.version)))
               .returning({ version: informes.version });
             if (guardado.length === 0) throw problema("conflicto_de_version", "Otra persona guardó este informe mientras usted lo tenía abierto");
@@ -396,15 +404,21 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             for (const l of incluidos) {
               const formato = await formatos.obtener(tx, l.formato, l.versionFormato);
               if (!formato) throw problema("error_interno", "El formato de un levantamiento no existe");
-              contenido.levantamientos.push({
-                id: l.id,
-                formato,
-                tecnico: nombres.get(l.tecnicoId) ?? SIN_NOMBRE,
-                revisor: nombres.get(l.revisorId ?? "") ?? SIN_NOMBRE,
-                recibidoEn: l.recibidoEn.toISOString(),
-                respuestas: l.respuestas,
-                ...(Object.keys(l.repeticiones).length > 0 ? { repeticiones: l.repeticiones } : {}),
-              });
+              // Lo que oficina dejó fuera no entra en la copia (ADR-0039, regla 18): tampoco sus fotos en el PDF.
+              contenido.levantamientos.push(
+                aplicarSeleccion(
+                  {
+                    id: l.id,
+                    formato,
+                    tecnico: nombres.get(l.tecnicoId) ?? SIN_NOMBRE,
+                    revisor: nombres.get(l.revisorId ?? "") ?? SIN_NOMBRE,
+                    recibidoEn: l.recibidoEn.toISOString(),
+                    respuestas: l.respuestas,
+                    ...(Object.keys(l.repeticiones).length > 0 ? { repeticiones: l.repeticiones } : {}),
+                  },
+                  informe.seleccion,
+                ),
+              );
             }
 
             const versionId = randomUUID();
@@ -429,6 +443,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               mensaje: mensajeDe(contenido),
               destinos: cuerpo.destinatarios.map((contactoId) => ({ contactoId })),
               por: actor.usuarioId,
+              personal: cuerpo.mensaje,
             });
             // El PDF se genera en segundo plano, de a uno (ADR-0012); si la transacción se revierte, el trabajo no existe.
             await encolar(tx, "informes.generarPdf", { organizacionId: actor.organizacionId, versionId }, { cola: "pdf", llave: `informes.generarPdf:${versionId}` });
@@ -467,7 +482,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "version_retirada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero }, motivo: cuerpo.motivo },
             ]);
             const retirada = (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
-            return { ...retirada, envios: (await enviosDeVersiones(tx, [retirada.id])).get(retirada.id) };
+            return { ...retirada, envios: (await enviosDeVersiones(tx, [retirada.id], (ids) => identidad.nombres(actor.organizacionId, ids, tx))).get(retirada.id) };
           });
           const nombres = await identidad.nombres(actor.organizacionId, [version.publicadaPor, actor.usuarioId]);
           return comoVersion(version, nombres, version.envios);
@@ -496,6 +511,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               mensaje: mensajeDe(fila.contenido),
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
+              personal: cuerpo.mensaje,
               pdfRuta: fila.pdfEstado === "listo" && fila.pdfHuella ? claveDeObjeto(actor.organizacionId, fila.pdfHuella) : undefined,
               llave: cuerpo.llave,
             });
@@ -506,12 +522,49 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               ]);
             }
             const actual = (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
-            return { ...actual, envios: (await enviosDeVersiones(tx, [actual.id])).get(actual.id) };
+            return { ...actual, envios: (await enviosDeVersiones(tx, [actual.id], (ids) => identidad.nombres(actor.organizacionId, ids, tx))).get(actual.id) };
           });
           const nombres = await identidad.nombres(actor.organizacionId, [version.publicadaPor, ...(version.retiradaPor ? [version.retiradaPor] : [])]);
           return comoVersion(version, nombres, version.envios);
         },
       });
+
+      /**
+       * Cancelar o reanudar un envío en cola (ADR-0034). La versión queda bloqueada, como al enviar: si el PDF queda
+       * listo al mismo tiempo, uno espera al otro y lo reanudado sale con él.
+       */
+      const corregirEnvio = (accion: "cancelar" | "reanudar") =>
+        async ({ parametros: { id, numero, envio }, actor, correlacion }: { parametros: { id: string; numero: number; envio: string }; actor: Actor; correlacion: string }) => {
+          const version = await enOrganizacion(bd, actor.organizacionId, async (tx) => {
+            const [fila] = await tx
+              .select()
+              .from(versionesPublicadas)
+              .where(and(eq(versionesPublicadas.informeId, id), eq(versionesPublicadas.numero, numero)))
+              .for("update");
+            if (!fila) throw problema("no_encontrado", "La versión no existe");
+            if (accion === "cancelar") {
+              const resultado = await cancelarEnvio(tx, { versionId: fila.id, envioId: envio, por: actor.usuarioId });
+              if (resultado === "no_existe") throw problema("no_encontrado", "El envío no existe");
+              if (resultado === "ya_salio") throw problema("estado_invalido", "El envío ya salió: lo enviado no se recupera");
+              if (resultado === "ya_cancelado") throw problema("estado_invalido", "El envío ya estaba cancelado");
+            } else {
+              // Lo retirado no se vuelve a entregar (regla 10), y sin PDF no hay qué adjuntar.
+              if (fila.retiradaEn) throw problema("estado_invalido", "La versión está retirada del portal: no se puede reanudar el envío");
+              if (fila.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
+              const pdfRuta = fila.pdfEstado === "listo" && fila.pdfHuella ? claveDeObjeto(actor.organizacionId, fila.pdfHuella) : undefined;
+              if (!(await reanudarEnvio(tx, { organizacionId: actor.organizacionId, versionId: fila.id, envioId: envio, pdfRuta }))) throw problema("estado_invalido", "El envío no estaba cancelado");
+            }
+            await registrar(tx, [
+              { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: accion === "cancelar" ? "envio_cancelado" : "envio_reanudado", autorId: actor.usuarioId, correlacion, valorNuevo: { numero, envio } },
+            ]);
+            const actual = (await versionesDe(tx, id)).find((v) => v.numero === numero)!;
+            return { ...actual, envios: (await enviosDeVersiones(tx, [actual.id], (ids) => identidad.nombres(actor.organizacionId, ids, tx))).get(actual.id) };
+          });
+          const nombres = await identidad.nombres(actor.organizacionId, [version.publicadaPor, ...(version.retiradaPor ? [version.retiradaPor] : [])]);
+          return comoVersion(version, nombres, version.envios);
+        };
+      registrarOperacion(app, "cancelarEnvio", { politica: politicas.oficina, manejar: corregirEnvio("cancelar") });
+      registrarOperacion(app, "reanudarEnvio", { politica: politicas.oficina, manejar: corregirEnvio("reanudar") });
 
       registrarOperacion(app, "pdfDeVersion", {
         politica: politicas.oficina,
@@ -525,10 +578,31 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
           if (!version) throw problema("no_encontrado");
           if (version.estado !== "listo" || !version.huella) throw problema("estado_invalido", "El PDF de esta versión todavía no está listo");
           // Se descarga, no se abre: la aplicación de oficina no pierde la pantalla.
-          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(actor.organizacionId, version.huella), { descargarComo: nombreDelPdf(version.visita, numero) });
+          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(actor.organizacionId, version.huella), { descargarComo: nombreDelPdfDeInforme(version.visita, numero) });
           return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
         },
       });
     },
   };
+}
+
+/**
+ * Lo que quedó a medias hace más de `antesDe` (ADR-0043) vuelve a la cola con la misma llave: el PDF que sigue
+ * «generando» y, si ya está listo, los envíos que siguen «en cola». Lo retirado no se recupera.
+ */
+export async function recuperarInformesAtascados(tx: TxOrganizacion, organizacionId: string, antesDe: Date): Promise<number> {
+  const generando = await tx
+    .select({ id: versionesPublicadas.id })
+    .from(versionesPublicadas)
+    .where(and(eq(versionesPublicadas.pdfEstado, "generando"), lt(versionesPublicadas.publicadaEn, antesDe), isNull(versionesPublicadas.retiradaEn)));
+  for (const { id } of generando) await encolar(tx, "informes.generarPdf", { organizacionId, versionId: id }, { cola: "pdf", llave: `informes.generarPdf:${id}` });
+  const conEnvios = await versionesConEnviosAtascados(tx, antesDe);
+  const listas = conEnvios.length
+    ? await tx
+        .select({ id: versionesPublicadas.id, huella: versionesPublicadas.pdfHuella })
+        .from(versionesPublicadas)
+        .where(and(inArray(versionesPublicadas.id, conEnvios), eq(versionesPublicadas.pdfEstado, "listo"), isNull(versionesPublicadas.retiradaEn)))
+    : [];
+  for (const { id, huella } of listas) if (huella) await enviarAlQuedarListo(tx, { organizacionId, versionId: id, pdfRuta: claveDeObjeto(organizacionId, huella) });
+  return generando.length + listas.length;
 }

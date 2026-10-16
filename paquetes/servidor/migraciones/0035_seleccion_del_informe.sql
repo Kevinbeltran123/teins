@@ -1,0 +1,1 @@
+ALTER TABLE "informes"."informes" ADD COLUMN "seleccion" jsonb DEFAULT '{"ocultos":[],"mostrados":[]}'::jsonb NOT NULL;

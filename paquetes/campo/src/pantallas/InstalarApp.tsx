@@ -49,7 +49,7 @@ export function GuiaDeInstalacion() {
 
   if (plataforma() === "iphone") {
     return (
-      <ol aria-label="Pasos para instalar" className="flex flex-col rounded-panel bg-panel">
+      <ol aria-label="Pasos para instalar" className="flex flex-col rounded-panel border border-division bg-panel">
         <Paso
           numero={1}
           titulo={
@@ -89,7 +89,7 @@ export function GuiaDeInstalacion() {
     );
   }
   return (
-    <ol aria-label="Pasos para instalar" className="flex flex-col rounded-panel bg-panel">
+    <ol aria-label="Pasos para instalar" className="flex flex-col rounded-panel border border-division bg-panel">
       <Paso numero={1} titulo="Abre el menú del navegador" ayuda="Los tres puntos, arriba o abajo de la pantalla." />
       <Paso numero={2} titulo="Elige “Instalar app” o “Agregar a pantalla principal”" ayuda="El nombre cambia según el navegador." />
       {Abrir}

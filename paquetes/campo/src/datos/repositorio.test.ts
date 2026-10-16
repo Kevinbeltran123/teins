@@ -1,10 +1,11 @@
 import "fake-indexeddb/auto";
 import Dexie from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
-import { bocetoVacio, crearLevantamiento, type VersionFormato } from "@teins/dominio";
+import { bocetoVacio, claveDeRepeticion, crearLevantamiento, LIMITES_BOCETO, type VersionFormato } from "@teins/dominio";
 import { almacenDexie } from "../sincronizacion/almacen";
 import { abrirBase, nuevoIdDeRepeticion, repositorioDexie } from "./dexie";
-import type { ArchivoNuevo } from "./repositorio";
+import { sellarVisita } from "./registros";
+import { VisitaConOtroBorrador, type ArchivoNuevo } from "./repositorio";
 
 // Formato ficticio (R5).
 const formato: VersionFormato = {
@@ -332,7 +333,7 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
 
     const v2 = abrirBase(nombre);
     bases.push(v2);
-    expect(v2.verno).toBe(6);
+    expect(v2.verno).toBe(7);
     expect(await v2.levantamientos.get("l1")).toEqual(borrador);
     const archivos = await v2.archivos.toArray();
     expect(archivos.map((a) => [a.id, a.subida, new Uint8Array(a.datos)[0]])).toEqual([
@@ -357,12 +358,292 @@ describe("migración del almacenamiento local (ADR-0004, QA-22)", () => {
 
     const v3 = abrirBase(nombre);
     bases.push(v3);
-    expect(v3.verno).toBe(6);
+    expect(v3.verno).toBe(7);
     expect(await v3.levantamientos.get("l1")).toEqual(borrador);
     expect(await v3.envios.get("l2")).toEqual(envio);
     expect((await v3.formatos.toArray()).map((f) => `${f.formato}@${f.version}`)).toEqual(["prueba-ups@1", "prueba-ups@2"]);
     const bajada = await v3.bajadas.get("t1");
     expect(bajada).toMatchObject({ puntoDeControl: 0 });
     expect(Date.parse(bajada!.permisoLocalHasta) - Date.now()).toBeGreaterThan(6.9 * 86_400_000);
+  });
+
+  it("la versión 7 solo agrega las tablas del chat: lo de la 6 sigue igual (iteración 39)", async () => {
+    const nombre = nombreNuevo();
+    const borrador = { ...crearLevantamiento(formato, "l1", ahora), tecnicoId: "t1" };
+    const envio = { levantamientoId: "l2", tecnicoId: "t1", estado: "pendiente" as const, intentos: 1, proximoIntentoEn: 0, creadoEn: ahora.toISOString() };
+    // La base de la app 13: la misma definición sin la versión 7.
+    const anterior = new Dexie(nombre);
+    anterior.version(6).stores({
+      levantamientos: "id, estado, actualizadoEn, tecnicoId",
+      archivos: "id, subida, cifrado",
+      envios: "levantamientoId, estado, tecnicoId",
+      ajustes: "clave",
+      formatos: "[formato+version], formato",
+      visitas: "[tecnicoId+id], tecnicoId",
+      estadosServidor: "id, tecnicoId",
+      bajadas: "tecnicoId",
+      claves: "tecnicoId",
+      catalogo: "id",
+      simbolos: "id",
+    });
+    await anterior.table("levantamientos").add(borrador);
+    await anterior.table("envios").add(envio);
+    anterior.close();
+
+    const v7 = abrirBase(nombre);
+    bases.push(v7);
+    expect(v7.verno).toBe(7);
+    expect(await v7.levantamientos.get("l1")).toEqual(borrador);
+    expect(await v7.envios.get("l2")).toEqual(envio);
+    expect(await v7.respuestasPendientes.count()).toBe(0);
+    expect(await v7.lecturasDeChat.count()).toBe(0);
+  });
+});
+
+describe("descartar un borrador (ADR-0035)", () => {
+  it("sale de Mis visitas, queda en la papelera y se recupera tal como estaba", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const id = "0192f0e0-0000-7000-8000-000000000500";
+    await repo.crear(crearLevantamiento(formato, id, ahora, "0192f0e0-0000-7000-8000-000000000501"), "t1");
+    await repo.guardarRespuesta(id, "s", "t", "Cuarto de prueba", ahora);
+    await repo.agregarFoto(id, "s", "fotos", archivo(h("a")), ahora);
+
+    await repo.descartar(id, despues);
+    expect(await repo.listar("t1")).toEqual([]);
+    expect((await repo.descartados("t1")).map((l) => [l.id, l.descartadoEn])).toEqual([[id, despues.toISOString()]]);
+
+    expect(await repo.recuperar(id)).toEqual({ suelto: false });
+    const [recuperado] = await repo.listar("t1");
+    expect(recuperado).toMatchObject({ id, respuestas: { s: { t: "Cuarto de prueba", fotos: [h("a")] } } });
+    expect(recuperado!.descartadoEn).toBeUndefined();
+    expect(await repo.descartados("t1")).toEqual([]);
+  });
+
+  it("un levantamiento enviado no se descarta", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const id = "0192f0e0-0000-7000-8000-000000000510";
+    const sinObligatorios: VersionFormato = { ...formato, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "t", etiqueta: "T", tipo: "texto" }] }] };
+    await repo.crear(crearLevantamiento(sinObligatorios, id, ahora), "t1");
+    expect((await repo.enviar(id, sinObligatorios, despues)).ok).toBe(true);
+    await expect(repo.descartar(id, despues)).rejects.toThrow();
+  });
+
+  it("uno enviado que oficina rechazó para siempre sí se descarta; se recupera con su envío y la papelera se lo lleva con él", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const id = "0192f0e0-0000-7000-8000-000000000515";
+    const sinObligatorios: VersionFormato = { ...formato, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "t", etiqueta: "T", tipo: "texto" }] }] };
+    await repo.crear(crearLevantamiento(sinObligatorios, id, ahora), "t1");
+    expect((await repo.enviar(id, sinObligatorios, ahora)).ok).toBe(true);
+    await db.envios.update(id, { estado: "error", ultimoError: { codigo: "conflicto", mensaje: "Ya lo envió otra persona" } });
+
+    await repo.descartar(id, ahora);
+    expect(await repo.listar("t1")).toEqual([]);
+    await repo.recuperar(id);
+    expect((await db.envios.get(id))?.estado).toBe("error");
+
+    await repo.descartar(id, ahora);
+    expect(await repo.vaciarPapelera(new Date("2026-10-25T10:00:00.000Z"))).toBe(1);
+    // Sin el levantamiento, su envío no queda huérfano contando como «por enviar».
+    expect(await db.envios.get(id)).toBeUndefined();
+  });
+
+  it("si la visita ya tiene otro borrador, vuelve como suelto", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const visita = "0192f0e0-0000-7000-8000-000000000521";
+    const [primero, segundo] = ["0192f0e0-0000-7000-8000-000000000522", "0192f0e0-0000-7000-8000-000000000523"];
+    await repo.crear(crearLevantamiento(formato, primero, ahora, visita), "t1");
+    await repo.descartar(primero, ahora);
+    await repo.crear(crearLevantamiento(formato, segundo, ahora, visita), "t1");
+    expect(await repo.recuperar(primero)).toEqual({ suelto: true });
+    expect((await repo.obtener(primero))!.visitaId).toBeUndefined();
+    expect((await repo.obtener(segundo))!.visitaId).toBe(visita);
+  });
+
+  it("a los 30 días se borra con sus fotos, salvo las que usa otro levantamiento", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const [viejo, reciente, otro] = ["0192f0e0-0000-7000-8000-000000000530", "0192f0e0-0000-7000-8000-000000000531", "0192f0e0-0000-7000-8000-000000000532"];
+    for (const id of [viejo, reciente, otro]) await repo.crear(crearLevantamiento(formato, id, ahora), "t1");
+    await repo.agregarFoto(viejo, "s", "fotos", archivo(h("b")), ahora);
+    await repo.agregarFoto(viejo, "s", "fotos", archivo(h("c")), ahora);
+    await repo.agregarFoto(otro, "s", "fotos", archivo(h("c")), ahora);
+    await repo.descartar(viejo, ahora);
+    await repo.descartar(reciente, new Date("2026-10-20T10:00:00.000Z"));
+
+    expect(await repo.vaciarPapelera(new Date("2026-10-23T10:00:00.000Z"))).toBe(0);
+    expect(await repo.vaciarPapelera(new Date("2026-10-25T10:00:00.000Z"))).toBe(1);
+    expect(await repo.obtener(viejo)).toBeUndefined();
+    expect((await repo.descartados("t1")).map((l) => l.id)).toEqual([reciente]);
+    // La foto que solo usaba el viejo se borró; la que también usa otro, no.
+    expect((await repo.obtenerArchivos([h("b"), h("c")])).map((a) => a.id)).toEqual([h("c")]);
+  });
+});
+
+describe("copias viejas y escrituras tardías (iteración 42)", () => {
+  const conTableros: VersionFormato = {
+    ...formato,
+    appMinima: 4,
+    secciones: [{ clave: "tableros", titulo: "Tableros", repetible: { etiqueta: "Tablero", min: 0, max: 3 }, campos: [{ clave: "t", etiqueta: "T", tipo: "texto", obligatorio: true }, { clave: "fotos", etiqueta: "F", tipo: "foto" }] }],
+  };
+
+  it("lo que llega tarde a un tablero quitado no lo revive ni deja su foto en el teléfono", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const id = "0192f0e0-0000-7000-8000-000000000901";
+    await repo.crear(crearLevantamiento(conTableros, id, ahora, undefined, nuevoIdDeRepeticion), "t1");
+    await repo.agregarRepeticion(id, conTableros, "tableros", despues);
+    const tablero = (await repo.obtener(id))!.repeticiones!.tableros![0]!;
+    await repo.quitarRepeticion(id, "tableros", tablero.id, despues);
+    const rev = (await db.levantamientos.get(id))!.rev;
+
+    // Un «Deshacer» de foto o de «No se pudo obtener», o una foto que terminaba de procesarse.
+    const clave = claveDeRepeticion("tableros", tablero.id);
+    await repo.agregarFoto(id, clave, "fotos", archivo(h("9")), despues);
+    await repo.guardarRespuesta(id, clave, "t", "Sótano", despues);
+    expect((await repo.obtener(id))!.respuestas).toEqual({});
+    expect(await db.archivos.get(h("9"))).toBeUndefined();
+    expect((await db.levantamientos.get(id))!.rev).toBe(rev);
+    expect((await repo.enviar(id, conTableros, despues)).ok).toBe(true);
+  });
+
+  it("al enviar quita las respuestas de tableros que ya no existen: un borrador atascado antes de la iteración 42 sale", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const id = "0192f0e0-0000-7000-8000-000000000902";
+    const base = crearLevantamiento(conTableros, id, ahora, undefined, nuevoIdDeRepeticion);
+    await repo.crear({ ...base, respuestas: { [claveDeRepeticion("tableros", "quitad01")]: { t: "Piso 2" } } }, "t1");
+    expect((await repo.enviar(id, conTableros, despues)).ok).toBe(true);
+    const [envio] = await almacenDexie(db).enviosListos(Number.MAX_SAFE_INTEGER, "t1");
+    expect(envio?.comando.levantamiento.respuestas).toEqual({});
+    expect((await repo.obtener(id))!.respuestas).toEqual({});
+  });
+
+  it("al enviar quita los caracteres nulos, que el servidor no guarda", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
+    await repo.guardarRespuesta("l1", "s", "t", "Cuarto\u0000 norte", ahora);
+    expect((await repo.enviar("l1", formato, despues)).ok).toBe(true);
+    const [envio] = await almacenDexie(db).enviosListos(Number.MAX_SAFE_INTEGER, "t1");
+    expect(envio?.comando.levantamiento.respuestas).toEqual({ s: { t: "Cuarto norte" } });
+  });
+
+  it("un boceto que pesa más de lo que recibe el servidor no sale: el error dice cuál, y sigue en borrador", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const conCroquis: VersionFormato = { ...formato, appMinima: 5, secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "croquis", etiqueta: "Croquis", tipo: "boceto" }] }] };
+    await repo.crear(crearLevantamiento(conCroquis, "l1", ahora), "t1");
+    // Un archivo de boceto del tamaño que el servidor rechaza, guardado como lo deja el editor.
+    await db.archivos.add({ id: h("8"), datos: new ArrayBuffer(LIMITES_BOCETO.bytes + 1), tipo: "application/vnd.teins.boceto+json", creadoEn: ahora.toISOString(), subida: "pendiente" });
+    await repo.guardarRespuesta("l1", "s", "croquis", { boceto: h("8") }, ahora);
+    expect(await repo.enviar("l1", conCroquis, despues)).toEqual({ ok: false, motivo: "respuestas_invalidas", errores: [{ seccion: "s", campo: "croquis", codigo: "archivo_muy_grande" }] });
+    expect((await repo.obtener("l1"))?.estado).toBe("borrador");
+    expect(await db.envios.count()).toBe(0);
+  });
+
+  it("un envío que oficina rechazó para siempre vuelve a borrador, sale de la cola y se puede corregir (ADR-0045)", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
+    await repo.guardarRespuesta("l1", "s", "t", "listo", ahora);
+    expect((await repo.enviar("l1", formato, despues)).ok).toBe(true);
+    // Mientras no está en error (va en camino o llegó), no vuelve.
+    await expect(repo.volverABorrador("l1")).rejects.toThrow();
+    await db.envios.update("l1", { estado: "error", ultimoError: { codigo: "entrada_invalida", mensaje: "" } });
+
+    await repo.volverABorrador("l1");
+    const l = (await repo.obtener("l1"))!;
+    expect(l.estado).toBe("borrador");
+    expect(l.enviadoEn).toBeUndefined();
+    expect(await db.envios.get("l1")).toBeUndefined();
+    await repo.guardarRespuesta("l1", "s", "t", "corregido", despues);
+    expect((await repo.enviar("l1", formato, despues)).ok).toBe(true);
+  });
+
+  it("no vuelve a borrador si su visita ya tiene otro borrador: uno quedaría escondido", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    await repo.crear(crearLevantamiento(formato, "l1", ahora, "v1"), "t1");
+    await repo.guardarRespuesta("l1", "s", "t", "listo", ahora);
+    await repo.enviar("l1", formato, despues);
+    await db.envios.update("l1", { estado: "error" });
+    // La visita quedó atendida y el técnico empezó otro levantamiento en ella.
+    await repo.crear(crearLevantamiento(formato, "l2", ahora, "v1"), "t1");
+    await expect(repo.volverABorrador("l1")).rejects.toBeInstanceOf(VisitaConOtroBorrador);
+    // Descartado el otro, ya puede.
+    await repo.descartar("l2", despues);
+    await repo.volverABorrador("l1");
+    expect((await repo.obtener("l1"))?.estado).toBe("borrador");
+  });
+
+  it("reemplazar un boceto no borra el documento que otro campo del mismo levantamiento todavía usa", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const dosCroquis: VersionFormato = {
+      ...formato,
+      appMinima: 5,
+      secciones: [{ clave: "s", titulo: "S", campos: [{ clave: "a", etiqueta: "A", tipo: "boceto" }, { clave: "b", etiqueta: "B", tipo: "boceto" }] }],
+    };
+    await repo.crear(crearLevantamiento(dosCroquis, "l1", ahora), "t1");
+    const linea = (x: number) => ({ ...bocetoVacio(), elementos: [{ tipo: "linea" as const, grosor: 3, desde: [0, 0] as const, hasta: [x, 0] as const }] });
+    // El mismo dibujo en los dos campos: el mismo archivo.
+    await repo.guardarBoceto("l1", "s", "a", linea(100), ahora);
+    await repo.guardarBoceto("l1", "s", "b", linea(100), ahora);
+    const compartido = ((await repo.obtener("l1"))!.respuestas.s!.b as { boceto: string }).boceto;
+    await repo.guardarBoceto("l1", "s", "a", linea(200), despues);
+    expect(await repo.obtenerBoceto(compartido)).toEqual(linea(100));
+  });
+
+  it("lo que oficina ya recibió no vuelve a borrador aunque su envío haya quedado en error", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
+    await repo.guardarRespuesta("l1", "s", "t", "listo", ahora);
+    await repo.enviar("l1", formato, despues);
+    await db.envios.update("l1", { estado: "error" });
+    await db.estadosServidor.put({ id: "l1", tecnicoId: "t1", estado: "enviado", recibidoEn: despues.toISOString() });
+    await expect(repo.volverABorrador("l1")).rejects.toThrow();
+    expect((await repo.obtener("l1"))?.estado).toBe("enviado");
+  });
+
+  it("al abrir la app borra los archivos que nada usa, de nadie; lo de la papelera y de otras personas se queda", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const id = "0192f0e0-0000-7000-8000-000000000903";
+    await repo.crear(crearLevantamiento(conTableros, id, ahora, undefined, nuevoIdDeRepeticion), "t1");
+    await repo.agregarRepeticion(id, conTableros, "tableros", despues);
+    const tablero = (await repo.obtener(id))!.repeticiones!.tableros![0]!;
+    await repo.agregarFoto(id, claveDeRepeticion("tableros", tablero.id), "fotos", archivo(h("1")), despues);
+    await repo.quitarRepeticion(id, "tableros", tablero.id, despues);
+    await repo.crear(crearLevantamiento(formato, "l2", ahora), "t2");
+    await repo.agregarFoto("l2", "s", "fotos", archivo(h("2")), despues);
+    await repo.crear(crearLevantamiento(formato, "l3", ahora), "t1");
+    await repo.agregarFoto("l3", "s", "fotos", archivo(h("3")), despues);
+    await repo.descartar("l3", despues);
+
+    expect(await repo.limpiarArchivosSinUso()).toBe(1);
+    expect((await db.archivos.toCollection().primaryKeys()).sort()).toEqual([h("2"), h("3")]);
+  });
+
+  it("guarda sellado el cliente y el sitio de su visita; al enviar los copia si el borrador no los traía", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const lugar = { cliente: "Cliente ficticio", sitio: "Sede norte" };
+    await repo.crear(crearLevantamiento(formato, "l1", ahora, "v1"), "t1", lugar);
+    expect((await repo.obtener("l1"))?.lugar).toEqual(lugar);
+    // Va sellado (ADR-0022): a la vista no queda el nombre del cliente.
+    expect(JSON.stringify(await db.levantamientos.get("l1"))).not.toContain("Cliente ficticio");
+
+    // Un borrador de antes de la iteración 42, sin lugar: al enviarlo se toma de su visita.
+    const visita = { id: "v1", tecnicoId: "t1", cliente: { nombre: "Cliente ficticio" }, sitio: { nombre: "Sede sur", direccion: "Calle [N]" }, motivo: "Mantenimiento", programadaPara: "2026-09-24" };
+    await db.visitas.put(await sellarVisita(db, visita));
+    await repo.crear(crearLevantamiento(formato, "l2", ahora, "v1"), "t1");
+    await repo.guardarRespuesta("l2", "s", "t", "listo", ahora);
+    expect((await repo.enviar("l2", formato, despues)).ok).toBe(true);
+    expect((await repo.obtener("l2"))?.lugar).toEqual({ cliente: "Cliente ficticio", sitio: "Sede sur" });
   });
 });

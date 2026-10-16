@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validarBorrador, validarParaPublicar, type BorradorInforme, type LevantamientoParaInforme } from "./informe";
+import { SELECCION_VACIA } from "./seleccion";
 
 const visita = "v1";
 const h = (c: string) => c.repeat(64);
@@ -8,7 +9,7 @@ const levantamientos = new Map<string, LevantamientoParaInforme>([
   ["b", { id: "b", visitaId: "v1", estado: "en_revision" }],
   ["c", { id: "c", visitaId: "v2", estado: "revisado" }],
 ]);
-const borrador = (extra: Partial<BorradorInforme> = {}): BorradorInforme => ({ introduccion: "", conclusiones: "", levantamientos: ["a"], planos: [], ...extra });
+const borrador = (extra: Partial<BorradorInforme> = {}): BorradorInforme => ({ introduccion: "", conclusiones: "", levantamientos: ["a"], planos: [], seleccion: SELECCION_VACIA, ...extra });
 
 describe("borrador del informe (regla 9)", () => {
   it("acepta levantamientos revisados de su visita y planos PDF con nombre", () => {

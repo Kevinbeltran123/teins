@@ -29,6 +29,12 @@
         ],
         "createdAt": "2026-09-30T02:50:49.913Z",
         "reason": "Claude: static detector pairs the dark-theme page gray (#9ba1ad) with the light-theme panel (#ffffff); they never render together"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-10-01T17:43:02.455Z",
+        "reason": "Kevin approved Geist as the single font of the Precisión base visual on 2026-09-29 (DESIGN.md, Tipografía); the PDF must use the same face as the UI"
       }
     ]
   }

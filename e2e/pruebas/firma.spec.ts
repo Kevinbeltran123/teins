@@ -35,22 +35,26 @@ test("firma del cliente: quien recibe la visita firma la constancia en el teléf
   await irAlPaso(page, "Firma del cliente");
   await page.getByRole("button", { name: "Entregar el teléfono" }).click();
   const hoja = page.getByRole("dialog", { name: "Constancia de visita" });
-  await hoja.getByRole("button", { name: "Ya lo tiene" }).click();
+  // Una sola pantalla (iteración 34): a quién confirma, la declaración, el nombre y el recuadro.
+  await expect(hoja.getByRole("heading", { name: `Confirme la visita de ${tecnico.nombre}` })).toBeVisible();
+  await expect(hoja.getByText(`Constancia de visita · ${cliente}`)).toBeVisible();
   await expect(hoja.getByText(`Confirmo que ${tecnico.nombre}, de TEINS, visitó ${cliente} · Sede E2E el`)).toBeVisible();
   // Sin nombre ni firma, dice qué falta.
   await hoja.getByRole("button", { name: "Firmar" }).click();
   await expect(hoja.getByText("Escriba su nombre.")).toBeVisible();
   await expect(hoja.getByText("Firme en el recuadro.")).toBeVisible();
-  await hoja.getByRole("textbox", { name: "Nombre de quien firma" }).fill("Martha Gómez");
+  await hoja.getByRole("textbox", { name: "Su nombre" }).fill("Martha Gómez");
   await hoja.getByRole("textbox", { name: "Cargo (opcional)" }).fill("Jefe de mantenimiento");
   await firmar(page, [[0.1, 0.7], [0.25, 0.5], [0.45, 0.75], [0.65, 0.55], [0.9, 0.7]]);
   await hoja.getByRole("button", { name: "Firmar" }).click();
   await expect(hoja).toHaveCount(0);
   await expect(page.getByRole("img", { name: "Firma de Martha Gómez" })).toBeVisible();
-  await expect(page.getByText("Martha Gómez · Jefe de mantenimiento")).toBeVisible();
+  const constancia = page.getByRole("region", { name: "Constancia firmada" });
+  await expect(constancia.getByText("Martha Gómez", { exact: true })).toBeVisible();
+  await expect(constancia.getByText(`Jefe de mantenimiento · ${cliente}`)).toBeVisible();
 
   // Volver a firmar pide confirmar; cancelar deja la firma.
-  await page.getByRole("button", { name: "Volver a firmar" }).click();
+  await constancia.getByRole("button", { name: "Repetir" }).click();
   await page.getByRole("dialog", { name: "¿Volver a firmar?" }).getByRole("button", { name: "Cancelar" }).click();
   await expect(page.getByRole("img", { name: "Firma de Martha Gómez" })).toBeVisible();
 
