@@ -1,11 +1,11 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { comando, nuevaVisitaConCliente, nuevoUsuario, ORGANIZACION, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
+import { filaDeLaBandeja, fotoDePrueba, guardadoSolo, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
 
 /*
-  Robustez de oficina: un técnico desactivado no traba una visita, un conflicto no se repite al reintentar y lo
-  escrito en la revisión no se pierde sin aviso.
+  Robustez de oficina: un técnico desactivado no traba una visita, un conflicto no se repite al reintentar, lo
+  escrito en la revisión no se pierde sin aviso y lo que se abre muestra lo de ahora, no una copia vieja.
 */
 
 const abiertos: BrowserContext[] = [];
@@ -132,11 +132,20 @@ test("lo escrito en la revisión sigue ahí al cambiar de pestaña o de globo, y
   await o.getByRole("tab", { name: /^Comentarios/ }).click();
   const comentarios = o.getByRole("region", { name: "Comentarios al técnico" });
   await comentarios.getByRole("textbox", { name: "Comentario general" }).fill("Conversación para responder (E2E)");
-  await comentarios.getByRole("button", { name: "Enviar comentario" }).click();
+  // Lo que se escribe mientras se envía el anterior se queda cuando este llega: el envío se demora a propósito.
+  const enviarComentario = comentarios.getByRole("button", { name: "Enviar comentario" });
+  await o.route("**/api/levantamientos/*/comentarios", async (ruta) => {
+    await new Promise((listo) => setTimeout(listo, 1_500));
+    await ruta.continue();
+  });
+  await enviarComentario.click();
+  await comentarios.getByRole("textbox", { name: "Comentario general" }).fill("Comentario general a medias (E2E)");
   const general = comentarios.getByRole("region", { name: "Conversación general" });
   await expect(general.getByText("Conversación para responder (E2E)")).toBeVisible();
+  await expect(enviarComentario).not.toHaveAttribute("aria-busy");
+  await o.unroute("**/api/levantamientos/*/comentarios");
+  await expect(comentarios.getByRole("textbox", { name: "Comentario general" })).toHaveValue("Comentario general a medias (E2E)");
   await general.getByRole("textbox", { name: `Responder a ${tecnico.nombre}` }).fill("Respuesta a medias (E2E)");
-  await comentarios.getByRole("textbox", { name: "Comentario general" }).fill("Comentario general a medias (E2E)");
   await o.getByRole("tab", { name: "Historial" }).click();
   await o.getByRole("tab", { name: /^Comentarios/ }).click();
   await expect(general.getByRole("textbox", { name: `Responder a ${tecnico.nombre}` })).toHaveValue("Respuesta a medias (E2E)");
@@ -203,4 +212,101 @@ test("apagar WhatsApp a un contacto no borra su autorización: al encenderlo otr
   await edicion.getByRole("checkbox", { name: "WhatsApp", exact: true }).check();
   await expect(edicion.getByRole("checkbox", { name: /autorizó recibir el informe por WhatsApp/ })).toBeChecked();
   await expect(edicion.getByText(/^Lo confirmó /)).toBeVisible();
+});
+
+/** Abre en la búsqueda (⌘K / Ctrl + K) lo que coincide con el texto, con su botón del menú. */
+async function buscarYAbrir(o: Page, texto: string, grupo: string) {
+  await o.getByRole("button", { name: "Buscar" }).click();
+  const busqueda = o.getByRole("dialog", { name: "Buscar en oficina" });
+  await busqueda.getByRole("combobox").fill(texto);
+  await expect(busqueda.getByRole("group", { name: grupo }).getByRole("option").first()).toContainText(texto);
+  await o.keyboard.press("Enter");
+  await expect(busqueda).toHaveCount(0);
+}
+
+test("pasar de un informe a otro desde la búsqueda abre el otro sin lo escrito en el primero; Atrás vuelve con lo suyo", async ({ browser }) => {
+  const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
+  const primera = nuevaVisitaConCliente(tecnico);
+  const segunda = nuevaVisitaConCliente(tecnico);
+  const o = await oficina(browser, nuevoUsuario("oficina", "oficina"));
+  // Informes vacíos bastan: lo que se prueba es cambiar de uno a otro sin recargar la página.
+  const abrirInforme = async (visitaId: string) => {
+    const r = await o.request.post(`${OFICINA}/api/informes`, { data: { visitaId }, headers: { origin: OFICINA } });
+    expect(r.ok()).toBe(true);
+    return ((await r.json()) as { id: string }).id;
+  };
+  await abrirInforme(primera.visitaId);
+  // El segundo queda leído en la página: al volver a él no hay esqueleto de carga que monte la pantalla de nuevo.
+  await o.goto(`${OFICINA}/informes/${await abrirInforme(segunda.visitaId)}`);
+  await expect(o.getByRole("heading", { name: `Informe de ${segunda.cliente}` })).toBeVisible();
+  await buscarYAbrir(o, `Informe de ${primera.cliente}`, "Informes");
+  await expect(o.getByRole("heading", { name: `Informe de ${primera.cliente}` })).toBeVisible();
+  const introduccion = o.getByRole("textbox", { name: "Introducción" });
+  await introduccion.fill("Solo del primer informe");
+  await guardadoSolo(o);
+
+  await buscarYAbrir(o, `Informe de ${segunda.cliente}`, "Informes");
+  await expect(o.getByRole("heading", { name: `Informe de ${segunda.cliente}` })).toBeVisible();
+  await expect(introduccion).toHaveValue("");
+  await o.goBack();
+  await expect(o.getByRole("heading", { name: `Informe de ${primera.cliente}` })).toBeVisible();
+  await expect(introduccion).toHaveValue("Solo del primer informe");
+});
+
+test("lo reciente de la búsqueda se ve como está ahora: el cliente que otra persona corrigió sale con su nombre nuevo", async ({ browser }) => {
+  const { cliente, clienteId } = nuevaVisitaConCliente(nuevoUsuario("tecnico", "tecnico.e2e"));
+  const o = await oficina(browser, nuevoUsuario("oficina", "oficina"));
+  await o.goto(`${OFICINA}/clientes/${clienteId}`);
+  await expect(o.getByRole("heading", { name: cliente, exact: true })).toBeVisible();
+  await o.getByRole("link", { name: "Levantamientos" }).click();
+
+  const otra = await oficina(browser, nuevoUsuario("oficina", "oficina"));
+  await otra.goto(`${OFICINA}/clientes/${clienteId}`);
+  await otra.getByRole("button", { name: "Editar", exact: true }).click();
+  await otra.getByLabel("Nombre del cliente").fill(`${cliente} corregido`);
+  await otra.getByRole("button", { name: "Guardar cambios" }).click();
+  await expect(otra.getByRole("heading", { name: `${cliente} corregido`, exact: true })).toBeVisible();
+
+  await o.getByRole("button", { name: "Buscar" }).click();
+  const recientes = o.getByRole("dialog", { name: "Buscar en oficina" }).getByRole("group", { name: "Recientes" });
+  await expect(recientes.getByRole("option").first()).toContainText(`${cliente} corregido`);
+});
+
+test("el formulario que abrió la búsqueda no se vuelve a abrir al regresar con Atrás ni al recargar", async ({ browser }) => {
+  const o = await oficina(browser, nuevoUsuario("oficina", "oficina"));
+  await buscarYAbrir(o, "Programar visita", "Acciones");
+  const programar = o.getByRole("dialog", { name: /Programar visita/ });
+  await expect(programar).toBeVisible();
+  await o.keyboard.press("Escape");
+  await expect(programar).toHaveCount(0);
+
+  await o.getByRole("link", { name: "Clientes" }).click();
+  await expect(o.getByRole("heading", { name: "Clientes" })).toBeVisible();
+  await o.goBack();
+  await expect(o.getByRole("heading", { name: "Visitas" })).toBeVisible();
+  // Lo pedido se atendía al montar la pantalla: se espera a que haya tenido tiempo de abrirse.
+  await o.waitForTimeout(1_000);
+  await expect(programar).toHaveCount(0);
+  await o.reload();
+  await expect(o.getByRole("heading", { name: "Visitas" })).toBeVisible();
+  await o.waitForTimeout(1_000);
+  await expect(programar).toHaveCount(0);
+});
+
+test("«Ver en Canceladas» lleva a la visita cancelada también después de salir de Visitas", async ({ browser }) => {
+  const { cliente } = nuevaVisitaConCliente(nuevoUsuario("tecnico", "tecnico.e2e"));
+  const o = await oficina(browser, nuevoUsuario("oficina", "oficina"));
+  await o.getByRole("link", { name: "Visitas" }).click();
+  const fila = o.getByRole("row").filter({ hasText: cliente });
+  await fila.getByRole("button", { name: `Más acciones para la visita de ${cliente}` }).click();
+  await o.getByRole("menuitem", { name: "Cancelar visita" }).click();
+  await o.getByLabel("Motivo de la cancelación").fill("Aplazada por el cliente (E2E)");
+  await o.getByRole("dialog").getByRole("button", { name: "Cancelar visita" }).click();
+  await expect(fila).toHaveCount(0);
+
+  await o.getByRole("link", { name: "Clientes" }).click();
+  await expect(o.getByRole("heading", { name: "Clientes" })).toBeVisible();
+  await o.getByRole("button", { name: "Ver en Canceladas" }).click();
+  await expect(o.getByRole("tab", { name: /Canceladas/, selected: true })).toBeVisible();
+  await expect(fila.getByText("Aplazada por el cliente (E2E)", { exact: false })).toBeVisible();
 });

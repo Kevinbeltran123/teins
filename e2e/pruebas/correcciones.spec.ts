@@ -79,7 +79,10 @@ test("oficina corrige un cliente: lo renombra, archiva un sitio, no archiva con 
   await expect(archivado.getByText(persona.nombre, { exact: false })).toBeVisible();
   await archivado.getByRole("button", { name: "Recuperar" }).click();
   await expect(archivado).toHaveCount(0);
-  await o.getByRole("tab", { name: /Activos/ }).click();
+  // «Ver en Activos» lleva a la lista también si ya se salió de Clientes (iteración 42).
+  await o.getByRole("link", { name: "Visitas" }).click();
+  await o.getByRole("button", { name: "Ver en Activos" }).click();
+  await expect(o.getByRole("tab", { name: /Activos/, selected: true })).toBeVisible();
   await expect(o.getByRole("row").filter({ hasText: nombre })).toBeVisible();
   await contexto.close();
 });

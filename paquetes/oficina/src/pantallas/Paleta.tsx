@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import type { Respuesta } from "@teins/protocolo";
 import { Building, CalendarDays, ClipboardCheck, Clock, etiquetaEnter, FileText, Keyboard, Package, Receipt, Search, useModal, useNotificar, UserRound, type LucideIcon } from "@teins/ui";
-import { cliente, consultas } from "../api";
+import { cliente, consultas, REFRESCO_BANDEJA_MS } from "../api";
 import { resultadosDeBusqueda, type Resultado } from "../busqueda";
 import { consultasDeCotizaciones } from "../cotizaciones";
 import { esTexto, unoDe, usePreferencia } from "../preferencias";
@@ -43,6 +44,14 @@ const SECCIONES: [string, "/" | "/visitas" | "/clientes" | "/catalogo" | "/infor
 const ICONO: Record<Resultado["tipo"], LucideIcon> = { accion: Clock, ir: Package, cliente: Building, visita: CalendarDays, levantamiento: ClipboardCheck, informe: FileText, cotizacion: Receipt };
 const iconoDe = (r: Resultado): LucideIcon =>
   r.tipo === "accion" ? ({ programar: CalendarDays, "nuevo-cliente": Building, "nueva-cotizacion": Receipt, tomar: ClipboardCheck, atajos: Keyboard } as Record<string, LucideIcon>)[r.id] ?? Clock : r.tipo === "ir" ? ({ "/": ClipboardCheck, "/visitas": CalendarDays, "/clientes": Building, "/catalogo": Package, "/informes": FileText, "/cotizaciones": Receipt, "/cuenta": UserRound } as Record<string, LucideIcon>)[r.id] ?? Package : ICONO[r.tipo];
+
+/** Un levantamiento, como se ve entre lo reciente: dónde, quién y en qué estado está. */
+export const recienteDeLevantamiento = (l: Respuesta<"obtenerLevantamiento">): Resultado => ({
+  tipo: "levantamiento",
+  id: l.id,
+  titulo: l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : `Levantamiento de ${l.tecnico.nombre}`,
+  detalle: `${l.tecnico.nombre} · ${ESTADO_TEXTO[l.estado]}`,
+});
 
 const esResultado = (v: unknown): v is Resultado => typeof v === "object" && v !== null && typeof (v as Resultado).id === "string" && typeof (v as Resultado).titulo === "string";
 const esRecientes = (v: unknown): v is Resultado[] => Array.isArray(v) && v.every(esResultado);
@@ -95,12 +104,25 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
     staleTime: 15_000,
   });
 
+  const deClientes = (clientes.data?.clientes ?? []).map((c): Resultado => ({ tipo: "cliente", id: c.id, titulo: c.nombre, detalle: c.sitios.length === 1 ? "1 sitio" : `${c.sitios.length} sitios` }));
+  const deVisitas = (visitas.data?.visitas ?? []).map((v): Resultado => ({ tipo: "visita", id: v.id, titulo: `${v.cliente.nombre} · ${v.sitio.nombre}`, detalle: `${dia(v.programadaPara)} · ${v.motivo} · ${v.tecnicos.map((t) => t.nombre).join(", ")}` }));
+  const deInformes = (informes.data?.elementos ?? []).map((i): Resultado => ({ tipo: "informe", id: i.id, titulo: `Informe de ${i.visita.cliente}`, detalle: `${i.visita.sitio} · ${i.vigente ? `versión ${i.vigente} vigente` : "sin publicar"}` }));
+  const deCotizaciones = (cotizaciones.data?.cotizaciones ?? []).map((c): Resultado => ({ tipo: "cotizacion", id: c.id, titulo: c.numero, detalle: `${c.visita.cliente} · ${c.visita.sitio}` }));
+  // Lo reciente se ve como está ahora, con el nombre corregido o el estado de hoy (iteración 42): de las mismas listas, y
+  // cada levantamiento con su detalle. Lo que ya no está en ellas (un cliente archivado) queda como se anotó.
+  const levantamientosRecientes = useQueries({
+    queries: recientes.filter((r) => r.tipo === "levantamiento").map((r) => ({ ...consultas.levantamiento(r.id), staleTime: REFRESCO_BANDEJA_MS })),
+  });
+  const vigentes = new Map(
+    [...deClientes, ...deVisitas, ...deInformes, ...deCotizaciones, ...levantamientosRecientes.flatMap((q) => (q.data ? [recienteDeLevantamiento(q.data)] : []))].map((r) => [`${r.tipo}:${r.id}`, r]),
+  );
+
   const grupos = resultadosDeBusqueda(texto, {
-    recientes,
+    recientes: recientes.map((r) => vigentes.get(`${r.tipo}:${r.id}`) ?? r),
     acciones: [...ACCIONES, ...(masAntiguo ? [TOMAR] : []), ATAJOS],
     secciones: SECCIONES.map(([titulo, a]) => ({ tipo: "ir", id: a, titulo })),
-    clientes: (clientes.data?.clientes ?? []).map((c) => ({ tipo: "cliente", id: c.id, titulo: c.nombre, detalle: c.sitios.length === 1 ? "1 sitio" : `${c.sitios.length} sitios` })),
-    visitas: (visitas.data?.visitas ?? []).map((v) => ({ tipo: "visita", id: v.id, titulo: `${v.cliente.nombre} · ${v.sitio.nombre}`, detalle: `${dia(v.programadaPara)} · ${v.motivo} · ${v.tecnicos.map((t) => t.nombre).join(", ")}` })),
+    clientes: deClientes,
+    visitas: deVisitas,
     // Mientras llega la búsqueda nueva, nada: los de la anterior no coinciden con lo escrito.
     levantamientos:
       buscar && buscar === texto.trim()
@@ -108,8 +130,8 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
             p.elementos.map((l) => ({ tipo: "levantamiento" as const, id: l.id, titulo: l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : `Levantamiento de ${l.tecnico.nombre}`, detalle: `${l.nombreFormato ?? l.formato} · ${l.tecnico.nombre} · ${ESTADO_TEXTO[ESTADOS[i]!]}` })),
           )
         : [],
-    informes: (informes.data?.elementos ?? []).map((i) => ({ tipo: "informe", id: i.id, titulo: `Informe de ${i.visita.cliente}`, detalle: `${i.visita.sitio} · ${i.vigente ? `versión ${i.vigente} vigente` : "sin publicar"}` })),
-    cotizaciones: (cotizaciones.data?.cotizaciones ?? []).map((c) => ({ tipo: "cotizacion", id: c.id, titulo: c.numero, detalle: `${c.visita.cliente} · ${c.visita.sitio}` })),
+    informes: deInformes,
+    cotizaciones: deCotizaciones,
   });
   const planos = grupos.flatMap((g) => g.resultados);
   const actual = Math.min(activo, Math.max(planos.length - 1, 0));

@@ -80,7 +80,7 @@ import { BotonMostrarVista, EditorConVista, Lienzo, useVistaPrevia, VistaDeDocum
 import type { Plantillas } from "../documentos";
 import { esTexto, unoDe, usePreferencia } from "../preferencias";
 import { useTeclaSuelta } from "../atajos";
-import { useAnotarReciente } from "./Paleta";
+import { recienteDeLevantamiento, useAnotarReciente } from "./Paleta";
 
 type Levantamiento = Respuesta<"obtenerLevantamiento">;
 type Historial = Respuesta<"historialLevantamiento">;
@@ -162,16 +162,24 @@ const sinEnviarDe = (levantamientoId: string) => {
 };
 const hayCorreccionAbierta = (pendientes: Iterable<Pendiente>) => [...pendientes].some((p) => p.que.tipo === "correccion");
 
-/** Un texto de la revisión que sigue ahí si su campo se desmonta y vuelve a montarse. */
-function useSinEnviar<T>(que: Escrito, inicial: T): [T, (valor: T) => void] {
+/**
+ * Un texto de la revisión que sigue ahí si su campo se desmonta y vuelve a montarse. El tercero vacía lo enviado al
+ * llegar, solo si el campo sigue diciendo eso: lo que se escribió mientras se enviaba se queda (iteración 42).
+ */
+function useSinEnviar<T>(que: Escrito, inicial: T): [T, (valor: T) => void, (enviado: T) => void] {
   const pendientes = useContext(SinEnviar);
   const clave = JSON.stringify(que);
   const [valor, setValor] = useState<T>(() => (pendientes?.has(clave) ? (pendientes.get(clave)!.valor as T) : inicial));
+  const ultimo = useRef(valor);
   const poner = (nuevo: T) => {
+    ultimo.current = nuevo;
     setValor(nuevo);
     pendientes?.set(clave, { que, valor: nuevo });
   };
-  return [valor, poner];
+  const vaciarSiSigue = (enviado: T) => {
+    if ((pendientes ? pendientes.get(clave)?.valor : ultimo.current) === enviado) poner(inicial);
+  };
+  return [valor, poner, vaciarSiSigue];
 }
 
 /** La última corrección de cada dato y su valor original, para mostrar antes y después en la fila. */
@@ -238,7 +246,7 @@ export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined })
   const [, setUltima] = usePreferencia("bandeja-ultima", "", esTexto, "pestana");
   useEffect(() => setUltima(id), [id, setUltima]);
   const abierto = consulta.data;
-  useAnotarReciente(abierto ? { tipo: "levantamiento", id, titulo: abierto.visita ? `${abierto.visita.cliente} · ${abierto.visita.sitio}` : `Levantamiento de ${abierto.tecnico.nombre}`, detalle: `${abierto.tecnico.nombre} · ${{ enviado: "esperando revisión", en_revision: "en revisión", revisado: "revisado" }[abierto.estado]}` } : null);
+  useAnotarReciente(abierto ? recienteDeLevantamiento(abierto) : null);
   // Esc vuelve a la bandeja, con la fila de este levantamiento marcada (iteración 37).
   const volver = useNavigate();
   const [enCurso, setEnCurso] = useState<EnCurso | null>(null);
@@ -1218,7 +1226,7 @@ function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: 
   }
   // Solo lo recién llegado entra animado; lo demás no se anima otra vez al volver a la pestaña.
   const esNuevo = useLoNuevo(l.comentarios.map((c) => c.id));
-  const [texto, setTexto] = useSinEnviar({ tipo: "general" }, "");
+  const [texto, setTexto, vaciarSiSigue] = useSinEnviar({ tipo: "general" }, "");
   const raices = l.comentarios.filter((c) => !c.enRespuestaA);
 
   function irALaFila(seccion: string, campo: string) {
@@ -1241,10 +1249,11 @@ function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: 
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    if (!texto.trim()) return;
+    const enviado = texto;
+    if (!enviado.trim()) return;
     try {
-      await comentar.mutateAsync({ texto: texto.trim() });
-      setTexto("");
+      await comentar.mutateAsync({ texto: enviado.trim() });
+      vaciarSiSigue(enviado);
     } catch {
       // El error queda a la vista.
     }
@@ -1398,13 +1407,14 @@ function Comentarios({ l, usuarioId, enfocado }: { l: Levantamiento; usuarioId: 
 function ResponderEnHilo({ l, raiz, sobre }: { l: Levantamiento; raiz: ComentarioDeOficina; sobre: string | undefined }) {
   const comentar = useComentar(l.id);
   // La respuesta a medias sigue ahí al cambiar de pestaña, ocultar el panel o cerrar la hoja lateral.
-  const [texto, setTexto] = useSinEnviar({ tipo: "respuesta", comentarioId: raiz.id }, "");
+  const [texto, setTexto, vaciarSiSigue] = useSinEnviar({ tipo: "respuesta", comentarioId: raiz.id }, "");
   const vacio = !texto.trim();
   async function enviar() {
     if (vacio || comentar.isPending) return;
+    const enviado = texto;
     try {
-      await comentar.mutateAsync({ texto: texto.trim(), enRespuestaA: raiz.id });
-      setTexto("");
+      await comentar.mutateAsync({ texto: enviado.trim(), enRespuestaA: raiz.id });
+      vaciarSiSigue(enviado);
     } catch {
       // El error queda a la vista.
     }

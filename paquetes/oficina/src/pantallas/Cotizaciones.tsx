@@ -1,10 +1,11 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, coincide, Dialogo, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, Insignia, Marcado, PieLista, Plus, Receipt, RefreshCw, SinResultados, Tabla } from "@teins/ui";
 import { cliente } from "../api";
 import { consultasDeCotizaciones, mensajeDeCotizacion } from "../cotizaciones";
 import { aDiaCorto, pesos } from "../formato";
+import { usePedido } from "../pedido";
 import { useBusquedaRecordada } from "../preferencias";
 
 const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
@@ -14,10 +15,9 @@ export function Cotizaciones() {
   const consulta = useQuery(consultasDeCotizaciones.lista());
   const [creando, setCreando] = useState(false);
   // «Nueva cotización» desde la búsqueda (⌘K / Ctrl + K) llega con el formulario abierto.
-  const pedido = useLocation({ select: (l) => l.state.abrir });
-  useEffect(() => {
+  usePedido("abrir", (pedido) => {
     if (pedido === "nueva") setCreando(true);
-  }, [pedido]);
+  });
   const [busqueda, setBusqueda] = useBusquedaRecordada("cotizaciones");
   const todas = consulta.data?.cotizaciones ?? [];
   const lista = todas.filter((c) => coincide(busqueda, c.numero, c.visita.cliente, c.visita.sitio));

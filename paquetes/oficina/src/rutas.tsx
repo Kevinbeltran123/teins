@@ -226,5 +226,7 @@ declare module "@tanstack/react-router" {
     vista?: "activos" | "archivados";
     /** Lo que se pidió desde la búsqueda (⌘K / Ctrl + K): la pantalla abre ese formulario (iteración 37). */
     abrir?: "programar" | "nuevo" | "nueva";
+    /** La visita que pidió ver un aviso ("Ver en Canceladas"): Visitas abre en su pestaña y la resalta. */
+    mostrarVisita?: { vista: "proximas" | "anteriores" | "canceladas"; id: string };
   }
 }

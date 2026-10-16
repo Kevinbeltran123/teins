@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ErrorApi, ErrorDeRed, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
@@ -48,6 +48,7 @@ import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, sinError } from "../mensajes";
 import { cambiosAlReasignar, consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
 import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../horario";
+import { usePedido } from "../pedido";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
 import { enLista } from "./Envios";
 import { CuandoVisita, resumenDeHorario, TecnicosDisponibles } from "./HorarioDeVisita";
@@ -108,10 +109,9 @@ export function Visitas() {
   const [busqueda, setBusqueda] = useBusquedaRecordada("visitas");
   const [programando, setProgramando] = useState(false);
   // «Programar visita» desde la búsqueda (⌘K / Ctrl + K) llega con el formulario abierto.
-  const pedido = useLocation({ select: (l) => l.state.abrir });
-  useEffect(() => {
+  usePedido("abrir", (pedido) => {
     if (pedido === "programar") setProgramando(true);
-  }, [pedido]);
+  });
   const [edicion, setEdicion] = useState<Edicion | null>(null);
   const [recientes, setRecientes] = useState<string[]>([]);
   // Lo que no se pudo hacer desde una fila («Abrir el informe»): encima de la lista, como en el catálogo.
@@ -119,6 +119,7 @@ export function Visitas() {
   // En otra pestaña la fila del aviso ya no está a la vista: el aviso se va con ella (iteración 42).
   useEffect(() => setErrorFila(null), [vista]);
   const notificar = useNotificar();
+  const navegar = useNavigate();
   const hoy = hoyLocal();
   const consulta = useQuery(consultasDeProgramacion.visitas(vista, hoy));
   const proximas = useQuery(consultasDeProgramacion.visitas("proximas", hoy));
@@ -136,6 +137,8 @@ export function Visitas() {
       setBusqueda("");
       destacar(id);
     });
+  // «Ver en Canceladas» llega aquí también si ya se salió de Visitas: el aviso dura 10 s y sigue a la vista.
+  usePedido("mostrarVisita", (pedido) => mostrarEn(pedido.vista, pedido.id));
 
   const todas = consulta.data?.visitas ?? [];
   const filtradas = todas.filter((v) => coincide(busqueda, v.cliente.nombre, v.sitio.nombre, v.sitio.direccion, ...v.tecnicos.map((t) => t.nombre)));
@@ -289,7 +292,7 @@ export function Visitas() {
           alCerrar={cerrarEdicion}
           alCancelar={() => {
             const id = edicion.v.id;
-            notificar({ texto: `Visita cancelada: ${edicion.v.cliente.nombre}`, accion: { texto: "Ver en Canceladas", alHacer: () => mostrarEn("canceladas", id) } });
+            notificar({ texto: `Visita cancelada: ${edicion.v.cliente.nombre}`, accion: { texto: "Ver en Canceladas", alHacer: () => void navegar({ to: "/visitas", state: { mostrarVisita: { vista: "canceladas", id } } }) } });
           }}
         />
       )}

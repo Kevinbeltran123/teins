@@ -1,6 +1,6 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import {
   Aviso,
@@ -31,6 +31,7 @@ import { cliente } from "../api";
 import { aFechaCorta } from "../formato";
 import { sinError } from "../mensajes";
 import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
+import { usePedido } from "../pedido";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
 import { useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
 
@@ -39,13 +40,10 @@ type Cliente = Respuesta<"listarClientes">["clientes"][number];
 const normalizar = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 export function Clientes() {
-  // Activos o archivados (ADR-0035); "Ver en Archivados" al archivar uno llega con esa pestaña.
-  const pedida = useLocation({ select: (l) => l.state.vista });
+  // Activos o archivados (ADR-0035); "Ver en Archivados" o "Ver en Activos" desde un aviso llega con esa pestaña, también
+  // con la pantalla ya abierta: la pestaña pedida manda.
   const [vista, setVista] = usePreferencia<"activos" | "archivados">("clientes-pestana", "activos", unoDe("activos", "archivados"));
-  // "Ver en Archivados" desde el aviso llega con la pantalla ya abierta: la pestaña pedida manda.
-  useEffect(() => {
-    if (pedida) setVista(pedida);
-  }, [pedida, setVista]);
+  usePedido("vista", setVista);
   const consulta = useQuery(consultasDeProgramacion.clientes(vista));
   const otra = useQuery(consultasDeProgramacion.clientes(vista === "activos" ? "archivados" : "activos"));
   const cantidad = (v: "activos" | "archivados") => (v === vista ? consulta.data : otra.data)?.clientes.length;
@@ -54,10 +52,9 @@ export function Clientes() {
   const notificar = useNotificar();
   const [creando, setCreando] = useState(false);
   // «Nuevo cliente» desde la búsqueda (⌘K / Ctrl + K) llega con el formulario abierto.
-  const pedidoAbrir = useLocation({ select: (l) => l.state.abrir });
-  useEffect(() => {
-    if (pedidoAbrir === "nuevo") setCreando(true);
-  }, [pedidoAbrir]);
+  usePedido("abrir", (pedido) => {
+    if (pedido === "nuevo") setCreando(true);
+  });
   const [agregandoA, setAgregandoA] = useState<Cliente | null>(null);
   // Lo creado o cambiado en esta visita a la pantalla: va primero y resaltado (DESIGN.md, crear y editar).
   const [recientes, setRecientes] = useState<string[]>([]);
@@ -176,7 +173,7 @@ export function Clientes() {
                         onClick={() => {
                           setErrorRecuperar(null);
                           recuperar.mutate(c, {
-                            onSuccess: () => notificar({ texto: `${c.nombre} recuperado`, accion: { texto: "Ver en Activos", alHacer: () => setVista("activos") } }),
+                            onSuccess: () => notificar({ texto: `${c.nombre} recuperado`, accion: { texto: "Ver en Activos", alHacer: () => void navegar({ to: "/clientes", state: { vista: "activos" } }) } }),
                             onError: (e) => setErrorRecuperar(mensajeDeCliente(e)),
                           });
                         }}
