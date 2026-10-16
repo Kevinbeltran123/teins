@@ -16,7 +16,7 @@ const InstalarApp = lazy(() => import("./pantallas/InstalarApp"));
 // La captura no hace falta para abrir la app: se carga aparte, apenas se abre el inicio, para que abrir una visita no
 // pase por una pantalla de carga (iteración 27). El service worker la guarda con todo lo demás, así que abre igual
 // sin conexión (ADR-0011).
-type PropsCaptura = { id: string; volver: () => void; alMostrar?: () => void; alDescartar?: () => void; conversacion?: boolean };
+type PropsCaptura = { id: string; volver: () => void; alMostrar?: () => void; alDescartar?: () => void; conversacion?: boolean; pedirSesion?: () => void };
 let moduloCaptura: Promise<ComponentType<PropsCaptura>> | undefined;
 // Si la carga falla (sin red y sin la versión en caché), se olvida: el siguiente toque la intenta de nuevo (iteración 42).
 const cargarCaptura = () =>
@@ -165,6 +165,7 @@ export function App() {
         id={abierto}
         conversacion={conChat}
         volver={volver}
+        pedirSesion={() => setPidiendoSesion(true)}
         alMostrar={() => mostrada.current?.()}
         alDescartar={() => {
           void conTransicion(() => {

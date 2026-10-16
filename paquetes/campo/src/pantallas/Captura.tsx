@@ -145,11 +145,14 @@ export function Captura({
   alMostrar,
   alDescartar,
   conversacion = false,
+  pedirSesion,
 }: {
   id: string;
   volver: () => void;
   /** Abrir de una vez el chat con oficina: lo pidió un aviso (ADR-0040). */
   conversacion?: boolean;
+  /** Con la captura bloqueada y la sesión vencida, conectarse no basta: se inicia sesión desde aquí (iteración 42). */
+  pedirSesion?: () => void;
   /** Ya se ve lo del levantamiento (no el esqueleto): la tarjeta del inicio puede convertirse en la cabecera. */
   alMostrar?: () => void;
   /** Se descartó el borrador (ADR-0035): quien abrió la captura vuelve al inicio y lo dice. */
@@ -170,11 +173,13 @@ export function Captura({
     return l?.visitaId && l.tecnicoId ? visitaDe(db, l.tecnicoId, l.visitaId) : null;
   }, [id]);
   // Vencido el permiso de trabajo local, el borrador se ve pero no se edita (ADR-0009, parte 2).
-  const bloqueado = useLiveQuery(async () => {
+  const permiso = useLiveQuery(async () => {
     const l = await repositorio.obtener(id);
     const bajada = l?.tecnicoId ? await db.bajadas.get(l.tecnicoId) : undefined;
-    return bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
+    if (!bajada || Date.parse(bajada.permisoLocalHasta) >= Date.now()) return "vigente";
+    return bajada.sesionVencida ? "vencido_sin_sesion" : "vencido";
   }, [id]);
+  const bloqueado = permiso === undefined ? undefined : permiso !== "vigente";
   // Los campos leen los valores una sola vez; después solo escriben (ver CampoTexto).
   const [inicial, setInicial] = useState<LevantamientoLocal>();
   useEffect(() => {
@@ -282,7 +287,16 @@ export function Captura({
           <Enviado levantamiento={levantamiento} formato={formato} envio={envio} servidor={servidor ?? null} volver={volver} estadoChat={estadoChat} alDescartar={alDescartar ?? volver} />
         ) : bloqueado ? (
           <>
-            <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>
+            {permiso === "vencido_sin_sesion" && pedirSesion ? (
+              <Aviso tono="alerta">
+                <p>Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: inicia sesión para seguir.</p>
+                <Boton className="mt-3 w-full" onClick={pedirSesion}>
+                  Iniciar sesión
+                </Boton>
+              </Aviso>
+            ) : (
+              <Aviso tono="alerta">Pasó demasiado tiempo sin conexión y la captura quedó bloqueada por seguridad. Nada se borró: conéctate para seguir.</Aviso>
+            )}
             <Enviado levantamiento={levantamiento} formato={formato} envio={null} servidor={null} volver={volver} estadoChat={estadoChat} alDescartar={alDescartar ?? volver} />
           </>
         ) : (
