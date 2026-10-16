@@ -94,7 +94,7 @@ jobs:
     needs: calidad
     runs-on: ubuntu-latest
     # Un navegador por trabajo, en paralelo: los dos juntos ya pasaban de los 30 minutos (iteración 42).
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
