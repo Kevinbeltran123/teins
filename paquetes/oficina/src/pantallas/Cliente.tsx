@@ -37,6 +37,7 @@ import {
 import { cliente } from "../api";
 import { aFechaHora } from "../formato";
 import { sinError } from "../mensajes";
+import { useIrConPedido } from "../pedido";
 import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
 import { AgregarSitio } from "./Clientes";
 import { celularLegible, useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
@@ -67,6 +68,7 @@ export function DetalleCliente({ id }: { id: string }) {
   const [editandoSitio, setEditandoSitio] = useState<Sitio | null>(null);
   const [archivandoSitio, setArchivandoSitio] = useState<Sitio | null>(null);
   const navegar = useNavigate();
+  const irConPedido = useIrConPedido();
   const recuperar = useAccionDeProgramacion(() => cliente.llamar("recuperarCliente", { parametros: { id } }));
   const recuperarSitio = useAccionDeProgramacion((sitioId: string) => cliente.llamar("recuperarSitio", { parametros: { id, sitioId } }));
   // «Deshacer» al archivar un sitio lo recupera una sola vez: si ya se recuperó desde su fila, no hace nada.
@@ -306,7 +308,7 @@ export function DetalleCliente({ id }: { id: string }) {
           alCerrar={() => setArchivando(false)}
           alArchivar={() => {
             void navegar({ to: "/clientes" });
-            notificar({ texto: `${detalle.nombre} archivado`, accion: { texto: "Ver en Archivados", alHacer: () => void navegar({ to: "/clientes", state: { vista: "archivados" } }) } });
+            notificar({ texto: `${detalle.nombre} archivado`, accion: { texto: "Ver en Archivados", alHacer: () => void irConPedido("/clientes", { vista: "archivados" }) } });
           }}
         />
       )}

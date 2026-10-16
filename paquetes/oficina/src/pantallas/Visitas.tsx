@@ -48,7 +48,7 @@ import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, sinError } from "../mensajes";
 import { cambiosAlReasignar, consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
 import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../horario";
-import { usePedido } from "../pedido";
+import { useIrConPedido, usePedido } from "../pedido";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
 import { enLista } from "./Envios";
 import { CuandoVisita, resumenDeHorario, TecnicosDisponibles } from "./HorarioDeVisita";
@@ -119,7 +119,7 @@ export function Visitas() {
   // En otra pestaña la fila del aviso ya no está a la vista: el aviso se va con ella (iteración 42).
   useEffect(() => setErrorFila(null), [vista]);
   const notificar = useNotificar();
-  const navegar = useNavigate();
+  const irConPedido = useIrConPedido();
   const hoy = hoyLocal();
   const consulta = useQuery(consultasDeProgramacion.visitas(vista, hoy));
   const proximas = useQuery(consultasDeProgramacion.visitas("proximas", hoy));
@@ -257,7 +257,7 @@ export function Visitas() {
             setProgramando(false);
             if (vista === "proximas") destacar(v.id);
             else mostrarEn("proximas", v.id);
-            notificar({ texto: `Visita programada: ${v.cliente}, ${dia(v.programadaPara)}${v.horaInicio ? `, ${hora12(v.horaInicio)}` : ""}`, accion: { texto: "Programar otra", alHacer: () => setProgramando(true) } });
+            notificar({ texto: `Visita programada: ${v.cliente}, ${dia(v.programadaPara)}${v.horaInicio ? `, ${hora12(v.horaInicio)}` : ""}`, accion: { texto: "Programar otra", alHacer: () => void irConPedido("/visitas", { abrir: "programar" }) } });
           }}
         />
       )}
@@ -292,7 +292,7 @@ export function Visitas() {
           alCerrar={cerrarEdicion}
           alCancelar={() => {
             const id = edicion.v.id;
-            notificar({ texto: `Visita cancelada: ${edicion.v.cliente.nombre}`, accion: { texto: "Ver en Canceladas", alHacer: () => void navegar({ to: "/visitas", state: { mostrarVisita: { vista: "canceladas", id } } }) } });
+            notificar({ texto: `Visita cancelada: ${edicion.v.cliente.nombre}`, accion: { texto: "Ver en Canceladas", alHacer: () => void irConPedido("/visitas", { mostrarVisita: { vista: "canceladas", id } }) } });
           }}
         />
       )}

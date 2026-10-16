@@ -31,7 +31,7 @@ import { cliente } from "../api";
 import { aFechaCorta } from "../formato";
 import { sinError } from "../mensajes";
 import { consultasDeProgramacion, mensajeDeCliente, mensajeDeProgramacion, useAccionDeProgramacion } from "../programacion";
-import { usePedido } from "../pedido";
+import { useIrConPedido, usePedido } from "../pedido";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
 import { useCamposDeContacto, type ErroresDeContacto } from "./CamposDeContacto";
 
@@ -61,6 +61,7 @@ export function Clientes() {
   const [busqueda, setBusqueda] = useBusquedaRecordada("clientes");
   const destacar = (id: string) => setRecientes((r) => [id, ...r.filter((x) => x !== id)]);
   const navegar = useNavigate();
+  const irConPedido = useIrConPedido();
 
   const todos = consulta.data?.clientes ?? [];
   // Lo que llega después de abrir la pantalla (lo recién creado) entra primero y resaltado, en la misma transición;
@@ -173,7 +174,7 @@ export function Clientes() {
                         onClick={() => {
                           setErrorRecuperar(null);
                           recuperar.mutate(c, {
-                            onSuccess: () => notificar({ texto: `${c.nombre} recuperado`, accion: { texto: "Ver en Activos", alHacer: () => void navegar({ to: "/clientes", state: { vista: "activos" } }) } }),
+                            onSuccess: () => notificar({ texto: `${c.nombre} recuperado`, accion: { texto: "Ver en Activos", alHacer: () => void irConPedido("/clientes", { vista: "activos" }) } }),
                             onError: (e) => setErrorRecuperar(mensajeDeCliente(e)),
                           });
                         }}

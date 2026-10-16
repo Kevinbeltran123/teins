@@ -6,6 +6,7 @@ import { Building, CalendarDays, ClipboardCheck, Clock, etiquetaEnter, FileText,
 import { cliente, consultas, REFRESCO_BANDEJA_MS } from "../api";
 import { resultadosDeBusqueda, type Resultado } from "../busqueda";
 import { consultasDeCotizaciones } from "../cotizaciones";
+import { useIrConPedido } from "../pedido";
 import { esTexto, unoDe, usePreferencia } from "../preferencias";
 import { consultasDeProgramacion, hoyLocal } from "../programacion";
 import { mensajeDeError } from "../mensajes";
@@ -81,6 +82,7 @@ export function useAnotarReciente(r: Resultado | null) {
 export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerAtajos: () => void }) {
   const modal = useModal(true, alCerrar);
   const navegar = useNavigate();
+  const irConPedido = useIrConPedido();
   const idLista = useId();
   const [texto, setTexto] = useState("");
   const [activo, setActivo] = useState(0);
@@ -162,9 +164,9 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
       case "ir":
         return navegar({ to: SECCIONES.find(([, a]) => a === r.id)?.[1] ?? "/" });
       case "accion":
-        if (r.id === "programar") return navegar({ to: "/visitas", state: { abrir: "programar" } });
-        if (r.id === "nuevo-cliente") return navegar({ to: "/clientes", state: { abrir: "nuevo" } });
-        if (r.id === "nueva-cotizacion") return navegar({ to: "/cotizaciones", state: { abrir: "nueva" } });
+        if (r.id === "programar") return irConPedido("/visitas", { abrir: "programar" });
+        if (r.id === "nuevo-cliente") return irConPedido("/clientes", { abrir: "nuevo" });
+        if (r.id === "nueva-cotizacion") return irConPedido("/cotizaciones", { abrir: "nueva" });
         if (r.id === "atajos") return alVerAtajos();
         if (r.id === "tomar" && masAntiguo) {
           // Si otra persona lo tomó un instante antes, se dice y no se abre como si fuera propio.

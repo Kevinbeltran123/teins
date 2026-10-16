@@ -274,6 +274,9 @@ test("lo reciente de la búsqueda se ve como está ahora: el cliente que otra pe
 
 test("el formulario que abrió la búsqueda no se vuelve a abrir al regresar con Atrás ni al recargar", async ({ browser }) => {
   const o = await oficina(browser, nuevoUsuario("oficina", "oficina"));
+  // Desde otra lista que también atiende lo que pide la búsqueda: mientras se navega, no se queda con el de Visitas.
+  await o.getByRole("link", { name: "Clientes" }).click();
+  await expect(o.getByRole("heading", { name: "Clientes" })).toBeVisible();
   await buscarYAbrir(o, "Programar visita", "Acciones");
   const programar = o.getByRole("dialog", { name: /Programar visita/ });
   await expect(programar).toBeVisible();
