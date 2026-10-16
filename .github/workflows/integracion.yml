@@ -114,8 +114,9 @@ jobs:
       - name: Configuración del servidor para la prueba (datos ficticios, secreto de un solo uso)
         working-directory: paquetes/servidor
         run: sed "s|^AUTH_SECRETO=$|AUTH_SECRETO=$(openssl rand -base64 32)|" .env.example > .env
+      # Chromium siempre: el worker imprime los PDF con él, también en el trabajo de WebKit.
       - name: Navegadores
-        run: pnpm --filter @teins/e2e exec playwright install --with-deps ${{ matrix.navegador }}
+        run: pnpm --filter @teins/e2e exec playwright install --with-deps chromium ${{ matrix.navegador }}
       - name: Pruebas
         run: pnpm --filter @teins/e2e test --project=${{ matrix.navegador }}
       - name: Reporte de la prueba
