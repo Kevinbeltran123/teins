@@ -318,11 +318,12 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config, { alDesactivar }
       await tx.delete(sesiones).where(eq(sesiones.userId, fila.id));
       // Una orden ya cumplida no cubre lo que bajó si lo reactivaron y volvió a trabajar en ese teléfono: va otra. Una
       // sin cumplir se deja: al cumplirla, el teléfono borra todo lo del usuario.
-      const marcados = await tx
+      await tx
         .update(dispositivos)
         .set({ ordenDeBorradoEn: ahora, borradoConfirmadoEn: null })
-        .where(and(eq(dispositivos.usuarioId, fila.id), or(isNull(dispositivos.ordenDeBorradoEn), isNotNull(dispositivos.borradoConfirmadoEn))))
-        .returning({ id: dispositivos.id });
+        .where(and(eq(dispositivos.usuarioId, fila.id), or(isNull(dispositivos.ordenDeBorradoEn), isNotNull(dispositivos.borradoConfirmadoEn))));
+      // Así, todos sus teléfonos quedan con una orden sin cumplir: la auditoría los cuenta a todos, no solo los marcados ahora.
+      const conOrden = await tx.select({ id: dispositivos.id }).from(dispositivos).where(eq(dispositivos.usuarioId, fila.id));
       await olvidarSuscripciones(tx, fila.id);
       await alDesactivar?.(tx, { organizacionId: fila.organizacionId, usuarioId: fila.id, autorId, correlacion });
       await registrar(tx, [
@@ -333,7 +334,7 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config, { alDesactivar }
           tipoEvento: "usuario_desactivado",
           autorId,
           correlacion,
-          valorNuevo: { dispositivosConOrdenDeBorrado: marcados.length },
+          valorNuevo: { dispositivosConOrdenDeBorrado: conOrden.length },
         },
       ]);
     });

@@ -322,10 +322,12 @@ describe("archivos (ADR-0007)", () => {
     await almacenamiento.guardar(clave, generado, "application/pdf");
     const autorizar = (cookie: string, tipo: string) =>
       app.inject({ method: "POST", url: "/api/archivos/subidas", headers: { cookie, ...cabecerasSync }, payload: { huella, bytes: generado.length, tipo } });
-    // Como foto o boceto no es lo que dice ser; como PDF no se adopta nunca: un plano no se distingue de un informe.
-    expect((await autorizar(tecnico.cookie, "image/jpeg")).json()).toMatchObject({ codigo: "estado_invalido" });
-    expect((await autorizar(tecnico.cookie, TIPO_ARCHIVO_BOCETO)).json()).toMatchObject({ codigo: "estado_invalido" });
-    expect((await autorizar(oficina.cookie, "application/pdf")).json()).toMatchObject({ codigo: "estado_invalido" });
+    // Como foto o boceto no es lo que dice ser, y así se dice; como PDF no se adopta nunca: un plano no se distingue de
+    // un informe.
+    const noCoincide = { codigo: "estado_invalido", detail: expect.stringContaining("no coincide con lo declarado") };
+    expect((await autorizar(tecnico.cookie, "image/jpeg")).json()).toMatchObject(noCoincide);
+    expect((await autorizar(tecnico.cookie, TIPO_ARCHIVO_BOCETO)).json()).toMatchObject(noCoincide);
+    expect((await autorizar(oficina.cookie, "application/pdf")).json()).toMatchObject({ codigo: "estado_invalido", detail: "Ese contenido ya está guardado como documento generado" });
     await s.procesarCola();
     expect(await almacenamiento.existe(clave)).toBe(true);
     expect((await s.propietario.pool.query("select 1 from archivos.archivos where organizacion_id = $1 and huella = $2", [organizacionId, huella])).rows).toEqual([]);

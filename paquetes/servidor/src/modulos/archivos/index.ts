@@ -149,8 +149,9 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
           // se adopta sin subirlo otra vez; un PDF no, porque un plano no se distingue de un documento generado.
           // Fuera de la transacción: no retiene conexión mientras lee el almacenamiento.
           if (!(await leerFila(actor.organizacionId, cuerpo.huella)) && (await almacenamiento.existe(claveDeObjeto(actor.organizacionId, cuerpo.huella)))) {
-            if (cuerpo.tipo === "application/pdf" || (await examinar(actor.organizacionId, cuerpo.huella, cuerpo)).motivo !== null) {
-              throw problema("estado_invalido", "Ese contenido ya está guardado como documento generado");
+            if (cuerpo.tipo === "application/pdf") throw problema("estado_invalido", "Ese contenido ya está guardado como documento generado");
+            if ((await examinar(actor.organizacionId, cuerpo.huella, cuerpo)).motivo !== null) {
+              throw problema("estado_invalido", "Ya hay un archivo guardado con ese contenido que no coincide con lo declarado: no se reemplaza");
             }
             // Queda subido y lo verifica el worker, como cualquier subida (ADR-0007). Ya pasó el mismo examen, así que no lo
             // rechaza ni lo borra, tampoco si la recuperación de atascados lo vuelve a encolar (ADR-0043).

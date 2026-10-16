@@ -223,5 +223,8 @@ describe("reactivar un usuario desactivado", () => {
     expect((await pedir(admin.cookie, "POST", `/api/administracion/usuarios/${tecnico.id}/desactivar`)).statusCode).toBe(200);
     expect((await ordenes()).json()).toEqual({ borrar: [tecnico.id] });
     expect(await ordenDe(olvidado)).toEqual(ordenDelOlvidado);
+    // La auditoría cuenta los dos teléfonos que van a borrar, también el que seguía con su orden sin cumplir.
+    const { rows } = await s.propietario.pool.query("select valor_nuevo from auditoria.registros where agregado_id = $1 and tipo_evento = 'usuario_desactivado' order by secuencia", [tecnico.id]);
+    expect(rows.map((f) => f.valor_nuevo)).toEqual([{ dispositivosConOrdenDeBorrado: 2 }, { dispositivosConOrdenDeBorrado: 2 }]);
   });
 });
