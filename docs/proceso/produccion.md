@@ -4,6 +4,15 @@ Cómo se monta, se respalda y se recupera un entorno de TEINS en Railway (ADR-00
 
 **Mientras producción viva en la cuenta de Kevin, no se cargan datos reales** (ADR-0021): solo la primera persona administradora y datos de verificación, hasta transferir el proyecto al espacio de trabajo de TEINS o tener su autorización escrita.
 
+**Producción está apagada desde el 2026-10-10** para ahorrar: sin datos reales costaba lo mismo que el entorno de pruebas (unos USD 7 al mes, casi todo memoria). Se quitó el despliegue activo de sus seis servicios con `railway down`; el volumen de Postgres (con sus datos), las variables, los secretos y los dominios se conservan, y sus tres direcciones responden 404. El entorno de pruebas no cambió.
+
+`railway scale <región>=0` **no** apaga un servicio: quita la región y Railway lo vuelve a poner en `us-west2` con una réplica. Así quedó producción ese día antes de apagarla, base incluida. Para encenderla, con el proyecto enlazado:
+
+1. `railway config plan` y `railway config apply`: devuelve los servicios a `us-east4`, como declara `.railway/railway.ts`.
+2. Postgres primero: en el panel de Railway, su último despliegue → «Redeploy». Espera a que quede activo.
+3. `railway up --service campo --detach` (migra antes de arrancar) y, después, `oficina`, `portal`, `worker` y `respaldos`.
+4. Comprueba que `/salud` responde en las tres direcciones y corre `infra/railway/verificar-exposicion.sh`.
+
 ## Qué es cada pieza
 
 | Pieza | Dónde | Qué hace |
