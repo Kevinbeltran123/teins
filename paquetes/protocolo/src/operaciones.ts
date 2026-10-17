@@ -410,7 +410,8 @@ const LlaveDeEnvioAlCliente = Uuid.optional();
 export const CanalDeEnvio = z.enum(["correo", "whatsapp"]);
 /**
  * Estado de un envío (ADR-0028, parte 4): solo avanza, salvo un rebote después de entregado. "cancelado": oficina lo
- * detuvo mientras esperaba en cola y nunca sale; mientras no salga nada, se puede reanudar (ADR-0034).
+ * detuvo mientras esperaba en cola y nunca sale; mientras no salga nada, se puede reanudar (ADR-0034). Al retirar la
+ * versión, lo que esperaba queda cancelado con el motivo "Versión retirada" y ya no se reanuda (ADR-0047).
  */
 export const EstadoDeEnvio = z.enum(["en_cola", "enviado", "entregado", "fallido", "cancelado"]);
 
@@ -422,7 +423,7 @@ export const EnvioDeVersion = z
     canal: CanalDeEnvio,
     destino: z.string(),
     estado: EstadoDeEnvio,
-    /** Por qué no llegó, en palabras para oficina. */
+    /** Por qué no llegó, o por qué se canceló sin que nadie lo pidiera uno a uno ("Versión retirada"), en palabras para oficina. */
     error: z.string().nullable(),
     creadoEn: Fecha,
     enviadoEn: Fecha.nullable(),

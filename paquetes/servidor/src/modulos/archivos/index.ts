@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { fileTypeFromBuffer } from "file-type";
 import { leerBoceto, LIMITES_BOCETO, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
@@ -34,6 +34,62 @@ export async function recuperarArchivosAtascados(tx: TxOrganizacion, organizacio
   const atascados = await tx.select({ huella: archivos.huella }).from(archivos).where(and(eq(archivos.estado, "subido"), lt(archivos.subidoEn, antesDe)));
   for (const { huella } of atascados) await encolar(tx, "archivos.verificar", { organizacionId, huella }, { llave: `archivos.verificar:${organizacionId}:${huella}` });
   return atascados.length;
+}
+
+/** Fotos, bocetos y firmas de campo. Los planos no: los usan informes que este módulo no ve (ADR-0048). */
+const TIPOS_QUE_SE_LIMPIAN = ["image/jpeg", TIPO_ARCHIVO_BOCETO];
+/** Por organización y pasada: lo que quede sigue en la próxima hora. */
+const LOTE_SIN_USO = 500;
+
+/**
+ * Limpieza de ADR-0007 (ADR-0048): de los archivos de campo sin actividad desde `antesDe`, borra la fila y el objeto
+ * de los que ningún levantamiento usa (`enUso`) y marca los demás para no volver a mirarlos. Corre con la conexión
+ * del dueño: la aplicación no borra archivos. Las filas se bloquean antes de preguntar por su uso y un envío las lee
+ * con `for share` (`estados`): o el envío espera y ya no las encuentra (vuelve a subirlas), o la limpieza las salta.
+ * El objeto se borra después de la fila: si eso falla queda un objeto sin fila, que una subida igual adopta.
+ */
+export async function borrarArchivosSinUso(
+  bd: BaseDeDatos,
+  almacenamiento: Almacenamiento,
+  organizacionId: string,
+  { antesDe, enUso }: { antesDe: Date; enUso: (tx: TxOrganizacion, huellas: readonly string[]) => Promise<Set<string>> },
+): Promise<number> {
+  const borradas = await enOrganizacion(bd, organizacionId, async (tx) => {
+    // El dueño no pasa por la seguridad por fila: cada sentencia filtra la organización.
+    const deLaOrganizacion = eq(archivos.organizacionId, organizacionId);
+    const candidatas = (
+      await tx
+        .select({ huella: archivos.huella })
+        .from(archivos)
+        .where(
+          and(
+            deLaOrganizacion,
+            isNull(archivos.enUsoComprobadoEn),
+            inArray(archivos.tipo, TIPOS_QUE_SE_LIMPIAN),
+            sql`greatest(${archivos.creadoEn}, ${archivos.subidoEn}, ${archivos.verificadoEn}) < ${antesDe.toISOString()}`,
+          ),
+        )
+        .orderBy(archivos.creadoEn)
+        .limit(LOTE_SIN_USO)
+        .for("update", { skipLocked: true })
+    ).map((f) => f.huella);
+    if (candidatas.length === 0) return [];
+    const usadas = await enUso(tx, candidatas);
+    if (usadas.size > 0) await tx.update(archivos).set({ enUsoComprobadoEn: new Date() }).where(and(deLaOrganizacion, inArray(archivos.huella, [...usadas])));
+    const sinUso = candidatas.filter((h) => !usadas.has(h));
+    if (sinUso.length > 0) await tx.delete(archivos).where(and(deLaOrganizacion, inArray(archivos.huella, sinUso)));
+    return sinUso;
+  });
+  const fallidas: string[] = [];
+  for (const huella of borradas) {
+    try {
+      await almacenamiento.eliminar(claveDeObjeto(organizacionId, huella));
+    } catch {
+      fallidas.push(huella);
+    }
+  }
+  if (fallidas.length > 0) throw new Error(`No se borraron ${fallidas.length} objetos sin uso de ${organizacionId}; quedan sin fila: ${fallidas.join(", ")}`);
+  return borradas.length;
 }
 
 export interface RegistroDeTrabajo {
@@ -117,7 +173,12 @@ export function crearArchivos({ bd, almacenamiento, config }: { bd: BaseDeDatos;
   return {
     async estados(tx, huellas) {
       if (huellas.length === 0) return new Map();
-      const filas = await tx.select({ huella: archivos.huella, estado: archivos.estado, tipo: archivos.tipo }).from(archivos).where(inArray(archivos.huella, [...huellas]));
+      // `for share`: mientras la transacción que los usa no termine, la limpieza no los borra (ADR-0048).
+      const filas = await tx
+        .select({ huella: archivos.huella, estado: archivos.estado, tipo: archivos.tipo })
+        .from(archivos)
+        .where(inArray(archivos.huella, [...huellas]))
+        .for("share");
       return new Map(filas.map((f) => [f.huella, { estado: f.estado, tipo: f.tipo }]));
     },
 

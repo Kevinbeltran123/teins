@@ -29,7 +29,7 @@ export const visitas = esquemaVisitas.table(
     tecnicos: text("tecnicos").array().notNull(),
     creadaEn: marcaDeTiempo("creada_en").notNull().defaultNow(),
     version: integer("version").notNull().default(1),
-    /** Cancelada: el único estado explícito de la visita (modelo de dominio, sección 5). */
+    /** Cancelada: una de las tres marcas explícitas de la visita, con terminada y cerrada (modelo de dominio, sección 5). */
     canceladaEn: marcaDeTiempo("cancelada_en"),
     canceladaPor: text("cancelada_por"),
     motivoCancelacion: text("motivo_cancelacion"),

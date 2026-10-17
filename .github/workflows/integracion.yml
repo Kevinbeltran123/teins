@@ -35,8 +35,8 @@ jobs:
         run: pnpm licencias
       - name: Vulnerabilidades conocidas graves
         run: pnpm audit --prod --audit-level high
-      - name: Dominio, contrato y campo (incluye el arnés de fallas)
-        run: pnpm --filter @teins/dominio --filter @teins/protocolo --filter @teins/campo test
+      - name: Dominio, contrato, documentos, campo y oficina (incluye el arnés de fallas)
+        run: pnpm --filter @teins/dominio --filter @teins/protocolo --filter @teins/documentos --filter @teins/campo --filter @teins/oficina test
       - name: Compilación de las superficies
         run: pnpm --filter @teins/campo --filter @teins/oficina build
       - name: Presupuesto de rendimiento de campo

@@ -123,6 +123,15 @@ const ESTADO_ENVIO = {
 } as const;
 
 /**
+ * Por qué un envío cancelado no sale: quién lo canceló o, si se retiró su versión, el motivo y quién la retiró
+ * (ADR-0047). Es una decisión de oficina, no un fallo de entrega.
+ */
+export function detalleDelCancelado(e: Pick<Envio, "canal" | "error" | "cancelado">): string {
+  const quien = e.cancelado ? ` por ${e.cancelado.por.nombre} ${aFechaCorta(e.cancelado.en)}` : "";
+  return `${e.canal === "correo" ? "Correo" : "WhatsApp"} · ${e.error ?? "cancelado"}${quien}: no sale`;
+}
+
+/**
  * Cancelar un envío en cola (ADR-0034): no pide confirmar, porque mientras siga en cola "Deshacer" lo devuelve. Si ya
  * salió, el servidor lo dice y queda a la vista: lo enviado no se recupera. Lo usan la lista de envíos y el avance de
  * publicar.
@@ -269,10 +278,7 @@ export function PanelEnvios({ cliente: c, version, contactos, mensaje, enviar, r
                   )}
                 </span>
                 {e.estado === "cancelado" ? (
-                  <span className="det">
-                    {e.canal === "correo" ? "Correo" : "WhatsApp"}
-                    {e.cancelado ? ` · cancelado por ${e.cancelado.por.nombre} ${aFechaCorta(e.cancelado.en)}` : " · cancelado"}: no sale
-                  </span>
+                  <span className="det">{detalleDelCancelado(e)}</span>
                 ) : e.estado === "fallido" ? (
                   <span className="det mal">
                     {e.error}

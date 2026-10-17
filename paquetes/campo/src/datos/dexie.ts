@@ -191,7 +191,17 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
         const rechazado = actual.estado === "enviado" && envio?.estado === "error";
         if (actual.estado !== "borrador" && !rechazado) throw new Error("Solo se descarta un borrador o un envío rechazado");
         if (envio && !rechazado) throw new Error("Este levantamiento ya se envió");
-        return { resultado: undefined, levantamiento: { ...actual, descartadoEn: ahora.toISOString() } };
+        if (rechazado && (await db.estadosServidor.get(id))) throw new Error("Oficina ya recibió este levantamiento");
+        if (!rechazado) return { resultado: undefined, levantamiento: { ...actual, descartadoEn: ahora.toISOString() } };
+        return {
+          resultado: undefined,
+          levantamiento: { ...actual, descartadoEn: ahora.toISOString() },
+          tablas: [db.envios, db.estadosServidor],
+          async enTransaccion() {
+            // Si en medio se reintentó o llegó a oficina, ya no se descarta (ADR-0046).
+            if ((await db.envios.get(id))?.estado !== "error" || (await db.estadosServidor.get(id))) throw new Error("El envío cambió mientras se descartaba");
+          },
+        };
       });
     },
     recuperar(id) {

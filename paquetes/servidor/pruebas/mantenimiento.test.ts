@@ -1,13 +1,18 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { llaveDeEnvio } from "@teins/protocolo";
+import { claveDeObjeto, almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { registrarCambios } from "../src/modulos/cambios";
-import { podarVencido } from "../src/modulos/mantenimiento";
+import { clientesYSitios } from "../src/modulos/clientes";
+import { limpiarArchivosSinUso, podarVencido } from "../src/modulos/mantenimiento";
+import { crearVisitas } from "../src/modulos/visitas";
 import { periodicas } from "../src/tareas";
-import { cabecerasSync, ORIGEN, servidorDePrueba } from "./ayudas";
+import { cabecerasSync, jpegDePrueba, ORIGEN, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
+const almacenamiento = almacenamientoS3(s.config);
 
 describe("tareas periódicas (ADR-0043)", () => {
   it("se declaran como objetos que el worker acepta", () => {
@@ -73,4 +78,82 @@ describe("teléfonos en Administración (ADR-0044)", () => {
     expect((r.json().dispositivos as { id: string }[]).map((d) => d.id).sort()).toEqual([reciente, conOrden].sort());
     expect((await s.propietario.pool.query("select 1 from identidad.dispositivos where id = $1", [olvidado])).rowCount).toBe(1);
   });
+});
+
+describe("archivos sin uso (ADR-0007, ADR-0048)", () => {
+  async function subir(cookie: string, datos: Buffer, tipo: "image/jpeg" | "application/pdf") {
+    const huella = createHash("sha256").update(datos).digest("hex");
+    const r = await app.inject({ method: "POST", url: "/api/archivos/subidas", headers: { cookie, ...cabecerasSync }, payload: { huella, bytes: datos.length, tipo } });
+    expect(r.statusCode, r.body).toBe(200);
+    const a = r.json();
+    if (a.estado === "autorizada") expect((await fetch(a.url, { method: "PUT", headers: a.cabeceras, body: datos })).status).toBe(200);
+    await app.inject({ method: "POST", url: `/api/archivos/${huella}/subido`, headers: { cookie, ...cabecerasSync } });
+    return huella;
+  }
+  const post = (cookie: string, url: string, payload: object) => app.inject({ method: "POST", url, headers: { cookie }, payload });
+
+  it("borra la fila y el objeto de lo que nadie usa pasado el plazo; no lo reciente, lo usado, lo publicado ni los planos", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const { organizacionId, tecnico, oficina } = org;
+    const visitaId = await enOrganizacion(s.conexionApp.bd, organizacionId, async (tx) => {
+      const { clienteId, sitioId } = await clientesYSitios.crear(tx, { organizacionId, nombre: "Cliente ficticio", sitio: { nombre: "Sede", direccion: "Calle [N]" } });
+      return crearVisitas(clientesYSitios).crear(tx, { organizacionId, autorId: "prueba", correlacion: "prueba", clienteId, sitioId, motivo: "Mantenimiento", programadaPara: "2026-09-30", tecnicos: [tecnico.id] });
+    });
+    const foto = () => subir(tecnico.cookie, jpegDePrueba().datos, "image/jpeg");
+    const [sinUso, reciente, usada, publicada] = [await foto(), await foto(), await foto(), await foto()];
+    const plano = await subir(oficina.cookie, Buffer.from(`%PDF-1.7 ${randomUUID()} plano ficticio`), "application/pdf");
+    await s.procesarCola();
+
+    const enviar = async (fotos: string[]) => {
+      const id = randomUUID();
+      const r = await app.inject({
+        method: "POST",
+        url: "/api/sync/comandos",
+        headers: { cookie: tecnico.cookie, ...cabecerasSync },
+        payload: {
+          tipo: "EnviarLevantamiento",
+          llave: llaveDeEnvio(id),
+          levantamiento: {
+            id,
+            formato: "prueba-ups",
+            versionFormato: 1,
+            visitaId,
+            respuestas: { cuarto_tecnico: { potencia_nominal: { valor: "12.5", unidad: "kVA" }, fotos_equipo: fotos } },
+            creadoEn: "2026-09-30T10:00:00.000-05:00",
+            enviadoEn: "2026-09-30T11:00:00.000-05:00",
+          },
+        },
+      });
+      expect(r.statusCode, r.body).toBe(200);
+      return id;
+    };
+    await enviar([usada]);
+    const revisado = await enviar([publicada]);
+    expect((await post(oficina.cookie, `/api/levantamientos/${revisado}/tomar`, { version: 1 })).statusCode).toBe(200);
+    expect((await post(oficina.cookie, `/api/levantamientos/${revisado}/marcar-revisado`, { version: 2 })).statusCode).toBe(200);
+    const { id: informeId } = (await post(oficina.cookie, "/api/informes", { visitaId })).json();
+    await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [] });
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2 })).statusCode).toBe(201);
+
+    const envejecer = (huellas: string[], dias: number) =>
+      s.propietario.pool.query(
+        "update archivos.archivos set creado_en = now() - ($3 || ' days')::interval, subido_en = now() - ($3 || ' days')::interval, verificado_en = now() - ($3 || ' days')::interval where organizacion_id = $1 and huella = any($2)",
+        [organizacionId, huellas, String(dias)],
+      );
+    await envejecer([sinUso, usada, publicada, plano], 200);
+    await envejecer([reciente], 100);
+
+    const limpiar = () => limpiarArchivosSinUso({ negocio: s.conexionApp.bd, propietario: s.propietario.bd, almacenamiento });
+    await limpiar();
+    const filas = async () =>
+      (await s.propietario.pool.query("select huella from archivos.archivos where organizacion_id = $1", [organizacionId])).rows.map((f) => f.huella as string).sort();
+    expect(await filas()).toEqual([reciente, usada, publicada, plano].sort());
+    const existe = (huella: string) => almacenamiento.existe(claveDeObjeto(organizacionId, huella));
+    expect(await existe(sinUso)).toBe(false);
+    for (const h of [reciente, usada, publicada, plano]) expect(await existe(h)).toBe(true);
+
+    // Otra pasada no encuentra nada que borrar.
+    expect(await limpiar()).toBe(0);
+    expect(await filas()).toEqual([reciente, usada, publicada, plano].sort());
+  }, 60_000);
 });

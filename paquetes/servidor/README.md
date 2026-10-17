@@ -39,8 +39,8 @@ src/
     envios/          Informe y cotización al cliente por correo y WhatsApp (ADR-0028, 0034, 0036).
     portal/          Accesos de cliente y rutas del portal, con la conexión de `teins_portal` (ADR-0009).
     avisos/          Avisos push (ADR-0023, ADR-0040).
-    mantenimiento/   La tarea periódica: recupera trabajos a medias y poda (ADR-0043, ADR-0044).
-migraciones/    SQL generado por drizzle-kit más migraciones propias (permisos, cola). La última es 0038.
+    mantenimiento/   La tarea periódica: recupera trabajos a medias, poda y borra archivos sin uso (ADR-0043, ADR-0044, ADR-0048).
+migraciones/    SQL generado por drizzle-kit más migraciones propias (permisos, cola). La última es 0039 (archivos sin uso, ADR-0048).
 infra/          SQL que ejecuta la infraestructura, no las migraciones (roles de la base).
 scripts/        compilar.mjs (la imagen) y vaciar-almacenamiento.mjs (entorno de pruebas).
 pruebas/        Integración con PostgreSQL y S3Mock reales en contenedores.
@@ -142,7 +142,7 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 - `crearCotizacion` toma las cantidades de los levantamientos revisados (`levantamientos.cantidadesRevisadas`) con los precios vigentes; `publicarCotizacion` congela líneas, impuestos y totales, encola `cotizaciones.generarPdf` y programa los envíos con el mensaje de tipo `cotizacion`.
 - `retirarVersionDeCotizacion` (administración, con motivo) marca `retirada_en`, cancela sus envíos en cola y deja vigente la anterior no retirada (`todasRetiradas` en la lista).
 
-### Envíos al cliente (ADR-0028, ADR-0034, ADR-0036)
+### Envíos al cliente (ADR-0028, ADR-0034, ADR-0036, ADR-0047)
 
 - Los contactos viven en `clientes.contactos` y los envíos en `envios.envios`. Publicar con `destinatarios` crea los envíos "En cola"; el worker los encola al marcar el PDF listo (`enviarAlQuedarListo`) y los manda con el trabajo `envios.enviar`.
 - Sin `RESEND_CLAVE_API`, o sin `WHATSAPP_TOKEN` y `WHATSAPP_NUMERO_ID`, ese canal queda "No llegó: no está configurado".
@@ -150,7 +150,7 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 - Los eventos de Resend llegan a `POST /api/envios/eventos/correo` (firma Svix con `RESEND_SECRETO_EVENTOS`) y los de Meta a `GET` y `POST /api/envios/eventos/whatsapp` (`WHATSAPP_TOKEN_VERIFICACION` y `WHATSAPP_SECRETO_APP`).
 - Enviar otra vez (`enviarVersion`, `enviarCotizacion`) acepta una `llave`: el mismo pedido repetido no crea otro envío (regla 4).
 - El correo propio: `mensaje` en publicar y enviar se copia a `envios.mensaje.personal` de cada envío por correo y el envío responde `personalizado`.
-- Cancelar: el estado `cancelado` con `cancelado_por` y `cancelado_en`. `envios.cancelarEnvio` es `UPDATE … WHERE estado = 'en_cola' AND enviado_en IS NULL` y el worker marca `enviado_en` antes de llamar al proveedor, así que gana quien llega primero a la fila. `reanudarEnvio` lo devuelve a la cola y lo encola si el PDF está listo (eventos `envio_cancelado` y `envio_reanudado`).
+- Cancelar: el estado `cancelado` con `cancelado_por` y `cancelado_en`. `envios.cancelarEnvio` es `UPDATE … WHERE estado = 'en_cola' AND enviado_en IS NULL` y el worker marca `enviado_en` antes de llamar al proveedor, así que gana quien llega primero a la fila. `reanudarEnvio` lo devuelve a la cola y lo encola si el PDF está listo (eventos `envio_cancelado` y `envio_reanudado`). Retirar una versión cancela sus envíos en cola (`cancelarEnviosDeVersion`), por quien la retiró y con `error` = "Versión retirada"; no se reanudan, y uno que ya salía pasa a `enviado` si el proveedor lo acepta (ADR-0047).
 
 ### Sincronización y registro de cambios (ADR-0003, ADR-0038, ADR-0044)
 
@@ -161,9 +161,11 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 
 Suscripciones por persona y navegador; un trabajo por suscripción, encolado en la transacción del hecho, enviado con VAPID en el worker. El texto no lleva datos del cliente, salvo los avisos `mensaje_de_oficina` y `respuesta_del_tecnico`, que llevan el cliente y el texto (excepción del ADR-0040). `avisos.enviar` acepta solo rutas relativas.
 
-### Mantenimiento (ADR-0043, ADR-0044)
+### Mantenimiento (ADR-0043, ADR-0044, ADR-0048)
 
 La tarea periódica `mantenimiento.recuperar` corre cada hora en el minuto 17 (`periodicas` en `tareas.ts`): vuelve a encolar lo que lleva más de 12 horas a medias (archivos, PDF de informes y cotizaciones), borra sesiones vencidas hace más de un día (oficina, campo y portal) y compacta el registro de cambios con la conexión del dueño.
+
+También borra, con la conexión del dueño, la fila y el objeto de las fotos, bocetos y firmas sin actividad en 120 días que ningún levantamiento usa (`limpiarArchivosSinUso`, 500 por organización y pasada). Lo usado queda marcado en `archivos.en_uso_comprobado_en` y no se vuelve a mirar. Los planos y los PDF generados nunca entran. La limpieza bloquea las filas con `for update skip locked` y `archivos.estados` las lee con `for share`, así que un envío en curso nunca pierde un archivo.
 
 ### Portal (ADR-0009)
 

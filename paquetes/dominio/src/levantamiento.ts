@@ -43,7 +43,7 @@ export const esFirma = (valor: unknown): valor is ValorFirma => typeof valor ===
 /** Respuestas por clave de sección y clave de campo. */
 export type Respuestas = Readonly<Record<string, Readonly<Record<string, Valor>>>>;
 
-/** Ciclo de vida (modelo de dominio, sección 5). Anulado llega cuando haga falta. */
+/** Ciclo de vida (modelo de dominio, sección 5; diagramas en docs/arquitectura/03-como-funciona.md). */
 export type EstadoLevantamiento = "borrador" | "enviado" | "en_revision" | "revisado";
 
 export interface Levantamiento {

@@ -610,6 +610,18 @@ describe("copias viejas y escrituras tardías (iteración 42)", () => {
     expect((await repo.obtener("l1"))?.estado).toBe("enviado");
   });
 
+  it("lo que oficina ya recibió no se descarta aunque su envío haya quedado en error (ADR-0046)", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
+    await repo.guardarRespuesta("l1", "s", "t", "listo", ahora);
+    await repo.enviar("l1", formato, despues);
+    await db.envios.update("l1", { estado: "error" });
+    await db.estadosServidor.put({ id: "l1", tecnicoId: "t1", estado: "enviado", recibidoEn: despues.toISOString() });
+    await expect(repo.descartar("l1", despues)).rejects.toThrow();
+    expect((await repo.obtener("l1"))?.descartadoEn).toBeUndefined();
+  });
+
   it("al abrir la app borra los archivos que nada usa, de nadie; lo de la papelera y de otras personas se queda", async () => {
     const db = nuevaBase();
     const repo = repositorioDexie(db);

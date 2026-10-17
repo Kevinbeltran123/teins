@@ -46,14 +46,15 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0004](0004-almacenamiento-en-el-dispositivo.md) | Almacenamiento local: IndexedDB con Dexie | Aceptada |
 | [0005](0005-base-de-datos-del-servidor.md) | Base de datos: PostgreSQL relacional + documental | Aceptada |
 | [0006](0006-formatos-y-respuestas.md) | Formatos como esquema de dominio versionado | Aceptada |
-| [0007](0007-archivos.md) | Archivos: almacenamiento de objetos, direccionado por contenido | Aceptada |
+| [0007](0007-archivos.md) | Archivos: almacenamiento de objetos, direccionado por contenido | Aceptada; ampliada por 0048 |
 | [0008](0008-trazabilidad-e-integridad.md) | Trazabilidad semántica con cadena de hashes por agregado | Aceptada |
 | [0012](0012-eventos-y-trabajos.md) | Cola transaccional en PostgreSQL como outbox | Aceptada; ampliada por 0043 |
 | [0022](0022-cifrado-local-en-campo.md) | Cifrado local en campo: qué se sella, cómo se escribe y cómo se migra | Aceptada |
 | [0038](0038-epoca-de-la-bajada.md) | Época de la bajada: el teléfono se entera de que el servidor se dejó limpio | Aceptada |
 | [0043](0043-recuperar-trabajos-a-medias.md) | Una tarea periódica recupera los trabajos que quedaron a medias (amplía 0012) | Aceptada |
-| [0044](0044-retencion-y-poda.md) | Retención en el teléfono y poda en el servidor (amplía 0003) | Aceptada |
+| [0044](0044-retencion-y-poda.md) | Retención en el teléfono y poda en el servidor (amplía 0003) | Aceptada; ampliada por 0048 |
 | [0045](0045-volver-a-borrador-un-envio-rechazado.md) | Un envío que oficina nunca recibió vuelve a borrador para corregirlo (amplía 0035) | Aceptada |
+| [0048](0048-limpiar-archivos-sin-uso.md) | Los archivos de campo que nadie usa se borran a los 120 días (amplía 0007 y 0044) | Aceptada |
 
 ### Identidad y acceso
 
@@ -85,7 +86,8 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | ADR | Decisión | Estado |
 |---|---|---|
 | [0032](0032-soltar-reabrir-y-devolver-una-revision.md) | Soltar, reabrir y devolver una revisión (estado "Devuelto") | Propuesta, aplazada |
-| [0035](0035-archivar-clientes-comentarios-y-borradores.md) | Editar y archivar clientes, sitios y comentarios, y descartar borradores en campo | Aceptada; ampliada por 0045 |
+| [0035](0035-archivar-clientes-comentarios-y-borradores.md) | Editar y archivar clientes, sitios y comentarios, y descartar borradores en campo | Aceptada; ampliada por 0045 y 0046 |
+| [0046](0046-descartar-un-envio-en-error.md) | Descartar un envío en error: a la misma papelera de 30 días, oficina nunca lo recibió (amplía 0035) | Aceptada |
 | [0040](0040-conversaciones-entre-oficina-y-campo.md) | Conversaciones entre oficina y campo: el técnico responde los comentarios (amplía 0003, 0014 y 0023) | Aceptada |
 
 ### Informe, cotización y envío al cliente
@@ -96,8 +98,9 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0028](0028-envio-del-informe-al-cliente.md) | Envío del informe al cliente por correo (Resend) y WhatsApp (Cloud API de Meta), con contactos del cliente y estado por envío | Aceptada; ampliada por 0036 |
 | [0029](0029-cotizaciones.md) | Cotizaciones desde las cantidades revisadas, con lista de precios con historia, IVA o AIU y versiones inmutables | Aceptada; retirar versiones: reemplazada en ese punto por 0034 |
 | [0031](0031-vista-en-vivo-de-los-documentos.md) | Vista en vivo de los documentos desde las mismas plantillas del PDF, en un paquete compartido | Aceptada |
-| [0034](0034-cancelar-envios-y-retirar-cotizaciones.md) | Cancelar un envío en cola y retirar una versión de cotización (reemplaza a 0029 en un punto) | Aceptada |
+| [0034](0034-cancelar-envios-y-retirar-cotizaciones.md) | Cancelar un envío en cola y retirar una versión de cotización (reemplaza a 0029 en un punto) | Aceptada; ampliada por 0047 |
 | [0036](0036-correo-que-escribe-oficina.md) | El correo de un envío lo puede escribir oficina, sobre la vista previa (amplía 0028) | Aceptada |
+| [0047](0047-retirar-una-version-cancela-sus-envios.md) | Retirar una versión cancela sus envíos que no han salido, con el motivo, y no se reanudan (amplía 0034) | Aceptada |
 | [0039](0039-que-sale-en-el-informe.md) | Qué sale en el informe: oficina oculta partes de cada levantamiento | Aceptada |
 
 ### API y avisos

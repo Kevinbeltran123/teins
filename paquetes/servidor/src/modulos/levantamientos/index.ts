@@ -94,6 +94,20 @@ export async function soltarRevisionesDe(tx: TxOrganizacion, datos: { organizaci
   await registrarCambios(tx, soltados.map((l) => ({ organizacionId: datos.organizacionId, usuarioId: l.tecnicoId, entidad: "levantamiento" as const, entidadId: l.id, operacion: "cambio" as const })));
 }
 
+/**
+ * De estas huellas, las que usa algún levantamiento del servidor (ADR-0048). Uno recibido no se borra y sus fotos,
+ * bocetos y firmas no se corrigen (`no_corregible`): lo que usa, lo usa para siempre, también en la versión publicada
+ * que lo incluye. Filtra la organización porque la limpieza corre con la conexión del dueño.
+ */
+export async function archivosEnUso(tx: TxOrganizacion, organizacionId: string, huellas: readonly string[]): Promise<Set<string>> {
+  if (huellas.length === 0) return new Set();
+  const { rows } = await tx.execute<{ huella: string }>(sql`
+    select distinct m[1] as huella
+    from levantamientos.levantamientos l, regexp_matches(l.respuestas::text, '[0-9a-f]{64}', 'g') as m
+    where l.organizacion_id = ${organizacionId} and m[1] in ${[...huellas]}`);
+  return new Set(rows.map((f) => f.huella));
+}
+
 interface Dependencias {
   bd: BaseDeDatos;
   formatos: Formatos;

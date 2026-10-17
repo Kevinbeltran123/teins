@@ -124,6 +124,6 @@ Verificación, en el orden de la integración continua (ADR-0018):
 - `pnpm arquitectura`: fronteras entre paquetes y módulos (`.dependency-cruiser.cjs`).
 - `pnpm licencias`: sin AGPL ni licencias sin revisar (`scripts/verificar-licencias.mjs`).
 - `pnpm audit --prod --audit-level high`
-- `pnpm test`: las pruebas de cada paquete (dominio, protocolo, documentos, campo, oficina y servidor; este último levanta PostgreSQL y S3 con Testcontainers).
+- `pnpm --filter "./paquetes/*" test`: las pruebas de cada paquete (dominio, protocolo, documentos, campo, oficina y servidor; este último levanta PostgreSQL y S3 con Testcontainers). `pnpm test` a secas también corre la de extremo a extremo.
 - `pnpm presupuesto`: JavaScript inicial de campo (compile campo antes).
 - `pnpm --filter @teins/e2e test`: extremo a extremo en Chromium y WebKit (requiere `docker compose up`). Contra el entorno de pruebas: `E2E_CAMPO_URL`, `E2E_OFICINA_URL` y `E2E_PORTAL_URL` (ver `docs/proceso/entorno-de-pruebas.md`).

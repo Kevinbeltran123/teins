@@ -308,7 +308,8 @@ describe("motor de sincronización", () => {
       ),
       { numRuns: 60 },
     );
-  });
+    // 60 corridas con IndexedDB en memoria: con otros paquetes probándose a la vez pasan de los 5 s por omisión.
+  }, 30_000);
 });
 
 describe("bajada (ADR-0003)", () => {

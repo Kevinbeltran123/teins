@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, lt, ne, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, notInArray, or } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp, type TextoPropio } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
@@ -73,17 +73,18 @@ export async function enviarAlQuedarListo(tx: TxOrganizacion, { organizacionId, 
   for (const { id } of pendientes) await encolarEnvio(tx, { organizacionId, envioId: id, pdfRuta });
 }
 
-const RETIRADA_ANTES_DE_SALIR = "La versión se retiró antes de enviarla";
+/** El motivo de un envío que se canceló porque su versión se retiró (ADR-0047). */
+const VERSION_RETIRADA = "Versión retirada";
 
 /**
- * La versión se retiró: sus envíos en cola no salen. Quedan "No llegó" con el motivo y sin aviso,
- * porque lo decidió oficina (regla 10). Uno que ya estaba saliendo no se detiene: si el proveedor lo
- * acepta, pasa a "Enviado" (`marcarEnviado`); si no, su reintento ya no lo manda.
+ * La versión se retiró: sus envíos en cola no salen. Quedan cancelados por quien la retiró, con el motivo y sin aviso,
+ * porque lo decidió oficina (ADR-0047); no se reanudan, porque la versión ya no se entrega (regla 10). Uno que ya
+ * estaba saliendo no se detiene: si el proveedor lo acepta, pasa a "Enviado" (`marcarEnviado`); si no, queda cancelado.
  */
-export async function cancelarEnviosDeVersion(tx: TxOrganizacion, versionId: string): Promise<void> {
+export async function cancelarEnviosDeVersion(tx: TxOrganizacion, { versionId, por }: { versionId: string; por: string }): Promise<void> {
   await tx
     .update(envios)
-    .set({ estado: "fallido", error: RETIRADA_ANTES_DE_SALIR, actualizadoEn: new Date() })
+    .set({ estado: "cancelado", error: VERSION_RETIRADA, canceladoPor: por, canceladoEn: new Date(), actualizadoEn: new Date() })
     .where(and(eq(envios.versionId, versionId), eq(envios.estado, "en_cola")));
 }
 
@@ -111,7 +112,7 @@ export async function cancelarEnvio(tx: TxOrganizacion, { versionId, envioId, po
 export async function reanudarEnvio(tx: TxOrganizacion, { organizacionId, versionId, envioId, pdfRuta }: { organizacionId: string; versionId: string; envioId: string; pdfRuta: string | undefined }): Promise<boolean> {
   const [reanudado] = await tx
     .update(envios)
-    .set({ estado: "en_cola", canceladoPor: null, canceladoEn: null, actualizadoEn: new Date() })
+    .set({ estado: "en_cola", error: null, canceladoPor: null, canceladoEn: null, actualizadoEn: new Date() })
     .where(and(eq(envios.id, envioId), eq(envios.versionId, versionId), eq(envios.estado, "cancelado")))
     .returning({ id: envios.id });
   if (!reanudado) return false;
@@ -119,8 +120,11 @@ export async function reanudarEnvio(tx: TxOrganizacion, { organizacionId, versio
   return true;
 }
 
-/** El proveedor lo aceptó o lo entregó: vale para uno en cola y para uno que el retiro alcanzó cuando ya salía. */
-const puedeSalir = or(eq(envios.estado, "en_cola"), and(eq(envios.estado, "fallido"), eq(envios.error, RETIRADA_ANTES_DE_SALIR)));
+/**
+ * El proveedor lo aceptó o lo entregó: vale para uno en cola y para uno que el retiro alcanzó cuando ya salía
+ * (`enviadoEn` marcado antes de llamar al proveedor). Un cancelado por oficina nunca empezó a salir (ADR-0034, 0047).
+ */
+const puedeSalir = or(eq(envios.estado, "en_cola"), and(eq(envios.estado, "cancelado"), eq(envios.error, VERSION_RETIRADA), isNotNull(envios.enviadoEn)));
 
 /** El PDF de la versión no se pudo generar: sus envíos en cola no van a salir, y se avisa a quien los pidió (ADR-0012). */
 export async function fallarEnviosDeVersion(tx: TxOrganizacion, versionId: string): Promise<void> {
@@ -181,19 +185,20 @@ export async function versionesConEnvioSinEntregar(tx: TxOrganizacion, versionId
 async function marcarEnviado(tx: TxOrganizacion, envioId: string, proveedorId: string | null): Promise<void> {
   await tx
     .update(envios)
-    .set({ estado: "enviado", proveedorId, error: null, actualizadoEn: new Date() })
+    .set({ estado: "enviado", proveedorId, error: null, canceladoPor: null, canceladoEn: null, actualizadoEn: new Date() })
     .where(and(eq(envios.id, envioId), puedeSalir));
 }
 
 /**
  * "No llegó": queda el motivo y se avisa a quien lo pidió. Un rebote de correo marca al contacto. Sin `avisarle` no se
- * avisa: lo decidió oficina (quitó el contacto o su canal) y no hay nada que volver a enviar (iteración 42).
+ * avisa: lo decidió oficina (quitó el contacto o su canal) y no hay nada que volver a enviar (iteración 42). Un
+ * cancelado no pasa a "No llegó": no salió porque oficina lo detuvo (ADR-0034, 0047).
  */
 async function marcarFallido(tx: TxOrganizacion, fila: FilaEnvio, motivo: string, rebote = false, avisarle = true): Promise<void> {
   const [cambiado] = await tx
     .update(envios)
     .set({ estado: "fallido", error: motivo.slice(0, 500), actualizadoEn: new Date() })
-    .where(and(eq(envios.id, fila.id), ne(envios.estado, "fallido")))
+    .where(and(eq(envios.id, fila.id), notInArray(envios.estado, ["fallido", "cancelado"])))
     .returning({ id: envios.id });
   if (!cambiado) return;
   if (rebote && fila.canal === "correo") await contactosDelCliente.marcarRebote(tx, fila.contactoId, fila.destino, motivo);
@@ -263,7 +268,7 @@ export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { 
       if (evento.estado === "fallido") return marcarFallido(tx, fila, evento.motivo ?? "El proveedor no lo entregó", evento.rebote);
       await tx
         .update(envios)
-        .set({ estado: "entregado", proveedorId: evento.proveedorId, error: null, actualizadoEn: new Date() })
+        .set({ estado: "entregado", proveedorId: evento.proveedorId, error: null, canceladoPor: null, canceladoEn: null, actualizadoEn: new Date() })
         .where(and(eq(envios.id, fila.id), or(eq(envios.estado, "enviado"), puedeSalir)));
     });
   }
