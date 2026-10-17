@@ -692,6 +692,7 @@ function AvancePublicacion({
                       {e.contacto.nombre}
                       <span className={`det ${e.estado === "entregado" ? "ok" : e.estado === "fallido" ? "mal" : ""}`}>
                         {e.canal === "correo" ? "Correo" : "WhatsApp"} · {ESTADO_DEL_ENVIO[e.estado]}
+                        {e.estado === "cancelado" && e.error && `: ${e.error}`}
                         {e.estado === "enviado" && e.canal === "whatsapp" && ": Meta no ha confirmado la entrega"}
                         {e.estado === "en_cola" && (
                           <button type="button" className="accion-envio" onClick={() => void cancelar(e)} aria-label={`Cancelar el envío a ${e.contacto.nombre} por ${e.canal === "correo" ? "correo" : "WhatsApp"}`}>

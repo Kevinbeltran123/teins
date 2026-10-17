@@ -317,7 +317,7 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     expect((await enviosDe(oficina.cookie, informeId)).map((e) => e.estado)).toEqual(["enviado"]);
   }, 90_000);
 
-  it("retirar la versión antes de que el PDF esté listo cancela sus envíos en cola", async () => {
+  it("retirar la versión antes de que el PDF esté listo cancela sus envíos en cola, sin poder reanudarlos (ADR-0047)", async () => {
     const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
     const [ana] = await crearContacto(oficina.cookie, clienteId, ANA);
     expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [ana!.id] })).statusCode).toBe(201);
@@ -327,9 +327,12 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     await s.esperarPdf({ informeId });
     await s.procesarCola();
     const envios = await enviosDe(oficina.cookie, informeId);
-    expect(envios.map((e) => e.estado)).toEqual(["fallido", "fallido"]);
-    expect(envios[0]!.error).toContain("retiró");
+    expect(envios).toEqual([
+      expect.objectContaining({ estado: "cancelado", error: "Versión retirada", cancelado: expect.objectContaining({ por: expect.objectContaining({ nombre: "Administradora de prueba" }) }) }),
+      expect.objectContaining({ estado: "cancelado", error: "Versión retirada" }),
+    ]);
     expect(correos.some((c) => envios.some((e) => e.id === c.etiquetas["envio"]))).toBe(false);
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/envios/${envios[0]!.id}/reanudar`)).json()).toMatchObject({ codigo: "estado_invalido" });
   }, 90_000);
 
   it("un contacto quitado mientras su envío espera el PDF no lo recibe", async () => {
@@ -373,6 +376,25 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     await s.procesarCola();
     expect(retiro).toBe(200);
     expect(await enviosDe(oficina.cookie, informeId)).toEqual([expect.objectContaining({ estado: "enviado", error: null })]);
+  }, 90_000);
+
+  it("retirar la versión mientras una copia sale y el proveedor la rechaza: queda cancelada, no «No llegó» (ADR-0047)", async () => {
+    const { oficina, clienteId, informeId, organizacionId } = await informeListoParaPublicar();
+    const [ana] = await crearContacto(oficina.cookie, clienteId, { ...ANA, recibeWhatsapp: false });
+    const admin = await s.nuevoAdministrador(organizacionId);
+    await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [] });
+    await s.esperarPdf({ informeId });
+    await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: ana!.id }] });
+    const envioId = (await enviosDe(oficina.cookie, informeId))[0]!.id;
+    const { rows } = await s.propietario.pool.query("select pdf_huella from informes.versiones where informe_id = $1", [informeId]);
+
+    const rechaza: ProveedorDeCorreo = async () => {
+      expect((await post(admin.cookie, `/api/informes/${informeId}/versiones/1/retirar`, { motivo: "Tenía un error" })).statusCode).toBe(200);
+      throw new RechazoDefinitivo("Resend lo rechazó: dirección inválida");
+    };
+    const envios = crearEnvios({ bd: s.conexionApp.bd, almacenamiento: almacenamientoS3(s.config), config: s.config, proveedores: { correo: rechaza, whatsapp } });
+    await envios.enviar({ organizacionId, envioId, pdfRuta: claveDeObjeto(organizacionId, rows[0].pdf_huella) }, { ultimoIntento: false });
+    expect((await enviosDe(oficina.cookie, informeId))[0]).toMatchObject({ estado: "cancelado", error: "Versión retirada" });
   }, 90_000);
 
   it("el PDF se lee antes de marcar la salida: si el proceso muere leyéndolo, el WhatsApp no queda por enviado", async () => {

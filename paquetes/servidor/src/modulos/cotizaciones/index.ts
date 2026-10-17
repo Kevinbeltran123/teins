@@ -459,7 +459,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               throw existe ? problema("estado_invalido", "La versión ya estaba retirada") : problema("no_encontrado", "La versión no existe");
             }
             // Lo que esperaba en cola ya no sale: la versión dejó de valer.
-            await cancelarEnviosDeVersion(tx, retirada.id);
+            await cancelarEnviosDeVersion(tx, { versionId: retirada.id, por: actor.usuarioId });
             await registrar(tx, [
               { organizacionId: actor.organizacionId, agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: "version_retirada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero }, motivo: cuerpo.motivo },
             ]);

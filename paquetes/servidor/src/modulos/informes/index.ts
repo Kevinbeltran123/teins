@@ -477,7 +477,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               .returning({ id: versionesPublicadas.id });
             // Otra persona la retiró al mismo tiempo: un solo evento en la auditoría.
             if (!retiro) throw problema("estado_invalido", "La versión ya estaba retirada");
-            await cancelarEnviosDeVersion(tx, retiro.id);
+            await cancelarEnviosDeVersion(tx, { versionId: retiro.id, por: actor.usuarioId });
             await registrar(tx, [
               { organizacionId: actor.organizacionId, agregadoTipo: "informe", agregadoId: id, tipoEvento: "version_retirada", autorId: actor.usuarioId, correlacion, valorNuevo: { numero }, motivo: cuerpo.motivo },
             ]);
