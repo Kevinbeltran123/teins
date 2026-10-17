@@ -6,7 +6,7 @@ import { crearAvisos, enviadorSegunConfig } from "./modulos/avisos";
 import { crearGeneradorPdfDeCotizaciones } from "./modulos/cotizaciones";
 import { crearEnvios, proveedoresSegunConfig } from "./modulos/envios";
 import { crearGeneradorPdf } from "./modulos/informes";
-import { podarVencido, recuperarTrabajosAMedias } from "./modulos/mantenimiento";
+import { limpiarArchivosSinUso, podarVencido, recuperarTrabajosAMedias } from "./modulos/mantenimiento";
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
 import { cerrarNavegador } from "./plataforma/pdf";
@@ -34,10 +34,11 @@ const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
   registro[metodo]({ ...alcance, ...meta }, mensaje);
 });
 
-/** La tarea periódica (ADR-0043, ADR-0044): recupera lo que quedó a medias y poda lo vencido. */
+/** La tarea periódica (ADR-0043, ADR-0044, ADR-0048): recupera lo que quedó a medias, poda lo vencido y borra los archivos sin uso. */
 const mantener = async (bds: { negocio: typeof negocio.bd; propietario: typeof cola.bd }) => {
   await recuperarTrabajosAMedias(bds.negocio);
   await podarVencido(bds);
+  await limpiarArchivosSinUso({ ...bds, almacenamiento });
 };
 
 const corredor = await run({

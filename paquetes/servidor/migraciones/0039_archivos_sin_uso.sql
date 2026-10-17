@@ -1,0 +1,2 @@
+ALTER TABLE "archivos"."archivos" ADD COLUMN "en_uso_comprobado_en" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "archivos_sin_comprobar_idx" ON "archivos"."archivos" USING btree ("organizacion_id","creado_en") WHERE "archivos"."archivos"."en_uso_comprobado_en" is null;
