@@ -4,7 +4,7 @@ Cómo se monta, se respalda y se recupera un entorno de TEINS en Railway (ADR-00
 
 **Mientras producción viva en la cuenta de Kevin, no se cargan datos reales** (ADR-0021): solo la primera persona administradora y datos de verificación, hasta transferir el proyecto al espacio de trabajo de TEINS o tener su autorización escrita.
 
-**Producción está apagada desde el 2026-10-10** para ahorrar: sin datos reales costaba lo mismo que el entorno de pruebas (unos USD 7 al mes, casi todo memoria). Se quitó el despliegue activo de sus seis servicios con `railway down`; el volumen de Postgres (con sus datos), las variables, los secretos y los dominios se conservan, y sus tres direcciones responden 404. El entorno de pruebas no cambió.
+Si producción está encendida o apagada, y por qué, lo dice el "Estado actual" del [plan de entrega](plan-de-entrega.md). Apagarla es quitar el despliegue activo de sus seis servicios con `railway down`; el volumen de Postgres (con sus datos), las variables, los secretos y los dominios se conservan. Mientras está apagada, sus tres direcciones responden 404; apagarla no toca el entorno de pruebas.
 
 `railway scale <región>=0` **no** apaga un servicio: quita la región y Railway lo vuelve a poner en `us-west2` con una réplica. Así quedó producción ese día antes de apagarla, base incluida. Para encenderla, con el proyecto enlazado:
 
@@ -147,4 +147,4 @@ Cuando TEINS tenga su espacio de trabajo en Railway (plan Hobby o Pro):
 1. Simulacro completo en producción, anotado arriba.
 2. Transferir `teins-produccion` y `teins-respaldos` (Settings → Transfer Project).
 3. En la cuenta de TEINS: alerta de gasto, personas con acceso, y cambiar las credenciales del almacenamiento y los secretos (`AUTH_SECRETO` cierra todas las sesiones). `RESPALDOS_CLAVE` no se cambia: se entrega a TEINS la copia de `privado/teins-produccion-respaldos.txt` y se borra del computador de Kevin.
-4. Registrar la transferencia en ADR-0021 ("Cuándo revisarla") y en el plan de entrega. Desde ese momento se pueden cargar datos reales.
+4. Registrar la transferencia en un ADR nuevo que cierre la condición de ADR-0021 ("Cuándo revisarla"; un ADR aceptado no se edita) y en el plan de entrega. Desde ese momento se pueden cargar datos reales.

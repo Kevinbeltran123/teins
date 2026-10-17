@@ -24,6 +24,6 @@ Cada iteración identifica qué preguntas de `docs/producto/preguntas-pendientes
 
 Un ADR aceptado no se edita para cambiar la decisión: se escribe uno nuevo que lo reemplaza, con la plantilla de `docs/adr/0000-plantilla.md`.
 
-## Pendiente
+## Dónde va el avance
 
-El **plan de entrega** (recorrido delgado e iteraciones de las ocho semanas) es el siguiente documento de esta carpeta.
+El avance y el próximo paso están en [`plan-de-entrega.md`](plan-de-entrega.md); el alcance, las decisiones y lo que quedó fuera de cada corte, en [`historia/`](historia/README.md). Al cerrar un corte, la documentación dice lo mismo que el código ([`docs/README.md`](../README.md), "Al cerrar una iteración").

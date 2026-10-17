@@ -25,7 +25,7 @@ import { estilosDe, type Salida } from "./salida";
  * mismo contenido produce el mismo documento. La vista en vivo de oficina dibuja el borrador con esta misma
  * plantilla (ADR-0031).
  *
- * Supuestos mientras TEINS responde P22 y P23 (plan de entrega, corte 4): portada, introducción,
+ * Supuestos mientras TEINS responde P22 y P23 (docs/proceso/historia/04-informe.md): portada, introducción,
  * un capítulo por levantamiento, conclusiones, firma y planos anexos. Lo que falta va como marcador.
  * La marca por organización (ADR-0020) llega con la administración: hoy, los valores de TEINS.
  */

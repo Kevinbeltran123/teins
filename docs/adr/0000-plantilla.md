@@ -1,6 +1,6 @@
 # ADR-NNNN · Título en forma de decisión
 
-- **Estado:** Aceptada | Aceptada | Reemplazada por NNNN
+- **Estado:** Propuesta | Aceptada | Reemplazada por NNNN
 - **Fecha:** AAAA-MM-DD
 - **Impulsores:** QA-n, R-n, I-n
 - **Depende de:** ADR-NNNN
