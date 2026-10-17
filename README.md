@@ -6,7 +6,7 @@ Sistema para capturar levantamientos técnicos en campo (con o sin conexión), r
 
 ## Estado
 
-El recorrido completo funciona en el entorno de pruebas (Railway). Producción es provisional y no tiene datos reales hasta transferirla a TEINS (ADR-0021). Qué está desplegado dónde, lo que falta probar y el próximo paso están en un solo lugar: [`docs/proceso/plan-de-entrega.md`](docs/proceso/plan-de-entrega.md).
+El recorrido completo funciona en el entorno de pruebas (Railway). Producción es provisional y no tiene datos reales hasta transferirla a TEINS (ADR-0021). Qué está desplegado dónde, lo que falta probar y el próximo paso están en un solo lugar: `docs/proceso/plan-de-entrega.md` (local).
 
 ## Qué hace
 
@@ -29,11 +29,11 @@ Lo que hace falta para el piloto con TEINS (precios, plantilla del informe, dato
 | [`docs/README.md`](docs/README.md) | Mapa de la documentación: qué hay en cada documento y qué actualizar cuando algo cambia |
 | [`docs/arquitectura/`](docs/arquitectura/) | Impulsores, modelo de dominio y cómo funciona hoy (diagramas) |
 | [`docs/adr/`](docs/adr/) | Registro de decisiones de arquitectura |
-| [`docs/diseno/`](docs/diseno/) | Referencias visuales y pantallas pendientes |
+| `docs/diseno/` (local) | Referencias visuales y pantallas pendientes |
 | [`docs/proceso/`](docs/proceso/) | Plan de entrega (estado y próximo paso), historia de cada iteración, forma de trabajo, entornos y verificación manual |
 | [`paquetes/`](paquetes/) | Monorepo: dominio, protocolo, servidor, campo, oficina, portal, documentos, ui (cada uno con su README) |
 | [`e2e/`](e2e/) | Pruebas de extremo a extremo (Chromium y WebKit) |
-| [`prototipos/`](prototipos/) | Prototipos navegables aprobados antes de construir cada cambio de interfaz |
+| `prototipos/` (local) | Prototipos navegables aprobados antes de construir cada cambio de interfaz |
 | [`infra/`](infra/) | Railway, respaldos y limpieza de entornos |
 
 ## Stack
