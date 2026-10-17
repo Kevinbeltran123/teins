@@ -45,3 +45,4 @@ Un archivo por corte o grupo de iteraciones, con su alcance, lo que quedó fuera
 | [40-lo-atendido-no-es-la-siguiente-visita](40-lo-atendido-no-es-la-siguiente-visita.md) | Lo atendido sale de «Siguiente visita» y del teléfono | 2026-10-06 | 0041, 0042 |
 | [41-nada-queda-a-medias](41-nada-queda-a-medias.md) | Recuperar trabajos a medias, retención de 30 días y poda | 2026-10-06 | 0043, 0044 |
 | [42-lo-que-se-ve-sale-de-lo-guardado](42-lo-que-se-ve-sale-de-lo-guardado.md) | Lo que se ve sale de lo guardado, en campo, oficina y servidor | 2026-10-15 | 0045 |
+| [43-documentacion-y-codigo-alineados](43-documentacion-y-codigo-alineados.md) | Documentación reorganizada; envíos de una versión retirada, descarte en error y archivos sin uso | 2026-10-16 | 0046, 0047, 0048 |

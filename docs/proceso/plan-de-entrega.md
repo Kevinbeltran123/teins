@@ -17,9 +17,9 @@ Al 2026-10-16.
 
 **Entornos:**
 
-- **Entorno de pruebas:** al día hasta la iteración 42, desplegada el 2026-10-15 con su tanda 5 ([`entorno-de-pruebas.md`](entorno-de-pruebas.md)).
+- **Entorno de pruebas:** al día hasta la iteración 43, desplegada el 2026-10-16 con la migración `0039` ([`entorno-de-pruebas.md`](entorno-de-pruebas.md)).
 - **Producción:** apagada desde el 2026-10-10 para no pasar el límite de USD 10 del mes; la base y la configuración siguen intactas. Cómo encenderla está en [`produccion.md`](produccion.md). Lo último desplegado allí son las iteraciones hasta la 41 (2026-10-06, migraciones hasta la `0038`). Sin datos reales ni formatos publicados hasta que TEINS entregue los suyos (ADR-0021). En el mapa, "En producción" quiere decir que entró en ese último despliegue.
-- **Código:** todo `corte-0` se fusionó a `master` con el pull request #2 el 2026-10-16. `corte-0` sigue como rama de trabajo.
+- **Código:** `corte-0` se lleva a `master` con un pull request por iteración (el #5, con la 43, el 2026-10-16). `corte-0` sigue como rama de trabajo.
 
 **Pendientes de Kevin:**
 
@@ -39,9 +39,9 @@ Al 2026-10-16.
 
 ## Próximo paso
 
-**Iteración 42 desplegada en el entorno de pruebas (2026-10-15).** Kevin encontró en producción que un tablero quitado se seguía pidiendo al enviar. La investigación lo reprodujo y encontró la misma familia de fallos en campo, oficina y servidor, todos arreglados (ADR-0045). Una quinta tanda cerró lo menor que dejaron las revisiones, y todo `corte-0` pasó a `master` con el pull request #2 el 2026-10-16, cuando la integración quedó en verde (el trabajo de WebKit no instalaba el Chromium con el que el worker imprime los PDF). Siguiente: que Kevin pruebe la 42 en su iPhone (agregar y quitar tableros, volver a pasos ya capturados, materiales, croquis) y en oficina. Después, producción cuando la vuelva a encender: respaldo antes, y `campo`, `oficina`, `portal` y `worker`, sin migración. Pendiente de antes: probar de la 38 a la 41 y lo que entregue TEINS.
+**Iteración 43 (2026-10-16): la documentación reorganizada y alineada con el código.** El estado vive aquí, la historia en `historia/` y los estados en diagramas (`03-como-funciona.md`). Se cerraron las 8 diferencias entre el código y los documentos: retirar una versión cancela sus envíos (ADR-0047), descartar un envío en error (ADR-0046) y los archivos sin uso se borran a los 120 días (ADR-0048, migración `0039`). Siguiente: que Kevin pruebe la 42 en su iPhone y en oficina, y en oficina que retirar una versión con envíos en cola los deja «Cancelado», no «No llegó». Después, producción cuando la vuelva a encender: respaldo antes, y `campo` (migra a la `0039`), `oficina`, `portal` y `worker`. Pendiente de antes: probar de la 38 a la 41 y lo que entregue TEINS.
 
-El detalle de la iteración 42 está en [`historia/42-lo-que-se-ve-sale-de-lo-guardado.md`](historia/42-lo-que-se-ve-sale-de-lo-guardado.md).
+El detalle está en [`historia/43-documentacion-y-codigo-alineados.md`](historia/43-documentacion-y-codigo-alineados.md).
 
 ## Mapa
 
@@ -90,5 +90,6 @@ El detalle de la iteración 42 está en [`historia/42-lo-que-se-ve-sale-de-lo-gu
 | Iteración 40 | Lo atendido no es la siguiente visita (ADR-0041 y ADR-0042) | Una visita ya hecha seguía como «Siguiente visita» y se acumulaba en el teléfono | En producción; falta iPhone | [40-lo-atendido-no-es-la-siguiente-visita](historia/40-lo-atendido-no-es-la-siguiente-visita.md) |
 | Iteración 41 | Nada queda a medias ni crece sin fin (ADR-0043 y ADR-0044): lo que espera la app nueva, la foto rechazada, el envío sin salida, los trabajos a medias, la retención de 30 días, la poda del servidor y el estado que no se actualizaba | Trabajo atascado para siempre, un teléfono que se llena y pantallas que no se enteran del paso del tiempo | En producción; falta iPhone | [41-nada-queda-a-medias](historia/41-nada-queda-a-medias.md) |
 | Iteración 42 | Lo que se ve sale de lo guardado (ADR-0045): el tablero quitado que se seguía pidiendo, los pasos que volvían vacíos y borraban materiales, lo que llegaba tarde a un tablero quitado, el croquis grande, el envío rechazado que vuelve a borrador, y la misma familia en oficina y servidor | Un tablero quitado bloqueaba el envío, lo capturado se perdía al volver a un paso y oficina podía escribir un documento sobre otro | En pruebas y en `master`; falta iPhone | [42-lo-que-se-ve-sale-de-lo-guardado](historia/42-lo-que-se-ve-sale-de-lo-guardado.md) |
+| Iteración 43 | La documentación reorganizada y alineada con el código; retirar una versión cancela sus envíos (ADR-0047), descartar un envío en error (ADR-0046) y los archivos sin uso se borran (ADR-0048) | Documentos que ya no decían lo que hace el código, un retiro que se veía como fallo de entrega y archivos que crecían sin fin | En pruebas; falta que Kevin la pruebe | [43-documentacion-y-codigo-alineados](historia/43-documentacion-y-codigo-alineados.md) |
 
 Con el corte 5 quedó completo el **recorrido delgado**. Desde ahí, cada iteración se eligió por riesgo, en el orden del mapa.

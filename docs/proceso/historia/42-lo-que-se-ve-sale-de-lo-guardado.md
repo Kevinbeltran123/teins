@@ -1,4 +1,4 @@
-[Plan de entrega](../plan-de-entrega.md) · Anterior: [Iteración 41 · Nada queda a medias ni crece sin fin](41-nada-queda-a-medias.md)
+[Plan de entrega](../plan-de-entrega.md) · Anterior: [Iteración 41 · Nada queda a medias ni crece sin fin](41-nada-queda-a-medias.md) · Siguiente: [Iteración 43 · Lo que dice la documentación es lo que hace el código](43-documentacion-y-codigo-alineados.md)
 
 # Iteración 42 · Lo que se ve sale de lo guardado
 
@@ -115,3 +115,7 @@
   - extremo a extremo en Chromium y WebKit: 153 pasan, 3 omitidas y ninguna falla (37,1 min), con `robustez-oficina.spec.ts` en 8 pruebas;
   - en el entorno de pruebas, después del despliegue, pasaron la del formulario que parte de Clientes, «Ver en Canceladas» y el borrador bloqueado con la sesión vencida;
   - `avisos.test.ts` («410 borra la suscripción…») falló una vez con los 22 archivos en paralelo, y pasó sola y en la corrida siguiente: es intermitente desde antes y no depende de esta tanda.
+
+## Al cerrarla
+
+**Iteración 42 desplegada en el entorno de pruebas (2026-10-15).** Kevin encontró en producción que un tablero quitado se seguía pidiendo al enviar. La investigación lo reprodujo y encontró la misma familia de fallos en campo, oficina y servidor, todos arreglados (ADR-0045). Una quinta tanda cerró lo menor que dejaron las revisiones, y todo `corte-0` pasó a `master` con el pull request #2 el 2026-10-16, cuando la integración quedó en verde (el trabajo de WebKit no instalaba el Chromium con el que el worker imprime los PDF). Siguiente: que Kevin pruebe la 42 en su iPhone (agregar y quitar tableros, volver a pasos ya capturados, materiales, croquis) y en oficina. Después, producción cuando la vuelva a encender: respaldo antes, y `campo`, `oficina`, `portal` y `worker`, sin migración. Pendiente de antes: probar de la 38 a la 41 y lo que entregue TEINS.

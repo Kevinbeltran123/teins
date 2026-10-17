@@ -140,7 +140,7 @@ En el teléfono, la visita sale con un cambio `fuera_de_alcance` y un motivo: `r
 
 ## 3. Envío del informe o la cotización al cliente
 
-Cada envío es una fila por destinatario y canal, creada en la misma transacción que publica o que pide enviar ([ADR-0028](../adr/0028-envio-del-informe-al-cliente.md)). Sale del worker cuando el PDF está listo. El estado solo avanza, con tres excepciones: «Deshacer» devuelve un `cancelado` a la cola, un rebote después de `entregado` pasa a `fallido`, y un envío que ya estaba saliendo cuando se retiró su versión pasa de `fallido` a `enviado` si el proveedor lo acepta (`puedeSalir`). Cancelar gana o pierde contra el worker en la misma fila, así un `cancelado` nunca sale ([ADR-0034](../adr/0034-cancelar-envios-y-retirar-cotizaciones.md)).
+Cada envío es una fila por destinatario y canal, creada en la misma transacción que publica o que pide enviar ([ADR-0028](../adr/0028-envio-del-informe-al-cliente.md)). Sale del worker cuando el PDF está listo. El estado solo avanza, con tres excepciones: «Deshacer» devuelve un `cancelado` a la cola, un rebote después de `entregado` pasa a `fallido`, y un envío que ya estaba saliendo cuando se retiró su versión pasa de `cancelado` a `enviado` o `entregado` si el proveedor lo acepta (`puedeSalir`, que exige el motivo "Versión retirada" y `enviado_en`). Cancelar gana o pierde contra el worker en la misma fila, así un `cancelado` a mano nunca sale ([ADR-0034](../adr/0034-cancelar-envios-y-retirar-cotizaciones.md)). Retirar una versión cancela sus envíos en cola, por quien la retiró y con el motivo "Versión retirada", y no se reanudan; "No llegó" nunca toca un `cancelado` ([ADR-0047](../adr/0047-retirar-una-version-cancela-sus-envios.md)).
 
 ```mermaid
 stateDiagram-v2
@@ -148,15 +148,16 @@ stateDiagram-v2
   state "fallido, No llegó" as fallido
 
   [*] --> en_cola : publicar o enviar otra vez, oficina
-  en_cola --> cancelado : cancelarEnvio, oficina
-  cancelado --> en_cola : reanudarEnvio, Deshacer
+  en_cola --> cancelado : cancelarEnvio, oficina, o versión retirada
+  cancelado --> en_cola : reanudarEnvio, Deshacer, si la versión no está retirada
   en_cola --> en_cola : error pasajero, la cola reintenta
   en_cola --> enviado : worker, el proveedor lo aceptó
-  en_cola --> fallido : rechazo definitivo, último intento, PDF fallido, contacto sin el canal o versión retirada
+  en_cola --> fallido : rechazo definitivo, último intento, PDF fallido o contacto sin el canal
   enviado --> entregado : evento de Resend o Meta
   enviado --> fallido : evento de rebote o fallo
   entregado --> fallido : rebote tardío
-  fallido --> enviado : ya salía cuando se retiró la versión
+  cancelado --> enviado : ya salía cuando se retiró la versión
+  cancelado --> [*]
   fallido --> [*]
   entregado --> [*]
 ```
@@ -168,12 +169,13 @@ Reintentar no revive una fila: oficina pide "enviar solo a quien falta" y se cre
 | crear en cola | Oficina | `paquetes/servidor/src/modulos/envios/index.ts:programarEnvios` (desde `publicarInforme`, `enviarVersion`, `publicarCotizacion`, `enviarCotizacion`) | 0028, 0036 |
 | salir cuando el PDF está listo | Sistema | `paquetes/servidor/src/modulos/envios/index.ts:enviarAlQuedarListo`, `crearEnvios().enviar` | 0012, 0028 |
 | cancelar y deshacer | Oficina | `paquetes/servidor/src/modulos/envios/index.ts:cancelarEnvio`, `reanudarEnvio` | 0034 |
+| cancelar al retirar la versión | Oficina (administración) | `paquetes/servidor/src/modulos/envios/index.ts:cancelarEnviosDeVersion` (desde `retirarVersion`, `retirarVersionDeCotizacion`) | 0034, 0047 |
 | `enviado` | Sistema | `paquetes/servidor/src/modulos/envios/index.ts:marcarEnviado` | 0028 |
 | `entregado` o `fallido` por evento firmado | Proveedor | `paquetes/servidor/src/modulos/envios/index.ts:aplicar`, `paquetes/servidor/src/modulos/envios/eventos.ts` | 0028 |
-| `fallido` | Sistema | `paquetes/servidor/src/modulos/envios/index.ts:marcarFallido`, `fallarEnviosDeVersion`, `cancelarEnviosDeVersion` | 0028, 0034 |
+| `fallido` | Sistema | `paquetes/servidor/src/modulos/envios/index.ts:marcarFallido`, `fallarEnviosDeVersion` | 0028 |
 | relanzar lo atascado | Sistema, cada hora | `paquetes/servidor/src/modulos/mantenimiento/index.ts:recuperarTrabajosAMedias` | 0043 |
 
-**Si cambias esto, actualiza:** `paquetes/servidor/src/modulos/envios/esquema.ts` (`EstadoDeEnvio`) e `index.ts`, las pantallas de envíos de `paquetes/oficina`, [ADR-0028](../adr/0028-envio-del-informe-al-cliente.md) si cambia la regla.
+**Si cambias esto, actualiza:** `paquetes/servidor/src/modulos/envios/esquema.ts` (`EstadoDeEnvio`) e `index.ts`, las pantallas de envíos de `paquetes/oficina`, [ADR-0028](../adr/0028-envio-del-informe-al-cliente.md) o [ADR-0047](../adr/0047-retirar-una-version-cancela-sus-envios.md) si cambia la regla.
 
 ---
 
@@ -345,13 +347,17 @@ flowchart BT
 
 ## Diferencias encontradas
 
-Comparación del código con `02-modelo-dominio.md` y los ADR al 2026-10-16. Ninguna se corrigió aquí.
+La comparación del código con `02-modelo-dominio.md` y los ADR, del 2026-10-16, encontró 8 diferencias. Se cerraron el mismo día:
 
-1. **Estado "Anulado" del levantamiento.** `02-modelo-dominio.md` (sección 5 y regla 14) lo lista. El código no lo tiene: `EstadoLevantamiento` es `borrador | enviado | en_revision | revisado`, y una prueba del protocolo rechaza `anulado` en la bajada.
-2. **Editar un revisado.** `02-modelo-dominio.md` dice que en Revisado edita "Oficina, con toma y registro de cambios". En el código `revisado` es final: `puedeEditar` exige `en_revision` y no existe reabrir ([ADR-0032](../adr/0032-soltar-reabrir-y-devolver-una-revision.md) está aplazado).
-3. **Soltar la revisión.** Solo existe al desactivar al revisor (`soltarRevisionesDe`), y deja el levantamiento en `en_revision` sin responsable, no en `enviado` como propone ADR-0032. No hay "Soltar" en oficina.
-4. **Cancelar un envío de levantamiento.** El teléfono no tiene cómo cancelar un envío en cola: ADR-0034 trata los envíos al cliente. En campo, lo único es volver a borrador o descartar, y solo con el envío en `error`.
-5. **Descartar un envío rechazado.** ADR-0035 limita el descarte a "un borrador nunca enviado". El código también descarta un envío en `error`, como pide ADR-0045 (punto 3). Es una ampliación, no una contradicción, pero ADR-0035 no lo dice.
-6. **Marcas explícitas de la visita.** `02-modelo-dominio.md` (sección 5) dice que solo Cancelada y Terminada son explícitas. También lo es `cerradaEn` (ADR-0041), que el agregado sí menciona. El comentario de `canceladaEn` en `paquetes/servidor/src/modulos/visitas/esquema.ts` aún dice "el único estado explícito".
-7. **Envíos de una versión retirada.** Al retirar, los envíos en cola quedan `fallido` ("No llegó", con el motivo), no `cancelado`. Es coherente con la regla del código, pero en pantalla un retiro se ve como un fallo de entrega.
-8. **Eventos de dominio.** La tabla de `02-modelo-dominio.md` (sección 7) los nombra en PascalCase (`RevisionTomada`); la auditoría los guarda como `revision_tomada`, `campo_corregido`, `levantamiento_revisado`, `informe_publicado`, `version_retirada`. Además existen `revision_reasignada` y `revision_liberada`, que la tabla no menciona.
+| # | Diferencia | Cómo se cerró |
+|---|---|---|
+| 1 | `02` listaba el estado "Anulado", que el código no tiene | `02` corregido: nada del negocio se borra; se cancela, se archiva o se retira |
+| 2 | `02` decía que oficina edita un revisado | `02` corregido: `revisado` es final mientras [ADR-0032](../adr/0032-soltar-reabrir-y-devolver-una-revision.md) siga aplazado |
+| 3 | Soltar la revisión solo ocurre al desactivar al revisor | `02` corregido: queda `en_revision` sin revisor, no vuelve a `enviado` |
+| 4 | El teléfono no cancela un envío de levantamiento en cola | `02` corregido: solo con el envío en `error`, vuelve a borrador o se descarta |
+| 5 | ADR-0035 no decía que se descarta un envío en `error` | [ADR-0046](../adr/0046-descartar-un-envio-en-error.md). El repositorio de campo ahora también lo niega si oficina ya lo recibió, no solo la pantalla |
+| 6 | `cerradaEn` también es marca explícita de la visita | `02` y el comentario de `visitas/esquema.ts` corregidos |
+| 7 | Los envíos de una versión retirada quedaban `fallido` («No llegó») | [ADR-0047](../adr/0047-retirar-una-version-cancela-sus-envios.md): quedan `cancelado` con «Versión retirada» y no se reanudan (sección 3) |
+| 8 | Los eventos de `02` no tenían los nombres de la auditoría | `02`, sección 7: nombres reales de `TipoEvento`, con `revision_reasignada` y `revision_liberada` |
+
+Una diferencia nueva entre este documento y el código se anota aquí y se cierra en el mismo cambio, o en la iteración que la arregla.
