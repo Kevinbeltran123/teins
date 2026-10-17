@@ -33,7 +33,7 @@ export interface RepositorioLevantamientos {
   listar(tecnicoId: string): Promise<LevantamientoLocal[]>;
   /** La papelera del técnico (ADR-0035): lo descartado, del más reciente al más antiguo. */
   descartados(tecnicoId: string): Promise<LevantamientoLocal[]>;
-  /** Descarta un borrador nunca enviado: sale de Mis visitas y queda en la papelera. */
+  /** Descarta un borrador nunca enviado, o un envío en error que oficina no recibió (ADR-0046): sale de Mis visitas y queda en la papelera. */
   descartar(id: string, ahora: Date): Promise<void>;
   /**
    * Lo saca de la papelera. Si su visita ya tiene otro borrador, vuelve como levantamiento suelto: una visita no
