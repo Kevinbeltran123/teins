@@ -28,7 +28,7 @@ Precisión cambia la piel, no el orden de las pantallas. Se conserva lo que se d
 
 - **Campo, la visita como recorrido.** Cada sección del formato es un paso (regla 6): arriba, "Paso N de M" con la barra de avance; abajo, fija, "Siguiente: …". Lo repetido son tarjetas con su estado; se revisa antes de enviar; el enviado muestra la cola de subida real. Componentes en `paquetes/ui/src/Recorrido.tsx`.
 - **Oficina, la página es la superficie.** Se agrupa con espacio, títulos y líneas finas; solo flota lo que es una capa (hojas, confirmaciones, menús, notificaciones) o un objeto (una foto, un croquis, una firma). El encabezado resume en una línea de datos cortos. Las listas: pestañas subrayadas con su contador y el buscador en la misma barra. Los documentos: el contenido a la izquierda y un carril a la derecha. Los que recibe el cliente (cotización, informe) cambian el carril por la hoja en vivo (iteración 26, `prototipos/vista-en-vivo`): el editor a la izquierda y el documento a la derecha, a todo el alto y cada uno con su desplazamiento; las acciones van en la barra superior y las versiones publicadas al final del editor. Bajo 1280 px la hoja no cabe al lado: "Vista previa" la abre en una hoja lateral ancha.
-- **Movimiento.** En campo todo es CSS (regla 10): pasos con View Transitions, hojas que suben, el chulo que se dibuja. Con movimiento reducido, nada se mueve.
+- **Movimiento.** En campo y en oficina todo es CSS (regla 10; detalle en "Movimiento"): en campo, pasos con View Transitions, hojas que suben, el chulo que se dibuja. Con movimiento reducido, nada se mueve.
 
 ## Color
 
@@ -196,7 +196,7 @@ Cada animación tiene un propósito escrito. Desde la iteración 27 (`prototipos
 3. **Solo lo nuevo se anima.** Lo que ya estaba no vuelve a entrar al volver a una pantalla o a una pestaña (`useLoNuevo`).
 4. **Cada acción termina diciendo qué pasó y qué sigue:** la notificación lleva el siguiente paso ("Agregar contactos", "Ver en Canceladas") y los flujos en serie ofrecen el siguiente ("Siguiente: …", "Ver la siguiente visita").
 
-**Cómo:** View Transitions en las dos superficies (`conTransicion` en `paquetes/ui`; el enrutador de oficina con `defaultViewTransition`). El navegador toma una foto antes y otra después y anima solo lo que tiene `view-transition-name`; la página no se mueve. Sin soporte, el cambio es instantáneo. **Sin Motion:** el movimiento es CSS en `campo` y en `oficina`; el JavaScript solo dice cuándo empieza una transición.
+**Cómo:** View Transitions en las dos superficies (`conTransicion` en `paquetes/ui`; en oficina, `router.startViewTransition` pasa por él en `src/rutas.tsx`). El navegador toma una foto antes y otra después y anima solo lo que tiene `view-transition-name`; la página no se mueve. Sin soporte, el cambio es instantáneo. **Sin Motion:** el movimiento es CSS en `campo` y en `oficina`; el JavaScript solo dice cuándo empieza una transición.
 
 | Momento | Movimiento | Propósito |
 |---|---|---|

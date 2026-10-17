@@ -56,3 +56,5 @@ Dos precauciones adicionales: digitalizar no garantiza exactitud técnica (una m
 ## Evoluciones posteriores
 
 Nuevos formularios y editor visual; estadísticas e indicadores; catálogo amplio, precios y presupuestos; integraciones con facturación; planos avanzados o medición automática; aprobaciones adicionales; comercialización a otras empresas; acceso al portal desde la web corporativa.
+
+De estas, la lista de precios y las cotizaciones ya se construyeron (iteración 21, ADR-0029). Este análisis es el del inicio del proyecto: el alcance vigente está en [`contexto.md`](contexto.md) y en el plan de entrega.

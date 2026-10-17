@@ -1,6 +1,6 @@
 # Herramientas de agentes
 
-Skills, plugins y servidores MCP que ayudan a construir Teins con agentes de programación. La regla es una sola: **cada herramienta se usa para la tarea que la necesita, no siempre.** Lo que corre en cada edición o en cada turno cuesta tiempo y contexto aunque no aporte.
+Skills, plugins y servidores MCP que ayudan a construir TEINS con agentes de programación. La regla es una sola: **cada herramienta se usa para la tarea que la necesita, no siempre.** Lo que corre en cada edición o en cada turno cuesta tiempo y contexto aunque no aporte.
 
 Un agente nunca instala ni activa una herramienta por su cuenta: la instala o activa el desarrollador (ver `AGENTS.md`).
 
@@ -21,7 +21,7 @@ Un agente nunca instala ni activa una herramienta por su cuenta: la instala o ac
 |---|---|---|---|
 | `antislop` y variantes | Skills | Filtro contra interfaz y texto genéricos | Todo trabajo de interfaz y textos |
 | Context7 | MCP | Documentación vigente de Dexie, Drizzle, Fastify, Zod, Better Auth, Graphile Worker | Antes de usar la API de una librería |
-| `shadcn` | MCP (`.mcp.json`) | Buscar e instalar componentes del registro de shadcn/ui | Al crear componentes en `paquetes/ui` (necesita `components.json`) |
+| `shadcn` | MCP (`.mcp.json`) | Buscar e instalar componentes del registro de shadcn/ui | Al crear componentes en `paquetes/ui`. Necesita un `components.json`, que el repositorio no tiene hoy: `paquetes/ui` es propio, sobre los elementos del navegador |
 | `differential-review` | Plugin, Trail of Bits | Revisión de seguridad de un cambio con su radio de impacto | Antes de fusionar cambios en `servidor`, permisos o sincronización |
 | `insecure-defaults` | Plugin, Trail of Bits | Secretos por defecto, credenciales en código, configuración débil | Al tocar configuración, variables de entorno o autenticación |
 | `sharp-edges` | Plugin, Trail of Bits | APIs y configuraciones propensas a errores de seguridad | Al diseñar interfaces públicas de módulos |
@@ -34,13 +34,13 @@ Un agente nunca instala ni activa una herramienta por su cuenta: la instala o ac
 | Herramienta | Tipo | Para qué | Cuándo activarla | Por qué no queda activa |
 |---|---|---|---|---|
 | `impeccable` | Plugin | Revisión de diseño: `audit`, `critique`, `polish`, `animate` | Al construir o pulir pantallas de `oficina` y `portal` | Trae hooks que revisan cada edición y hacen una pasada de hasta 30 s al final de cada turno. En `campo` sus sugerencias de movimiento deben ser solo CSS (regla 10) |
-| `auth-skills` | Plugin, Better Auth | Buenas prácticas y creación de la capa de autenticación | En el corte que implemente ADR 0009 | Solo sirve para ese trabajo |
+| `auth-skills` | Plugin, Better Auth | Buenas prácticas y creación de la capa de autenticación | Al cambiar la autenticación (Better Auth, ADR-0009) | Solo sirve para ese trabajo |
 
 Activar o desactivar: `/plugin` en Claude Code, o cambiar `true`/`false` en `enabledPlugins` de `.claude/settings.json`. Al terminar la tarea, se vuelve a desactivar.
 
 ## Para más adelante
 
-- **Postgres MCP Pro** (`crystaldba/postgres-mcp`, MIT): planes `EXPLAIN`, índices y salud de la base. Cuando exista la base local de desarrollo. Siempre en modo restringido y nunca contra datos reales (R5).
+- **Postgres MCP Pro** (`crystaldba/postgres-mcp`, MIT): planes `EXPLAIN`, índices y salud de la base. Con la base local de Docker Compose. Siempre en modo restringido y nunca contra datos reales (R5).
 - **`static-analysis`** (Trail of Bits): Semgrep y CodeQL. Requiere instalar esas herramientas de línea de comandos.
 
 ## Descartadas

@@ -1,10 +1,12 @@
 # Verificación manual de todas las fases
 
-Recorrido completo, a mano, de lo construido en los cortes 0 a 5 y las iteraciones 6 a 8. Las pruebas automáticas ya cubren la lógica; esto confirma lo que solo una persona con un teléfono real puede confirmar: que la app instalada en iPhone sobrevive sin señal, que las pantallas se entienden y que todo el recorrido funciona de punta a punta.
+Recorrido completo, a mano, de lo construido en los cortes 0 a 5 y las iteraciones 6 a 19 (la fase N es la iteración N; la 14 cambió la interfaz y no tiene fase propia). Lo que llegó después, de la iteración 20 en adelante, todavía no tiene fase aquí. Las pruebas automáticas ya cubren la lógica; esto confirma lo que solo una persona con un teléfono real puede confirmar: que la app instalada en iPhone sobrevive sin señal, que las pantallas se entienden y que todo el recorrido funciona de punta a punta.
 
 **Todo se hace en el entorno de pruebas** (datos ficticios, R5). Producción solo se toca en la fase 8, sin crear datos.
 
 Tiempo total: unas 2 horas y media, que se pueden repartir en varias sesiones siguiendo el orden de las fases.
+
+**Nombres de botones.** Las fases se escribieron con la interfaz de su momento; las iteraciones 22, 23, 32 y 36 rehicieron campo y oficina. Lo que se sabe que cambió ya está corregido abajo. Si un botón no aparece con el nombre que dice el paso, anote el que encontró.
 
 ## Antes de empezar
 
@@ -13,7 +15,8 @@ Tiempo total: unas 2 horas y media, que se pueden repartir en varias sesiones si
 | iPhone con Safari, cargado y con señal | El teléfono de campo |
 | Computador con Chrome o Safari | Para oficina |
 | App autenticadora en el iPhone (Google Authenticator o Microsoft Authenticator, gratis) | Para el segundo factor de la fase 6 |
-| Contraseñas de `tecnico.prueba`, `oficina.prueba` y `tecnico.revocable` | `privado/entorno-de-pruebas.txt` en el computador de Kevin |
+| Contraseñas de `tecnico.prueba` y `oficina.prueba` | `privado/entorno-de-pruebas.txt` en el computador de Kevin |
+| Un cliente con una visita de hoy y un técnico para revocar | Desde la limpieza del 2026-10-02 el entorno no los tiene: `sembrar` crea "Cliente de prueba" con una visita de hoy para `tecnico.prueba` ([`entorno-de-pruebas.md`](entorno-de-pruebas.md)); para la fase 2, cree en Administración el técnico `tecnico.revocable` y prográmele una visita ("Cliente revocación") como en la fase 5 |
 
 Direcciones del entorno de pruebas:
 
@@ -33,8 +36,8 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 
 1. En el iPhone, Safari → dirección de campo → botón Compartir → **Agregar a inicio**. Cierre Safari y abra la app **desde el ícono**, no desde Safari.
 2. Inicie sesión con `tecnico.prueba`.
-   - Debe: aparecer "Mis visitas" con "Cliente de prueba" en el bloque azul "Siguiente visita".
-3. Baje al final de la pantalla, al diagnóstico.
+   - Debe: aparecer "Mis visitas" con "Cliente de prueba" como siguiente visita.
+3. Abra **Tu cuenta** → **Diagnóstico del teléfono**.
    - **Anotar:** si dice "Persistente" sí o no, y el espacio usado.
 4. Active el **modo avión**. Toque **Iniciar levantamiento**. Llene potencia y descripción y tome 3 o 4 fotos con la cámara.
    - Debe: guardar cada dato sin señal y mostrar las fotos.
@@ -45,7 +48,7 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 7. En el diagnóstico, toque **Verificar fotos**.
    - Debe: todas íntegras, cero perdidas.
    - **Anotar:** modelo de iPhone, versión de iOS, fotos tomadas, fotos íntegras.
-8. Sin señal, abra el levantamiento y toque **Enviar a oficina** → **Confirmar envío**.
+8. Sin señal, abra el levantamiento y toque **Enviar a oficina** → **Enviar levantamiento**.
    - Debe: en "Mis visitas", bajo la visita, la fila del levantamiento dice "Sin conexión: se enviará al recuperar señal".
 9. Quite el modo avión y vuelva a la app.
    - Debe: en menos de un minuto, "Recibido en oficina".
@@ -65,7 +68,7 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 6. Entre de nuevo con `tecnico.prueba`.
    - Debe: su levantamiento enviado en la fase 1 sigue ahí. El borrado solo afectó al usuario revocado.
 7. En oficina, pestaña "Teléfonos de campo".
-   - Debe: el iPhone aparece para los dos técnicos; el de Técnico revocable, con "Datos borrados el …".
+   - Debe: el iPhone aparece para los dos técnicos; el de Técnico revocable, con "Datos borrados".
 
 ## Fase 3 · Revisión en oficina (corte 3)
 
@@ -84,8 +87,9 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 
 ## Fase 4 · Informe y PDF (corte 4)
 
-1. En oficina, en el levantamiento revisado, toque **Abrir el informe de esta visita**.
-2. Marque el levantamiento para incluirlo, escriba una introducción y unas conclusiones y toque **Guardar borrador**.
+1. En oficina, en el levantamiento revisado, toque **Abrir el informe**.
+2. Marque el levantamiento para incluirlo y escriba una introducción y unas conclusiones.
+   - Debe: se guarda solo; junto a «Publicar» dice «Guardado» (no hay «Guardar borrador»).
 3. En "Agregar planos en PDF", suba un PDF cualquiera que no tenga información real.
 4. Toque **Publicar versión 1** → **Sí, publicar la versión 1**.
    - Debe: "Generando el PDF…" y, en menos de un minuto, **Descargar PDF de la versión 1**.
@@ -109,7 +113,7 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 6. En oficina, toque **Cancelar la visita de …**, escriba el motivo y confirme.
    - Debe: la visita pasa a la pestaña "Canceladas" con su motivo.
 7. En el iPhone, cierre y abra la app.
-   - Debe: la visita sigue en el bloque azul solo por el borrador, con el aviso "Oficina canceló esta visita. Puedes terminar y enviar lo que ya empezaste", y con "Continuar levantamiento" pero sin "Iniciar levantamiento".
+   - Debe: la visita sigue como siguiente visita solo por el borrador, con el aviso "Oficina canceló esta visita. Puedes terminar y enviar lo que ya empezaste", y con "Continuar levantamiento" pero sin "Iniciar levantamiento".
    - La cancelación no aparece en el historial del levantamiento: es de la visita, no del levantamiento. Se ve en oficina, **Visitas → Canceladas**, con quién la canceló, cuándo y por qué.
 8. Envíe ese levantamiento.
    - Debe: llegar a oficina, y la visita cancelada lo cuenta en su avance.
@@ -118,14 +122,14 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 
 1. En oficina con `oficina.prueba`, abra **Administración**.
    - Debe: pedir activar el segundo factor.
-2. Escriba su contraseña y toque **Empezar la activación**.
+2. Escriba su contraseña y toque **Continuar**.
 3. Escanee el QR con la app autenticadora del iPhone. **Guarde los códigos de respaldo** (en `privado/`, no en el repositorio).
-4. Escriba los 6 dígitos que muestra la app y toque **Confirmar y activar**.
+4. Escriba los 6 dígitos que muestra la app y toque **Verificar y activar**.
    - Debe: aparecer las pestañas Usuarios, Teléfonos de campo y Accesos de clientes.
 5. **Cerrar sesión** y vuelva a entrar con `oficina.prueba`.
    - Debe: después de la contraseña, pedir el código. Pruebe primero uno equivocado (debe rechazarlo) y después el correcto.
 6. En "Usuarios", cree un técnico ficticio.
-   - Debe: mostrar su contraseña temporal una sola vez, en el bloque azul, hasta **Ya la entregué**.
+   - Debe: mostrar su contraseña temporal una sola vez, en un diálogo que no se cierra por accidente, hasta **Ya la entregué**.
 7. Entre con ese técnico en el iPhone (cierre la sesión de `tecnico.prueba` antes).
    - Debe: entrar. Después vuelva a `tecnico.prueba`.
 8. En "Accesos de clientes", cree el acceso del cliente de la fase 4 ("Cliente de prueba"); si ya tiene uno de pruebas anteriores, use **Regenerar el acceso**.
@@ -149,7 +153,7 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 
 ## Fase 8 · Producción (iteración 8)
 
-Aquí **no se crean datos**: producción queda limpia hasta transferirla a TEINS (ADR-0021).
+Aquí **no se crean datos**: producción queda limpia hasta transferirla a TEINS (ADR-0021). Si producción está apagada ([`plan-de-entrega.md`](plan-de-entrega.md), "Estado actual"), antes de esta fase hay que encenderla ([`produccion.md`](produccion.md)).
 
 1. En el computador, abra la oficina de producción: https://oficina-production-9584.up.railway.app
 2. Entre con `administracion` y la contraseña de `privado/teins-produccion.txt`.
@@ -218,7 +222,7 @@ Necesita la app 6: si campo avisa "Hay una versión nueva de la app", acéptela 
    - Debe: la tabla Materiales con la columna **Catálogo**, cada línea con una lista para elegir el ítem.
 6. Vincule una línea a un ítem. Corrija la otra con **Corregir materiales** (cambie la cantidad) y guarde.
    - Debe: el historial dice "vinculó al catálogo “…”: sin vincular → C-12" y la corrección "materiales: 2 líneas → 2 líneas"; el vínculo sigue ahí después de corregir.
-7. Márquelo revisado. En **Visitas**, en la visita, **Exportar las cantidades** → **Descargar el detalle (CSV)** y **Descargar el resumen (CSV)**. Abra los dos en Excel.
+7. Márquelo revisado. En **Visitas**, en «Más acciones» de la visita, **Exportar cantidades** → **Descargar el detalle (CSV)** y **Descargar el resumen (CSV)**. Abra los dos en Excel.
    - Debe: Excel abre las columnas separadas, con tildes y coma decimal; el resumen suma por código del catálogo.
 8. Opcional: publique el informe y abra el PDF.
    - Debe: la tabla de materiales con coma decimal.
@@ -230,7 +234,7 @@ Necesita la app 6: si campo avisa "Hay una versión nueva de la app", acéptela 
 Hágala **antes de aceptar la actualización**, con un borrador a medias y al menos una foto: es lo que prueba que la actualización no pierde nada.
 
 1. Con la app todavía en la versión anterior, deje un borrador con texto y dos fotos, sin enviar.
-2. Acepte "Hay una versión nueva de la app". Abra Inicio y baje al diagnóstico.
+2. Acepte "Hay una versión nueva de la app". Abra **Tu cuenta** → **Diagnóstico del teléfono**.
    - Debe: **Datos cifrados: Todos** (si dice "Faltan N", espere unos segundos: se cifra en segundo plano).
 3. Abra el borrador.
    - Debe: el texto y las dos fotos, iguales. Toque **Verificar fotos** en el diagnóstico: "Íntegras" igual a "Guardadas".
@@ -287,8 +291,8 @@ Antes: en el iPhone, borre TEINS de la pantalla de inicio si ya estaba (los dato
 ## Fase 16 · Firma del cliente (iteración 16)
 
 1. En el iPhone, con la app actualizada (v7), inicie un levantamiento en la visita de hoy y vaya a "Cierre de la visita".
-   - Debe: "Firma de quien recibe la visita" con **Pedir la firma**.
-2. Toque **Pedir la firma**.
+   - Debe: "Firma de quien recibe la visita" con **Entregar el teléfono**.
+2. Toque **Entregar el teléfono**.
    - Debe: a pantalla completa, "Constancia de visita" con su nombre, el cliente y el sitio de la visita y la fecha de hoy.
 3. Toque **Firmar** sin escribir nada.
    - Debe: "Escriba su nombre." y "Firme en el recuadro."
@@ -369,6 +373,6 @@ Con la app 10 instalada y la biblioteca de prueba publicada en el entorno (`semb
 
 ## Al terminar
 
-- Resultados del iPhone (fase 1, paso 7): en la tabla de resultados del corte 0 de `plan-de-entrega.md`.
-- Todo lo que no se vio como "Debe": en una lista con fase, paso y lo que se vio. Con eso se abren los arreglos antes de seguir con campo (secciones repetibles y bocetos).
+- Resultados del iPhone (fase 1, paso 7): en la tabla de resultados de [`historia/00-captura-sin-conexion.md`](historia/00-captura-sin-conexion.md).
+- Todo lo que no se vio como "Debe": en una lista con fase, paso y lo que se vio. Con eso se abren los arreglos.
 - Si todo pasó: los cortes 1, 2 y 3 dejan de decir "falta la prueba en iPhone" en el mapa del plan.

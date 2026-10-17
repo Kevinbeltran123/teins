@@ -23,6 +23,6 @@ Marcadas con ⚙ las que pueden cambiar la arquitectura (ver `docs/arquitectura/
 | P43 | ¿Qué esperan ver en la demostración? | Plan de entrega |
 | P44 | ¿Qué tan concreta es la idea de ofrecerlo a otros ingenieros? | ⚙ Multiempresa |
 | · | ¿Qué hace el supervisor que no haga el administrador? | Tabla de permisos |
-| · | Logo en blanco, en vector | Superficies azules |
+| · | Logo en vector y en negativo | Tema oscuro (hoy un filtro pinta el PNG de blanco) |
 
 **Material pendiente:** formato físico (P6), catálogo de materiales (P28), informes de ejemplo (P22).

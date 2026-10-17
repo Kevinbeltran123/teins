@@ -9,7 +9,7 @@ import { plataforma } from "../dispositivo/instalacion";
 import { verificarFotos, type Verificacion } from "../fotos/verificar";
 import { megabytes } from "../formato";
 
-/** Evidencia para la prueba de durabilidad del corte 0 (docs/proceso/plan-de-entrega.md). */
+/** Evidencia para la prueba de durabilidad del corte 0 (docs/proceso/historia/00-captura-sin-conexion.md). */
 const ESTADO_AVISOS: Record<EstadoAvisos, string> = {
   activos: "Activos",
   bloqueados: "Bloqueados",
