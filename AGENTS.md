@@ -6,9 +6,11 @@ Instrucciones para cualquier agente de programación que trabaje en este reposit
 
 Sistema de levantamientos técnicos para TEINS: los técnicos capturan información en campo (con o sin conexión) desde una PWA, oficina la revisa y corrige con trazabilidad, y el cliente descarga el informe PDF desde un portal. Monolito modular en TypeScript sobre PostgreSQL.
 
-**Estado:** vive en un solo lugar, [`docs/proceso/plan-de-entrega.md`](docs/proceso/plan-de-entrega.md): estado actual, próximo paso y mapa de cortes. No se copia aquí: ni fechas, ni número de iteración, ni estado de los entornos. En resumen: recorrido completo (captura sin conexión, envío, revisión, informe con PDF, portal del cliente) más las iteraciones que siguieron, con un entorno de pruebas y una producción provisional en Railway. Lo que pasó en cada corte o iteración, con sus decisiones, está en [`docs/proceso/historia/`](docs/proceso/historia/README.md).
+**Estado:** vive en un solo lugar, `docs/proceso/plan-de-entrega.md` (local, ver abajo): estado actual, próximo paso y mapa de cortes. No se copia aquí: ni fechas, ni número de iteración, ni estado de los entornos. En resumen: recorrido completo (captura sin conexión, envío, revisión, informe con PDF, portal del cliente) más las iteraciones que siguieron, con un entorno de pruebas y una producción provisional en Railway. Lo que pasó en cada corte o iteración, con sus decisiones, está en `docs/proceso/historia/`.
 
 Mapa de toda la documentación, con qué actualizar cuando cambia algo: [`docs/README.md`](docs/README.md).
+
+**Material local, no versionado (`.gitignore`):** `prototipos/`, `docs/videos/`, `docs/proceso/` salvo `produccion.md`, `entorno-de-pruebas.md` y `verificacion-manual.md`, `docs/producto/` salvo `contexto.md`, y `docs/diseno/`. Existe en la máquina de quien trabaja, no en un clon nuevo; ahí, salta los pasos que lo mencionan y apóyate en `git log` y los ADR.
 
 ## Antes de tocar cualquier cosa, lee en este orden
 
@@ -116,6 +118,7 @@ Entorno local (detalle en `paquetes/servidor/README.md`):
 - `pnpm --filter @teins/servidor migrar` · `sembrar` · `dev:web` · `dev:worker`.
 - Administración por comando: `crear-usuario`, `desactivar-usuario`, `marcar-administrador`, `crear-cliente`, `crear-visita`, `reasignar-visita`, `publicar-formato`, `crear-acceso-cliente`, `generar-claves-avisos` (tabla en `paquetes/servidor/README.md`). Usuarios, accesos de clientes y retiro de versiones también tienen pantalla en oficina (iteración 6), para quien tiene la marca de administrador y el segundo factor activo; clientes, sitios y visitas, para toda persona de oficina (iteración 7).
 - Railway (detalle en `docs/proceso/produccion.md`): `railway config plan` / `apply` sobre `.railway/railway.ts`; `infra/railway/montar.sh <proyecto>` monta un entorno desde cero; `infra/railway/verificar-exposicion.sh` comprueba que solo las tres superficies se alcanzan desde internet; `railway run --service respaldos infra/respaldos/simulacro.sh` hace el simulacro de restauración (los respaldos van cifrados con `RESPALDOS_CLAVE`); `pnpm --filter @teins/servidor verificar-integridad` verifica las cadenas de una base.
+- Videos técnicos (`docs/videos/README.md`): `node docs/videos/generar.mjs <carpeta>`; con `--solo-guion` solo escribe el guion. Necesita `ffmpeg` y `say` (macOS).
 - `pnpm dev:campo` (5173), `pnpm --filter @teins/oficina dev` (5174) y `pnpm --filter @teins/portal dev` (5175); reenvían `/api` al servidor.
 
 Verificación, en el orden de la integración continua (ADR-0018):

@@ -5,6 +5,9 @@ build/
 .turbo/
 coverage/
 
+# Videos generados (se regeneran con docs/videos/generar.mjs)
+docs/videos/*/salida/
+
 # Resultados de pruebas de extremo a extremo
 test-results/
 playwright-report/
@@ -34,3 +37,18 @@ datos-reales/
 
 # Material de análisis local (transcripciones, formatos físicos)
 privado/
+
+# Material de trabajo propio: prototipos, bitácora, proceso y herramientas de agentes
+prototipos/
+docs/videos/
+docs/proceso/historia/
+docs/proceso/plan-de-entrega.md
+docs/proceso/forma-de-trabajo.md
+docs/proceso/herramientas-de-agentes.md
+docs/producto/analisis-inicial.md
+docs/producto/preguntas-pendientes.md
+docs/diseno/pendientes.md
+docs/diseno/referencias.md
+.claude/context-audit/
+.impeccable/
+.mcp.json
