@@ -117,6 +117,7 @@ Entorno local (detalle en `paquetes/servidor/README.md`):
 - `docker compose up -d --wait`: PostgreSQL y S3 locales.
 - `pnpm --filter @teins/servidor migrar` · `sembrar` · `dev:web` · `dev:worker`.
 - Administración por comando: `crear-usuario`, `desactivar-usuario`, `marcar-administrador`, `crear-cliente`, `crear-visita`, `reasignar-visita`, `publicar-formato`, `crear-acceso-cliente`, `generar-claves-avisos` (tabla en `paquetes/servidor/README.md`). Usuarios, accesos de clientes y retiro de versiones también tienen pantalla en oficina (iteración 6), para quien tiene la marca de administrador y el segundo factor activo; clientes, sitios y visitas, para toda persona de oficina (iteración 7).
+- Desplegar (ADR-0049): flujo «Desplegar» de GitHub Actions, por lotes; `corte-0` va a `pruebas` y `master` a `produccion` (`docs/proceso/produccion.md`, "Desplegar una versión").
 - Railway (detalle en `docs/proceso/produccion.md`): `railway config plan` / `apply` sobre `.railway/railway.ts`; `infra/railway/montar.sh <proyecto>` monta un entorno desde cero; `infra/railway/verificar-exposicion.sh` comprueba que solo las tres superficies se alcanzan desde internet; `railway run --service respaldos infra/respaldos/simulacro.sh` hace el simulacro de restauración (los respaldos van cifrados con `RESPALDOS_CLAVE`); `pnpm --filter @teins/servidor verificar-integridad` verifica las cadenas de una base.
 - Videos técnicos (`docs/videos/README.md`): `node docs/videos/generar.mjs <carpeta>`; con `--solo-guion` solo escribe el guion. Necesita `ffmpeg` y `say` (macOS).
 - `pnpm dev:campo` (5173), `pnpm --filter @teins/oficina dev` (5174) y `pnpm --filter @teins/portal dev` (5175); reenvían `/api` al servidor.
@@ -127,6 +128,6 @@ Verificación, en el orden de la integración continua (ADR-0018):
 - `pnpm arquitectura`: fronteras entre paquetes y módulos (`.dependency-cruiser.cjs`).
 - `pnpm licencias`: sin AGPL ni licencias sin revisar (`scripts/verificar-licencias.mjs`).
 - `pnpm audit --prod --audit-level high`
-- `pnpm --filter "./paquetes/*" test`: las pruebas de cada paquete (dominio, protocolo, documentos, campo, oficina y servidor; este último levanta PostgreSQL y S3 con Testcontainers). `pnpm test` a secas también corre la de extremo a extremo.
+- `pnpm --filter "./paquetes/*" test`: las pruebas de cada paquete (dominio, protocolo, documentos, ui, campo, oficina y servidor; este último levanta PostgreSQL y S3 con Testcontainers). `pnpm test` a secas también corre la de extremo a extremo.
 - `pnpm presupuesto`: JavaScript inicial de campo (compile campo antes).
-- `pnpm --filter @teins/e2e test`: extremo a extremo en Chromium y WebKit (requiere `docker compose up`). Contra el entorno de pruebas: `E2E_CAMPO_URL`, `E2E_OFICINA_URL` y `E2E_PORTAL_URL` (ver `docs/proceso/entorno-de-pruebas.md`).
+- `pnpm --filter @teins/e2e test`: extremo a extremo en Chromium y WebKit (requiere `docker compose up`), tres pruebas a la vez. Las que recorren la bandeja compartida llevan la etiqueta `@bandeja-compartida` y corren al final, solas: `--project chromium-bandeja` corre todo Chromium, como la integración continua. Contra el entorno de pruebas: `E2E_CAMPO_URL`, `E2E_OFICINA_URL` y `E2E_PORTAL_URL` (ver `docs/proceso/entorno-de-pruebas.md`).

@@ -1,8 +1,7 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
 import { conTransicion } from "@teins/ui";
 import { cliente } from "./api";
-import { esVersionVieja, MENSAJE_VERSION_NUEVA, textoDelServidor } from "./mensajes";
+import { errorComun, textoDelServidor } from "./mensajes";
 
 export const consultasDeAdministracion = {
   usuarios: () => queryOptions({ queryKey: ["administracion", "usuarios"], queryFn: () => cliente.llamar("listarUsuarios") }),
@@ -45,17 +44,14 @@ export async function credencialConQr<T extends { url: string }>(respuesta: T, d
   }
 }
 
-export function mensajeDeAdministracion(error: unknown): string {
-  if (esVersionVieja(error)) return MENSAJE_VERSION_NUEVA;
-  if (error instanceof ErrorDeRed) return "Sin conexión con el servidor. No se hizo ningún cambio; intente de nuevo al recuperar la conexión.";
-  if (!(error instanceof ErrorApi)) return "No se pudo completar la acción. Intente de nuevo.";
+export function mensajeDeAdministracion(problema: unknown): string {
+  const error = errorComun(problema, "No se hizo ningún cambio", "No se pudo completar la acción. Intente de nuevo.");
+  if (typeof error === "string") return error;
   switch (error.codigo) {
     case "segundo_factor_requerido":
       return "Active el segundo factor para administrar.";
     case "sin_permiso":
       return "Su usuario ya no tiene permiso de administración.";
-    case "no_autenticado":
-      return "Su sesión venció. Inicie sesión de nuevo.";
     case "entrada_invalida":
       // Lo que más se rechaza es el usuario: se dice cómo se escribe. Otro dato se nombra como en la pantalla.
       return error.problema.campos?.every((c) => !c.ruta.endsWith(".usuario"))

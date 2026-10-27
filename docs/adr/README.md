@@ -33,10 +33,11 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0002](0002-plataforma-y-superficies-del-cliente.md) | Plataforma del cliente: PWA con tres superficies | Aceptada |
 | [0010](0010-lenguaje-y-framework-del-servidor.md) | TypeScript de extremo a extremo en monorepo | Aceptada |
 | [0015](0015-actualizacion-y-versionado.md) | Actualización en momento seguro y compatibilidad N-1 | Aceptada |
-| [0016](0016-infraestructura-y-despliegue.md) | Contenedor propio sobre datos gestionados, en cuentas de TEINS | Aceptada; 0021 la complementa mientras TEINS no tenga cuenta |
+| [0016](0016-infraestructura-y-despliegue.md) | Contenedor propio sobre datos gestionados, en cuentas de TEINS | Aceptada; 0021 la complementa mientras TEINS no tenga cuenta; 0049 reemplaza su despliegue automático en Pruebas |
 | [0017](0017-observabilidad.md) | Registros, errores con privacidad y salud de dispositivos | Aceptada |
 | [0018](0018-pruebas-y-reglas-de-arquitectura.md) | Pruebas guiadas por riesgo y reglas ejecutables | Aceptada |
 | [0021](0021-produccion-provisional-transferible.md) | Producción provisional en un proyecto transferible, sin datos reales hasta que pase a TEINS | Aceptada |
+| [0049](0049-despliegue-manual-por-lotes-desde-github.md) | Despliegue manual por lotes desde GitHub Actions, en el orden de `montar.sh` (reemplaza en parte 0016) | Aceptada |
 
 ### Datos y sincronización
 

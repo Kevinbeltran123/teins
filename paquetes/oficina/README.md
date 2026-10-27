@@ -20,8 +20,9 @@ Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizac
 |---|---|
 | `src/rutas.tsx` | Enrutador, `Raiz`, `SesionVencida`, pantallas de error y de ruta inexistente en español, View Transitions |
 | `src/api.ts` | Cliente de la API; cualquier 401 relee la sesión; `recordarContrasenaDeIngreso` |
-| `src/mensajes.ts` | Textos y errores: `textoDelServidor` nombra los datos que rechaza el servidor, `errorDelCampo` marca el campo rechazado |
-| `src/revision.ts` | Acciones de la revisión, `useCorregirComentario`, `alMarcarRevisado` |
+| `src/mensajes.ts` | Textos y errores: `errorComun` dice igual en todos los traductores la versión vieja, la falta de conexión, el error desconocido y la sesión vencida; `textoDelServidor` nombra los datos que rechaza el servidor, `errorDelCampo` marca el campo rechazado |
+| `src/revision.ts` | Acciones de la revisión, `useCorregirComentario`, `alMarcarRevisado`, `correccionesDe` (antes y después de cada dato) y `loEscritoAlMarcar` (lo que la confirmación dice que se pierde) |
+| `src/sinEnviar.ts` | Lo escrito sin enviar en la revisión, por levantamiento: sobrevive a salir del detalle y, los comentarios, a recargar (`sessionStorage`); `useSinEnviar` |
 | `src/informes.ts`, `src/vistaInforme.ts`, `src/documentos.ts` | Informe, subida de planos, capítulo de cada levantamiento para la vista en vivo y carga aparte de las plantillas |
 | `src/cotizaciones.ts`, `src/catalogo.ts` | Consultas de cotizaciones y del catálogo |
 | `src/programacion.ts`, `src/horario.ts` | Visitas y clientes; horario de una visita (ADR-0037) |
@@ -30,7 +31,7 @@ Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizac
 | `src/preferencias.ts` | Lo que se recuerda de cada persona en el equipo |
 | `src/busqueda.ts`, `src/atajos.ts`, `src/pedido.ts` | Buscar en todo, atajos de teclado, pedidos de una navegación |
 | `src/conversacion.ts`, `src/avisos.ts` | Conversaciones con el técnico y avisos push |
-| `src/csv.ts`, `src/formato.ts`, `src/usarRetraso.ts`, `src/version.ts` | CSV para Excel, fechas cortas y pesos (`leerPesos`), búsqueda con espera, aviso de versión nueva |
+| `src/csv.ts`, `src/formato.ts`, `src/usarRetraso.ts`, `src/version.ts` | CSV para Excel, fechas cortas, pesos (`leerPesos`) y listas de nombres (`enLista`), búsqueda con espera, aviso de versión nueva |
 
 ## Qué hace cada sección
 
@@ -45,6 +46,7 @@ Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizac
 - El estado y su acción van en la barra (`EstadoDeRevision`). Toma y reasignación explícita, corrección por campo con motivo, aviso cuando otra persona guardó antes (QA-25), marcar revisado con "Siguiente" (el que más lleva esperando y cuántos quedan) e historial con la verificación de su cadena.
 - Lo escrito se guarda por destino; "Marcar revisado" dice qué se pierde. Un error al releer no reemplaza la revisión.
 - Cada repetición de una sección repetible se ve con su nombre ("Tableros · Tablero 2"); se corrige y se comenta por separado.
+- Cada tipo de dato se ve con su componente, en su archivo: `Fotos`, `BocetoDeCampo`, `FirmaDeCampo`, `LineasDeCantidad` (y `CorregirCantidades` al corregir); el historial, en `HistorialDeCambios`. "Abrir el informe" (`AbrirInforme.tsx`) es el mismo en la revisión y en la lista de visitas.
 - Bocetos con `HojasDeBoceto`, hoja por hoja, desde el documento ya verificado (`bocetoDeArchivo`); no se corrigen. La firma (`FirmaDeCampo`) muestra quién firmó, cuándo, en qué teléfono y la constancia; se comenta, no se corrige.
 - Cantidades en tabla con la columna "Catálogo": quien revisa elige el ítem de cada línea; "Elegido en campo" bajo el vínculo del técnico (deja de decirlo si oficina lo cambia). Corregir la tabla conserva el ítem de cada línea.
 - "En el informe" muestra el capítulo con lo corregido resaltado y, mientras se escribe la corrección, el valor nuevo.
@@ -95,5 +97,5 @@ Buscar, crear, editar, desactivar e importar un CSV de Excel (punto y coma o com
 
 ## Pruebas
 
-- `src/*.test.ts`: CSV, cotizaciones, envíos, contactos, horario, informes, revisión, programación, administración, mensajes, búsqueda y usabilidad.
+- `src/*.test.ts`: CSV, cotizaciones, envíos, contactos, horario, informes, revisión, lo escrito sin enviar, programación, administración, mensajes (todos los traductores dicen igual los errores comunes), búsqueda y usabilidad.
 - Extremo a extremo en `e2e/pruebas/` (por ejemplo `revision.spec.ts`, `informe.spec.ts`, `cotizaciones.spec.ts`, `usabilidad.spec.ts`, `robustez-oficina.spec.ts`).

@@ -157,6 +157,8 @@ td .fuerte { font-weight: 500; }
 .persona { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .persona .avatar { width: 22px; height: 22px; font-size: 10px; }
 td .sub { color: var(--sec); font-size: 13px; display: block; margin-top: 2px; }
+/* Una advertencia dentro del texto (datos que el sistema puede borrar, un correo que rebotó), también en la línea .sub de una celda. */
+.alerta-fuerte, td .sub.alerta-fuerte { color: var(--alerta); font-weight: 700; }
 td.num, th.num { text-align: right; }
 .enlace { color: var(--texto); font-weight: 500; text-decoration: none; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 .enlace:hover { text-decoration: underline; text-underline-offset: 3px; }

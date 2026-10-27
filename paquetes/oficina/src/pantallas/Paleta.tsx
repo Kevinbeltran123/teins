@@ -12,6 +12,7 @@ import { consultasDeProgramacion, hoyLocal } from "../programacion";
 import { mensajeDeError } from "../mensajes";
 import { useBandeja, useTomar, type Estado } from "../revision";
 import { useRetrasado } from "../usarRetraso";
+import { formatearDia } from "@teins/dominio";
 
 /*
   Buscar en todo (iteración 37, prototipos/usabilidad-oficina): ⌘K en Mac, Ctrl + K en Windows, o «Buscar» en el menú.
@@ -21,8 +22,7 @@ import { useRetrasado } from "../usarRetraso";
 
 const ESTADOS: readonly Estado[] = ["enviado", "en_revision", "revisado"];
 const ESTADO_TEXTO: Record<Estado, string> = { enviado: "esperando revisión", en_revision: "en revisión", revisado: "revisado" };
-const fechaCorta = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", timeZone: "UTC" });
-const dia = (aaaaMmDd: string) => fechaCorta.format(new Date(`${aaaaMmDd}T00:00:00Z`));
+const dia = (aaaaMmDd: string) => formatearDia(aaaaMmDd, { day: "numeric", month: "short" });
 
 const ACCIONES: Resultado[] = [
   { tipo: "accion", id: "programar", titulo: "Programar visita" },

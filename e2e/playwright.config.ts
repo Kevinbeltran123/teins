@@ -21,12 +21,18 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 15_000 },
   retries: enCI ? 1 : 0,
-  workers: 1,
+  // Cada prueba crea sus propios usuarios y visitas, así que los archivos corren en paralelo. Contra un entorno
+  // desplegado, uno a la vez: el límite de inicios de sesión por IP (QA-7) no se relaja allá.
+  workers: REMOTO ? 1 : 3,
   reporter: enCI ? [["github"], ["html", { open: "never" }]] : "list",
   use: { trace: "retain-on-failure", locale: "es-CO", timezoneId: "America/Bogota" },
+  // Lo que recorre filas que comparte toda la corrida (la bandeja) va en «<navegador>-bandeja»: después de las
+  // demás y solo, para que nadie le tome una fila. Pedir `--project webkit-bandeja` corre también `webkit` antes.
   projects: [
-    { name: "chromium", use: { ...devices["Pixel 7"] } },
-    { name: "webkit", use: { ...devices["iPhone 13"] } },
+    { name: "chromium", use: { ...devices["Pixel 7"] }, grepInvert: /@bandeja-compartida/ },
+    { name: "webkit", use: { ...devices["iPhone 13"] }, grepInvert: /@bandeja-compartida/ },
+    { name: "chromium-bandeja", use: { ...devices["Pixel 7"] }, grep: /@bandeja-compartida/, dependencies: ["chromium"], workers: 1 },
+    { name: "webkit-bandeja", use: { ...devices["iPhone 13"] }, grep: /@bandeja-compartida/, dependencies: ["webkit"], workers: 1 },
   ],
   webServer: REMOTO
     ? []

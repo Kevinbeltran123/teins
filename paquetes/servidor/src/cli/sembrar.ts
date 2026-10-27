@@ -11,6 +11,7 @@ import { crearIdentidad } from "../modulos/identidad";
 import { crearSimbolos } from "../modulos/simbolos";
 import { crearVisitas } from "../modulos/visitas";
 import { organizaciones, usuarios } from "../modulos/identidad/esquema";
+import { fechaEnColombia } from "@teins/dominio";
 
 /**
  * Prepara un entorno de desarrollo o de pruebas con datos ficticios (R5). Es idempotente:
@@ -60,7 +61,7 @@ try {
   const { rows } = await propietario.pool.query("select 1 from clientes.clientes where organizacion_id = $1 limit 1", [ORGANIZACION_DE_DESARROLLO]);
   if (rows.length === 0) {
     const [tecnico] = await identidad.tecnicos(ORGANIZACION_DE_DESARROLLO, ["tecnico.prueba"]);
-    const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+    const hoy = fechaEnColombia();
     await enOrganizacion(app.bd, ORGANIZACION_DE_DESARROLLO, async (tx) => {
       const { clienteId, sitioId } = await clientesYSitios.crear(tx, {
         organizacionId: ORGANIZACION_DE_DESARROLLO,

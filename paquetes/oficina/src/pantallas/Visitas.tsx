@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { ErrorApi, ErrorDeRed, type Respuesta } from "@teins/protocolo";
+import { Link } from "@tanstack/react-router";
+import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   Aviso,
   BarraLista,
@@ -26,7 +26,6 @@ import {
   EncabezadoPagina,
   EstadoVacio,
   FilaTabla,
-  FileText,
   GrupoDeOpciones,
   MenuAcciones,
   Pencil,
@@ -43,15 +42,15 @@ import {
 } from "@teins/ui";
 import { cliente } from "../api";
 import { csvDetalle, csvResumen, descargar } from "../csv";
-import { aFechaHora } from "../formato";
-import { useAbrirInformeDeVisita } from "../informes";
-import { mensajeDeError, sinError } from "../mensajes";
+import { aFechaHora, enLista } from "../formato";
+import { sinError } from "../mensajes";
 import { cambiosAlReasignar, consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
 import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../horario";
 import { useIrConPedido, usePedido } from "../pedido";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
-import { enLista } from "./Envios";
+import { AbrirInforme } from "./AbrirInforme";
 import { CuandoVisita, resumenDeHorario, TecnicosDisponibles } from "./HorarioDeVisita";
+import { formatearDia } from "@teins/dominio";
 
 type Visita = Respuesta<"listarVisitas">["visitas"][number];
 type Tecnico = Respuesta<"listarTecnicos">["tecnicos"][number];
@@ -67,13 +66,12 @@ const motivoConocido = (m: string): Motivo => MOTIVOS.find((x) => x.valor === m)
 
 /** "sáb, 26 sept"; con el año solo si no es el actual: en una agenda, el año casi nunca decide nada. */
 const dia = (aaaaMmDd: string) =>
-  new Intl.DateTimeFormat("es-CO", {
+  formatearDia(aaaaMmDd, {
     weekday: "short",
     day: "numeric",
     month: "short",
     ...(aaaaMmDd.slice(0, 4) === hoyLocal().slice(0, 4) ? {} : { year: "numeric" }),
-    timeZone: "UTC",
-  }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
+  });
 
 /** Lo que oficina tiene que hacer con la visita: revisar lo recibido o armar el informe. */
 function avance(v: Visita): string {
@@ -92,7 +90,7 @@ type Edicion = { tipo: "reasignar" | "reprogramar" | "cancelar" | "exportar"; v:
 
 /** Encabezado de un día: "Hoy · sábado 27 de septiembre", "Lunes 29 de septiembre". */
 function tituloDia(aaaaMmDd: string, hoy: string) {
-  const largo = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", ...(aaaaMmDd.slice(0, 4) === hoy.slice(0, 4) ? {} : { year: "numeric" }), timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
+  const largo = formatearDia(aaaaMmDd, { weekday: "long", day: "numeric", month: "long", ...(aaaaMmDd.slice(0, 4) === hoy.slice(0, 4) ? {} : { year: "numeric" }) });
   const texto = largo.replace(",", "");
   return aaaaMmDd === hoy ? `Hoy · ${texto}` : texto.charAt(0).toUpperCase() + texto.slice(1);
 }
@@ -312,7 +310,7 @@ function Avance({ v }: { v: Visita }) {
         {enRevision > 0 && <i className="a2" style={{ flex: enRevision }} />}
         {revisados > 0 && <i className="a3" style={{ flex: revisados }} />}
       </span>
-      <span style={{ fontSize: 13 }}>{avance(v)}</span>
+      <span className="text-ayuda">{avance(v)}</span>
     </div>
   );
 }
@@ -372,7 +370,7 @@ function FilaVisita({
       <CeldaTabla clase="sec">{v.motivo}</CeldaTabla>
       <CeldaTabla>
         {v.cancelada ? (
-          <span style={{ fontSize: 13 }}>
+          <span className="text-ayuda">
             {`${aFechaHora(v.cancelada.en)} por ${v.cancelada.por.nombre}: `}
             <span className="sec">{v.cancelada.motivo}</span>
           </span>
@@ -397,27 +395,6 @@ function FilaVisita({
         )}
       </CeldaTabla>
     </FilaTabla>
-  );
-}
-
-function AbrirInforme({ visitaId, cliente: nombre, alFallar }: { visitaId: string; cliente: string; alFallar: (texto: string | null) => void }) {
-  const abrir = useAbrirInformeDeVisita();
-  const navegar = useNavigate();
-  return (
-    <Boton
-      variante="fantasma"
-      tamano="pequeno"
-      icono={FileText}
-      aria-label={`Abrir el informe de ${nombre}`}
-      cargando={abrir.isPending}
-      // Si no abre (sin conexión, la visita se canceló), se dice: antes el botón dejaba de girar y no pasaba nada.
-      onClick={() => {
-        alFallar(null);
-        abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }), onError: (e) => alFallar(`No se pudo abrir el informe de ${nombre}. ${porQueNoAbrio(e)}`) });
-      }}
-    >
-      Abrir el informe
-    </Boton>
   );
 }
 
@@ -560,8 +537,6 @@ const deLaVisita = (v: Visita) => `${v.cliente.nombre} · ${dia(v.programadaPara
 const esConflicto = (e: unknown) => e instanceof ErrorApi && e.codigo === "conflicto_de_version";
 
 /** Por qué no se abrió el informe: lo que explica el servidor (una visita cancelada), o qué hacer; no «No se pudo guardar». */
-const porQueNoAbrio = (e: unknown) =>
-  e instanceof ErrorApi && e.codigo === "estado_invalido" ? mensajeDeError(e) : e instanceof ErrorDeRed ? "Revise la conexión e intente de nuevo." : "Intente de nuevo.";
 
 function Reasignar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: () => void; alCerrar: () => void; alGuardar: () => void }) {
   const formulario = useId();

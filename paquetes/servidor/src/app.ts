@@ -14,7 +14,7 @@ import { crearIdentidad } from "./modulos/identidad";
 import { crearArchivos } from "./modulos/archivos";
 import { crearFormatos } from "./modulos/formatos";
 import { crearLevantamientos, soltarRevisionesDe } from "./modulos/levantamientos";
-import { clientesYSitios, registrarRutasDeClientes } from "./modulos/clientes";
+import { clientesYSitios, crearClientes } from "./modulos/clientes";
 import { crearSincronizacion } from "./modulos/sincronizacion";
 import { crearVisitas } from "./modulos/visitas";
 import { crearInformes } from "./modulos/informes";
@@ -24,6 +24,7 @@ import { crearSimbolos } from "./modulos/simbolos";
 import { crearAvisos } from "./modulos/avisos";
 import { crearEnvios } from "./modulos/envios";
 import { crearCotizaciones } from "./modulos/cotizaciones";
+import { fechaEnColombia } from "@teins/dominio";
 
 export interface Dependencias {
   config: Config;
@@ -172,27 +173,19 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   levantamientos.registrarRutas(app);
   sincronizacion.registrarRutas(app);
   informes.registrarRutas(app);
-  // Por hacer: sin cancelar, terminar ni cerrar, y sin ningún levantamiento recibido (lo atendido ya se hizo).
-  registrarRutasDeClientes(
-    app,
+  crearClientes({
     bd,
     identidad,
-    async (tx, clienteId) => {
-      const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
-      const porHacer = await visitas.porHacer(tx, clienteId, hoy);
-      const atendidas = await levantamientos.conteosPorVisita(tx, porHacer.map((v) => v.id));
-      // Una visita de otro día con un levantamiento ya recibido se reprogramó para volver (ADR-0042): sigue por hacer.
-      return porHacer.filter((v) => !atendidas.has(v.id) || v.programadaPara > hoy);
-    },
+    porHacer: (tx, clienteId) => visitas.porHacer(tx, clienteId, fechaEnColombia(), levantamientos.conteosPorVisita),
     // Una corrección llega a los teléfonos que tienen sus visitas, y el nombre del cliente, también al portal.
-    {
+    alCorregir: {
       cliente: async (tx, correccion) => {
         await renombrarClienteDelPortal(tx, correccion.clienteId, correccion.nombre);
         await visitas.avisarCorreccion(tx, correccion);
       },
       sitio: (tx, correccion) => visitas.avisarCorreccion(tx, correccion),
     },
-  );
+  }).registrarRutas(app);
   // El rol web no envía (lo hace el worker): solo recibe los eventos firmados de los proveedores.
   crearEnvios({ bd, almacenamiento, config }).registrarRutas(app);
   crearCotizaciones({ bd, almacenamiento, config, levantamientos, visitas, catalogo, identidad }).registrarRutas(app);

@@ -1,4 +1,5 @@
 import { escapar } from "./escapar";
+import { formatearDia } from "@teins/dominio";
 
 /**
  * El asunto y el texto que escribió oficina para un envío (iteración 30, ADR-0036). El saludo con el nombre, el
@@ -40,11 +41,9 @@ export interface MensajeDeCotizacion {
 
 export type MensajeDeEnvio = MensajeDeInforme | MensajeDeCotizacion;
 
-const fechaCorta = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-const fechaLarga = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 /** "3 oct 2026": la visita tiene día, no hora. */
-export const diaCorto = (aaaaMmDd: string) => fechaCorta.format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(/\./g, "").replace(/ de /g, " ");
-const diaLargo = (aaaaMmDd: string) => fechaLarga.format(new Date(`${aaaaMmDd}T00:00:00Z`));
+export const diaCorto = (aaaaMmDd: string) => formatearDia(aaaaMmDd, { day: "numeric", month: "short", year: "numeric" }).replace(/\./g, "").replace(/ de /g, " ");
+const diaLargo = (aaaaMmDd: string) => formatearDia(aaaaMmDd, { day: "numeric", month: "long", year: "numeric" });
 
 /** El saludo va con el primer nombre, como lo diría alguien de oficina. */
 export const primerNombre = (nombre: string) => nombre.trim().split(/\s+/)[0] ?? nombre;

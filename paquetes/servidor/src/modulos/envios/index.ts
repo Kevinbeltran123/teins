@@ -4,13 +4,14 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp, type TextoPropio } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
 import type { Config } from "../../config";
-import { leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
+import { claveDeObjeto, leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { encolar, type Trabajos } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
 import { registrarRutaPublica } from "../../plataforma/rutas";
 import { avisar } from "../avisos";
 import { contactosDelCliente } from "../clientes";
+import { nombreDe } from "../identidad";
 import { envios, type CanalDeEnvio, type FilaEnvio, type MensajeDeEnvio } from "./esquema";
 import { eventoDeResend, eventosDeWhatsapp, firmaMetaValida, firmaSvixValida, type EventoDeEnvio } from "./eventos";
 import { NoAceptado, RechazoDefinitivo, type Proveedores } from "./proveedores";
@@ -120,6 +121,48 @@ export async function reanudarEnvio(tx: TxOrganizacion, { organizacionId, versio
   return true;
 }
 
+/** Lo que las reglas de envío necesitan de una versión publicada, de informe o de cotización. */
+interface VersionParaEnviar {
+  id: string;
+  retiradaEn: Date | null;
+  pdfEstado: "generando" | "listo" | "fallido";
+  pdfHuella: string | null;
+}
+
+/** El PDF para adjuntar, si ya está listo; sin él, el envío espera en cola a que lo esté (ADR-0028, parte 3). */
+export const rutaDelPdf = (organizacionId: string, version: Pick<VersionParaEnviar, "pdfEstado" | "pdfHuella">): string | undefined =>
+  version.pdfEstado === "listo" && version.pdfHuella ? claveDeObjeto(organizacionId, version.pdfHuella) : undefined;
+
+/**
+ * Lo retirado no se vuelve a entregar (regla 10), y sin PDF no hay qué adjuntar: nada lo vuelve a generar y el envío
+ * quedaría en cola para siempre. `retirada` es lo que se dice cuando la versión está retirada.
+ */
+export function exigirEnviable(version: Pick<VersionParaEnviar, "retiradaEn" | "pdfEstado">, retirada: string): void {
+  if (version.retiradaEn) throw problema("estado_invalido", retirada);
+  if (version.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
+}
+
+/**
+ * Cancelar o reanudar un envío en cola (ADR-0034), con la versión ya bloqueada por quien llama. Reanudar exige lo mismo
+ * que enviar; `retirada` es lo que se dice si la versión está retirada.
+ */
+export async function cancelarOReanudarEnvio(
+  tx: TxOrganizacion,
+  { accion, organizacionId, version, envioId, por, retirada }: { accion: "cancelar" | "reanudar"; organizacionId: string; version: VersionParaEnviar; envioId: string; por: string; retirada: string },
+): Promise<void> {
+  if (accion === "cancelar") {
+    const resultado = await cancelarEnvio(tx, { versionId: version.id, envioId, por });
+    if (resultado === "no_existe") throw problema("no_encontrado", "El envío no existe");
+    if (resultado === "ya_salio") throw problema("estado_invalido", "El envío ya salió: lo enviado no se recupera");
+    if (resultado === "ya_cancelado") throw problema("estado_invalido", "El envío ya estaba cancelado");
+    return;
+  }
+  exigirEnviable(version, retirada);
+  if (!(await reanudarEnvio(tx, { organizacionId, versionId: version.id, envioId, pdfRuta: rutaDelPdf(organizacionId, version) }))) {
+    throw problema("estado_invalido", "El envío no estaba cancelado");
+  }
+}
+
 /**
  * El proveedor lo aceptó o lo entregó: vale para uno en cola y para uno que el retiro alcanzó cuando ya salía
  * (`enviadoEn` marcado antes de llamar al proveedor). Un cancelado por oficina nunca empezó a salir (ADR-0034, 0047).
@@ -146,7 +189,7 @@ const comoEnvio = (
   error: f.error,
   creadoEn: f.creadoEn.toISOString(),
   enviadoEn: f.enviadoEn?.toISOString() ?? null,
-  cancelado: f.estado === "cancelado" && f.canceladoEn ? { en: f.canceladoEn.toISOString(), por: { id: f.canceladoPor ?? "", nombre: nombres.get(f.canceladoPor ?? "") ?? "[Usuario no disponible]" } } : null,
+  cancelado: f.estado === "cancelado" && f.canceladoEn ? { en: f.canceladoEn.toISOString(), por: { id: f.canceladoPor ?? "", nombre: nombreDe(nombres, f.canceladoPor) } } : null,
   personalizado: f.mensaje.personal !== undefined,
 });
 

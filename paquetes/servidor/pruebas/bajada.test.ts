@@ -359,7 +359,8 @@ describe("las visitas atendidas salen del teléfono al día siguiente (ADR-0041)
     await enviarCon(tecnico.cookie, cancelada);
     await enOrganizacion(s.conexionApp.bd, organizacionId, async (tx) => {
       // La bajada las eligió para cerrar; antes de cerrarlas, oficina reprogramó una para mañana y canceló la otra.
-      const elegidas = (await visitas.porCerrar(tx, tecnico.id, dia(0))).map((v) => v.id);
+      const recibidas = async (_tx: unknown, ids: readonly string[]) => new Map(ids.map((id) => [id, { enviados: 1, enRevision: 0, revisados: 0 }]));
+      const elegidas = await visitas.porCerrar(tx, tecnico.id, dia(0), recibidas);
       expect(elegidas.sort()).toEqual([movida, cancelada].sort());
       await visitas.reprogramar(tx, { organizacionId, ...contexto, visitaId: movida, version: 1, programadaPara: dia(1), motivo: "Volver a medir" });
       await visitas.cancelar(tx, { organizacionId, ...contexto, visitaId: cancelada, version: 1, motivo: "Aplazada" });

@@ -1,3 +1,4 @@
+import { formatearDia, pesos, ZONA_COLOMBIA } from "@teins/dominio";
 const fechaHora = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
 const hora = new Intl.DateTimeFormat("es-CO", { timeStyle: "short" });
 const relativo = new Intl.RelativeTimeFormat("es-CO", { numeric: "auto" });
@@ -24,7 +25,7 @@ export function haceCuanto(iso: string, ahora = Date.now()): string {
 
 const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-const enBogota = (d: Date) => new Date(d.toLocaleString("en-US", { timeZone: "America/Bogota" }));
+const enBogota = (d: Date) => new Date(d.toLocaleString("en-US", { timeZone: ZONA_COLOMBIA }));
 const diasEntre = (a: Date, b: Date) => Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86_400_000);
 
 /** "jue 25 sep": el día corto de una fecha; "hoy" y "ayer" cuando lo son. */
@@ -45,9 +46,11 @@ export function cuantoLleva(iso: string, ahora = Date.now()): { texto: string; d
   return { texto: dias === 0 ? "Hoy" : dias === 1 ? "Desde ayer" : `${dias} días`, dias };
 }
 
-const formatoPesos = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 });
-/** "$ 1.234.567": pesos colombianos enteros (ADR-0029). */
-export const pesos = (valor: number) => `$ ${formatoPesos.format(valor)}`;
+/** "$ 1.234.567": pesos colombianos enteros (ADR-0029), igual que en el PDF. */
+export { pesos };
+
+/** "jueves 2 de octubre": el día de una visita, con el día de la semana. */
+export const diaConSemana = (aaaaMmDd: string) => formatearDia(aaaaMmDd, { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
 
 /** El mayor precio unitario que acepta el servidor. */
 const PRECIO_MAXIMO = 1_000_000_000;
@@ -73,3 +76,8 @@ export const iniciales = (nombre: string) =>
     .slice(0, 2)
     .map((p) => p[0]!.toUpperCase())
     .join("");
+
+/** "Ana Torres, Jorge Pardo y Marta Gil". */
+export function enLista(nombres: readonly string[]): string {
+  return nombres.length <= 1 ? (nombres[0] ?? "") : `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+}

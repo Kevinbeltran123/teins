@@ -1,4 +1,4 @@
-import { TARIFA_IVA, type CondicionesCotizacion, type Impuestos, type LineaDeCotizacion, type Totales } from "@teins/dominio";
+import { formatearDia, pesos, ZONA_COLOMBIA, TARIFA_IVA, type CondicionesCotizacion, type Impuestos, type LineaDeCotizacion, type Totales } from "@teins/dominio";
 import { escapar } from "./escapar";
 import { LOGO_TEINS } from "./logo";
 import { estilosDe, type Salida } from "./salida";
@@ -25,10 +25,8 @@ export interface ContenidoCotizacion {
  */
 const MARCA = { superficie: "#002B81", texto: "#15171A", secundario: "#525152", division: "#E1E4EA", suave: "#F3F6FC" };
 
-const ZONA = "America/Bogota";
-const fecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: ZONA });
-const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(/\./g, "").replace(/ de /g, " ");
-const pesos = (n: number) => `$ ${n.toLocaleString("es-CO")}`;
+const fecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: ZONA_COLOMBIA });
+const dia = (aaaaMmDd: string) => formatearDia(aaaaMmDd, { day: "numeric", month: "short", year: "numeric" }).replace(/\./g, "").replace(/ de /g, " ");
 const cantidad = (decimal: string) => decimal.replace(".", ",");
 
 

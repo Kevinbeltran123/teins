@@ -3,6 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { bloques, campoDeRuta, describirValor, esNoObtenido, type Valor, type VersionFormato } from "@teins/dominio";
 import { ArrowUp, ChevronLeft, Clock, LockKeyhole } from "@teins/ui";
 import { db } from "../datos/instancia";
+import { bajadaDe } from "../datos/lecturas";
 import { leidoHasta, marcarLeido, pendientesDe, responder } from "../datos/conversacion";
 import type { EstadoServidor, LevantamientoLocal } from "../datos/modelo";
 import { armarChat, filasDelChat, horaDelChat, type MensajeDelChat } from "../conversacion";
@@ -96,7 +97,7 @@ export function Chat({
   const [enviando, setEnviando] = useState(false);
   const [noSeGuardo, setNoSeGuardo] = useState(false);
   // Con la sesión vencida, lo que espera en la cola no sale hasta volver a iniciar sesión (desde el inicio).
-  const sesionVencida = useLiveQuery(async () => Boolean((await db.bajadas.get(tecnicoId))?.sesionVencida), [tecnicoId]);
+  const sesionVencida = useLiveQuery(async () => Boolean((await bajadaDe(db, tecnicoId))?.sesionVencida), [tecnicoId]);
 
   function escribir(nuevo: string) {
     if (texto.trim() === "" && nuevo.trim() !== "") setFijado(objetivo ?? null);

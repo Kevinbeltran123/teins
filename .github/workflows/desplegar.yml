@@ -1,0 +1,63 @@
+# Despliegue manual por lotes (ADR-0049): se lanza a mano desde la pestaña Actions, eligiendo la rama
+# en «Use workflow from» y el entorno. Despliega el último commit de esa rama, y solo si ese commit pasó
+# la integración continua. El orden es el de infra/railway/montar.sh: campo primero (migra la base en su
+# pre-deploy), después oficina, portal, worker y respaldos.
+name: Desplegar
+
+on:
+  workflow_dispatch:
+    inputs:
+      entorno:
+        description: Entorno de Railway
+        type: choice
+        options: [pruebas, produccion]
+        default: pruebas
+      confirmar:
+        description: Solo para producción, escribe «produccion»
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+# Nunca dos despliegues del mismo entorno a la vez, y uno empezado no se cancela a medias.
+concurrency:
+  group: desplegar-${{ inputs.entorno }}
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    name: Desplegar en ${{ inputs.entorno }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # El token del proyecto de Railway (RAILWAY_TOKEN) es un secreto de cada entorno de GitHub.
+    environment: ${{ inputs.entorno }}
+    steps:
+      # En un repositorio privado con GitHub Pro no hay revisores obligatorios: la aprobación es esta.
+      - name: Producción solo desde master y confirmada
+        if: inputs.entorno == 'produccion' && (github.ref != 'refs/heads/master' || inputs.confirmar != 'produccion')
+        run: |
+          echo "::error::Producción se despliega solo desde master y escribiendo «produccion» en la confirmación."
+          exit 1
+      - uses: actions/checkout@v4
+      - name: El commit pasó la integración continua
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          exitosas=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow integracion.yml --commit "$GITHUB_SHA" --status success --json databaseId --jq length)
+          if [ "$exitosas" -eq 0 ]; then
+            echo "::error::El commit $GITHUB_SHA no tiene una corrida exitosa de la integración continua."
+            exit 1
+          fi
+      # La misma CLI que se usa desde el computador; la versión se fija aquí.
+      - name: CLI de Railway
+        run: npm install --global @railway/cli@5.63.3
+      # Solo este paso ve el token. `--ci` espera a que termine la construcción y falla si falla.
+      - name: campo (migra antes de arrancar), oficina, portal, worker y respaldos
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up --service campo --ci
+          for servicio in oficina portal worker; do railway up --service "$servicio" --ci; done
+          railway up infra/respaldos --path-as-root --service respaldos --ci

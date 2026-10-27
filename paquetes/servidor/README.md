@@ -48,7 +48,7 @@ pruebas/        Integración con PostgreSQL y S3Mock reales en contenedores.
 
 Reglas de la estructura:
 
-- Un módulo solo importa la interfaz pública de otro (`modulos/<nombre>/index.ts`), nunca sus tablas. Cuando dos módulos no pueden importarse, `app.ts` pasa la función (por ejemplo `visitas.porHacer` a `registrarRutasDeClientes`).
+- Un módulo solo importa la interfaz pública de otro (`modulos/<nombre>/index.ts`), nunca sus tablas. Cuando dos módulos no pueden importarse, `app.ts` pasa la función (por ejemplo `visitas.porHacer` a `crearClientes`).
 - Todo dato de negocio se lee y escribe dentro de `enOrganizacion`: la seguridad por fila de la base filtra por organización.
 - Toda ruta declara su política; una ruta sin política impide arrancar.
 - Todo cambio de esquema es de expansión (ADR-0015): columnas nuevas con valor por defecto o anulables.

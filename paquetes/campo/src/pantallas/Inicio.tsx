@@ -6,7 +6,7 @@ import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
 import { useLecturaRecordada } from "../datos/lecturaRecordada";
-import { estadosDe, visitasDe } from "../datos/lecturas";
+import { bajadaDe, enColaPorLevantamiento, enviosDe, estadosDe, leidoPorLevantamiento, visitasDe } from "../datos/lecturas";
 import type { EstadoDeEnvio, EstadoServidor, LevantamientoLocal, UsuarioLocal, VisitaLocal } from "../datos/modelo";
 import { estaInstalada } from "../dispositivo/almacenamiento";
 import { plataforma } from "../dispositivo/instalacion";
@@ -17,6 +17,7 @@ import { armarChat, horaDelChat, sinLeer } from "../conversacion";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 import { agendaDeVisitas, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, terminadaEn } from "../visitas";
+import { permisoLocal } from "../sesion/permiso";
 import { VERSION_APP } from "../version";
 import { AvisoDeAlmacenamiento, Diagnostico } from "./Diagnostico";
 
@@ -71,21 +72,19 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
   useMinuto();
   // Al volver de una captura, el inicio empieza con lo que ya había leído: sin esqueleto (iteración 27).
   const lista = useLecturaRecordada(`lista:${usuario.id}`, () => repositorio.listar(usuario.id), [usuario.id]);
-  const envios = useLecturaRecordada(`envios:${usuario.id}`, async () => new Map((await db.envios.where("tecnicoId").equals(usuario.id).toArray()).map((e) => [e.levantamientoId, e])), [usuario.id]);
+  const envios = useLecturaRecordada(`envios:${usuario.id}`, async () => new Map((await enviosDe(db, usuario.id)).map((e) => [e.levantamientoId, e])), [usuario.id]);
   const servidor = useLecturaRecordada(`servidor:${usuario.id}`, async () => new Map((await estadosDe(db, usuario.id)).map((e) => [e.id, e])), [usuario.id]);
   const visitas = useLecturaRecordada(`visitas:${usuario.id}`, () => visitasDe(db, usuario.id), [usuario.id]);
   // Sin abrir lo sellado: lo leído no lleva contenido y la cola se cuenta por lo que está a la vista.
   const chats = useLecturaRecordada(
     `chats:${usuario.id}`,
     async () => {
-      const leido = new Map((await db.lecturasDeChat.where("tecnicoId").equals(usuario.id).toArray()).map((l) => [l.levantamientoId, l.leidoHasta]));
-      const enCola = new Map<string, number>();
-      for (const r of await db.respuestasPendientes.where("tecnicoId").equals(usuario.id).toArray()) if (!r.enviada && !r.rechazo) enCola.set(r.levantamientoId, (enCola.get(r.levantamientoId) ?? 0) + 1);
+      const [leido, enCola] = await Promise.all([leidoPorLevantamiento(db, usuario.id), enColaPorLevantamiento(db, usuario.id)]);
       return { leido, enCola };
     },
     [usuario.id],
   );
-  const bajada = useLecturaRecordada(`bajada:${usuario.id}`, async () => (await db.bajadas.get(usuario.id)) ?? null, [usuario.id]);
+  const bajada = useLecturaRecordada(`bajada:${usuario.id}`, () => bajadaDe(db, usuario.id), [usuario.id]);
   const formatos = useFormatos();
   const deOtros = useLecturaRecordada(`deOtros:${usuario.id}`, () => repositorio.contarDeOtros(usuario.id), [usuario.id]);
   const enLinea = useConexionDelNavegador();
@@ -120,7 +119,7 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
   const porSubir = deEnvios.filter((e) => e.estado !== "recibido" && e.estado !== "error").length;
   const esperanSesion = deEnvios.some((e) => e.estado === "requiere_sesion") || Boolean(bajada?.sesionVencida);
   const esperanActualizacion = deEnvios.some((e) => e.estado === "requiere_actualizar");
-  const permisoVencido = bajada ? Date.parse(bajada.permisoLocalHasta) < Date.now() : false;
+  const permisoVencido = permisoLocal(bajada, Date.now()) !== "vigente";
   const sinConexion = !enLinea || (!alcanzable && porSubir > 0);
 
   // Un doble toque crea uno solo. Creado, no se suelta: entre abrirlo y que la captura reemplace esta pantalla,

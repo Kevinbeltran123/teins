@@ -1,15 +1,12 @@
-import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { nuevaVisita, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
 import { filaDeLaBandeja, fotoDePrueba, iniciarSesion, irARevisar } from "./ayudas";
 
-const usuarios = () =>
-  JSON.parse(readFileSync("test-results/usuarios.json", "utf8")) as Record<"tecnico" | "oficina", { usuario: string; nombre: string; contrasena: string }> & {
-    cliente: string;
-  };
-
 test("un levantamiento capturado sin conexión llega completo a la bandeja de oficina", async ({ page, context, browser, browserName }) => {
-  const { tecnico, oficina, cliente } = usuarios();
+  const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
+  const oficina = nuevoUsuario("oficina", "oficina");
+  const cliente = nuevaVisita(tecnico);
   page.on("console", (m) => {
     if (m.type() === "error") console.log(`[${browserName}] consola:`, m.text());
   });

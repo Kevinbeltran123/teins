@@ -5,6 +5,7 @@ import { aDecimalColombiano, calcularTotales, normalizarDecimal, PORCENTAJE, typ
 import type { ContenidoCotizacion, MensajeDeCotizacion, TextoPropio } from "@teins/documentos";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
+  ErrorDeCarga,
   Aviso,
   Boton,
   BotonIcono,
@@ -25,25 +26,24 @@ import {
   LockKeyhole,
   Mail,
   Plus,
-  RefreshCw,
   Send,
   sinMovimiento,
   Tabla,
   Trash,
   TriangleAlert,
+  useConexion,
   useNotificar,
   useRetirarNotificacion,
   type AnclaDeHoja,
 } from "@teins/ui";
 import { cliente, consultas, esSesionVencida } from "../api";
 import { type Plantillas } from "../documentos";
-import { useConexion } from "../conexion";
 import { useGuardadoAutomatico } from "../guardado";
 import { useBorrador } from "../borrador";
 import { consultasDeCotizaciones, devolverLinea, mensajeDeCotizacion, useAccionDeCotizacion } from "../cotizaciones";
-import { aFechaCorta, leerPesos, pesos } from "../formato";
+import { aFechaCorta, diaConSemana, enLista, leerPesos, pesos } from "../formato";
 import { consultasDeProgramacion } from "../programacion";
-import { ClienteArchivado, copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores } from "./Envios";
+import { ClienteArchivado, copiasEnviadas, Destinatarios, PanelEnvios, receptores } from "./Envios";
 import { AvisoDeConflicto, EstadoDeGuardado } from "./Guardado";
 import { BotonMostrarVista, CorreoDeContactos, EditorConVista, Lienzo, PestanasDeVista, useVistaPrevia, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
 import { useAnotarReciente } from "./Paleta";
@@ -71,7 +71,6 @@ const migas = (
   </Link>
 );
 
-const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
 const AIU_INICIAL = { tipo: "aiu" as const, administracion: "10", imprevistos: "3", utilidad: "5" };
 
 /** Id de una línea nueva: 8 caracteres, como las de las cantidades. */
@@ -134,16 +133,7 @@ export function DetalleCotizacion({ id }: { id: string }) {
     return (
       <>
         <EncabezadoPagina migas={migas} titulo="Cotización" />
-        <Aviso tono="error">
-          <b>{noExiste ? "Esta cotización no existe o no pertenece a su organización." : "No se pudo cargar la cotización."}</b>
-          {!noExiste && (
-            <div>
-              <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-                Reintentar
-              </Boton>
-            </div>
-          )}
-        </Aviso>
+        <ErrorDeCarga texto={noExiste ? "Esta cotización no existe o no pertenece a su organización." : "No se pudo cargar la cotización."} reintentar={noExiste ? undefined : () => void consulta.refetch()} />
       </>
     );
   }
@@ -340,7 +330,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
               <span>
                 {c.visita.cliente} · {c.visita.sitio}
               </span>
-              <span>Visita del {dia(c.visita.programadaPara)}</span>
+              <span>Visita del {diaConSemana(c.visita.programadaPara)}</span>
               {contactos.data && (
                 <span>
                   Recibe el PDF: <b>{reciben.length > 0 ? enLista(reciben) : "nadie"}</b>
@@ -476,7 +466,7 @@ function Composicion({ c, recargar }: { c: Cotizacion; recargar: () => void }) {
               Agregar línea
             </button>
             <div className="pie-doc">
-              <fieldset className="impuesto" style={{ border: 0, padding: 0, margin: 0 }}>
+              <fieldset className="impuesto">
                 <legend className="etq" style={{ marginBottom: 4 }}>
                   Impuestos
                 </legend>
@@ -689,7 +679,7 @@ function Versiones({ c, vigente, administrador, recargar, envios }: { c: Cotizac
                     PDF
                   </Boton>
                 ) : v.pdf === "generando" ? (
-                  <span className="sec" style={{ fontSize: 13 }} aria-live="polite">
+                  <span className="sec text-ayuda" aria-live="polite">
                     Generando el PDF…
                   </span>
                 ) : (

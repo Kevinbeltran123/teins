@@ -112,7 +112,7 @@ export function useCamposDeContacto(contacto: Contacto | null, { algunCanal = fa
         />
       </div>
       <div className="fila-campos">
-        <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
+        <fieldset className="campo">
           <legend className="etq" style={{ marginBottom: 6 }}>
             Recibe
           </legend>
@@ -127,7 +127,7 @@ export function useCamposDeContacto(contacto: Contacto | null, { algunCanal = fa
             </label>
           </div>
         </fieldset>
-        <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
+        <fieldset className="campo">
           <legend className="etq" style={{ marginBottom: 6 }}>
             Por
           </legend>
@@ -148,7 +148,7 @@ export function useCamposDeContacto(contacto: Contacto | null, { algunCanal = fa
           <input type="checkbox" checked={autorizado} onChange={(e) => (setMarca({ celular: celularE164, autorizado: e.target.checked }), corregido(setErrores, "autorizacion"))} />
           <span>
             <b>{`${quien} autorizó recibir el informe por WhatsApp`}</b>
-            <span style={{ display: "block", color: "var(--sec)", fontSize: 13 }}>
+            <span className="block text-ayuda text-texto-secundario">
               {autorizacionVigente && autorizado ? `Lo confirmó ${autorizacionVigente.por.nombre} el ${aFechaHora(autorizacionVigente.en)}.` : "WhatsApp lo exige. Queda registrado que usted lo confirmó, y cuándo."}
             </span>
             {errores.autorizacion && <span className="msj-error">{errores.autorizacion}</span>}

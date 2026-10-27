@@ -19,6 +19,15 @@ export type DefinicionCampo =
   /** Firma de quien recibe la visita (ADR-0024). `declaracion` admite {tecnico}, {sitio} y {fecha}. */
   | (CampoBase & { tipo: "firma"; declaracion?: string | undefined });
 
+export type TipoCampo = DefinicionCampo["tipo"];
+
+/**
+ * Qué tipos son un dato simple, que se lee en una línea (texto y medida). Los demás van en su propio bloque.
+ * Es un Record de todos los tipos: un tipo nuevo no compila hasta decidir aquí cómo se presenta.
+ */
+const DATO_SIMPLE = { texto: true, medida: true, foto: false, boceto: false, cantidades: false, firma: false } satisfies Record<TipoCampo, boolean>;
+export const esDatoSimple = (campo: Pick<DefinicionCampo, "tipo">) => DATO_SIMPLE[campo.tipo];
+
 /** Sección que el técnico repite cuantas veces haga falta: "Tablero 1", "Tablero 2" (F2). */
 export interface Repetible {
   /** Cómo se llama cada repetición: "Tablero", "Piso", "Área". */

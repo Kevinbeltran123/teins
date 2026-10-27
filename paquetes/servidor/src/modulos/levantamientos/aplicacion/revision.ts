@@ -3,6 +3,7 @@ import { bloqueDe, corregir, marcarRevisado, nombreDeDato, puedeEditar, tomarRev
 import type { Actor } from "../../../plataforma/actor";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../../plataforma/base-de-datos";
 import { problema } from "../../../plataforma/errores";
+import { nombreDe } from "../../identidad";
 import type { Avisar, ComentarioGuardado, LevantamientoEnRevision, PuertoCatalogo, PuertoFormatos, RegistrarAuditoria, RegistrarCambios, RepositorioRevision } from "./puertos";
 
 export interface DependenciasRevision {
@@ -75,7 +76,7 @@ export function tomar(deps: DependenciasRevision, actor: Actor, id: string, vers
       // Tomar dos veces lo propio no es un error: responde el estado vigente.
       if (r.motivo === "ya_es_suya") return { estado: actual.estado, revisorId: actual.revisorId, version: actual.version };
       if (r.motivo === "tomado_por_otro") {
-        const nombre = (await deps.nombres(actor.organizacionId, [r.revisorId], tx)).get(r.revisorId) ?? "[Usuario no disponible]";
+        const nombre = nombreDe(await deps.nombres(actor.organizacionId, [r.revisorId], tx), r.revisorId);
         throw problema("tomado_por_otro", `${nombre} tiene la revisión de este levantamiento`, { revisor: { id: r.revisorId, nombre }, versionActual: actual.version });
       }
       throw problema("estado_invalido", "Este levantamiento ya no se puede tomar para revisar");

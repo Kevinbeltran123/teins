@@ -4,7 +4,7 @@ import type { MensajeDeEnvio, TextoPropio } from "@teins/documentos";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import { Aviso, Boton, Dialogo, Insignia, Mail, MessageCircle, RefreshCw, Send, useNotificar } from "@teins/ui";
 import { usePlantillas, type Plantillas } from "../documentos";
-import { aFechaCorta } from "../formato";
+import { aFechaCorta, enLista } from "../formato";
 import { textoDelServidor } from "../mensajes";
 import { Lienzo, VistaDeCorreo, VistaDeWhatsapp, type EdicionDeCorreo } from "./Lienzo";
 
@@ -31,11 +31,6 @@ export function ClienteArchivado({ cliente: c }: { cliente: { id: string; nombre
 }
 
 const canalesDe = (c: Contacto) => [...(c.recibeCorreo ? ["Correo"] : []), ...(c.recibeWhatsapp ? ["WhatsApp"] : [])];
-
-/** "Ana Torres, Jorge Pardo y Marta Gil". */
-export function enLista(nombres: readonly string[]): string {
-  return nombres.length <= 1 ? (nombres[0] ?? "") : `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
-}
 
 /** "Ana Torres por correo y WhatsApp": a quién salió una copia (enviada o entregada). */
 export function copiasEnviadas(envios: readonly Envio[]): string[] {
@@ -76,7 +71,7 @@ export function Destinatarios({
     );
   }
   return (
-    <fieldset className="col" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
+    <fieldset className="col" style={{ gap: 8 }}>
       <legend className="etq" style={{ marginBottom: 8 }}>
         {titulo}
       </legend>
@@ -94,7 +89,7 @@ export function Destinatarios({
               <b>{x.nombre}</b>{" "}
               <span className="fila-flex" style={{ display: "inline-flex", gap: 4 }}>
                 {canales.length === 0 ? (
-                  <span className="sec" style={{ fontSize: 13 }}>
+                  <span className="sec text-ayuda">
                     Sin canal: edítelo en Clientes
                   </span>
                 ) : (

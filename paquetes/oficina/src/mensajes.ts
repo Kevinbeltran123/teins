@@ -103,11 +103,23 @@ export const MENSAJE_VERSION_NUEVA ="Hay una versión nueva de TEINS: recargue l
 export const esVersionVieja = (error: unknown) =>
   error instanceof TypeError && /dynamically imported module|module script failed|loading dynamically imported/i.test(error.message);
 
-/** Lo que una persona de oficina necesita saber de un error al guardar. */
-export function mensajeDeError(error: unknown): string {
+/**
+ * Lo que todos los errores de oficina dicen igual: versión vieja, sin conexión, un error que no es del servidor y la
+ * sesión vencida. `sinCambios` dice qué no pasó («No se guardó nada») y `fallo`, el texto de un error desconocido.
+ * Devuelve ese texto o, si no es un caso común, el error del servidor para que cada traductor siga con sus códigos.
+ */
+export function errorComun(error: unknown, sinCambios: string, fallo: string): string | ErrorApi {
   if (esVersionVieja(error)) return MENSAJE_VERSION_NUEVA;
-  if (error instanceof ErrorDeRed) return "Sin conexión con el servidor. No se guardó nada; intente de nuevo al recuperar la conexión.";
-  if (!(error instanceof ErrorApi)) return "No se pudo guardar. Intente de nuevo.";
+  if (error instanceof ErrorDeRed) return `Sin conexión con el servidor. ${sinCambios}; intente de nuevo al recuperar la conexión.`;
+  if (!(error instanceof ErrorApi)) return fallo;
+  if (error.codigo === "no_autenticado") return "Su sesión venció. Inicie sesión de nuevo.";
+  return error;
+}
+
+/** Lo que una persona de oficina necesita saber de un error al guardar. */
+export function mensajeDeError(problema: unknown): string {
+  const error = errorComun(problema, "No se guardó nada", "No se pudo guardar. Intente de nuevo.");
+  if (typeof error === "string") return error;
   switch (error.codigo) {
     case "conflicto_de_version":
       return "Otra persona guardó cambios en este levantamiento mientras usted lo tenía abierto. Lo suyo no se guardó: recargue para ver la versión actual.";
@@ -120,8 +132,6 @@ export function mensajeDeError(error: unknown): string {
       return error.problema.detail ?? "El levantamiento cambió de estado. Recargue para ver cómo quedó.";
     case "respuestas_invalidas":
       return "Hay datos que no cumplen el formato. Revise los campos marcados.";
-    case "no_autenticado":
-      return "Su sesión venció. Inicie sesión de nuevo.";
     default:
       return textoDelServidor(error, "No se pudo guardar. Intente de nuevo.");
   }

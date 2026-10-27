@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, coincide, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, FileText, Insignia, Marcado, RefreshCw, SinResultados, Tabla } from "@teins/ui";
+import { BarraLista, Buscador, CeldaTabla, coincide, EncabezadoPagina, ErrorDeCarga, EsqueletoLista, EstadoVacio, FilaTabla, FileText, Insignia, Marcado, SinResultados, Tabla } from "@teins/ui";
 import { consultas } from "../api";
 import { aDiaCorto } from "../formato";
 import { useBusquedaRecordada } from "../preferencias";
@@ -41,14 +41,7 @@ export function Informes() {
       {consulta.isPending ? (
         <EsqueletoLista etiqueta="Cargando informes" />
       ) : consulta.isError ? (
-        <Aviso tono="error">
-          <b>No se pudieron cargar los informes.</b>
-          <div>
-            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-              Reintentar
-            </Boton>
-          </div>
-        </Aviso>
+        <ErrorDeCarga texto="No se pudieron cargar los informes." reintentar={() => void consulta.refetch()} />
       ) : elementos.length === 0 ? (
         <EstadoVacio icono={FileText} titulo="Todavía no hay informes">
           Se abren desde una visita con levantamientos revisados: en Visitas, con "Abrir el informe", o desde el levantamiento revisado.

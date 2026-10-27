@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { chromium, type Browser } from "playwright-core";
 import { PDFDocument } from "pdf-lib";
+import { claveDeObjeto, type Almacenamiento } from "./almacenamiento";
 
 /*
   Impresión de documentos a PDF (ADR-0013): la usan el informe y la cotización (ADR-0029). Vive en la
@@ -135,4 +137,38 @@ export async function imprimirPdf({ html, pie, planos, metadatos, chromiumRuta }
   documento.setCreationDate(metadatos.fecha);
   documento.setModificationDate(metadatos.fecha);
   return documento.save();
+}
+
+/**
+ * Lo que el informe y la cotización hacen igual al generar el PDF de una versión (ADR-0029): imprimir, guardarlo por
+ * su huella y marcar la versión lista, o, si falla, guardar el error. Con reintentos pendientes la versión sigue
+ * «generando» y el error se relanza para que la cola reintente; al agotarlos, o con un plano ilegible, que no se
+ * arregla reintentando, el fallo es definitivo. Cada módulo marca su propia tabla.
+ */
+export async function producirPdf({
+  imprimir,
+  almacenamiento,
+  organizacionId,
+  ultimoIntento,
+  marcarListo,
+  marcarFallido,
+}: {
+  imprimir: () => Promise<Uint8Array>;
+  almacenamiento: Almacenamiento;
+  organizacionId: string;
+  ultimoIntento: boolean;
+  marcarListo: (huella: string) => Promise<void>;
+  marcarFallido: (mensaje: string, definitivo: boolean) => Promise<void>;
+}): Promise<void> {
+  try {
+    const pdf = await imprimir();
+    const huella = createHash("sha256").update(pdf).digest("hex");
+    await almacenamiento.guardar(claveDeObjeto(organizacionId, huella), pdf, "application/pdf");
+    await marcarListo(huella);
+  } catch (error) {
+    const mensaje = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+    const definitivo = ultimoIntento || error instanceof PlanoIlegible;
+    await marcarFallido(mensaje, definitivo);
+    if (!definitivo) throw error;
+  }
 }

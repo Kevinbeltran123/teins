@@ -14,7 +14,7 @@ import { leerCadena, registrar } from "../auditoria";
 import { avisar } from "../avisos";
 import { registrarCambios } from "../cambios";
 import type { Formatos } from "../formatos";
-import type { Identidad } from "../identidad";
+import { nombreDe, type Identidad } from "../identidad";
 import type { Visitas } from "../visitas";
 import { recibirEnvio, type DependenciasEnvio } from "./aplicacion/recibir-envio";
 import { comentar, corregirCampos, corregirComentario, leerConversacion, marcar, responderComentario, tomar, vincular, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
@@ -117,7 +117,6 @@ interface Dependencias {
   catalogo: Pick<Catalogo, "items">;
 }
 
-const SIN_NOMBRE = "[Usuario no disponible]";
 
 /** `inArray` con una lista vacía no coincide con nada. */
 const inArrayONada = (columna: AnyColumn, ids: string[]) => (ids.length ? inArray(columna, ids) : sql`false`);
@@ -130,7 +129,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
 
   async function personas(organizacionId: string, ids: readonly (string | null)[]) {
     const nombres = await identidad.nombres(organizacionId, [...new Set(ids.filter((i): i is string => i !== null))]);
-    return (id: string | null) => (id === null ? null : { id, nombre: nombres.get(id) ?? SIN_NOMBRE });
+    return (id: string | null) => (id === null ? null : { id, nombre: nombreDe(nombres, id) });
   }
 
   async function estadoDeRevision(organizacionId: string, e: EstadoDeRevision) {

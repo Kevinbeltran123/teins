@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { DECIMAL_CANONICO, ID_LINEA, PORCENTAJE, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
+import { DECIMAL_CANONICO, ID_LINEA, LIMITES_SELECCION, PORCENTAJE, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
+import type * as dominio from "@teins/dominio";
 import { DocumentoBoceto, Fecha, Huella, IdFormato, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
 import type { CodigoProblema } from "./problemas";
 
@@ -469,9 +470,9 @@ export const PaginaInformes = z
   .meta({ id: "PaginaInformes" });
 
 /** Qué sale de cada levantamiento en el informe (ADR-0039): lo que oficina ocultó y lo que volvió a mostrar. */
-const ClaveOcultable = z.string().min(1).max(300);
+const ClaveOcultable = z.string().min(1).max(LIMITES_SELECCION.largoClave);
 export const SeleccionInforme = z
-  .object({ ocultos: z.array(ClaveOcultable).max(2000), mostrados: z.array(ClaveOcultable).max(2000) })
+  .object({ ocultos: z.array(ClaveOcultable).max(LIMITES_SELECCION.claves), mostrados: z.array(ClaveOcultable).max(LIMITES_SELECCION.claves) })
   .meta({ id: "SeleccionInforme" });
 
 export const DetalleInforme = z
@@ -1736,3 +1737,13 @@ export type RespuestaServidor<N extends NombreOperacion> = z.input<Operaciones[N
 
 /** Tamaño máximo de un archivo de campo: una foto recodificada pesa unos cientos de KB (ADR-0007). */
 export const BYTES_MAXIMOS_ARCHIVO = 10 * 1024 * 1024;
+
+// Comprobaciones en compilación (como en ./dominio): lo que la frontera acepta cabe en lo que usa el dominio.
+// Aquí y no en ./dominio, que este archivo ya importa. El estado excluye "borrador" a propósito: solo existe en el teléfono.
+type Asignable<A, B> = [A] extends [B] ? true : false;
+const _impuestos: Asignable<z.output<typeof Impuestos>, dominio.Impuestos> = true;
+const _linea: Asignable<z.output<typeof LineaDeCotizacion>, dominio.LineaDeCotizacion> = true;
+const _condiciones: Asignable<z.output<typeof CondicionesCotizacion>, dominio.CondicionesCotizacion> = true;
+const _seleccion: Asignable<z.output<typeof SeleccionInforme>, dominio.SeleccionInforme> = true;
+const _estado: Asignable<z.output<typeof EstadoLevantamiento>, dominio.EstadoLevantamiento> = true;
+void [_impuestos, _linea, _condiciones, _seleccion, _estado];

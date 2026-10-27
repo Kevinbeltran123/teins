@@ -1,4 +1,4 @@
-import { leerClave, sinRespuestasHuerfanas, validarRespuestas, type DefinicionCampo, type DefinicionSeccion, type VersionFormato } from "@teins/dominio";
+import { esDatoSimple, leerClave, sinRespuestasHuerfanas, validarRespuestas, type DefinicionCampo, type DefinicionSeccion, type VersionFormato } from "@teins/dominio";
 import type { LevantamientoLocal } from "./datos/modelo";
 
 /**
@@ -13,7 +13,8 @@ export interface Paso {
   titulo: string;
 }
 
-const soloEnSuPaso = (c: DefinicionCampo) => c.tipo === "boceto" || c.tipo === "cantidades" || c.tipo === "firma";
+/** Bocetos, cantidades y firmas ocupan su paso; las fotos van con los datos. */
+const soloEnSuPaso = (c: DefinicionCampo) => !esDatoSimple(c) && c.tipo !== "foto";
 
 export function pasosDe(formato: VersionFormato): Paso[] {
   const pasos: Paso[] = [];

@@ -1,7 +1,6 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
 import { cliente } from "./api";
-import { textoDelServidor } from "./mensajes";
+import { errorComun, textoDelServidor } from "./mensajes";
 
 export const consultasDeCotizaciones = {
   lista: () => queryOptions({ queryKey: ["cotizaciones"], queryFn: () => cliente.llamar("listarCotizaciones") }),
@@ -27,9 +26,9 @@ const EXPLICACION: Record<string, (e: { lineas?: string[] | undefined; campo?: s
 };
 
 /** Qué decirle a oficina sobre un error de la cotización. */
-export function mensajeDeCotizacion(error: unknown): string {
-  if (error instanceof ErrorDeRed) return "Sin conexión con el servidor. No se guardó nada; intente de nuevo al recuperar la conexión.";
-  if (!(error instanceof ErrorApi)) return "No se pudo completar la acción. Intente de nuevo.";
+export function mensajeDeCotizacion(problema: unknown): string {
+  const error = errorComun(problema, "No se guardó nada", "No se pudo completar la acción. Intente de nuevo.");
+  if (typeof error === "string") return error;
   switch (error.codigo) {
     case "conflicto_de_version":
       return "Otra persona cambió esta cotización mientras usted la tenía abierta. Recargue para ver lo último.";
@@ -37,8 +36,6 @@ export function mensajeDeCotizacion(error: unknown): string {
       return (error.problema.erroresCotizacion ?? []).map((e) => EXPLICACION[e.codigo]?.(e) ?? e.codigo).join(" ") || "A la cotización le falta algo para publicarse.";
     case "estado_invalido":
       return textoDelServidor(error, "La cotización no se puede cambiar así.");
-    case "no_autenticado":
-      return "Su sesión venció. Inicie sesión de nuevo.";
     default:
       return textoDelServidor(error, "No se pudo completar la acción. Intente de nuevo.");
   }
