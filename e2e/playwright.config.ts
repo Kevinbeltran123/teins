@@ -21,9 +21,10 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 15_000 },
   retries: enCI ? 1 : 0,
-  // Cada prueba crea sus propios usuarios y visitas, así que los archivos corren en paralelo. Contra un entorno
-  // desplegado, uno a la vez: el límite de inicios de sesión por IP (QA-7) no se relaja allá.
-  workers: REMOTO ? 1 : 3,
+  // Cada prueba crea sus propios usuarios y visitas, así que los archivos corren en paralelo. En la integración,
+  // una por núcleo: la máquina de un repositorio privado tiene 2, y con 3 WebKit se agotaban los tiempos. Contra un
+  // entorno desplegado, una a la vez: el límite de inicios de sesión por IP (QA-7) no se relaja allá.
+  workers: REMOTO ? 1 : enCI ? 2 : 3,
   reporter: enCI ? [["github"], ["html", { open: "never" }]] : "list",
   use: { trace: "retain-on-failure", locale: "es-CO", timezoneId: "America/Bogota" },
   // Lo que recorre filas que comparte toda la corrida (la bandeja) va en «<navegador>-bandeja»: después de las
