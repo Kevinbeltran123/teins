@@ -22,8 +22,9 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   retries: enCI ? 1 : 0,
   // Cada prueba crea sus propios usuarios y visitas, así que los archivos corren en paralelo. En la integración,
-  // una por núcleo: la máquina de un repositorio privado tiene 2, y con 3 WebKit se agotaban los tiempos. Contra un
-  // entorno desplegado, una a la vez: el límite de inicios de sesión por IP (QA-7) no se relaja allá.
+  // una por núcleo (la máquina de un repositorio privado tiene 2), y WebKit en serie: con 2 o 3 a la vez los
+  // recorridos largos pasaban de 90 s y no terminaba antes. Contra un entorno desplegado, una a la vez: el límite
+  // de inicios de sesión por IP (QA-7) no se relaja allá.
   workers: REMOTO ? 1 : enCI ? 2 : 3,
   reporter: enCI ? [["github"], ["html", { open: "never" }]] : "list",
   use: { trace: "retain-on-failure", locale: "es-CO", timezoneId: "America/Bogota" },
@@ -31,7 +32,7 @@ export default defineConfig({
   // demás y solo, para que nadie le tome una fila. Pedir `--project webkit-bandeja` corre también `webkit` antes.
   projects: [
     { name: "chromium", use: { ...devices["Pixel 7"] }, grepInvert: /@bandeja-compartida/ },
-    { name: "webkit", use: { ...devices["iPhone 13"] }, grepInvert: /@bandeja-compartida/ },
+    { name: "webkit", use: { ...devices["iPhone 13"] }, grepInvert: /@bandeja-compartida/, ...(enCI && { workers: 1 }) },
     { name: "chromium-bandeja", use: { ...devices["Pixel 7"] }, grep: /@bandeja-compartida/, dependencies: ["chromium"], workers: 1 },
     { name: "webkit-bandeja", use: { ...devices["iPhone 13"] }, grep: /@bandeja-compartida/, dependencies: ["webkit"], workers: 1 },
   ],
