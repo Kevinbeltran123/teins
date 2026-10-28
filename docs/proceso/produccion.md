@@ -80,7 +80,7 @@ Se despliega por lotes, a mano, desde GitHub: pestaña Actions → «Desplegar»
 Lo que necesita, una vez por entorno (en GitHub, Settings → Environments):
 
 - Entornos `pruebas` y `produccion`. En `produccion`, «Deployment branches» limitado a `master`.
-- En cada uno, el secreto `RAILWAY_TOKEN`: un token de proyecto de Railway de ese proyecto y su entorno `production` (en Railway, Project Settings → Tokens). Nunca en el repositorio.
+- En cada uno, el secreto `RAILWAY_TOKEN`: un token de proyecto de Railway de ese proyecto y su entorno `production` (en Railway, Project Settings → Tokens). Nunca en el repositorio. No sirve el token de la cuenta (Account Settings → Tokens): con él, Railway responde «Invalid RAILWAY_TOKEN». Se guarda copiado, con `pbpaste | gh secret set RAILWAY_TOKEN --env <entorno>`; sin terminal interactiva (por ejemplo, con `!` en Claude Code), `gh secret set` a secas guarda un secreto vacío sin avisar.
 - En cada uno, las variables `CAMPO_URL`, `OFICINA_URL` y `PORTAL_URL` (sin `/` al final), con las que el flujo comprueba `/salud`. No son secretas.
 
 Si GitHub Actions no está disponible, se despliega desde el computador con el proyecto enlazado, en el mismo orden:
