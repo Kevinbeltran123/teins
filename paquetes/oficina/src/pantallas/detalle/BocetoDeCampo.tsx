@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { hojasDe } from "@teins/dominio";
 import { ErrorDeCarga, HojasDeBoceto } from "@teins/ui";
-import { consultas } from "../api";
+import { consultas } from "../../api";
 
 /** Boceto (ADR-0019): el servidor entrega el documento ya verificado y se dibuja en papel claro, hoja por hoja (ADR-0026). */
 export function BocetoDeCampo({ etiqueta, huella }: { etiqueta: string; huella: string }) {

@@ -2,9 +2,9 @@ import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { DefinicionCampo, LineaCantidad } from "@teins/dominio";
 import { Aviso, Boton, CampoSeleccion, Insignia, RefreshCw } from "@teins/ui";
-import { consultasDeCatalogo, useVincular } from "../catalogo";
-import { mensajeDeError, pideRecargar } from "../mensajes";
-import type { Levantamiento } from "../revision";
+import { consultasDeCatalogo, useVincular } from "../../catalogo";
+import { mensajeDeError, pideRecargar } from "../../mensajes";
+import type { Levantamiento } from "../../revision";
 
 /**
  * Tabla de cantidades con su vínculo al catálogo (iteración 11). Quien tiene la revisión elige el ítem

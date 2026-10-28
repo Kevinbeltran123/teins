@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { campoDeRuta, describirValor, esCantidades, nombreDeDato, type DefinicionCampo, type Valor } from "@teins/dominio";
 import { Check, ErrorDeCarga, EsqueletoLista, Insignia, Link2, MessageSquare, Pencil, Send, Smartphone, UserRound, type LucideIcon } from "@teins/ui";
-import { consultasDeCatalogo } from "../catalogo";
-import { aFechaCorta } from "../formato";
-import type { Historial, Levantamiento } from "../revision";
+import { consultasDeCatalogo } from "../../catalogo";
+import { aFechaCorta } from "../../formato";
+import type { Historial, Levantamiento } from "../../revision";
 
 type Evento = Historial["eventos"][number];
 

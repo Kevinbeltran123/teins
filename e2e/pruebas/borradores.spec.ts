@@ -1,7 +1,7 @@
 import { expect, test, type Browser } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { OFICINA } from "../destino";
-import { guardadoSolo, iniciarSesion, volverALaPestana } from "./ayudas";
+import { dejarPasar, guardadoSolo, iniciarSesion, volverALaPestana } from "./ayudas";
 
 /**
  * El borrador de un informe solo se pierde si la persona lo descarta (iteración 24) y se guarda solo (iteración 36,
@@ -55,7 +55,7 @@ test("un fallo de red al volver a la pestaña no borra el borrador del informe",
   await volverALaPestana(o);
   // La consulta se rinde después de sus reintentos (unos 7 s).
   await expect.poll(() => fallos, { timeout: 20_000 }).toBeGreaterThanOrEqual(4);
-  await o.waitForTimeout(1_000);
+  await dejarPasar(o, 1_000);
   await expect(introduccion).toHaveValue("Escrito antes del fallo");
   await o.unroute(leerInforme(id));
   await o.context().close();
@@ -120,12 +120,13 @@ test("con la sesión vencida, ingresar de nuevo conserva el borrador y se guarda
 });
 
 test("salir enseguida no pregunta y lo escrito se guarda igual", async ({ browser }) => {
-  const { o } = await informeEnBorrador(browser);
+  const { o, id } = await informeEnBorrador(browser);
   await o.getByRole("textbox", { name: "Introducción" }).fill("Se guarda al salir");
+  const guardado = o.waitForResponse((r) => r.url().endsWith(`/api/informes/${id}/borrador`) && r.request().method() === "POST");
   await o.getByRole("navigation", { name: "Secciones" }).getByRole("link", { name: "Visitas" }).click();
   await expect(o.getByRole("dialog", { name: /^¿Guardar los cambios/ })).toHaveCount(0);
   await expect(o.getByRole("heading", { name: "Visitas" })).toBeVisible();
-  await o.waitForTimeout(1_000);
+  expect((await guardado).ok()).toBe(true);
   await o.goBack();
   await expect(o.getByRole("textbox", { name: "Introducción" })).toHaveValue("Se guarda al salir");
   await o.context().close();

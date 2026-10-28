@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { ErrorDeCarga, VisorFotos } from "@teins/ui";
-import { consultas } from "../api";
+import { consultas } from "../../api";
 
 export function Fotos({ etiqueta, huellas, puestos }: { etiqueta: string; huellas: readonly string[]; puestos?: readonly string[] | undefined }) {
   const urls = useQueries({ queries: huellas.map((h) => consultas.urlDeArchivo(h)) });

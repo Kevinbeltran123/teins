@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { OFICINA } from "../destino";
-import { guardadoSolo, iniciarSesion, pdfDePrueba } from "./ayudas";
+import { dejarPasar, guardadoSolo, iniciarSesion, pdfDePrueba } from "./ayudas";
 
 /**
  * Iteración 36 (prototipos/usabilidad-oficina): la vista previa que se oculta, se amplía y cambia de ancho; el menú
@@ -84,7 +84,7 @@ test("el menú se pliega con su botón o con el atajo, y se recuerda", async ({ 
   await expect(o.getByRole("button", { name: "Plegar el menú" })).toHaveAttribute("title", `Plegar el menú (${esMac ? "⌘B" : "Ctrl + B"})`);
   // Con la otra tecla no pasa nada: en Mac, Ctrl + B es de los campos de texto.
   await o.keyboard.press(esMac ? "Control+b" : "Meta+b");
-  await o.waitForTimeout(300);
+  await dejarPasar(o, 300);
   expect(await ancho()).toBeGreaterThan(200);
   await o.context().close();
 });

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO } from "../destino";
-import { fotoDePrueba, iniciarSesion, irAlPaso, irAlRecorrido, irARevisar } from "./ayudas";
+import { dejarPasar, fotoDePrueba, iniciarSesion, irAlPaso, irAlRecorrido, irARevisar } from "./ayudas";
 
 /**
  * Iteración 42: lo que se ve en campo sale de lo guardado. Un tablero quitado deja de pedirse, lo que llega tarde no lo
@@ -81,20 +81,21 @@ test("«Deshacer» de una foto o de «No se pudo obtener» después de quitar su
 
 test("quitar un tablero mientras su foto todavía se procesa no deja el envío bloqueado", async ({ page }) => {
   // Un teléfono lento: decodificar la foto tarda 3 s.
-  await page.addInitScript(() => {
+  const DEMORA = 3000;
+  await page.addInitScript((demora) => {
     const original = HTMLImageElement.prototype.decode;
     HTMLImageElement.prototype.decode = function () {
-      return new Promise((r) => setTimeout(r, 3000)).then(() => original.call(this));
+      return new Promise((r) => setTimeout(r, demora)).then(() => original.call(this));
     };
-  });
+  }, DEMORA);
   const { tableros } = await iniciarConCuartoTecnico(page);
   await tableros.getByRole("button", { name: "Agregar tablero" }).click();
   const tablero = page.getByRole("article", { name: "Tablero 1" });
   await tablero.getByRole("textbox", { name: "Ubicación del tablero" }).fill("Sótano");
   await tablero.locator("input[type=file]").first().setInputFiles({ name: "t.png", mimeType: "image/png", buffer: fotoDePrueba() });
   await quitarTablero(page, "Tablero 1");
-  // La foto termina de procesarse con el tablero ya quitado.
-  await page.waitForTimeout(4000);
+  // La foto termina de procesarse con el tablero ya quitado; después no debe volver a aparecer.
+  await dejarPasar(page, DEMORA + 1000);
   await expect(tableros.getByRole("button", { name: /^Tablero/ })).toHaveCount(0);
   await enviarSinPendientes(page);
 });
@@ -200,6 +201,6 @@ test("«Ver en Descartados» abre la papelera una sola vez, no cada vez que se v
   await irAlRecorrido(page);
   await page.getByRole("button", { name: "Volver a mis visitas" }).first().click();
   await expect(siguiente.getByRole("button", { name: "Continuar levantamiento" })).toBeVisible();
-  await page.waitForTimeout(500);
+  await dejarPasar(page, 500);
   await expect(papelera).toHaveCount(0);
 });

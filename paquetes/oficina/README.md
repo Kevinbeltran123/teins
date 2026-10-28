@@ -40,13 +40,13 @@ Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizac
 - Pestañas por estado ("Esperando revisión", "En revisión", "Revisados") con "Tomar para revisar" sobre el más antiguo. La columna "Visita" dice de qué cliente y sitio es cada uno. La bandeja busca en el servidor (`buscar`); las demás listas, en la pantalla.
 - El punto de "sin leer" de las conversaciones (`Bandeja.tsx`, con "X respondió · hora").
 
-### Revisión (`pantallas/Detalle.tsx`)
+### Revisión (`pantallas/Detalle.tsx`, con sus partes en `pantallas/detalle/`)
 
 - Se arma como el informe, con `EditorConVista`: los datos a la izquierda y, a la derecha, el panel "En el informe", "Comentarios" e "Historial" (`PanelDeRevision`, un `Lienzo` con `panel`). `useVistaPrevia("revision")` recuerda su ancho y si va oculto; la pestaña se recuerda en `revision-pestana`. Bajo 1280 px, "Mostrar el panel" lo abre en hoja lateral.
 - El estado y su acción van en la barra (`EstadoDeRevision`). Toma y reasignación explícita, corrección por campo con motivo, aviso cuando otra persona guardó antes (QA-25), marcar revisado con "Siguiente" (el que más lleva esperando y cuántos quedan) e historial con la verificación de su cadena.
 - Lo escrito se guarda por destino; "Marcar revisado" dice qué se pierde. Un error al releer no reemplaza la revisión.
 - Cada repetición de una sección repetible se ve con su nombre ("Tableros · Tablero 2"); se corrige y se comenta por separado.
-- Cada tipo de dato se ve con su componente, en su archivo: `Fotos`, `BocetoDeCampo`, `FirmaDeCampo`, `LineasDeCantidad` (y `CorregirCantidades` al corregir); el historial, en `HistorialDeCambios`. "Abrir el informe" (`AbrirInforme.tsx`) es el mismo en la revisión y en la lista de visitas.
+- Cada tipo de dato se ve con su componente, en su archivo de `pantallas/detalle/`: `Fotos`, `BocetoDeCampo`, `FirmaDeCampo`, `LineasDeCantidad` (y `CorregirCantidades` al corregir); el historial, en `HistorialDeCambios`. "Abrir el informe" (`AbrirInforme.tsx`) es el mismo en la revisión y en la lista de visitas.
 - Bocetos con `HojasDeBoceto`, hoja por hoja, desde el documento ya verificado (`bocetoDeArchivo`); no se corrigen. La firma (`FirmaDeCampo`) muestra quién firmó, cuándo, en qué teléfono y la constancia; se comenta, no se corrige.
 - Cantidades en tabla con la columna "Catálogo": quien revisa elige el ítem de cada línea; "Elegido en campo" bajo el vínculo del técnico (deja de decirlo si oficina lo cambia). Corregir la tabla conserva el ítem de cada línea.
 - "En el informe" muestra el capítulo con lo corregido resaltado y, mientras se escribe la corrección, el valor nuevo.

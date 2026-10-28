@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { hojasDe, type DocumentoBoceto, type ValorFirma } from "@teins/dominio";
 import { ErrorDeCarga, Firma } from "@teins/ui";
-import { consultas } from "../api";
-import { aFechaCorta } from "../formato";
+import { consultas } from "../../api";
+import { aFechaCorta } from "../../formato";
 
 /** La firma es un boceto de una sola hoja (ADR-0024). */
 function FirmaDibujada({ documento, etiqueta }: { documento: DocumentoBoceto; etiqueta: string }) {
