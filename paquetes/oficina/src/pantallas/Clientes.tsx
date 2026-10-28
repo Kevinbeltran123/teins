@@ -24,6 +24,7 @@ import {
   Plus,
   Tabla,
   useLoNuevo,
+  primeroLoNuevo,
   useNotificar,
   enfocarPrimerError,
 } from "@teins/ui";
@@ -67,7 +68,7 @@ export function Clientes() {
   // Lo que llega después de abrir la pantalla (lo recién creado) entra primero y resaltado, en la misma transición;
   // lo cambiado (un sitio agregado) se resalta en su lugar.
   const esNuevo = useLoNuevo(consulta.data?.clientes.map((c) => c.id));
-  const ordenados = [...todos.filter((c) => esNuevo(c.id)), ...todos.filter((c) => !esNuevo(c.id))];
+  const ordenados = primeroLoNuevo(todos, esNuevo, recientes);
   const b = normalizar(busqueda.trim());
   const visibles = b === "" ? ordenados : ordenados.filter((c) => normalizar([c.nombre, ...c.sitios.map((s) => `${s.nombre} ${s.direccion}`)].join(" ")).includes(b));
 

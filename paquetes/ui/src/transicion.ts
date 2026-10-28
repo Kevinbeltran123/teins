@@ -97,6 +97,17 @@ export function useLoNuevo(ids: readonly string[] | undefined): (id: string) => 
 }
 
 /**
+ * El orden de una lista con lo nuevo arriba (DESIGN.md, «Lo recién creado entra arriba»): primero lo que esta persona
+ * acaba de crear, del más reciente al más viejo (`propios`), después lo nuevo que llegó de otros y al final lo que ya
+ * estaba. Así lo suyo no queda debajo de lo que otra persona creó al mismo tiempo.
+ */
+export function primeroLoNuevo<T extends { id: string }>(lista: readonly T[], esNuevo: (id: string) => boolean, propios: readonly string[]): T[] {
+  const nuevos = lista.filter((x) => esNuevo(x.id));
+  const puesto = (x: T) => (propios.includes(x.id) ? propios.indexOf(x.id) : propios.length);
+  return [...nuevos.sort((a, b) => puesto(a) - puesto(b)), ...lista.filter((x) => !esNuevo(x.id))];
+}
+
+/**
  * Una capa a pantalla completa que sube al abrirse y baja al cerrarse (el croquis, la firma): `salir` la deja
  * 200 ms bajando y después llama a `cerrar`. Con movimiento reducido, cierra en el acto.
  */

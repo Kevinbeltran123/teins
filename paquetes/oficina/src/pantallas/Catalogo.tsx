@@ -29,6 +29,7 @@ import {
   useNotificar,
   enfocarPrimerError,
   useLoNuevo,
+  primeroLoNuevo,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { mensajeDeAdministracion } from "../administracion";
@@ -68,7 +69,7 @@ export function Catalogo() {
   const todos = consulta.data?.items ?? [];
   // Lo creado (o importado) después de abrir la pantalla va primero y resaltado; lo cambiado se resalta en su lugar.
   const esNuevo = useLoNuevo(consulta.data?.items.map((i) => i.id));
-  const ordenados = [...todos.filter((i) => esNuevo(i.id)), ...todos.filter((i) => !esNuevo(i.id))];
+  const ordenados = primeroLoNuevo(todos, esNuevo, recientes);
   const b = normalizar(busqueda.trim());
   const sinPrecio = todos.filter((i) => i.activo && i.precio === null).length;
   const filtrados = (b === "" ? ordenados : ordenados.filter((i) => normalizar(`${i.codigo} ${i.descripcion}`).includes(b))).filter((i) => !soloSinPrecio || i.precio === null);

@@ -24,6 +24,7 @@ import {
   Dialogo,
   Download,
   EncabezadoPagina,
+  EsqueletoTexto,
   EstadoVacio,
   FilaTabla,
   GrupoDeOpciones,
@@ -169,15 +170,19 @@ export function Visitas() {
       <EncabezadoPagina
         titulo="Visitas"
         descripcion={
-          cantidadProximas !== undefined && (
-            <>
-              <span>
-                <b>{deHoy}</b> hoy
-              </span>
-              <span>
-                <b>{cantidadProximas}</b> programadas desde hoy
-              </span>
-            </>
+          proximas.isPending ? (
+            <EsqueletoTexto etiqueta="Cargando el resumen" />
+          ) : (
+            cantidadProximas !== undefined && (
+              <>
+                <span>
+                  <b>{deHoy}</b> hoy
+                </span>
+                <span>
+                  <b>{cantidadProximas}</b> programadas desde hoy
+                </span>
+              </>
+            )
           )
         }
         acciones={
@@ -192,7 +197,7 @@ export function Visitas() {
           activa={vista}
           onCambio={setVista}
           pestanas={[
-            { valor: "proximas", etiqueta: "Próximas", cantidad: cantidadProximas },
+            { valor: "proximas", etiqueta: "Próximas", cantidad: proximas.isPending ? null : cantidadProximas },
             { valor: "anteriores", etiqueta: "Anteriores" },
             { valor: "canceladas", etiqueta: "Canceladas" },
           ]}

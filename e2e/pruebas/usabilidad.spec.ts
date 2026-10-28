@@ -112,6 +112,32 @@ test("la bandeja recuerda la pestaña; la búsqueda y la fila abierta, mientras 
   await o.context().close();
 });
 
+test("la bandeja no se corre cuando llegan los datos: un toque temprano cae en la pestaña que se ve", async ({ browser }) => {
+  const o = await (await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" })).newPage();
+  await o.goto(`${OFICINA}/`);
+  await iniciarSesion(o, nuevoUsuario("oficina", "oficina"));
+  await expect(o.getByRole("tab", { name: /Esperando revisión \d/ })).toBeVisible();
+  // La bandeja tarda: el resumen y los conteos llegan después de que las pestañas ya se ven.
+  await o.route("**/api/levantamientos?**", async (ruta) => {
+    await new Promise((listo) => setTimeout(listo, 1500));
+    await ruta.continue();
+  });
+  await o.reload();
+  const pestanas = ["Esperando revisión", "En revisión", "Revisados"].map((nombre) => o.getByRole("tab", { name: new RegExp(nombre) }));
+  await expect(pestanas[2]!).toBeVisible();
+  const antes = await Promise.all(pestanas.map((p) => p.boundingBox()));
+  await expect(o.getByRole("tab", { name: /Esperando revisión \d/ })).toBeVisible();
+  const despues = await Promise.all(pestanas.map((p) => p.boundingBox()));
+  for (const [i, a] of antes.entries()) {
+    const d = despues[i]!;
+    expect(d.y).toBe(a!.y);
+    const centro = a!.x + a!.width / 2;
+    expect(centro).toBeGreaterThan(d.x);
+    expect(centro).toBeLessThan(d.x + d.width);
+  }
+  await o.context().close();
+});
+
 test("los planos se ordenan arrastrando y con el teclado; la hoja sigue el orden", async ({ browser }) => {
   const { o } = await oficinaConInforme(browser);
   const archivo = (nombre: string) => ({ name: `${nombre}.pdf`, mimeType: "application/pdf", buffer: pdfDePrueba(nombre) });

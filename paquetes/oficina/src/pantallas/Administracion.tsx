@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
   ErrorDeCarga,
+  primeroLoNuevo,
   Aviso,
   Boton,
   BotonCopiar,
@@ -59,12 +60,6 @@ const SECCIONES: { valor: Seccion; etiqueta: string }[] = [
 
 /** Un pendiente que lleva más de un día sin subir merece una llamada al técnico (ADR-0017). */
 const DIA_MS = 24 * 60 * 60 * 1000;
-
-/** Lo recién creado va primero, en el orden en que se creó: así se encuentra sin buscarlo (DESIGN.md). */
-function primeroLosNuevos<T extends { id: string }>(lista: readonly T[], nuevos: readonly string[]): T[] {
-  const nuevosPrimero = nuevos.map((id) => lista.find((x) => x.id === id)).filter((x): x is T => Boolean(x));
-  return [...nuevosPrimero, ...lista.filter((x) => !nuevos.includes(x.id))];
-}
 
 export function Administracion({ sesion }: { sesion: Sesion }) {
   const [seccion, setSeccion] = useState<Seccion>("usuarios");
@@ -334,7 +329,7 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
         <ErrorDeCarga texto="No se pudieron cargar los usuarios." reintentar={() => void consulta.refetch()} />
       ) : (
         <Tabla etiqueta="Usuarios de la organización" columnas={[{ titulo: "Nombre" }, { titulo: "Rol" }, { titulo: "Estado" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
-          {primeroLosNuevos(consulta.data.usuarios, nuevos).filter((u) => coincide(busqueda, u.nombre, u.usuario)).map((u, k) => {
+          {primeroLoNuevo(consulta.data.usuarios, (id) => nuevos.includes(id), nuevos).filter((u) => coincide(busqueda, u.nombre, u.usuario)).map((u, k) => {
             const propio = u.id === propioId;
             const activo = !u.desactivadoEn;
             return (
