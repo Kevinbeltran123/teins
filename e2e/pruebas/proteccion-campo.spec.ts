@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO } from "../destino";
-import { fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
+import { dejarPasar, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
 
 /** Iteración 24 (grupo A): en campo nada se duplica ni se pierde por un toque de más o un aviso tapado. */
 
@@ -37,7 +37,7 @@ async function iniciarLevantamiento(page: Page, { dobleToque = false } = {}) {
 test("un doble toque en «Iniciar levantamiento» y en «Agregar tablero» crea uno solo", async ({ page }) => {
   await iniciarLevantamiento(page, { dobleToque: true });
   await irAlPaso(page, "Tableros");
-  await page.waitForTimeout(500);
+  await dejarPasar(page, 500);
   expect(await levantamientosEnElTelefono(page)).toBe(1);
 
   const tableros = page.getByRole("region", { name: "Tableros" });
@@ -188,7 +188,7 @@ test("un doble toque en «Firmar» guarda la firma una sola vez", async ({ page 
   });
   await hoja.getByRole("button", { name: "Firmar" }).dblclick();
   await expect(hoja).toHaveCount(0);
-  await page.waitForTimeout(500);
+  await dejarPasar(page, 500);
   expect(await page.evaluate(() => (window as unknown as { escrituras: number }).escrituras)).toBe(1);
 });
 

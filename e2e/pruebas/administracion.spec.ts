@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoAdministrador } from "../consola";
 import { CAMPO, OFICINA, PORTAL } from "../destino";
 import { codigoTotp } from "../totp";
-import { iniciarSesion, volverALaPestana } from "./ayudas";
+import { dejarPasar, iniciarSesion, volverALaPestana } from "./ayudas";
 
 test("los códigos de respaldo siguen a la vista hasta decir que se guardaron, aunque la sesión se relea (iteración 24)", async ({ browser }) => {
   const admin = nuevoAdministrador();
@@ -28,7 +28,7 @@ test("los códigos de respaldo siguen a la vista hasta decir que se guardaron, a
   const releida = page.waitForResponse((r) => r.url().endsWith("/api/sesion"));
   await volverALaPestana(page);
   await releida;
-  await page.waitForTimeout(500);
+  await dejarPasar(page, 500);
   await expect(codigos).not.toHaveCount(0);
 
   await page.getByRole("button", { name: "Ya los guardé" }).click();

@@ -196,6 +196,12 @@ export async function crearUsuarioDesdeAdministracion(page: Page, u: { usuario: 
 }
 
 /** El informe o la cotización ya se guardó solo (guardado automático, prototipos/usabilidad-oficina). */
+/**
+ * Deja pasar `ms` para comprobar después que algo NO ocurrió: un segundo levantamiento, un diálogo que no debía
+ * abrirse. Para eso no hay evento que esperar; lo que sí ocurre se espera por su condición (`expect`, `waitForResponse`).
+ */
+export const dejarPasar = (page: Page, ms: number) => page.waitForTimeout(ms);
+
 export async function guardadoSolo(page: Page) {
   await expect(page.getByRole("status").filter({ hasText: /^Guardado$/ })).toBeVisible({ timeout: 15_000 });
 }

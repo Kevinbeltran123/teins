@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { comando, nuevaVisitaConCliente, nuevoUsuario, ORGANIZACION, type Usuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
-import { filaDeLaBandeja, fotoDePrueba, guardadoSolo, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
+import { dejarPasar, filaDeLaBandeja, fotoDePrueba, guardadoSolo, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
 
 /*
   Robustez de oficina: un técnico desactivado no traba una visita, un conflicto no se repite al reintentar, lo
@@ -288,11 +288,11 @@ test("el formulario que abrió la búsqueda no se vuelve a abrir al regresar con
   await o.goBack();
   await expect(o.getByRole("heading", { name: "Visitas" })).toBeVisible();
   // Lo pedido se atendía al montar la pantalla: se espera a que haya tenido tiempo de abrirse.
-  await o.waitForTimeout(1_000);
+  await dejarPasar(o, 1_000);
   await expect(programar).toHaveCount(0);
   await o.reload();
   await expect(o.getByRole("heading", { name: "Visitas" })).toBeVisible();
-  await o.waitForTimeout(1_000);
+  await dejarPasar(o, 1_000);
   await expect(programar).toHaveCount(0);
 });
 
