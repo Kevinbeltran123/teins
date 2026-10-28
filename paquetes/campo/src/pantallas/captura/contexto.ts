@@ -10,6 +10,8 @@ export const PasoPropio = createContext(false);
 export const VigilarGuardado = createContext<(escritura: Promise<unknown>) => void>(() => undefined);
 /** Ancla de un dato en la pantalla: el resumen de errores y el chat (en «Ver lo que enviaste») llevan hasta él. */
 export const anclaDeDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`.replace(/[^a-zA-Z0-9_-]/g, "");
+/** Ancla de una sección repetible: los errores sin dato (faltan repeticiones) llevan a su lista. */
+export const anclaDeSeccion = (seccion: string) => `seccion-${seccion}`;
 
 /**
  * Nombre de transición de la cabecera de la captura (iteración 27): el mismo que la tarjeta de su visita en el inicio,

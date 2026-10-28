@@ -42,6 +42,9 @@ export interface Cotizaciones {
 /** Id de línea: 8 caracteres, como los de las cantidades. */
 const idDeLinea = () => BigInt(`0x${randomBytes(8).toString("hex")}`).toString(36).padStart(8, "0").slice(-8);
 
+/** Una cotización no está en el portal (ADR-0029): su versión retirada solo deja de valer (ADR-0034). */
+const RETIRADA = "La versión está retirada";
+
 const CONDICIONES_INICIALES = { validezDias: 30, formaPago: "", notas: "" };
 
 /** Año en Colombia: una cotización creada el 31 de diciembre a las 8 p. m. es de ese año. */
@@ -416,7 +419,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               .for("update");
             if (!version) throw problema("no_encontrado", "La versión no existe");
             // Retirada, ya no vale: no se vuelve a enviar (ADR-0034).
-            exigirEnviable(version, "La versión está retirada: no se puede enviar");
+            exigirEnviable(version, RETIRADA, "enviar");
             const programados = await programarEnvios(tx, {
               organizacionId: actor.organizacionId,
               versionId: version.id,
@@ -479,7 +482,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               version,
               envioId: envio,
               por: actor.usuarioId,
-              retirada: "La versión está retirada: no se puede reanudar el envío",
+              retirada: RETIRADA,
             });
             await registrar(tx, [
               { ...autoria(actor, correlacion), agregadoTipo: "cotizacion", agregadoId: id, tipoEvento: accion === "cancelar" ? "envio_cancelado" : "envio_reanudado", valorNuevo: { numero, envio } },

@@ -133,18 +133,21 @@ interface VersionParaEnviar {
 export const rutaDelPdf = (organizacionId: string, version: Pick<VersionParaEnviar, "pdfEstado" | "pdfHuella">): string | undefined =>
   version.pdfEstado === "listo" && version.pdfHuella ? claveDeObjeto(organizacionId, version.pdfHuella) : undefined;
 
+/** Qué no se puede hacer con lo de una versión retirada, igual para el informe y la cotización. */
+const NO_SALE: Record<"enviar" | "reanudar", string> = { enviar: "publique una nueva para enviarla", reanudar: "no se puede reanudar el envío" };
+
 /**
  * Lo retirado no se vuelve a entregar (regla 10), y sin PDF no hay qué adjuntar: nada lo vuelve a generar y el envío
- * quedaría en cola para siempre. `retirada` es lo que se dice cuando la versión está retirada.
+ * quedaría en cola para siempre. `retirada` dice cómo está retirada la versión en el documento de quien llama.
  */
-export function exigirEnviable(version: Pick<VersionParaEnviar, "retiradaEn" | "pdfEstado">, retirada: string): void {
-  if (version.retiradaEn) throw problema("estado_invalido", retirada);
+export function exigirEnviable(version: Pick<VersionParaEnviar, "retiradaEn" | "pdfEstado">, retirada: string, para: "enviar" | "reanudar"): void {
+  if (version.retiradaEn) throw problema("estado_invalido", `${retirada}: ${NO_SALE[para]}`);
   if (version.pdfEstado === "fallido") throw problema("estado_invalido", "No se pudo generar el PDF de esta versión: publique una nueva para enviarla");
 }
 
 /**
  * Cancelar o reanudar un envío en cola (ADR-0034), con la versión ya bloqueada por quien llama. Reanudar exige lo mismo
- * que enviar; `retirada` es lo que se dice si la versión está retirada.
+ * que enviar; `retirada` dice cómo está retirada la versión, como en `exigirEnviable`.
  */
 export async function cancelarOReanudarEnvio(
   tx: TxOrganizacion,
@@ -157,7 +160,7 @@ export async function cancelarOReanudarEnvio(
     if (resultado === "ya_cancelado") throw problema("estado_invalido", "El envío ya estaba cancelado");
     return;
   }
-  exigirEnviable(version, retirada);
+  exigirEnviable(version, retirada, "reanudar");
   if (!(await reanudarEnvio(tx, { organizacionId, versionId: version.id, envioId, pdfRuta: rutaDelPdf(organizacionId, version) }))) {
     throw problema("estado_invalido", "El envío no estaba cancelado");
   }

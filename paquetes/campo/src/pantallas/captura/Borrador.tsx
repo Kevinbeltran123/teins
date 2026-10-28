@@ -15,9 +15,7 @@ import { Campo } from "./Campo";
 import { MiniaturaDeFirma, soloHora } from "./Firma";
 import { MiniaturasDeFotos } from "./Fotos";
 import { Repeticion, Repeticiones } from "./Repeticiones";
-import { anclaDeDato, CabeceraDeLaVisita, PasoPropio, VigilarGuardado } from "./contexto";
-
-const anclaDeSeccion = (seccion: string) => `seccion-${seccion}`;
+import { anclaDeDato, anclaDeSeccion, CabeceraDeLaVisita, PasoPropio, VigilarGuardado } from "./contexto";
 
 /** Lleva al dato del error y le da el foco; si es de una sección (faltan repeticiones), a la sección. */
 function irAlError(e: ErrorValidacion) {
@@ -205,6 +203,13 @@ export function Borrador({
     const paso = pasoDeError(e);
     ir(repeticion && e.campo ? { tipo: "repeticion", seccion, repeticion } : { tipo: "paso", paso: paso?.id ?? pasos[0]!.id });
     setTimeout(() => irAlError(e), 350);
+  }
+
+  /** Desde la hoja de lo que falta en un paso: un dato de una repetición no está en la lista del paso, se abre primero. */
+  function completarDesdeLaHoja(e: ErrorValidacion) {
+    setFaltantesDelPaso(null);
+    if (leerClave(e.seccion).repeticion && e.campo) irAlDato(e);
+    else setTimeout(() => irAlError(e), 250);
   }
 
   function mostrarErrores(lista: readonly ErrorValidacion[]) {
@@ -453,11 +458,7 @@ export function Borrador({
               <Boton onClick={() => avanzarDesde(faltantesDelPaso.pasoId, true)}>Seguir y completar después</Boton>
               <Boton
                 variante="principal"
-                onClick={() => {
-                  const primero = faltanDelPaso[0]!;
-                  setFaltantesDelPaso(null);
-                  setTimeout(() => irAlError(primero), 250);
-                }}
+                onClick={() => completarDesdeLaHoja(faltanDelPaso[0]!)}
               >
                 Completar ahora
               </Boton>
@@ -466,10 +467,7 @@ export function Borrador({
         >
           <ul className="flex flex-col gap-2">
             {faltanDelPaso.map((e, i) => {
-              const d = datoFaltante(e, () => {
-                setFaltantesDelPaso(null);
-                setTimeout(() => irAlError(e), 250);
-              });
+              const d = datoFaltante(e, () => completarDesdeLaHoja(e));
               return (
                 <li key={d.clave} className="motion-safe:animate-subir" style={{ animationDelay: `${i * 70}ms` }}>
                   <button type="button" onClick={d.ir} className="flex w-full items-center gap-3 rounded-control bg-peligro-fondo px-3.5 py-3 text-left active:scale-[0.98]">

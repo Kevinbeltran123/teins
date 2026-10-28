@@ -19,7 +19,7 @@ import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 import { agendaDeVisitas, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, terminadaEn } from "../visitas";
 import { permisoLocal } from "../sesion/permiso";
 import { VERSION_APP } from "../version";
-import { AvisoDeAlmacenamiento, Diagnostico } from "./Diagnostico";
+import { AvisoDeAlmacenamiento } from "./AvisoDeAlmacenamiento";
 
 // Secundarias: no entran en el JavaScript inicial (ADR-0011).
 const SugerirLlave = lazy(() => import("./SugerirLlave"));
@@ -28,6 +28,7 @@ const HojaCambiarContrasena = lazy(() => import("./HojaCambiarContrasena"));
 // La papelera (ADR-0035): solo al abrirla, dentro de "Tu cuenta".
 const Papelera = lazy(() => import("./Papelera"));
 const GuiaDeInstalacion = lazy(() => import("./InstalarApp").then((m) => ({ default: m.GuiaDeInstalacion })));
+const Diagnostico = lazy(() => import("./Diagnostico").then((m) => ({ default: m.Diagnostico })));
 
 interface Props {
   usuario: UsuarioLocal;
@@ -319,7 +320,9 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
                 <HojaCambiarContrasena alTerminar={() => irA(null)} />
               </Suspense>
             ) : pagina === "diagnostico" ? (
-              <Diagnostico tecnicoId={usuario.id} />
+              <Suspense fallback={<EsqueletoBloques etiqueta="Cargando" altos={["alto"]} />}>
+                <Diagnostico tecnicoId={usuario.id} />
+              </Suspense>
             ) : (
               <>
                 {/* Quién está en este teléfono y cómo va lo suyo, sin caja (Luma y Shop en Mobbin). */}
@@ -464,6 +467,7 @@ function TerminarVisita({ visita, contexto }: { visita: VisitaLocal; contexto: C
   const notificar = useNotificar();
   return (
     <>
+      {visita.terminacionRechazada && <Aviso tono="error">No se pudo terminar esta visita: oficina no la aceptó. Avísale a oficina.</Aviso>}
       <Boton variante="secundaria" className="w-full" onClick={() => setTerminando(true)}>
         Terminar visita
       </Boton>

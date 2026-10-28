@@ -85,3 +85,23 @@ test("secciones repetibles: el técnico agrega tableros y quita uno; oficina los
   await expect(o.getByRole("button", { name: "Descargar PDF de la versión 1" })).toBeVisible({ timeout: 60_000 });
   await escritorio.close();
 });
+
+test("«Completar ahora» con un dato de un tablero abre ese tablero y enfoca lo que falta", async ({ page }) => {
+  const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
+  const { cliente } = nuevaVisitaConCliente(tecnico);
+  await page.goto(`${CAMPO}/`);
+  await iniciarSesion(page, tecnico);
+  const visita = page.getByRole("region", { name: "Siguiente visita" });
+  await expect(visita.getByText(cliente)).toBeVisible();
+  await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(page, "Tableros");
+  await page.getByRole("region", { name: "Tableros" }).getByRole("button", { name: "Agregar tablero" }).click();
+  await page.getByRole("button", { name: /^Listo, ver / }).click();
+
+  // Los datos que faltan son del tablero, que no está a la vista en la lista del paso.
+  await page.getByRole("button", { name: "Siguiente: materiales" }).click();
+  await page.getByRole("dialog", { name: /datos? en tableros/ }).getByRole("button", { name: "Completar ahora" }).click();
+  const tablero = page.getByRole("article", { name: "Tablero 1" });
+  await expect(tablero).toBeVisible();
+  await expect(tablero.locator(":focus")).toHaveCount(1);
+});

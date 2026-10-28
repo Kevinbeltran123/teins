@@ -74,6 +74,12 @@ async function visitaConRevisado() {
   return { ...org, visitaId, revisado, enviado, informeId, foto };
 }
 
+/**
+ * Como si el trabajo se hubiera perdido: ya no está en la cola. Si alguien lo está procesando, termina esa vez y no se
+ * reintenta.
+ */
+const perderTrabajo = (llave: string) => s.propietario.pool.query("select graphile_worker.remove_job($1)", [llave]);
+
 /** La cola `pdf` procesa de a uno y otro archivo de pruebas puede estar usándola: se insiste hasta que termine. */
 const hastaQueLosPdfEstenListos = (informeId: string) => s.esperarPdf({ informeId });
 
@@ -103,8 +109,10 @@ describe("estado de un plano (iteración 26, ADR-0031)", () => {
     const tres = await subir(org.oficina.cookie, await planoDePrueba(3), "application/pdf");
     const danado = await subir(org.oficina.cookie, Buffer.from(`%PDF-1.7 ${randomUUID()} sin estructura`), "application/pdf");
     const estado = (cookie: string, huella: string) => get(cookie, `/api/archivos/${huella}/plano`);
-    // La cola es compartida con otros archivos de prueba: primero se espera a que termine lo que había (así ningún
-    // trabajo viejo pisa el estado) y después se fija el estado que se prueba, con su trabajo de nuevo en la cola.
+    // La cola es compartida con otros archivos de prueba: primero se quita su trabajo y se espera a que termine lo que
+    // había (así ningún trabajo viejo, ni un reintento, pisa el estado) y después se fija el estado que se prueba, con su
+    // trabajo de nuevo en la cola.
+    await perderTrabajo(`archivos.verificar:${org.organizacionId}:${tres}`);
     await s.procesarCola();
     await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null, paginas = null where huella = $1 and organizacion_id = $2", [tres, org.organizacionId]);
     expect((await estado(org.oficina.cookie, tres)).json()).toEqual({ estado: "verificando", paginas: null });
@@ -284,8 +292,10 @@ describe("informe (corte 4)", () => {
     });
 
     // Un plano que el worker todavía no verifica no entra en una versión. La cola es compartida con otros archivos de
-    // prueba: se espera a que termine lo que había y se deja el plano sin verificar, para no depender de quién la procesa.
+    // prueba: el plano se queda sin su trabajo (uno que espera reintentarse lo verificaría después), se espera a que
+    // termine lo que había y se deja sin verificar, para no depender de quién la procesa.
     const plano = await subir(oficina.cookie, await planoDePrueba(), "application/pdf");
+    await perderTrabajo(`archivos.verificar:${organizacionId}:${plano}`);
     await s.procesarCola();
     await s.propietario.pool.query("update archivos.archivos set estado = 'subido', verificado_en = null, paginas = null where huella = $1 and organizacion_id = $2", [plano, organizacionId]);
     await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: 1, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [{ huella: plano, nombre: "Planta" }] });
@@ -354,8 +364,6 @@ describe("plantilla del informe", () => {
 });
 
 describe("trabajos que quedaron a medias (ADR-0043)", () => {
-  /** Como si el trabajo se hubiera perdido: ya no está en la cola. */
-  const perderTrabajo = (llave: string) => s.propietario.pool.query("select graphile_worker.remove_job($1)", [llave]);
   const hayTrabajo = async (llave: string) => (await s.propietario.pool.query("select 1 from graphile_worker.jobs where key = $1", [llave])).rowCount === 1;
 
   it("un archivo subido sin verificar y un PDF que sigue «generando» vuelven a la cola pasadas 12 horas, y terminan", async () => {

@@ -6,7 +6,7 @@ import type { LevantamientoLocal } from "../../datos/modelo";
 import { mensajeDeValidacion } from "../../mensajes";
 import { datosDeResumen } from "../../resumen";
 import { useUrlsDeFotos } from "./Fotos";
-import { CabeceraDeLaVisita, VigilarGuardado } from "./contexto";
+import { anclaDeSeccion, CabeceraDeLaVisita, VigilarGuardado } from "./contexto";
 
 /**
  * Sección repetible (iteración 9) como lista de tarjetas: cada repetición resumida con su estado; tocarla la
@@ -53,7 +53,7 @@ export function Repeticiones({
   });
 
   return (
-    <section aria-label={seccion.titulo} className="flex flex-col gap-3">
+    <section id={anclaDeSeccion(seccion.clave)} aria-label={seccion.titulo} className="flex flex-col gap-3">
       {error && <Aviso tono="error">{mensajeDeValidacion[error]}</Aviso>}
       {lista.length === 0 && <p className="text-cuerpo text-texto-secundario">{`Agrega uno por cada ${etiqueta.toLowerCase()} que revises. Si no aplica, sigue.`}</p>}
       {lista.length > 0 && (

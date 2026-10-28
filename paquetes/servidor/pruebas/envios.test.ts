@@ -280,7 +280,10 @@ describe("envío del informe al cliente (ADR-0028)", () => {
 
     const admin = await s.nuevoAdministrador(await organizacionDe(informeId));
     expect((await post(admin.cookie, `/api/informes/${informeId}/versiones/1/retirar`, { motivo: "Prueba" })).statusCode).toBe(200);
-    expect((await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: jorge.id }] })).json()).toMatchObject({ codigo: "estado_invalido" });
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/versiones/1/enviar`, { destinos: [{ contactoId: jorge.id }] })).json()).toMatchObject({
+      codigo: "estado_invalido",
+      detail: "La versión está retirada del portal: publique una nueva para enviarla",
+    });
   }, 90_000);
 
   it("si no se sabe si WhatsApp lo recibió, no lo manda otra vez", async () => {
@@ -503,7 +506,10 @@ describe("cancelar un envío en cola (ADR-0034)", () => {
     expect((await post(oficina.cookie, url(informeId, envio!.id, "cancelar"))).statusCode).toBe(200);
     const admin = await s.nuevoAdministrador(organizacionId);
     expect((await post(admin.cookie, `/api/informes/${informeId}/versiones/1/retirar`, { motivo: "Tenía un error" })).statusCode).toBe(200);
-    expect((await post(oficina.cookie, url(informeId, envio!.id, "reanudar"))).json()).toMatchObject({ codigo: "estado_invalido" });
+    expect((await post(oficina.cookie, url(informeId, envio!.id, "reanudar"))).json()).toMatchObject({
+      codigo: "estado_invalido",
+      detail: "La versión está retirada del portal: no se puede reanudar el envío",
+    });
   }, 90_000);
 });
 

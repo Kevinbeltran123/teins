@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Aviso, Boton } from "@teins/ui";
+import { Aviso, Boton, Confirmacion, Smartphone, Trash, useNotificar } from "@teins/ui";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, repositorio } from "../datos/instancia";
 import { contarPorSellar } from "../datos/registros";
-import { estadoAlmacenamiento, estaInstalada, type EstadoAlmacenamiento } from "../dispositivo/almacenamiento";
+import { estadoAlmacenamiento, pocoEspacio, type EstadoAlmacenamiento } from "../dispositivo/almacenamiento";
 import { estadoAvisos, type EstadoAvisos } from "../dispositivo/estadoAvisos";
 import { plataforma } from "../dispositivo/instalacion";
 import { verificarFotos, type Verificacion } from "../fotos/verificar";
@@ -18,17 +18,6 @@ const ESTADO_AVISOS: Record<EstadoAvisos, string> = {
   requiere_instalar: "Solo con la app instalada",
 };
 
-/** El aviso de datos no persistentes queda a la vista en "Tu cuenta": pide hacer algo antes de capturar. */
-export function AvisoDeAlmacenamiento() {
-  const [estado, setEstado] = useState<EstadoAlmacenamiento>();
-  useEffect(() => {
-    estadoAlmacenamiento().then(setEstado, () => setEstado(undefined));
-  }, []);
-  // Sin instalar, el aviso de instalación de Inicio ya lo explica.
-  if (!estado || estado.persistente || !estaInstalada()) return null;
-  return <Aviso tono="alerta">El teléfono no garantiza conservar los datos. Avísale a soporte antes de capturar.</Aviso>;
-}
-
 /** Herramienta de soporte, no información del día: una página de "Tu cuenta" (iteración 32). */
 export function Diagnostico({ tecnicoId }: { tecnicoId: string }) {
   const [estado, setEstado] = useState<EstadoAlmacenamiento>();
@@ -36,10 +25,14 @@ export function Diagnostico({ tecnicoId }: { tecnicoId: string }) {
   const [avisos] = useState(estadoAvisos);
   const [verificacion, setVerificacion] = useState<Verificacion | "verificando" | "error">();
   const porCifrar = useLiveQuery(() => contarPorSellar(db));
+  const descartados = useLiveQuery(async () => (await repositorio.descartados(tecnicoId)).length, [tecnicoId]);
+  const [vaciando, setVaciando] = useState(false);
+  const notificar = useNotificar();
 
+  // Vaciar Descartados libera espacio: se vuelve a medir.
   useEffect(() => {
     estadoAlmacenamiento().then(setEstado, () => setEstado(undefined));
-  }, [verificacion]);
+  }, [verificacion, descartados]);
 
   async function verificar() {
     setVerificacion("verificando");
@@ -67,6 +60,37 @@ export function Diagnostico({ tecnicoId }: { tecnicoId: string }) {
         <dt className="text-texto-secundario">Avisos</dt>
         <dd className="font-bold">{ESTADO_AVISOS[avisos]}</dd>
       </dl>
+      {/* ADR-0035: lo descartado ocupa espacio 30 días; con poco espacio se vacía antes, solo si el técnico lo confirma. */}
+      {estado && pocoEspacio(estado) && (
+        <Aviso tono="alerta">
+          {descartados ? (
+            <>
+              <p>Queda poco espacio en este teléfono. Lo que descartaste lo sigue ocupando.</p>
+              <Boton className="mt-3 w-full" onClick={() => setVaciando(true)}>
+                Vaciar Descartados
+              </Boton>
+            </>
+          ) : (
+            "Queda poco espacio en este teléfono. Libera espacio para seguir tomando fotos."
+          )}
+        </Aviso>
+      )}
+      {vaciando && (
+        <Confirmacion
+          nivel="irreversible"
+          forma="inferior"
+          titulo="¿Vaciar Descartados?"
+          confirmar="Vaciar Descartados"
+          accion={() => repositorio.vaciarPapeleraDe(tecnicoId)}
+          mensajeDeError={() => "No se pudo vaciar. Intenta de nuevo."}
+          alCerrar={() => setVaciando(false)}
+          alTerminar={() => notificar({ texto: "Descartados vaciados" })}
+          consecuencias={[
+            { icono: Trash, texto: descartados === 1 ? "Se borra 1 levantamiento con sus fotos" : `Se borran ${descartados} levantamientos con sus fotos` },
+            { icono: Smartphone, texto: "No se pueden recuperar: solo estaban en este teléfono" },
+          ]}
+        />
+      )}
       {/* Bloqueados, la app ya no puede volver a preguntar: solo la persona los permite desde los ajustes. */}
       {avisos === "bloqueados" && (
         <p className="text-ayuda text-texto-secundario">
