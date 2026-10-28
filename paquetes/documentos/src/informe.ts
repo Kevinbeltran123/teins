@@ -14,6 +14,9 @@ import {
   type DefinicionCampo,
   type SeleccionInforme,
   type Valor,
+  formatearDia,
+  ZONA_COLOMBIA,
+  esDatoSimple,
 } from "@teins/dominio";
 import { escapar } from "./escapar";
 import { LOGO_TEINS } from "./logo";
@@ -31,10 +34,9 @@ import { estilosDe, type Salida } from "./salida";
  */
 const MARCA = { superficie: "#002B81", acento: "#FFC21A", texto: "#15171A", secundario: "#525152", division: "#E1E4EA", fondo: "#F5F6F8" };
 
-const ZONA = "America/Bogota";
-const fecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: ZONA });
-const fechaHora = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeStyle: "short", timeZone: ZONA });
-const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
+const fecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: ZONA_COLOMBIA });
+const fechaHora = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeStyle: "short", timeZone: ZONA_COLOMBIA });
+const dia = (aaaaMmDd: string) => formatearDia(aaaaMmDd, { dateStyle: "long" });
 
 
 const parrafos = (texto: string) =>
@@ -111,7 +113,7 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
               if (!seleccion && campoFuera(campo)) return false;
               if (valor !== undefined && esNoObtenido(valor)) return true;
-              return campo.tipo !== "foto" && campo.tipo !== "boceto" && campo.tipo !== "cantidades" && !(campo.tipo === "firma" && esFirma(valor));
+              return esDatoSimple(campo) || (campo.tipo === "firma" && !esFirma(valor));
             })
             .map((campo) => {
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;

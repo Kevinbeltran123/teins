@@ -5,12 +5,13 @@ import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../pla
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
-import { registrar } from "../auditoria";
+import { autoria, registrar } from "../auditoria";
 import { avisar as avisarPush } from "../avisos";
 import { registrarCambios, type Cambio } from "../cambios";
 import type { ClientesYSitios } from "../clientes";
-import type { Identidad } from "../identidad";
+import { nombreDe, type Identidad } from "../identidad";
 import { visitas } from "./esquema";
+import { fechaEnColombia, ZONA_COLOMBIA } from "@teins/dominio";
 
 export interface VisitaAsignada {
   id: string;
@@ -74,14 +75,20 @@ export interface Visitas {
   /** Cancela: sale de los teléfonos; lo empezado se conserva y se puede enviar (regla 17). */
   cancelar(tx: TxOrganizacion, datos: Contexto & { visitaId: string; version: number; motivo: string }): Promise<void>;
   existe(tx: TxOrganizacion, id: string): Promise<boolean>;
-  /** Visitas sin cancelar desde `hoy` de un cliente: mientras haya, ni él ni esos sitios se archivan (ADR-0035). */
-  porHacer(tx: TxOrganizacion, clienteId: string, hoy: string): Promise<VisitaPorHacer[]>;
+  /**
+   * Visitas por hacer de un cliente: mientras haya, ni él ni esos sitios se archivan (ADR-0035). Sin cancelar, terminar
+   * ni cerrar, desde `hoy`, y sin ningún levantamiento recibido, salvo las de otro día (ADR-0042).
+   */
+  porHacer(tx: TxOrganizacion, clienteId: string, hoy: string, conteos: ConteosPorVisita): Promise<VisitaPorHacer[]>;
   /** Visitas que siguen asignadas al técnico y sin cancelar; las demás no aparecen. */
   asignadas(tx: TxOrganizacion, ids: readonly string[], tecnicoId: string): Promise<Map<string, VisitaAsignada>>;
   /** Cuáles de estas visitas están canceladas: la bajada le dice al teléfono por qué salen. */
   canceladas(tx: TxOrganizacion, ids: readonly string[]): Promise<Set<string>>;
-  /** Visitas del técnico que podrían cerrarse (ADR-0041): asignadas, sin cancelar ni cerrar, de un día anterior a `hoy`. */
-  porCerrar(tx: TxOrganizacion, tecnicoId: string, hoy: string): Promise<{ id: string; terminada: boolean }[]>;
+  /**
+   * Visitas atendidas del técnico que se cierran (ADR-0041): asignadas, sin cancelar ni cerrar, de un día anterior a
+   * `hoy`, y terminadas o con algún levantamiento recibido. Lo atrasado sin atender no: oficina lo decide.
+   */
+  porCerrar(tx: TxOrganizacion, tecnicoId: string, hoy: string, conteos: ConteosPorVisita): Promise<string[]>;
   /**
    * Cierra estas visitas (ADR-0041): salen de los teléfonos de sus técnicos y no vuelven a bajar. Solo las que siguen
    * sin cancelar y de un día anterior a `hoy`: oficina pudo reprogramarlas o cancelarlas después de `porCerrar`.
@@ -105,11 +112,10 @@ export interface Visitas {
 /** "09:00:00" (Postgres) o "09:00" → "09:00". */
 const aHoraCorta = (hora: string | null) => (hora ? hora.slice(0, 5) : null);
 const minutos = (hora: string) => Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5));
-const ZONA = "America/Bogota";
 /** Minuto del día en Colombia de un momento, o null si cae en otro día que `fecha`. */
 function minutoDelDia(momento: Date, fecha: string): number | null {
-  if (momento.toLocaleDateString("en-CA", { timeZone: ZONA }) !== fecha) return null;
-  const [h, m] = momento.toLocaleTimeString("en-GB", { timeZone: ZONA, hour: "2-digit", minute: "2-digit", hour12: false }).split(":");
+  if (fechaEnColombia(momento) !== fecha) return null;
+  const [h, m] = momento.toLocaleTimeString("en-GB", { timeZone: ZONA_COLOMBIA, hour: "2-digit", minute: "2-digit", hour12: false }).split(":");
   return Number(h) * 60 + Number(m);
 }
 
@@ -240,13 +246,16 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       await registrarCambios(tx, avisar(organizacionId, visitaId, actual.tecnicos, "fuera_de_alcance"));
     },
 
-    async porHacer(tx, clienteId, hoy) {
-      return tx
+    async porHacer(tx, clienteId, hoy, conteos) {
+      const porHacer = await tx
         .select({ id: visitas.id, programadaPara: visitas.programadaPara, sitioId: visitas.sitioId, tecnicos: visitas.tecnicos })
         .from(visitas)
         // Lo terminado o cerrado ya se hizo (ADR-0037, ADR-0041): no detiene archivar.
         .where(and(eq(visitas.clienteId, clienteId), isNull(visitas.canceladaEn), isNull(visitas.terminadaEn), isNull(visitas.cerradaEn), gte(visitas.programadaPara, hoy)))
         .orderBy(asc(visitas.programadaPara));
+      const atendidas = await conteos(tx, porHacer.map((v) => v.id));
+      // Una visita de otro día con un levantamiento ya recibido se reprogramó para volver (ADR-0042): sigue por hacer.
+      return porHacer.filter((v) => !atendidas.has(v.id) || v.programadaPara > hoy);
     },
 
     async existe(tx, id) {
@@ -264,12 +273,14 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       return filas.map((f) => f.id);
     },
 
-    async porCerrar(tx, tecnicoId, hoy) {
-      const filas = await tx
+    async porCerrar(tx, tecnicoId, hoy, conteos) {
+      const candidatas = await tx
         .select({ id: visitas.id, terminadaEn: visitas.terminadaEn })
         .from(visitas)
         .where(and(arrayContains(visitas.tecnicos, [tecnicoId]), isNull(visitas.canceladaEn), isNull(visitas.cerradaEn), lt(visitas.programadaPara, hoy)));
-      return filas.map((f) => ({ id: f.id, terminada: f.terminadaEn !== null }));
+      if (candidatas.length === 0) return [];
+      const recibidos = await conteos(tx, candidatas.filter((c) => c.terminadaEn === null).map((c) => c.id));
+      return candidatas.filter((c) => c.terminadaEn !== null || recibidos.has(c.id)).map((c) => c.id);
     },
 
     async cerrar(tx, organizacionId, ids, hoy) {
@@ -319,7 +330,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
           // El detalle dice a quién quitar (oficina lo muestra): por ejemplo, alguien desactivado con la visita abierta.
           // Los nombres salen solo de esta organización: uno de otra no se revela.
           const nombres = await identidad.nombres(organizacionId, fuera);
-          const quienes = new Intl.ListFormat("es", { type: "conjunction" }).format(fuera.map((id) => nombres.get(id) ?? "[Usuario no disponible]"));
+          const quienes = new Intl.ListFormat("es", { type: "conjunction" }).format(fuera.map((id) => nombreDe(nombres, id)));
           throw problema(
             "entrada_invalida",
             fuera.length === 1 ? `${quienes} no es un técnico activo de la organización: quítelo de la visita` : `${quienes} no son técnicos activos de la organización: quítelos de la visita`,
@@ -333,7 +344,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         const sitios = await clientes.sitios(tx, filas.map((f) => f.sitioId));
         const avance = await conteos(tx, filas.map((f) => f.id));
         const nombres = await identidad.nombres(organizacionId, [...new Set(filas.flatMap((f) => [...f.tecnicos, ...(f.canceladaPor ? [f.canceladaPor] : []), ...(f.terminadaPor ? [f.terminadaPor] : [])]))], tx);
-        const persona = (id: string) => ({ id, nombre: nombres.get(id) ?? "[Usuario no disponible]" });
+        const persona = (id: string) => ({ id, nombre: nombreDe(nombres, id) });
         return filas.flatMap((f) => {
           const sitio = sitios.get(f.sitioId);
           if (!sitio) return [];
@@ -376,7 +387,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         const sitios = await clientes.sitios(tx, cruces.map((v) => v.sitioId));
         const ocupados = tecnicos.flatMap((t) => cruces.filter((v) => v.tecnicos.includes(t)).slice(0, 1).map((v) => ({ tecnicoId: t, visitaId: v.id, cliente: sitios.get(v.sitioId)?.cliente ?? "[Cliente]" })));
         const nombres = await identidad.nombres(organizacionId, ocupados.map((o) => o.tecnicoId), tx);
-        const lista = ocupados.map((o) => ({ tecnico: { id: o.tecnicoId, nombre: nombres.get(o.tecnicoId) ?? "[Usuario no disponible]" }, visitaId: o.visitaId, cliente: o.cliente }));
+        const lista = ocupados.map((o) => ({ tecnico: { id: o.tecnicoId, nombre: nombreDe(nombres, o.tecnicoId) }, visitaId: o.visitaId, cliente: o.cliente }));
         throw problema("tecnico_ocupado", `${lista.map((o) => o.tecnico.nombre).join(", ")} ya ${lista.length === 1 ? "tiene" : "tienen"} otra visita a esa hora`, { ocupados: lista });
       }
 
@@ -409,7 +420,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
             // al revés, programar y reprogramar ese día a la vez se esperan uno al otro y Postgres aborta a uno.
             await tomarDia(tx, actor.organizacionId, cuerpo.programadaPara);
             // Primero se valida el pedido (fecha, sitio); el cruce se mira después, sin contarse a sí misma.
-            const id = await publica.crear(tx, { organizacionId: actor.organizacionId, autorId: actor.usuarioId, correlacion, ...cuerpo, tecnicos });
+            const id = await publica.crear(tx, { ...autoria(actor, correlacion), ...cuerpo, tecnicos });
             await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, tecnicos, id);
             return una(actor.organizacionId, tx, id);
           });
@@ -424,7 +435,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
             const [actual] = await tx.select().from(visitas).where(eq(visitas.id, id));
             // Solo los que entran: quien ya la tenía no se cruza consigo mismo.
             if (actual) await sinCruces(tx, actor.organizacionId, actual.programadaPara, { horaInicio: aHoraCorta(actual.horaInicio), horaFin: aHoraCorta(actual.horaFin) }, tecnicos.filter((t) => !actual.tecnicos.includes(t)), id);
-            await publica.reasignar(tx, { organizacionId: actor.organizacionId, autorId: actor.usuarioId, correlacion, visitaId: id, version: cuerpo.version, tecnicos });
+            await publica.reasignar(tx, { ...autoria(actor, correlacion), visitaId: id, version: cuerpo.version, tecnicos });
             return una(actor.organizacionId, tx, id);
           });
         },
@@ -439,7 +450,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
           return enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const [actual] = await tx.select().from(visitas).where(eq(visitas.id, id));
             if (actual) await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, actual.tecnicos.filter((t) => activos.has(t)), id);
-            await publica.reprogramar(tx, { organizacionId: actor.organizacionId, autorId: actor.usuarioId, correlacion, visitaId: id, ...cuerpo });
+            await publica.reprogramar(tx, { ...autoria(actor, correlacion), visitaId: id, ...cuerpo });
             return una(actor.organizacionId, tx, id);
           });
         },
@@ -482,7 +493,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
             if (actual.canceladaEn) throw problema("estado_invalido", "La visita está cancelada");
             const en = new Date(Math.min(Date.parse(cuerpo.en), Date.now()));
             await tx.update(visitas).set({ terminadaEn: en, terminadaPor: actor.usuarioId }).where(eq(visitas.id, id));
-            await registrar(tx, [{ organizacionId: actor.organizacionId, agregadoTipo: "visita", agregadoId: id, tipoEvento: "visita_terminada", autorId: actor.usuarioId, correlacion, valorNuevo: { en: en.toISOString(), llave: cuerpo.llave } }]);
+            await registrar(tx, [{ ...autoria(actor, correlacion), agregadoTipo: "visita", agregadoId: id, tipoEvento: "visita_terminada", valorNuevo: { en: en.toISOString(), llave: cuerpo.llave } }]);
             // Los demás técnicos de la visita la ven terminada en su siguiente bajada.
             await registrarCambios(tx, avisar(actor.organizacionId, id, actual.tecnicos, "cambio"));
             return { terminada: { en: en.toISOString() } };
@@ -493,7 +504,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         politica: politicas.oficina,
         manejar: async ({ parametros: { id }, cuerpo, actor, correlacion }) =>
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
-            await publica.cancelar(tx, { organizacionId: actor.organizacionId, autorId: actor.usuarioId, correlacion, visitaId: id, ...cuerpo });
+            await publica.cancelar(tx, { ...autoria(actor, correlacion), visitaId: id, ...cuerpo });
             return una(actor.organizacionId, tx, id);
           }),
       });

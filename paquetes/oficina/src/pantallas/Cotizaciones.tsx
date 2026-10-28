@@ -1,14 +1,15 @@
 import { useId, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, coincide, Dialogo, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, Insignia, Marcado, PieLista, Plus, Receipt, RefreshCw, SinResultados, Tabla } from "@teins/ui";
+import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, coincide, Dialogo, EncabezadoPagina, ErrorDeCarga, EsqueletoLista, EstadoVacio, FilaTabla, Insignia, Marcado, PieLista, Plus, Receipt, RefreshCw, SinResultados, Tabla } from "@teins/ui";
 import { cliente } from "../api";
 import { consultasDeCotizaciones, mensajeDeCotizacion } from "../cotizaciones";
 import { aDiaCorto, pesos } from "../formato";
 import { usePedido } from "../pedido";
 import { useBusquedaRecordada } from "../preferencias";
+import { formatearDia } from "@teins/dominio";
 
-const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
+const dia = (aaaaMmDd: string) => formatearDia(aaaaMmDd, { dateStyle: "medium" }).replace(",", "");
 
 /** Cotizaciones (iteración 21, ADR-0029; prototipos/oficina): número, cliente, estado y total publicado, con buscador. */
 export function Cotizaciones() {
@@ -36,14 +37,7 @@ export function Cotizaciones() {
       {consulta.isPending ? (
         <EsqueletoLista etiqueta="Cargando las cotizaciones" />
       ) : consulta.isError ? (
-        <Aviso tono="error">
-          <b>No se pudieron cargar las cotizaciones.</b>
-          <div>
-            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-              Reintentar
-            </Boton>
-          </div>
-        </Aviso>
+        <ErrorDeCarga texto="No se pudieron cargar las cotizaciones." reintentar={() => void consulta.refetch()} />
       ) : todas.length === 0 ? (
         <EstadoVacio icono={Receipt} titulo="Todavía no hay cotizaciones">
           Se crean con "Nueva cotización", desde una visita con levantamientos revisados: las líneas salen de sus cantidades.
@@ -146,7 +140,7 @@ function NuevaCotizacion({ alCerrar }: { alCerrar: () => void }) {
             Cuando oficina marque revisado un levantamiento con materiales, su visita aparece aquí.
           </EstadoVacio>
         ) : (
-          <fieldset className="col" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
+          <fieldset className="col" style={{ gap: 8 }}>
             <legend className="etq" style={{ marginBottom: 8 }}>
               Visita
             </legend>
@@ -163,7 +157,7 @@ function NuevaCotizacion({ alCerrar }: { alCerrar: () => void }) {
                 />
                 <span>
                   <b>{v.cliente}</b> · {v.sitio}
-                  <span style={{ display: "block", color: "var(--sec)", fontSize: 13 }}>
+                  <span className="block text-ayuda text-texto-secundario">
                     {`Visita del ${dia(v.programadaPara)} · ${v.materiales} ${v.materiales === 1 ? "material" : "materiales"} de ${v.levantamientosRevisados} ${v.levantamientosRevisados === 1 ? "levantamiento revisado" : "levantamientos revisados"}`}
                     {v.cotizaciones.length > 0 ? ` · ya tiene la ${v.cotizaciones.join(", la ")}` : ""}
                   </span>

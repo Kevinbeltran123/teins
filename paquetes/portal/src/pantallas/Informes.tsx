@@ -4,10 +4,11 @@ import { ErrorApi } from "@teins/protocolo";
 import { Aviso, Boton, Download, EsqueletoBloques, EstadoVacio, FileText, Logo, LogOut } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { olvidarSesion } from "../sesion";
+import { formatearDia } from "@teins/dominio";
 
 const sesionVencida = (error: unknown) => error instanceof ErrorApi && error.codigo === "no_autenticado";
 
-const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`));
+const dia = (aaaaMmDd: string) => formatearDia(aaaaMmDd, { dateStyle: "long" });
 const fecha = (iso: string) => new Intl.DateTimeFormat("es-CO", { dateStyle: "long" }).format(new Date(iso));
 
 export function Informes({ cliente: nombre, aviso }: { cliente: string; aviso?: ReactNode }) {

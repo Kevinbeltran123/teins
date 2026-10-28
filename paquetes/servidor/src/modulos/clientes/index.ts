@@ -7,8 +7,8 @@ import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import type { Cuerpo, Respuesta } from "@teins/protocolo";
-import { registrar, type EntradaAuditoria } from "../auditoria";
-import type { Identidad } from "../identidad";
+import { autoria, registrar, type EntradaAuditoria } from "../auditoria";
+import { nombreDe, type Identidad } from "../identidad";
 import { clientes, contactos, sitios, type FilaContacto } from "./esquema";
 
 export interface Sitio {
@@ -246,8 +246,7 @@ interface Dependencias {
   porHacer: VisitasPorHacer;
 }
 
-const SIN_NOMBRE = "[Usuario no disponible]";
-const marca = (en: Date | null, por: string | null, nombres: Map<string, string>) => (en ? { en: en.toISOString(), por: { id: por ?? "", nombre: nombres.get(por ?? "") ?? SIN_NOMBRE } } : null);
+const marca = (en: Date | null, por: string | null, nombres: Map<string, string>) => (en ? { en: en.toISOString(), por: { id: por ?? "", nombre: nombreDe(nombres, por) } } : null);
 
 async function detalleDe(tx: TxOrganizacion, deps: Dependencias, organizacionId: string, id: string): Promise<DetalleCliente> {
   const [cliente] = await tx.select().from(clientes).where(eq(clientes.id, id));
@@ -272,7 +271,7 @@ async function detalleDe(tx: TxOrganizacion, deps: Dependencias, organizacionId:
       programadaPara: v.programadaPara,
       sitioId: v.sitioId,
       sitio: susSitios.find((x) => x.id === v.sitioId)?.nombre ?? "",
-      tecnicos: v.tecnicos.map((t) => nombres.get(t) ?? SIN_NOMBRE),
+      tecnicos: v.tecnicos.map((t) => nombreDe(nombres, t)),
     })),
     contactos: filas.map((f) => ({
       id: f.id,
@@ -286,7 +285,7 @@ async function detalleDe(tx: TxOrganizacion, deps: Dependencias, organizacionId:
       recibeCotizaciones: f.recibeCotizaciones,
       whatsappAutorizado:
         f.whatsappAutorizadoPor && f.whatsappAutorizadoEn
-          ? { por: { id: f.whatsappAutorizadoPor, nombre: nombres.get(f.whatsappAutorizadoPor) ?? SIN_NOMBRE }, en: f.whatsappAutorizadoEn.toISOString() }
+          ? { por: { id: f.whatsappAutorizadoPor, nombre: nombreDe(nombres, f.whatsappAutorizadoPor) }, en: f.whatsappAutorizadoEn.toISOString() }
           : null,
       correoRebotado: f.correoRebotadoEn ? { en: f.correoRebotadoEn.toISOString(), motivo: f.correoRebotadoMotivo ?? "" } : null,
     })),
@@ -339,8 +338,16 @@ const auditable = (v: Pick<FilaContacto, "nombre" | "cargo" | "correo" | "celula
   whatsappAutorizadoPor: v.whatsappAutorizadoPor,
 });
 
+export interface Clientes {
+  registrarRutas(app: FastifyInstance): void;
+}
+
 /** Operaciones de oficina sobre clientes, sitios (iteración 7) y contactos (iteración 20). */
-export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, identidad: Pick<Identidad, "nombres">, porHacer: VisitasPorHacer, alCorregir: AlCorregir): void {
+export function crearClientes(deps: Dependencias & { bd: BaseDeDatos; alCorregir: AlCorregir }): Clientes {
+  return { registrarRutas: (app) => registrarRutas(app, deps) };
+}
+
+function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorregir }: Dependencias & { bd: BaseDeDatos; alCorregir: AlCorregir }): void {
   const deps: Dependencias = { identidad, porHacer };
   registrarOperacion(app, "obtenerCliente", {
     politica: politicas.oficina,
@@ -356,7 +363,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
         const valores = valoresDeContacto(cuerpo, actor.usuarioId);
         await tx.insert(contactos).values({ id: contactoId, organizacionId: actor.organizacionId, clienteId: id, ...valores });
         await registrar(tx, [
-          { organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: id, tipoEvento: "contacto_creado", autorId: actor.usuarioId, correlacion, valorNuevo: { id: contactoId, ...auditable(valores) } },
+          { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "contacto_creado", valorNuevo: { id: contactoId, ...auditable(valores) } },
         ]);
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
@@ -372,12 +379,10 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
         await tx.update(contactos).set(valores).where(eq(contactos.id, contactoId));
         await registrar(tx, [
           {
-            organizacionId: actor.organizacionId,
+            ...autoria(actor, correlacion),
             agregadoTipo: "cliente",
             agregadoId: id,
             tipoEvento: "contacto_editado",
-            autorId: actor.usuarioId,
-            correlacion,
             valorAnterior: { id: contactoId, ...auditable(anterior) },
             valorNuevo: { id: contactoId, ...auditable(valores) },
           },
@@ -410,7 +415,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
           .returning({ nombre: contactos.nombre });
         if (!quitado) throw problema("no_encontrado", "El contacto no existe");
         await registrar(tx, [
-          { organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: id, tipoEvento: "contacto_quitado", autorId: actor.usuarioId, correlacion, valorAnterior: { id: contactoId, nombre: quitado.nombre } },
+          { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "contacto_quitado", valorAnterior: { id: contactoId, nombre: quitado.nombre } },
         ]);
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
@@ -429,14 +434,14 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
       enOrganizacion(bd, actor.organizacionId, async (tx) => {
         const { clienteId, sitioId } = await clientesYSitios.crear(tx, { organizacionId: actor.organizacionId, nombre: cuerpo.nombre, sitio: cuerpo.sitio });
         const eventos: EntradaAuditoria[] = [
-          { organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: clienteId, tipoEvento: "cliente_creado", autorId: actor.usuarioId, correlacion, valorNuevo: { nombre: cuerpo.nombre, sitio: { id: sitioId, ...cuerpo.sitio } } },
+          { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: clienteId, tipoEvento: "cliente_creado", valorNuevo: { nombre: cuerpo.nombre, sitio: { id: sitioId, ...cuerpo.sitio } } },
         ];
         // El contacto principal, en la misma transacción: o queda el cliente con su contacto, o nada (iteración 29).
         if (cuerpo.contacto) {
           const contactoId = randomUUID();
           const valores = valoresDeContacto(cuerpo.contacto, actor.usuarioId);
           await tx.insert(contactos).values({ id: contactoId, organizacionId: actor.organizacionId, clienteId, ...valores });
-          eventos.push({ organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: clienteId, tipoEvento: "contacto_creado", autorId: actor.usuarioId, correlacion, valorNuevo: { id: contactoId, ...auditable(valores) } });
+          eventos.push({ ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: clienteId, tipoEvento: "contacto_creado", valorNuevo: { id: contactoId, ...auditable(valores) } });
         }
         await registrar(tx, eventos);
         return (await comoClientes(tx, identidad, actor.organizacionId, await clientesYSitios.conSitios(tx, [clienteId])))[0]!;
@@ -451,7 +456,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
         if (cliente.archivadoEn) throw problema("estado_invalido", "El cliente está archivado: recupérelo para agregarle un sitio");
         const sitioId = await clientesYSitios.agregarSitio(tx, { organizacionId: actor.organizacionId, clienteId: id, ...cuerpo });
         await registrar(tx, [
-          { organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: id, tipoEvento: "sitio_agregado", autorId: actor.usuarioId, correlacion, valorNuevo: { id: sitioId, ...cuerpo } },
+          { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "sitio_agregado", valorNuevo: { id: sitioId, ...cuerpo } },
         ]);
         return (await comoClientes(tx, identidad, actor.organizacionId, await clientesYSitios.conSitios(tx, [id])))[0]!;
       }),
@@ -470,7 +475,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
         if (anterior.nombre !== cuerpo.nombre) {
           await tx.update(clientes).set({ nombre: cuerpo.nombre, editadoPor: actor.usuarioId, editadoEn: new Date() }).where(eq(clientes.id, id));
           await registrar(tx, [
-            { organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_editado", autorId: actor.usuarioId, correlacion, valorAnterior: { nombre: anterior.nombre }, valorNuevo: { nombre: cuerpo.nombre } },
+            { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_editado", valorAnterior: { nombre: anterior.nombre }, valorNuevo: { nombre: cuerpo.nombre } },
           ]);
           await alCorregir.cliente(tx, { organizacionId: actor.organizacionId, clienteId: id, nombre: cuerpo.nombre });
         }
@@ -487,7 +492,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
         const pendientes = await visitasDeHoy(tx, id);
         if (pendientes.length > 0) throw problema("estado_invalido", `Tiene ${pendientes.length === 1 ? "una visita" : `${pendientes.length} visitas`} por hacer: cancélelas o reprográmelas antes de archivarlo`);
         await tx.update(clientes).set({ archivadoPor: actor.usuarioId, archivadoEn: new Date() }).where(eq(clientes.id, id));
-        await registrar(tx, [{ organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_archivado", autorId: actor.usuarioId, correlacion, valorNuevo: { nombre: cliente.nombre } }]);
+        await registrar(tx, [{ ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_archivado", valorNuevo: { nombre: cliente.nombre } }]);
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
   });
@@ -499,7 +504,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
         const cliente = await leerCliente(tx, id, true);
         if (!cliente.archivadoEn) throw problema("estado_invalido", "El cliente no estaba archivado");
         await tx.update(clientes).set({ archivadoPor: null, archivadoEn: null }).where(eq(clientes.id, id));
-        await registrar(tx, [{ organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_recuperado", autorId: actor.usuarioId, correlacion, valorNuevo: { nombre: cliente.nombre } }]);
+        await registrar(tx, [{ ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_recuperado", valorNuevo: { nombre: cliente.nombre } }]);
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
   });
@@ -523,12 +528,10 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
           await tx.update(clientes).set({ editadoPor: actor.usuarioId, editadoEn: new Date() }).where(eq(clientes.id, id));
           await registrar(tx, [
             {
-              organizacionId: actor.organizacionId,
+              ...autoria(actor, correlacion),
               agregadoTipo: "cliente",
               agregadoId: id,
               tipoEvento: "sitio_editado",
-              autorId: actor.usuarioId,
-              correlacion,
               valorAnterior: { id: sitioId, nombre: sitio.nombre, direccion: sitio.direccion },
               valorNuevo: { id: sitioId, ...cuerpo },
             },
@@ -553,7 +556,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
         // Sin un sitio activo, al cliente no se le podría programar nada: para eso se archiva el cliente.
         if (activos <= 1) throw problema("estado_invalido", "Es el único sitio activo del cliente: archive el cliente en su lugar");
         await tx.update(sitios).set({ archivadoPor: actor.usuarioId, archivadoEn: new Date() }).where(eq(sitios.id, sitioId));
-        await registrar(tx, [{ organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: id, tipoEvento: "sitio_archivado", autorId: actor.usuarioId, correlacion, valorNuevo: { id: sitioId, nombre: sitio.nombre } }]);
+        await registrar(tx, [{ ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "sitio_archivado", valorNuevo: { id: sitioId, nombre: sitio.nombre } }]);
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
   });
@@ -565,7 +568,7 @@ export function registrarRutasDeClientes(app: FastifyInstance, bd: BaseDeDatos, 
         const { sitio } = await leerSitio(tx, id, sitioId);
         if (!sitio.archivadoEn) throw problema("estado_invalido", "El sitio no estaba archivado");
         await tx.update(sitios).set({ archivadoPor: null, archivadoEn: null }).where(eq(sitios.id, sitioId));
-        await registrar(tx, [{ organizacionId: actor.organizacionId, agregadoTipo: "cliente", agregadoId: id, tipoEvento: "sitio_recuperado", autorId: actor.usuarioId, correlacion, valorNuevo: { id: sitioId, nombre: sitio.nombre } }]);
+        await registrar(tx, [{ ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "sitio_recuperado", valorNuevo: { id: sitioId, nombre: sitio.nombre } }]);
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
   });

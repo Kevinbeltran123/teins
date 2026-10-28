@@ -3,9 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { MensajeDeEnvio, TextoPropio } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
-import { Boton, BotonIcono, CircleAlert, FileText, HojaEnVivo, Mail, Maximize2, PanelRight, Paperclip, RefreshCw, WifiOff, X, type AnclaDeHoja } from "@teins/ui";
+import { Boton, BotonIcono, CircleAlert, FileText, HojaEnVivo, Mail, Maximize2, PanelRight, Paperclip, RefreshCw, useConexion, WifiOff, X, type AnclaDeHoja } from "@teins/ui";
 import { consultas } from "../api";
-import { useConexion } from "../conexion";
 import { useHojaAlLado, usePlantillas, type Plantillas } from "../documentos";
 import { esBooleano, usePreferencia } from "../preferencias";
 
@@ -307,9 +306,12 @@ function Correo({ p, mensaje, contacto, portal, edicion }: { p: Plantillas; mens
       if (bloque.contentEditable !== "plaintext-only") bloque.contentEditable = "true";
       bloque.spellcheck = true;
       bloque.setAttribute("aria-label", "Texto del correo: escriba aquí");
-      for (const [propiedad, valor] of [["outline", "1px dashed #9AA3B2"], ["outline-offset", "6px"], ["border-radius", "4px"], ["cursor", "text"]]) bloque.style.setProperty(propiedad!, valor!);
-      bloque.addEventListener("focus", () => bloque.style.setProperty("outline", "2px solid #2F5FE8"));
-      bloque.addEventListener("blur", () => bloque.style.setProperty("outline", "1px dashed #9AA3B2"));
+      // El marco no ve las variables de la pantalla: los colores se leen de los tokens al ponerlos, como el asunto.
+      const token = (nombre: string) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim();
+      const punteado = () => `1px dashed ${token("--t-borde-suave")}`;
+      for (const [propiedad, valor] of [["outline", punteado()], ["outline-offset", "6px"], ["border-radius", "4px"], ["cursor", "text"]]) bloque.style.setProperty(propiedad!, valor!);
+      bloque.addEventListener("focus", () => bloque.style.setProperty("outline", `2px solid ${token("--t-foco")}`));
+      bloque.addEventListener("blur", () => bloque.style.setProperty("outline", punteado()));
       // Lo escrito se observa como cambio del bloque y no con "input": Safari no le entrega a la pantalla los eventos de
       // un marco sin scripts, y un observador sí le llega.
       new MutationObserver(() => {

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { VERSION_APP_CATALOGO, VERSION_APP_SIMBOLOS } from "@teins/dominio";
+import { fechaEnColombia, VERSION_APP_CATALOGO, VERSION_APP_SIMBOLOS } from "@teins/dominio";
 import type { Cambio } from "@teins/protocolo";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { politicas } from "../../plataforma/politicas";
@@ -36,18 +36,15 @@ export const APP_CON_REVISION = 3;
 /** Primera versión de campo que entiende la salida de una visita atendida (ADR-0041). */
 export const APP_CON_CIERRE = 15;
 
-const ZONA = "America/Bogota";
 
 /**
  * Antes de bajar, las visitas atendidas de días anteriores se cierran (ADR-0041): terminadas o con algún levantamiento
  * recibido. Lo de hoy no, por si hace falta otro levantamiento; lo atrasado sin atender tampoco, oficina lo decide.
  */
 async function cerrarAtendidas(tx: TxOrganizacion, deps: Omit<Dependencias, "bd">, organizacionId: string, usuarioId: string) {
-  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: ZONA });
-  const candidatas = await deps.visitas.porCerrar(tx, usuarioId, hoy);
-  if (candidatas.length === 0) return;
-  const conteos = await deps.levantamientos.conteosPorVisita(tx, candidatas.filter((c) => !c.terminada).map((c) => c.id));
-  await deps.visitas.cerrar(tx, organizacionId, candidatas.filter((c) => c.terminada || conteos.has(c.id)).map((c) => c.id), hoy);
+  const hoy = fechaEnColombia();
+  const atendidas = await deps.visitas.porCerrar(tx, usuarioId, hoy, deps.levantamientos.conteosPorVisita);
+  await deps.visitas.cerrar(tx, organizacionId, atendidas, hoy);
 }
 
 /**

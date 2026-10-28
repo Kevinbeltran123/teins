@@ -1,0 +1,14 @@
+# pnpm, Node de .nvmrc y las dependencias del lockfile: lo mismo en cada trabajo de la integración.
+# Cada trabajo hace su propio actions/checkout antes, porque esta acción vive en el repositorio.
+name: Preparar
+description: pnpm, Node (.nvmrc, con caché de pnpm) y pnpm install --frozen-lockfile
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+    - run: pnpm install --frozen-lockfile
+      shell: bash

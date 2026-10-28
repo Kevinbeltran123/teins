@@ -28,6 +28,12 @@ export interface NuevoUsuario {
 
 type Ejecutor = BaseDeDatos | TxOrganizacion;
 
+/** Lo que se muestra cuando el nombre de una persona no se encuentra (cuenta de otra organización o borrada). */
+export const SIN_NOMBRE = "[Usuario no disponible]";
+
+/** El nombre de la persona en el mapa que devuelve `nombres`, o el marcador explícito si no está. */
+export const nombreDe = (nombres: ReadonlyMap<string, string>, id: string | null): string => nombres.get(id ?? "") ?? SIN_NOMBRE;
+
 const RUTAS_DE_AUTENTICACION = new Set([
   "/sign-in/username",
   "/sign-out",

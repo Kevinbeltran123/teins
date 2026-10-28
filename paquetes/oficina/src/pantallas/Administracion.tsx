@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
+  ErrorDeCarga,
   Aviso,
   Boton,
   BotonCopiar,
@@ -102,19 +103,6 @@ export function Administracion({ sesion }: { sesion: Sesion }) {
         {seccion === "accesos" && <Accesos />}
       </div>
     </>
-  );
-}
-
-function ErrorDeCarga({ texto, reintentar }: { texto: string; reintentar: () => void }) {
-  return (
-    <Aviso tono="error">
-      <b>{texto}</b>
-      <div>
-        <Boton tamano="pequeno" icono={RefreshCw} onClick={reintentar}>
-          Reintentar
-        </Boton>
-      </div>
-    </Aviso>
   );
 }
 
@@ -610,11 +598,11 @@ function Dispositivos() {
             </CeldaTabla>
             <CeldaTabla>
               {d.borradoConfirmadoEn ? "Nada" : s ? (s.pendientes === 0 ? "Nada" : `${s.pendientes}`) : "[N]"}
-              {atrasado && <span className="sub" style={{ color: "var(--alerta)", fontWeight: 700 }}>{`El más antiguo espera desde ${aFechaHora(s!.pendienteMasAntiguo!)}. Llame al técnico.`}</span>}
+              {atrasado && <span className="sub alerta-fuerte">{`El más antiguo espera desde ${aFechaHora(s!.pendienteMasAntiguo!)}. Llame al técnico.`}</span>}
               {!d.borradoConfirmadoEn && s?.ultimoError && <span className="sub">{`Último error: ${s.ultimoError}`}</span>}
             </CeldaTabla>
             <CeldaTabla>
-              {s?.persistente === false ? <span style={{ color: "var(--alerta)", fontWeight: 700 }}>No persistente: el sistema puede borrar los datos</span> : s?.persistente ? "Persistente" : "Sin dato"}
+              {s?.persistente === false ? <span className="alerta-fuerte">No persistente: el sistema puede borrar los datos</span> : s?.persistente ? "Persistente" : "Sin dato"}
               {s?.bytesUsados != null && s.bytesDisponibles != null && <span className="sub">{`${megas(s.bytesUsados)} de ${megas(s.bytesDisponibles)}`}</span>}
             </CeldaTabla>
             <CeldaTabla>

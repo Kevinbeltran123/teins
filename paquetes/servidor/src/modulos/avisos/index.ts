@@ -9,6 +9,7 @@ import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
 import { suscripciones } from "./esquema";
+import { fechaEnColombia, formatearDia } from "@teins/dominio";
 
 /** Hechos que merecen un aviso (ADR-0023): cada uno pide una acción de quien lo recibe. */
 export type Aviso =
@@ -39,17 +40,15 @@ export interface Contenido {
 /** Un aviso muestra pocas líneas: el texto largo se corta. */
 const recortar = (texto: string, largo = 160) => (texto.length > largo ? `${texto.slice(0, largo - 1).trimEnd()}…` : texto);
 
-const ZONA = "America/Bogota";
-const formatoDia = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 /** "sáb, 3 de oct". */
-const dia = (aaaaMmDd: string) => formatoDia.format(new Date(`${aaaaMmDd}T00:00:00Z`));
+const dia = (aaaaMmDd: string) => formatearDia(aaaaMmDd, { weekday: "short", day: "numeric", month: "short" });
 /** "14:00" → "2:00 p. m." (ADR-0037). */
 const hora12 = (hhmm: string) => {
   const [h, m] = hhmm.split(":").map(Number) as [number, number];
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h >= 12 ? "p. m." : "a. m."}`;
 };
 const aLas = (hora: string | null | undefined) => (hora ? `, a las ${hora12(hora)}` : "");
-const diaDe = (momento: Date) => dia(momento.toLocaleDateString("en-CA", { timeZone: ZONA }));
+const diaDe = (momento: Date) => dia(fechaEnColombia(momento));
 
 export function contenidoDe(aviso: Aviso): Contenido {
   switch (aviso.tipo) {

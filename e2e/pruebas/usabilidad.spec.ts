@@ -201,7 +201,9 @@ test("buscar en todo: abre con el atajo, va a un cliente, lo recuerda y lanza ac
   await contexto.close();
 });
 
-test("revisar en serie con el teclado: J, Enter, T, R y S; «?» muestra los atajos (iteración 37)", async ({ browser }) => {
+// Recorre las primeras filas de la bandeja, que comparte toda la corrida: va en el proyecto «…-bandeja», que corre
+// solo y después de las demás (playwright.config.ts), cuando ya hay levantamientos enviados.
+test("revisar en serie con el teclado: J, Enter, T, R y S; «?» muestra los atajos (iteración 37)", { tag: "@bandeja-compartida" }, async ({ browser }) => {
   const revisora = nuevoUsuario("oficina", "oficina");
   const contexto = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "es-CO" });
   const o = await contexto.newPage();
@@ -211,7 +213,7 @@ test("revisar en serie con el teclado: J, Enter, T, R y S; «?» muestra los ata
   await expect(esperando).toBeVisible();
   const filas = o.getByRole("tabpanel").getByRole("row");
   await expect.poll(() => filas.count()).toBeGreaterThan(0);
-  // Los levantamientos los dejan enviados las pruebas de campo que corren antes; sin ellos no hay nada que revisar.
+  // Corrido suelto, sin las pruebas de campo antes, no hay nada que revisar.
   test.skip((await filas.count()) < 3, "No hay levantamientos esperando revisión");
 
   await o.keyboard.press("?");

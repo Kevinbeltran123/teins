@@ -1,9 +1,8 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ErrorApi } from "@teins/protocolo";
-import { Aviso, Boton, LoaderCircle } from "@teins/ui";
+import { Aviso, Boton, LoaderCircle, useConexion } from "@teins/ui";
 import { consultas } from "./api";
-import { useConexion } from "./conexion";
 import { Ingreso } from "./pantallas/Ingreso";
 import { Informes } from "./pantallas/Informes";
 import { habiaSesion, marcarSesionAbierta } from "./sesion";

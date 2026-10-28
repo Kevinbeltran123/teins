@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
 import {
+  ErrorDeCarga,
   Aviso,
   Boton,
   Building,
@@ -21,7 +22,6 @@ import {
   EstadoVacio,
   FilaTabla,
   Plus,
-  RefreshCw,
   Tabla,
   useLoNuevo,
   useNotificar,
@@ -98,14 +98,7 @@ export function Clientes() {
       {consulta.isPending ? (
         <EsqueletoLista etiqueta="Cargando clientes" />
       ) : consulta.isError ? (
-        <Aviso tono="error">
-          <b>No se pudieron cargar los clientes.</b>
-          <div>
-            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-              Reintentar
-            </Boton>
-          </div>
-        </Aviso>
+        <ErrorDeCarga texto="No se pudieron cargar los clientes." reintentar={() => void consulta.refetch()} />
       ) : todos.length === 0 && vista === "activos" && !cantidad("archivados") ? (
         <EstadoVacio icono={Building} titulo="Todavía no hay clientes">
           Cree el primero con "Nuevo cliente", con su sede principal. Después podrá programarle visitas.

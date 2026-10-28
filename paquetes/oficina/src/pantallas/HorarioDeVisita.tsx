@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Aviso, Boton, ChevronLeft, ChevronRight, ChevronDown, Clock, RefreshCw, Search } from "@teins/ui";
 import { cruceDe, duracionTexto, hora12, aHora, aMinutos, libreTexto, ocupadoTexto, DIA_COMPLETO, type Horario, type Ocupacion } from "../horario";
 import { consultasDeProgramacion } from "../programacion";
+import { formatearDia } from "@teins/dominio";
 
 /*
   Cuándo es una visita y quién está libre (ADR-0037, prototipos/ajustes-oficina): fecha, hora y duración en tres
@@ -17,7 +18,7 @@ const MAXIMO_A_LA_VISTA = 6;
 
 /** "vie 2 oct · hoy" */
 export function fechaCorta(aaaaMmDd: string, hoy: string): string {
-  const texto = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "").replace(/\./g, "").replace(/ de /g, " ");
+  const texto = formatearDia(aaaaMmDd, { weekday: "short", day: "numeric", month: "short" }).replace(",", "").replace(/\./g, "").replace(/ de /g, " ");
   return aaaaMmDd === hoy ? `${texto} · hoy` : texto;
 }
 
@@ -226,7 +227,7 @@ export function TecnicosDisponibles({
   }, [ocupacion.data, fecha, horario.horaInicio, horario.horaFin]);
 
   return (
-    <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+    <fieldset className="campo" style={{ minWidth: 0 }}>
       <legend className="etq">Técnicos</legend>
       {tecnicos.length === 0 ? (
         <Aviso tono="alerta">No hay técnicos activos. Quien administra los crea en Administración.</Aviso>

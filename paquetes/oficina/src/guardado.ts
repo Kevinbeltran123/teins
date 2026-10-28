@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
+import { useConexion } from "@teins/ui";
 import type { Borrador } from "./borrador";
-import { useConexion } from "./conexion";
 import { escribirPreferencia, llaveDePreferencia, PersonaDeOficina } from "./preferencias";
 
 /*

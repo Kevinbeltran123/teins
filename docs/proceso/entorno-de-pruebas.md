@@ -53,10 +53,12 @@ Credenciales de `tecnico.prueba` y `oficina.prueba`: en `privado/entorno-de-prue
 
 ## Operación
 
+Para desplegar, el flujo «Desplegar» de GitHub Actions con la rama `corte-0` y el entorno `pruebas`: comprueba que el commit pasó la integración continua y despliega los cinco servicios en orden (`produccion.md`, "Desplegar una versión"; ADR-0049). Un despliegue por lote de mejoras, no por cambio. Desde el computador queda como respaldo.
+
 Desde la raíz del repositorio, con la CLI enlazada (`railway link` → `teins-pruebas`) y la llave SSH registrada (`railway ssh keys`):
 
 ```sh
-# Desplegar la versión local (sube la carpeta respetando .gitignore; campo migra antes de arrancar)
+# Respaldo: desplegar la versión local (sube la carpeta respetando .gitignore; campo migra antes de arrancar)
 railway up --service campo --detach
 railway up --service oficina --detach
 railway up --service portal --detach

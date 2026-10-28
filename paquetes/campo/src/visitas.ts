@@ -1,9 +1,9 @@
 import type { VisitaLocal } from "./datos/modelo";
+import { formatearDia } from "@teins/dominio";
 
 /** Fecha de hoy en el teléfono, como AAAA-MM-DD (la misma forma de `programadaPara`). */
 export const hoyLocal = (ahora = new Date()) => ahora.toLocaleDateString("en-CA");
 
-const dia = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
 function sumarDias(fecha: string, dias: number): string {
   const d = new Date(`${fecha}T00:00:00Z`);
@@ -16,7 +16,7 @@ export function fechaDeVisita(programadaPara: string, hoy: string): string {
   if (programadaPara === hoy) return "Hoy";
   if (programadaPara === sumarDias(hoy, 1)) return "Mañana";
   if (programadaPara === sumarDias(hoy, -1)) return "Ayer";
-  return dia.format(new Date(`${programadaPara}T00:00:00Z`));
+  return formatearDia(programadaPara, { weekday: "short", day: "numeric", month: "short" });
 }
 
 /** "14:05" → "2:05 p. m.": la forma en que se dice la hora en Colombia, igual en todos los teléfonos. */

@@ -4,7 +4,7 @@ Componentes compartidos y tokens de diseño de la base visual Precisión (2026-0
 
 - **Dependencias:** ningún otro paquete del monorepo. Iconos de Lucide (`lucide-react`, ISC), reexportados desde `src/iconos.ts`: ninguna superficie importa la biblioteca. Geist con `@fontsource-variable/geist`.
 - **ADR:** 0011, 0020, 0026, 0031.
-- **Pruebas:** sin pruebas propias; los componentes se prueban desde campo, oficina y el extremo a extremo. `pnpm --filter @teins/ui typecheck`.
+- **Pruebas:** `pnpm --filter @teins/ui test` prueba la lógica pura (`src/orden.test.ts`); los componentes se prueban desde campo, oficina y el extremo a extremo. `pnpm --filter @teins/ui typecheck`.
 
 ## Qué contiene
 
@@ -45,10 +45,10 @@ Componentes compartidos y tokens de diseño de la base visual Precisión (2026-0
 | `Insignia` | Estados del documento (colores de ADR-0020) y de uso (activo, sin acceso, nuevo) |
 | `Aviso` | Mensajes en el flujo: info, éxito, alerta, error |
 | `EstadoVacio`, `EsqueletoTabla`, `EsqueletoBloques` | Vacío y cargando con la forma real |
+| `ErrorDeCarga` | Lo que no se pudo cargar, con "Reintentar"; sin `reintentar` (lo que no existe), solo el texto |
 | `CapturaDeErrores`, `FallaAlDibujar` | Si algo falla al dibujar, un aviso con "Volver a cargar" en vez de la pantalla en blanco (campo y portal; oficina usa `FallaAlDibujar` en su enrutador) |
 | `CampoTexto`, `CampoTextoLargo`, `CampoSeleccion`, `CampoMedida`, `Casilla`, `GrupoDeOpciones`, `SelectorDeArchivo`, `MarcaNoObtenido`, `EtiquetaCampo`, `MensajeError`, `enfocarPrimerError` | Campos de formulario, con su mensaje de error por campo. `CampoTexto` acepta `sugerencias` (atajos bajo un campo libre), `ejemplo` y `seleccionarAlEnfocar`; el de contraseña tiene el ojo. `MarcaNoObtenido` separa `onMarcar` (la casilla) de `onMotivo`. `enfocarPrimerError` lleva el foco al primer campo con `aria-invalid` |
 | `CampoBusqueda` | Buscar en listas que crecen sin límite |
-| `CampoEnTabla` | Un campo compacto dentro de una fila (cantidad y precio de una cotización), con su nombre accesible y su error debajo |
 | `BotonCopiar` | Copiar claves y códigos, con la confirmación en el mismo botón |
 | `VisorFotos` | Foto a pantalla completa con anterior y siguiente; en campo, "Eliminar foto" |
 | `CampoFotos`, `EditorCantidades`, `TablaCantidades`, `EditorMateriales`, `ValorLeido` | Tipos de campo de los formatos. `EditorCantidades` con `disposicion="tabla"` para oficina; `EditorMateriales` es la fila por material con − cantidad + y el catálogo como entrada principal. "Deshacer" en los dos devuelve solo la línea quitada, en su lugar. `ValorLeido` muestra un dato en modo lectura |
@@ -61,12 +61,11 @@ Componentes compartidos y tokens de diseño de la base visual Precisión (2026-0
 | `conTransicion`, `useLoNuevo`, `useCapaQueSale`, `nombreDeTransicion`, `useNombreEnPantalla`, `sinMovimiento` | Movimiento (`DESIGN.md`): un cambio de estado como View Transition con dirección (`adelante`, `atras`, `seccion`, `fundido`) y, si hace falta, esperando a que llegue lo nuevo; solo lo nuevo de una lista entra animado; una capa a pantalla completa que baja antes de cerrarse; nombres válidos a partir de un id, solo mientras el elemento se ve; y si la persona pidió menos movimiento |
 | `useMinuto` | Vuelve a dibujar cada minuto y al volver a la pestaña: lo que depende de la hora ("En curso", "Hoy") cambia con la app abierta |
 | `useSinRepetir` | Una acción asíncrona que un doble toque hace una sola vez (bloqueo síncrono); devuelve también `ocupado` |
-
-`CampoFlotante` se exporta pero hoy ninguna superficie lo usa.
+| `useConexion` | Si el navegador tiene conexión, y vuelve a pintar al perderla o recuperarla (oficina y portal; campo tiene la suya, en `campo/src/dispositivo`) |
 
 ## Estilos propios de oficina
 
-`oficina.css` tiene, además de la escala de escritorio: la vista en vivo y su divisor (`.vivo.con-divisor`, `.vivo.ampliada`), "Qué sale en el informe" (`.que-sale`, `.mini-f`), el menú plegado (`.app.plegado`), las filas ordenables y `tr.marcada`, la búsqueda (`dialog.paleta`, `.item-p`, `.buscar-m`) y la lista de atajos (`.atajos-a`, `.tecla-a`).
+`oficina.css` tiene, además de la escala de escritorio: la vista en vivo y su divisor (`.vivo.con-divisor`, `.vivo.ampliada`), "Qué sale en el informe" (`.que-sale`, `.mini-f`), el menú plegado (`.app.plegado`), las filas ordenables y `tr.marcada`, la búsqueda (`dialog.paleta`, `.item-p`, `.buscar-m`) la lista de atajos (`.atajos-a`, `.tecla-a`) y una advertencia dentro del texto (`.alerta-fuerte`).
 
 ## Movimiento en `tema.css`
 

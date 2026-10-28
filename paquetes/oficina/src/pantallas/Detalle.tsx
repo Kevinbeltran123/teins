@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   bloques,
@@ -11,25 +11,20 @@ import {
   esCantidades,
   esFirma,
   esNoObtenido,
-  hojasDe,
   nombreDeDato,
-  normalizarDecimal,
   rutaLegible,
   type ContenidoVersion,
   type DefinicionCampo,
-  type DocumentoBoceto,
-  type LineaCantidad,
   type Valor,
-  type ValorFirma,
   type ValorMedida,
 } from "@teins/dominio";
-import { ErrorApi, type Respuesta } from "@teins/protocolo";
+import { ErrorApi } from "@teins/protocolo";
 import {
+  ErrorDeCarga,
   ArrowUp,
   Aviso,
   Boton,
   CampoMedida,
-  CampoSeleccion,
   CampoTexto,
   BotonIcono,
   Check,
@@ -38,15 +33,10 @@ import {
   DestinoAccionesBarra,
   Dialogo,
   Confirmacion,
-  EditorCantidades,
   EncabezadoPagina,
   EsqueletoLista,
   FileText,
-  Firma,
   History,
-  HojasDeBoceto,
-  Insignia,
-  Link2,
   LockKeyhole,
   nombreDeTransicion,
   MarcaNoObtenido,
@@ -58,33 +48,48 @@ import {
   sinMovimiento,
   Smartphone,
   TriangleAlert,
-  UserRound,
   useLoNuevo,
   MenuAcciones,
   useNotificar,
-  VisorFotos,
   type AnclaDeHoja,
-  type LineaEditable,
   type LucideIcon,
 } from "@teins/ui";
 import { consultas } from "../api";
-import { consultasDeCatalogo, useVincular } from "../catalogo";
 import { aDiaCorto, aFechaCorta, aHora, cuantoLleva, iniciales } from "../formato";
 import { avisarConversacionAbierta } from "../conversacion";
-import { useAbrirInformeDeVisita } from "../informes";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../mensajes";
-import { alMarcarRevisado, seccionCorregida, useBandeja, useComentar, useCorregir, useCorregirComentario, useLeerConversacion, useMarcarRevisado, useTomar, type Escrito } from "../revision";
+import {
+  alMarcarRevisado,
+  claveDato,
+  correccionesDe,
+  loEscritoAlMarcar,
+  seccionCorregida,
+  useBandeja,
+  useComentar,
+  useCorregir,
+  useCorregirComentario,
+  useLeerConversacion,
+  useMarcarRevisado,
+  useTomar,
+  type Consecuencia,
+  type Escrito,
+  type Historial,
+  type Levantamiento,
+} from "../revision";
+import { hayCorreccionAbierta, SinEnviar, sinEnviarDe, useSinEnviar } from "../sinEnviar";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
-import { enLista } from "./Envios";
 import { BotonMostrarVista, EditorConVista, Lienzo, useVistaPrevia, VistaDeDocumento } from "./Lienzo";
 import type { Plantillas } from "../documentos";
 import { esTexto, unoDe, usePreferencia } from "../preferencias";
 import { useTeclaSuelta } from "../atajos";
 import { recienteDeLevantamiento, useAnotarReciente } from "./Paleta";
-
-type Levantamiento = Respuesta<"obtenerLevantamiento">;
-type Historial = Respuesta<"historialLevantamiento">;
-type Evento = Historial["eventos"][number];
+import { BocetoDeCampo } from "./BocetoDeCampo";
+import { CorregirCantidades } from "./CorregirCantidades";
+import { FirmaDeCampo } from "./FirmaDeCampo";
+import { Fotos } from "./Fotos";
+import { HistorialDeCambios } from "./HistorialDeCambios";
+import { LineasDeCantidad } from "./LineasDeCantidad";
+import { AbrirInforme } from "./AbrirInforme";
 
 const ESTADOS = {
   enviado: { texto: "Enviado", tono: "enviado" },
@@ -99,100 +104,11 @@ const migas = (
   </Link>
 );
 
-const claveDato = (seccion: string, campo: string) => `${seccion}|${campo}`;
 const idDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`.replace(/[^a-zA-Z0-9_-]/g, "");
 
 /** La corrección que se está escribiendo: el capítulo del informe la muestra antes de guardarla (iteración 26). */
 type EnCurso = { seccion: string; campo: string; valor: Valor | undefined };
 const CorreccionEnCurso = createContext<{ avisar: (c: EnCurso | null) => void; verCapitulo: (() => void) | null } | null>(null);
-
-type Pendiente = { que: Escrito; valor: unknown };
-/**
- * Lo escrito y no enviado en la revisión, por destino. Vive en el detalle y no en cada campo: cambiar de pestaña del
- * panel, ocultarlo, cerrar la hoja lateral o abrir el globo de otra fila no lo borra, y «Marcar revisado» dice qué se
- * pierde.
- */
-const SinEnviar = createContext<Map<string, Pendiente> | null>(null);
-
-/**
- * Lo escrito sin enviar de cada levantamiento, fuera del detalle: Esc, el menú, Atrás o «Siguiente» lo desmontan, y al
- * volver sigue ahí (iteración 42). Los comentarios se copian en la pestaña (`sessionStorage`) y también vuelven al
- * recargar; de una corrección solo queda la marca de que hay una abierta, que se va con su editor.
- */
-class LoSinEnviar extends Map<string, Pendiente> {
-  private readonly llave: string;
-  constructor(levantamientoId: string) {
-    super();
-    this.llave = `revision-sin-enviar:${levantamientoId}`;
-    try {
-      for (const [clave, pendiente] of JSON.parse(sessionStorage.getItem(this.llave) ?? "[]") as [string, Pendiente][]) super.set(clave, pendiente);
-    } catch {
-      // Sin almacenamiento de la pestaña (navegación privada estricta), lo escrito vive mientras la app esté abierta.
-    }
-  }
-  override set(clave: string, pendiente: Pendiente) {
-    super.set(clave, pendiente);
-    this.copiar();
-    return this;
-  }
-  override delete(clave: string) {
-    const habia = super.delete(clave);
-    this.copiar();
-    return habia;
-  }
-  override clear() {
-    super.clear();
-    this.copiar();
-  }
-  private copiar() {
-    try {
-      const comentarios = [...this].filter(([, p]) => p.que.tipo !== "correccion");
-      if (comentarios.length === 0) sessionStorage.removeItem(this.llave);
-      else sessionStorage.setItem(this.llave, JSON.stringify(comentarios));
-    } catch {
-      // Lleno o sin permiso: sigue en memoria.
-    }
-  }
-}
-const sinEnviarPorLevantamiento = new Map<string, LoSinEnviar>();
-const sinEnviarDe = (levantamientoId: string) => {
-  let registro = sinEnviarPorLevantamiento.get(levantamientoId);
-  if (!registro) sinEnviarPorLevantamiento.set(levantamientoId, (registro = new LoSinEnviar(levantamientoId)));
-  return registro;
-};
-const hayCorreccionAbierta = (pendientes: Iterable<Pendiente>) => [...pendientes].some((p) => p.que.tipo === "correccion");
-
-/**
- * Un texto de la revisión que sigue ahí si su campo se desmonta y vuelve a montarse. El tercero vacía lo enviado al
- * llegar, solo si el campo sigue diciendo eso: lo que se escribió mientras se enviaba se queda (iteración 42).
- */
-function useSinEnviar<T>(que: Escrito, inicial: T): [T, (valor: T) => void, (enviado: T) => void] {
-  const pendientes = useContext(SinEnviar);
-  const clave = JSON.stringify(que);
-  const [valor, setValor] = useState<T>(() => (pendientes?.has(clave) ? (pendientes.get(clave)!.valor as T) : inicial));
-  const ultimo = useRef(valor);
-  const poner = (nuevo: T) => {
-    ultimo.current = nuevo;
-    setValor(nuevo);
-    pendientes?.set(clave, { que, valor: nuevo });
-  };
-  const vaciarSiSigue = (enviado: T) => {
-    if ((pendientes ? pendientes.get(clave)?.valor : ultimo.current) === enviado) poner(inicial);
-  };
-  return [valor, poner, vaciarSiSigue];
-}
-
-/** La última corrección de cada dato y su valor original, para mostrar antes y después en la fila. */
-function correccionesDe(historial: Historial | undefined) {
-  const porDato = new Map<string, { original: unknown; autor: string; motivo: string | undefined }>();
-  for (const e of historial?.eventos ?? []) {
-    if (e.tipo !== "campo_corregido" || !e.seccion || !e.campo) continue;
-    const clave = claveDato(e.seccion, e.campo);
-    const previa = porDato.get(clave);
-    porDato.set(clave, { original: previa ? previa.original : e.anterior, autor: e.autor.nombre, motivo: e.motivo ?? undefined });
-  }
-  return porDato;
-}
 
 /**
  * Detalle de un levantamiento (prototipos/oficina): se lee como un documento, con las secciones del recorrido de
@@ -275,16 +191,7 @@ export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined })
     return (
       <>
         <EncabezadoPagina migas={migas} titulo="Levantamiento" />
-        <Aviso tono="error">
-          <b>{noExiste ? "Este levantamiento no existe o no pertenece a su organización." : "No se pudo cargar el levantamiento."}</b>
-          {!noExiste && (
-            <div>
-              <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-                Reintentar
-              </Boton>
-            </div>
-          )}
-        </Aviso>
+        <ErrorDeCarga texto={noExiste ? "Este levantamiento no existe o no pertenece a su organización." : "No se pudo cargar el levantamiento."} reintentar={noExiste ? undefined : () => void consulta.refetch()} />
       </>
     );
   }
@@ -484,51 +391,6 @@ function PanelDeRevision({
 /** "8:41 p. m." si fue hoy; si no, con el día. */
 const cuandoCorto = (iso: string) => (aDiaCorto(iso) === "hoy" ? aHora(Date.parse(iso)) : aFechaCorta(iso));
 
-type Consecuencia = { icono: LucideIcon; texto: string; detalle?: string };
-
-/**
- * Lo escrito que «Marcar revisado» deja atrás, como consecuencias de su confirmación (DESIGN.md, tabla de confirmar o
- * deshacer): lo que se pierde, y los comentarios sin enviar, que el técnico ya no podrá responder.
- */
-function loEscritoAlMarcar(l: Levantamiento, pendientes: Iterable<Pendiente>): Consecuencia[] {
-  const { sePierden, sinRespuesta } = alMarcarRevisado(pendientes);
-  const dato = (seccion: string, campo: string) => `«${nombreDeDato(l.formatoDefinicion, l.repeticiones, seccion, campo)}»`;
-  const enConversacion = (id: string | undefined) => {
-    const raiz = l.comentarios.find((c) => c.id === id);
-    return raiz?.seccion && raiz.campo ? `sobre ${dato(raiz.seccion, raiz.campo)}` : "en la conversación general";
-  };
-  const describir = ({ que, valor }: Pendiente): string => {
-    switch (que.tipo) {
-      case "correccion":
-        return `la corrección sin guardar de ${dato(que.seccion, que.campo)}`;
-      case "respuesta":
-        return `la respuesta sin enviar ${enConversacion(que.comentarioId)}`;
-      case "edicion":
-        return `la edición sin guardar de su comentario ${enConversacion((valor as { id?: string }).id)}`;
-      case "comentario":
-        return `el comentario sin enviar sobre ${dato(que.seccion, que.campo)}`;
-      case "general":
-        return "el comentario general sin enviar";
-    }
-  };
-  const corrige = sePierden.some((e) => e.que.tipo === "correccion");
-  const conversa = sePierden.some((e) => e.que.tipo !== "correccion");
-  return [
-    ...(sePierden.length > 0
-      ? [
-          {
-            icono: TriangleAlert,
-            texto: `Se ${sePierden.length === 1 ? "pierde" : "pierden"} ${enLista(sePierden.map(describir))}`,
-            detalle: corrige && conversa ? "Ya no se corrige y las conversaciones se cierran" : corrige ? "Después ya no se corrige: guarde antes lo que necesite" : "Las conversaciones se cierran: envíe antes lo que necesite",
-          },
-        ]
-      : []),
-    ...(sinRespuesta.length > 0
-      ? [{ icono: MessageSquare, texto: `${l.tecnico.nombre} no podrá responder ${enLista(sinRespuesta.map(describir))}`, detalle: sinRespuesta.length === 1 ? "Envíelo antes si espera respuesta" : "Envíelos antes si espera respuesta" }]
-      : []),
-  ];
-}
-
 /**
  * El estado de la revisión va en la barra, junto a su acción (iteración 38), como «Guardado» junto a «Publicar»:
  * «● En revisión · la tomó usted» con «Marcar revisado». En la pantalla quedan «Siguiente», los errores y las
@@ -727,19 +589,6 @@ function SiguienteEnSerie({ actual }: { actual: string }) {
       </span>
       <ChevronRight aria-hidden size={16} />
     </button>
-  );
-}
-
-function AbrirInforme({ visitaId }: { visitaId: string }) {
-  const abrir = useAbrirInformeDeVisita();
-  const navegar = useNavigate();
-  return (
-    <>
-      <Boton variante="principal" icono={FileText} cargando={abrir.isPending} onClick={() => abrir.mutate(visitaId, { onSuccess: ({ id }) => void navegar({ to: "/informes/$id", params: { id } }) })}>
-        Abrir el informe
-      </Boton>
-      {abrir.isError && <Aviso tono="error">{mensajeDeError(abrir.error)}</Aviso>}
-    </>
   );
 }
 
@@ -1037,8 +886,13 @@ function EditorCorreccion({
         const lineas = esCantidades(valor) ? valor : [];
         return <CorregirCantidades etiqueta={`Líneas corregidas de ${campo.etiqueta.toLowerCase()}`} inicial={lineas} unidades={campo.unidades} deshabilitado={marcado} error={marcado ? undefined : mensajeCampo} onCambio={(v) => desdeElControl(v)} />;
       }
-      default:
+      // Fotos, bocetos y firmas no se corrigen en revisión: se ven como los tomó el técnico.
+      case "foto":
+      case "boceto":
+      case "firma":
         return null;
+      default:
+        return campo satisfies never;
     }
   })();
 
@@ -1446,332 +1300,6 @@ function ResponderEnHilo({ l, raiz, sobre }: { l: Levantamiento; raiz: Comentari
       </button>
       {comentar.isError && <Aviso tono="error">{mensajeDeError(comentar.error)}</Aviso>}
     </form>
-  );
-}
-
-/** Id de una línea nueva: 8 caracteres en base 36, como los que genera campo. */
-const nuevoIdDeLinea = () => [...crypto.getRandomValues(new Uint8Array(8))].map((b) => (b % 36).toString(36)).join("");
-
-/**
- * Las líneas de cantidad corregidas: la cantidad se escribe como la lee una persona ("12,5") y se guarda
- * como decimal canónico; si no se puede leer, va tal cual y el servidor la marca.
- */
-function CorregirCantidades({
-  etiqueta,
-  inicial,
-  unidades,
-  deshabilitado,
-  error,
-  onCambio,
-}: {
-  etiqueta: string;
-  inicial: readonly LineaCantidad[];
-  unidades: readonly string[];
-  deshabilitado: boolean;
-  error: string | undefined;
-  onCambio: (valor: Valor | undefined) => void;
-}) {
-  const [lineas, setLineas] = useState<LineaEditable[]>(() => inicial.map((l) => ({ ...l, cantidad: l.cantidad.replace(".", ","), observacion: l.observacion ?? "" })));
-  if (deshabilitado) return null;
-  // El ítem que eligió el técnico viaja con su línea (ADR-0025): corregir la cantidad no lo borra del documento.
-  const itemDe = new Map(inicial.flatMap((l) => (l.item ? [[l.id, l.item] as const] : [])));
-  function cambiar(nuevas: LineaEditable[]) {
-    setLineas(nuevas);
-    onCambio(
-      nuevas.length === 0
-        ? undefined
-        : nuevas.map((l) => ({
-            id: l.id,
-            descripcion: l.descripcion,
-            cantidad: normalizarDecimal(l.cantidad) ?? l.cantidad,
-            unidad: l.unidad,
-            ...(l.observacion.trim() ? { observacion: l.observacion.trim() } : {}),
-            ...(itemDe.has(l.id) ? { item: itemDe.get(l.id)! } : {}),
-          })),
-    );
-  }
-  return <EditorCantidades etiqueta={etiqueta} lineas={lineas} unidades={unidades} onCambio={cambiar} nuevoId={nuevoIdDeLinea} error={error} disposicion="tabla" />;
-}
-
-/**
- * Tabla de cantidades con su vínculo al catálogo (iteración 11). Quien tiene la revisión elige el ítem
- * de cada línea; el técnico escribió texto libre y no lo elige (regla 6).
- */
-function LineasDeCantidad({ l, seccion, campo, lineas, mia, recargar }: { l: Levantamiento; seccion: string; campo: DefinicionCampo; lineas: readonly LineaCantidad[]; mia: boolean; recargar: () => void }) {
-  const catalogo = useQuery({ ...consultasDeCatalogo.items(), enabled: mia });
-  const vincular = useVincular(l.id);
-  const vinculoDe = (linea: string) => l.vinculos.find((v) => v.seccion === seccion && v.campo === campo.clave && v.linea === linea);
-  // Lo eligió el técnico y nadie lo ha cambiado (ADR-0025): quien revisa sabe qué confirmar.
-  const deCampo = (linea: string) => vinculoDe(linea)?.elegidoEnCampo && <span className="sub">Elegido en campo</span>;
-
-  function celda(linea: string) {
-    const actual = vinculoDe(linea)?.item;
-    if (!mia) {
-      return actual ? (
-        <>
-          <span className="fuerte">{`${actual.codigo} · ${actual.descripcion}`}</span>
-          {deCampo(linea)}
-        </>
-      ) : (
-        <Insignia tono="alerta">Sin vincular</Insignia>
-      );
-    }
-    if (catalogo.isPending) return <span className="sec">Cargando el catálogo…</span>;
-    if (catalogo.isError) return <span className="msj-error">No se pudo cargar el catálogo</span>;
-    const activos = catalogo.data.items.filter((i) => i.activo || i.id === actual?.id);
-    if (activos.length === 0) return <span className="sec">El catálogo está vacío</span>;
-    const numero = lineas.findIndex((x) => x.id === linea) + 1;
-    return (
-      <div style={{ maxWidth: 300 }}>
-        <CampoSeleccion
-          etiqueta={`Ítem del catálogo para la línea ${numero}`}
-          etiquetaOculta
-          vacio="Sin vincular"
-          valor={actual?.id ?? ""}
-          deshabilitado={vincular.isPending}
-          onCambio={(itemId) => vincular.mutate({ version: l.version, seccion, campo: campo.clave, linea, itemId: itemId || null })}
-          opciones={activos.map((i) => ({ valor: i.id, texto: `${i.codigo} · ${i.descripcion} (${i.unidad})` }))}
-        />
-        {deCampo(linea)}
-      </div>
-    );
-  }
-
-  return (
-    <div className="col" style={{ gap: 10 }}>
-      <div className="tabla-caja">
-        <table className="tabla" aria-label={campo.etiqueta}>
-          <thead>
-            <tr>
-              <th scope="col">Material</th>
-              <th scope="col" className="num">
-                Cantidad
-              </th>
-              <th scope="col">Catálogo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lineas.map((x, j) => (
-              <tr key={x.id} style={{ "--i": j } as CSSProperties}>
-                <td>
-                  <span className="fuerte">{x.descripcion}</span>
-                  {x.observacion && <span className="sub">{x.observacion}</span>}
-                </td>
-                <td className="num">
-                  <span className="fuerte">{x.cantidad.replace(".", ",")}</span> <span className="sec">{x.unidad}</span>
-                </td>
-                <td>{celda(x.id)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {vincular.isError && (
-        <Aviso tono="error">
-          <b>{mensajeDeError(vincular.error)}</b>
-          {pideRecargar(vincular.error) && (
-            <div>
-              <Boton tamano="pequeno" icono={RefreshCw} onClick={recargar}>
-                Recargar
-              </Boton>
-            </div>
-          )}
-        </Aviso>
-      )}
-    </div>
-  );
-}
-
-const QUE_PASO: Record<string, { texto: string; icono: LucideIcon }> = {
-  levantamiento_creado: { texto: "Creó el levantamiento en el teléfono", icono: Smartphone },
-  levantamiento_enviado: { texto: "Envió el levantamiento", icono: Send },
-  revision_tomada: { texto: "Tomó la revisión", icono: UserRound },
-  revision_reasignada: { texto: "Tomó la revisión", icono: UserRound },
-  revision_liberada: { texto: "Dejó la revisión sin tomar", icono: UserRound },
-  campo_corregido: { texto: "Corrigió", icono: Pencil },
-  levantamiento_revisado: { texto: "Marcó el levantamiento revisado", icono: Check },
-  comentario_agregado: { texto: "Comentó", icono: MessageSquare },
-  comentario_respondido: { texto: "Respondió", icono: MessageSquare },
-  comentario_editado: { texto: "Editó su comentario", icono: Pencil },
-  comentario_retirado: { texto: "Retiró su comentario", icono: MessageSquare },
-  comentario_restaurado: { texto: "Restauró su comentario", icono: MessageSquare },
-  linea_vinculada: { texto: "Vinculó al catálogo", icono: Link2 },
-};
-
-/** Historial legible por campo (ADR-0008), con la verificación de la cadena. */
-function HistorialDeCambios({ l, historial }: { l: Levantamiento; historial: ReturnType<typeof useQuery<Historial>> }) {
-  const { formatoDefinicion: formato, repeticiones } = l;
-  const vinculadas = historial.data?.eventos.some((e) => e.tipo === "linea_vinculada") ?? false;
-  const catalogo = useQuery({ ...consultasDeCatalogo.items(), enabled: vinculadas });
-  const codigoDe = (itemId: string | null | undefined) => (itemId ? (catalogo.data?.items.find((i) => i.id === itemId)?.codigo ?? "un ítem") : "sin vincular");
-  const descripcionDeLinea = (seccion: string | undefined, clave: string | undefined, linea: string | undefined) => {
-    const valor = seccion && clave ? l.respuestas[seccion]?.[clave] : undefined;
-    return (esCantidades(valor) ? valor.find((x) => x.id === linea)?.descripcion : undefined) ?? "una línea quitada";
-  };
-  const campo = (seccion?: string, clave?: string) => (seccion && clave ? campoDeRuta(formato, repeticiones, seccion, clave) : undefined);
-  const nombreDe = (seccion: string | undefined, definicion: DefinicionCampo) => (seccion ? nombreDeDato(formato, repeticiones, seccion, definicion.clave, true) : definicion.etiqueta.toLowerCase());
-
-  function detalle(e: Evento): ReactNode {
-    const definicion = campo(e.seccion, e.campo);
-    const revisorAnterior = (e.anterior as { revisor?: string } | undefined)?.revisor;
-    if (e.tipo === "campo_corregido" && definicion) {
-      return (
-        <>
-          <br />
-          <span className="cambio">
-            {nombreDe(e.seccion, definicion)}: <del>{describirValor(definicion, e.anterior as Valor | undefined)}</del> → <ins>{describirValor(definicion, e.nuevo as Valor | undefined)}</ins>
-          </span>
-        </>
-      );
-    }
-    if (e.tipo === "revision_reasignada" && revisorAnterior) return ` que tenía ${revisorAnterior}`;
-    if (e.tipo === "revision_liberada" && revisorAnterior) return ` al desactivar a ${revisorAnterior}`;
-    if (e.tipo === "linea_vinculada") {
-      const antes = e.anterior as { linea?: string; item?: string | null } | undefined;
-      const despues = e.nuevo as { linea?: string; item?: string | null } | undefined;
-      return ` “${descripcionDeLinea(e.seccion, e.campo, despues?.linea)}”: ${codigoDe(antes?.item)} → ${codigoDe(despues?.item)}`;
-    }
-    if (e.tipo === "comentario_editado") return `: “${(e.anterior as { texto?: string } | undefined)?.texto ?? ""}” → “${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
-    if (e.tipo === "comentario_agregado" || e.tipo === "comentario_respondido") return ` ${definicion ? `sobre ${nombreDe(e.seccion, definicion)}: ` : ""}“${(e.nuevo as { texto?: string } | undefined)?.texto ?? ""}”`;
-    return null;
-  }
-
-  return (
-    <section aria-label="Historial de cambios" className="col" style={{ gap: 10 }}>
-      <div className="fila-flex entre">
-        <span className="ayuda">Todo cambio queda con autor y fecha.</span>
-        {historial.data && <Insignia tono={historial.data.integra ? "exito" : "peligro"}>{historial.data.integra ? "Historial íntegro" : "El historial fue alterado fuera del sistema"}</Insignia>}
-      </div>
-      {historial.isPending ? (
-        <EsqueletoLista etiqueta="Cargando el historial" filas={3} />
-      ) : historial.isError ? (
-        <Aviso tono="error">
-          <b>No se pudo cargar el historial.</b>
-          <div>
-            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void historial.refetch()}>
-              Reintentar
-            </Boton>
-          </div>
-        </Aviso>
-      ) : (
-        <ul className="historial">
-          {[...historial.data.eventos].reverse().map((e) => {
-            const que = QUE_PASO[e.tipo];
-            const Icono = que?.icono ?? Pencil;
-            return (
-              <li key={e.secuencia}>
-                <span className="ico">
-                  <Icono aria-hidden size={15} />
-                </span>
-                <div className="que">
-                  <b>{e.autor.nombre}</b> {que?.texto.toLowerCase() ?? e.tipo}
-                  {detalle(e)}
-                  <div className="cuando">
-                    {aFechaCorta(e.hora)}
-                    {e.motivo && ` · Motivo: ${e.motivo}`}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-/** Boceto (ADR-0019): el servidor entrega el documento ya verificado y se dibuja en papel claro, hoja por hoja (ADR-0026). */
-function BocetoDeCampo({ etiqueta, huella }: { etiqueta: string; huella: string }) {
-  const boceto = useQuery(consultas.boceto(huella));
-  if (boceto.isPending) return <div aria-busy="true" aria-label="Cargando el boceto" className="esq" style={{ height: 200, marginTop: 10 }} />;
-  if (boceto.isError) {
-    return (
-      <Aviso tono="error">
-        <b>No se pudo cargar el boceto.</b>
-        <div>
-          <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void boceto.refetch()}>
-            Reintentar
-          </Boton>
-        </div>
-      </Aviso>
-    );
-  }
-  return (
-    <div className="hojas-papel">
-      <HojasDeBoceto hojas={hojasDe(boceto.data)} cuadricula={boceto.data.cuadricula} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} />
-    </div>
-  );
-}
-
-/** La firma es un boceto de una sola hoja (ADR-0024). */
-function FirmaDibujada({ documento, etiqueta }: { documento: DocumentoBoceto; etiqueta: string }) {
-  const trazos = hojasDe(documento)[0]!;
-  return <Firma ancho={trazos.ancho} alto={trazos.alto} elementos={trazos.elementos} etiqueta={etiqueta} className="max-h-28" />;
-}
-
-/** Firma de quien recibe la visita (ADR-0024): la firma en papel, quién y cuándo, y la constancia que leyó. */
-function FirmaDeCampo({ valor, tecnico }: { valor: ValorFirma; tecnico: string }) {
-  const trazos = useQuery(consultas.boceto(valor.firma));
-  return (
-    <div style={{ display: "grid", gap: 8, maxWidth: 420 }}>
-      {trazos.isPending ? (
-        <div aria-busy="true" aria-label="Cargando la firma" className="esq" style={{ height: 112 }} />
-      ) : trazos.isError ? (
-        <Aviso tono="error">
-          <b>No se pudo cargar la firma.</b>
-          <div>
-            <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void trazos.refetch()}>
-              Reintentar
-            </Boton>
-          </div>
-        </Aviso>
-      ) : (
-        <div className="papel" data-tema="claro">
-          <FirmaDibujada documento={trazos.data} etiqueta={`Firma de ${valor.nombre}`} />
-        </div>
-      )}
-      <span className="sec" style={{ fontSize: 13 }}>
-        <b style={{ color: "var(--texto)" }}>{`${valor.nombre}${valor.cargo ? ` · ${valor.cargo}` : ""}`}</b>
-        <br />
-        Firmó {aFechaCorta(valor.firmadoEn)}, en el teléfono de {tecnico}.
-      </span>
-      <span className="sec" style={{ fontSize: 13 }}>
-        “{valor.declaracion}”
-      </span>
-    </div>
-  );
-}
-
-function Fotos({ etiqueta, huellas, puestos }: { etiqueta: string; huellas: readonly string[]; puestos?: readonly string[] | undefined }) {
-  const urls = useQueries({ queries: huellas.map((h) => consultas.urlDeArchivo(h)) });
-  const [viendo, setViendo] = useState<number | null>(null);
-  if (urls.some((u) => u.isPending)) return <p className="ayuda">Cargando fotos…</p>;
-  if (urls.some((u) => u.isError)) {
-    return (
-      <Aviso tono="error">
-        <b>No se pudieron cargar las fotos de {etiqueta.toLowerCase()}.</b>
-        <div>
-          <Boton tamano="pequeno" icono={RefreshCw} onClick={() => urls.forEach((u) => void u.refetch())}>
-            Reintentar
-          </Boton>
-        </div>
-      </Aviso>
-    );
-  }
-  const fotos = urls.map((u, i) => ({ id: huellas[i]!, url: u.data!.url }));
-  return (
-    <>
-      <div className="fotos">
-        {fotos.map((f, i) => (
-          <figure key={f.id} className="foto" style={{ margin: 0 }}>
-            <img src={f.url} alt={`Foto ${i + 1} de ${etiqueta}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-            <figcaption>{puestos?.[i] ?? `Foto ${i + 1}`}</figcaption>
-            <button type="button" className="ver-foto" aria-label={`Ver ${puestos?.[i] ?? `la foto ${i + 1}`} de ${etiqueta.toLowerCase()}`} onClick={() => setViendo(i)} />
-          </figure>
-        ))}
-      </div>
-      {viendo !== null && <VisorFotos etiqueta={etiqueta} fotos={fotos} inicial={viendo} alCerrar={() => setViendo(null)} />}
-    </>
   );
 }
 

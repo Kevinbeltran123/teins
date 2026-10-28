@@ -6,8 +6,12 @@ RUN corepack enable
 WORKDIR /repo
 
 FROM base AS compilacion
+# Dependencias antes que el código: la capa de `pnpm fetch` solo se invalida si cambia el lockfile
+# (package.json va con él para que corepack use la versión de pnpm fijada en `packageManager`).
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm fetch --frozen-lockfile
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --offline --frozen-lockfile
 RUN pnpm --filter @teins/campo --filter @teins/oficina --filter @teins/portal build \
  && pnpm --filter @teins/servidor compilar
 # Solo el servidor con sus dependencias de producción; dominio y protocolo ya van dentro de dist/.

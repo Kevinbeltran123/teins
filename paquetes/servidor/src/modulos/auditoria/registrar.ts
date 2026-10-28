@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import type { Actor } from "../../plataforma/actor";
 import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { calcularHash, VERSION_FORMATO_REGISTRO, type ContenidoRegistro } from "./cadena";
 import { registros } from "./esquema";
@@ -77,6 +78,13 @@ export interface EntradaAuditoria {
   horaDispositivo?: Date;
   motivo?: string;
 }
+
+/** Quién hace el cambio y en qué solicitud: la parte de cada entrada que viene del actor. */
+export const autoria = (actor: Pick<Actor, "organizacionId" | "usuarioId">, correlacion: string) => ({
+  organizacionId: actor.organizacionId,
+  autorId: actor.usuarioId,
+  correlacion,
+});
 
 /**
  * Registra eventos en la misma transacción del cambio que describen. Si la transacción se

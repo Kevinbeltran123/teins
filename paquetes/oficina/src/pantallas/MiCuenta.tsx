@@ -2,6 +2,7 @@ import { useEffect, useId, useState, type FormEvent, type ReactNode } from "reac
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { esLlaveCancelada } from "@teins/protocolo";
 import {
+  ErrorDeCarga,
   Aviso,
   Bell,
   Boton,
@@ -21,7 +22,6 @@ import {
   Moon,
   OPCIONES_DE_TEMA,
   Plus,
-  RefreshCw,
   RequisitosDeContrasena,
   ShieldCheck,
   ShieldOff,
@@ -85,14 +85,7 @@ export function MiCuenta({ nombre }: { nombre: string }) {
         {llaves.isPending ? (
           <div aria-busy="true" aria-label="Cargando sus llaves de acceso" className="esq" style={{ height: 56 }} />
         ) : llaves.isError ? (
-          <Aviso tono="error">
-            <b>No se pudieron cargar sus llaves de acceso.</b>
-            <div>
-              <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void llaves.refetch()}>
-                Reintentar
-              </Boton>
-            </div>
-          </Aviso>
+          <ErrorDeCarga texto="No se pudieron cargar sus llaves de acceso." reintentar={() => void llaves.refetch()} />
         ) : cuantas === 0 ? null : (
           <ul aria-label="Sus llaves de acceso" className="filas" style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {llaves.data.map((l, i) => {

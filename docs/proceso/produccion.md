@@ -10,7 +10,7 @@ Si producción está encendida o apagada, y por qué, lo dice el "Estado actual"
 
 1. `railway config plan` y `railway config apply`: devuelve los servicios a `us-east4`, como declara `.railway/railway.ts`.
 2. Postgres primero: en el panel de Railway, su último despliegue → «Redeploy». Espera a que quede activo.
-3. `railway up --service campo --detach` (migra antes de arrancar) y, después, `oficina`, `portal`, `worker` y `respaldos`.
+3. Despliega con el flujo «Desplegar» (sección "Desplegar una versión"), o desde el computador: `railway up --service campo --detach` (migra antes de arrancar) y, después, `oficina`, `portal`, `worker` y `respaldos`.
 4. Comprueba que `/salud` responde en las tres direcciones y corre `infra/railway/verificar-exposicion.sh`.
 
 ## Qué es cada pieza
@@ -67,6 +67,28 @@ Hace, en orden y sin repetir lo que ya existe:
 9. Verifica la exposición a internet (`verificar-exposicion.sh`): termina con error si la base, el worker o los respaldos se alcanzan desde afuera.
 
 La conexión del rol dueño de la base (`DATABASE_URL_PROPIETARIO`, que migra y puede saltarse la seguridad por fila) solo la tienen `campo` (migra y corre los comandos) y `worker`; `oficina` y `portal` atienden solicitudes sin ella.
+
+## Desplegar una versión (ADR-0049)
+
+Se despliega por lotes, a mano, desde GitHub: pestaña Actions → «Desplegar» → «Run workflow».
+
+1. En «Use workflow from», la rama: `corte-0` para pruebas, `master` para producción. Se despliega el último commit de esa rama.
+2. En «Entorno», `pruebas` o `produccion`. Para producción, escribe `produccion` en la confirmación; desde otra rama que no sea `master` el flujo se niega.
+3. El flujo comprueba que ese commit pasó la integración continua y despliega en el orden de `montar.sh`: `campo` (migra en su pre-deploy), `oficina`, `portal`, `worker` y `respaldos`. Si una construcción falla, se detiene ahí.
+4. Comprueba que `/salud` responde en las tres direcciones.
+
+Lo que necesita, una vez por entorno (en GitHub, Settings → Environments):
+
+- Entornos `pruebas` y `produccion`. En `produccion`, «Deployment branches» limitado a `master`.
+- En cada uno, el secreto `RAILWAY_TOKEN`: un token de proyecto de Railway de ese proyecto y su entorno `production` (en Railway, Project Settings → Tokens). Nunca en el repositorio.
+
+Si GitHub Actions no está disponible, se despliega desde el computador con el proyecto enlazado, en el mismo orden:
+
+```sh
+railway up --service campo --ci
+for servicio in oficina portal worker; do railway up --service "$servicio" --ci; done
+railway up infra/respaldos --path-as-root --service respaldos --ci
+```
 
 ## Cambiar la infraestructura
 

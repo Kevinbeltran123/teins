@@ -9,4 +9,5 @@ function suscribir(avisar: () => void) {
   };
 }
 
+/** Si el navegador tiene conexión, y vuelve a pintar al perderla o recuperarla (oficina y portal; campo tiene la suya). */
 export const useConexion = () => useSyncExternalStore(suscribir, () => navigator.onLine);

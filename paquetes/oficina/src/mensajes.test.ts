@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ErrorApi, tipoDeProblema } from "@teins/protocolo";
-import { errorDelCampo, mensajeDeError, sinError, textoDelServidor } from "./mensajes";
+import { ErrorApi, ErrorDeRed, tipoDeProblema } from "@teins/protocolo";
+import { mensajeDeAdministracion } from "./administracion";
+import { mensajeDeCotizacion } from "./cotizaciones";
+import { errorDeCuenta } from "./cuenta";
+import { mensajeDeInforme } from "./informes";
+import { errorDelCampo, MENSAJE_VERSION_NUEVA, mensajeDeError, sinError, textoDelServidor } from "./mensajes";
+import { mensajeDeProgramacion } from "./programacion";
 
 const entradaInvalida = (campos?: { ruta: string; mensaje: string }[], detail = "Revise cuerpo") =>
   new ErrorApi({ type: tipoDeProblema("entrada_invalida"), title: "Entrada inválida", status: 400, codigo: "entrada_invalida", detail, ...(campos ? { campos } : {}) });
@@ -66,5 +71,25 @@ describe("errores por campo desde problema.campos (iteración 24b)", () => {
     expect(errorDelCampo(entradaInvalida(undefined, "El contacto no tiene correo"), "correo")).toBeUndefined();
     expect(errorDelCampo(new Error("red"), "correo")).toBeUndefined();
     expect(errorDelCampo(null, "correo")).toBeUndefined();
+  });
+});
+
+describe("todos los traductores dicen igual los errores comunes", () => {
+  const traductores: [string, (error: unknown) => string][] = [
+    ["mensajeDeError", mensajeDeError],
+    ["mensajeDeCotizacion", mensajeDeCotizacion],
+    ["mensajeDeAdministracion", mensajeDeAdministracion],
+    ["mensajeDeProgramacion", mensajeDeProgramacion],
+    ["mensajeDeInforme", (e) => mensajeDeInforme(e, () => "").join(" ")],
+    ["errorDeCuenta", (e) => errorDeCuenta(e).general ?? ""],
+  ];
+  const noAutenticado = new ErrorApi({ type: tipoDeProblema("no_autenticado"), title: "Se requiere iniciar sesión", status: 401, codigo: "no_autenticado" });
+  const versionVieja = new TypeError("Failed to fetch dynamically imported module: /assets/qr-abc123.js");
+
+  it.each(traductores)("%s", (_, traducir) => {
+    expect(traducir(versionVieja)).toBe(MENSAJE_VERSION_NUEVA);
+    expect(traducir(new ErrorDeRed(new Error("offline")))).toMatch(/^Sin conexión con el servidor\. No se .+; intente de nuevo al recuperar la conexión\.$/);
+    expect(traducir(new Error("inesperado"))).toMatch(/^No se pudo .+\. Intente de nuevo\.$/);
+    expect(traducir(noAutenticado)).toBe("Su sesión venció. Inicie sesión de nuevo.");
   });
 });

@@ -5,9 +5,9 @@ import { enOrganizacion, esViolacionUnica, type BaseDeDatos, type TxOrganizacion
 import { problema } from "../../plataforma/errores";
 import { evaluar, politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
-import { registrar } from "../auditoria";
+import { autoria, registrar } from "../auditoria";
 import { registrarCambios } from "../cambios";
-import type { Identidad } from "../identidad";
+import { nombreDe, type Identidad } from "../identidad";
 import { itemsCatalogo, preciosCatalogo } from "./esquema";
 
 export interface ItemDeCatalogo {
@@ -80,7 +80,7 @@ export function crearCatalogo(bd: BaseDeDatos, identidad: Pick<Identidad, "nombr
               const [fila] = await tx.insert(itemsCatalogo).values({ id: randomUUID(), organizacionId: actor.organizacionId, ...cuerpo }).returning();
               await paraLosTelefonos(tx, actor.organizacionId, [fila!.id]);
               await registrar(tx, [
-                { organizacionId: actor.organizacionId, agregadoTipo: "item_catalogo", agregadoId: fila!.id, tipoEvento: "item_catalogo_creado", autorId: actor.usuarioId, correlacion, valorNuevo: cuerpo },
+                { ...autoria(actor, correlacion), agregadoTipo: "item_catalogo", agregadoId: fila!.id, tipoEvento: "item_catalogo_creado", valorNuevo: cuerpo },
               ]);
               return comoItem(fila!);
             });
@@ -102,12 +102,10 @@ export function crearCatalogo(bd: BaseDeDatos, identidad: Pick<Identidad, "nombr
             const precio = (await vigentes(tx, [id])).get(id);
             await registrar(tx, [
               {
-                organizacionId: actor.organizacionId,
+                ...autoria(actor, correlacion),
                 agregadoTipo: "item_catalogo",
                 agregadoId: id,
                 tipoEvento: "item_catalogo_actualizado",
-                autorId: actor.usuarioId,
-                correlacion,
                 valorAnterior: { descripcion: antes.descripcion, unidad: antes.unidad, activo: antes.activo },
                 valorNuevo: cuerpo,
               },
@@ -127,7 +125,7 @@ export function crearCatalogo(bd: BaseDeDatos, identidad: Pick<Identidad, "nombr
             // Nunca se pisa: el nuevo rige desde ahora y el anterior queda en la historia.
             await tx.insert(preciosCatalogo).values({ id: randomUUID(), organizacionId: actor.organizacionId, itemId: id, valor: cuerpo.precio, desde, por: actor.usuarioId, origen: "manual" });
             await registrar(tx, [
-              { organizacionId: actor.organizacionId, agregadoTipo: "item_catalogo", agregadoId: id, tipoEvento: "precio_cambiado", autorId: actor.usuarioId, correlacion, valorAnterior: anterior?.valor ?? null, valorNuevo: cuerpo.precio },
+              { ...autoria(actor, correlacion), agregadoTipo: "item_catalogo", agregadoId: id, tipoEvento: "precio_cambiado", valorAnterior: anterior?.valor ?? null, valorNuevo: cuerpo.precio },
             ]);
             return comoItem(item, { valor: cuerpo.precio, desde });
           }),
@@ -143,7 +141,7 @@ export function crearCatalogo(bd: BaseDeDatos, identidad: Pick<Identidad, "nombr
           });
           const nombres = await identidad.nombres(actor.organizacionId, [...new Set(filas.map((f) => f.por))]);
           return {
-            precios: filas.map((f) => ({ valor: f.valor, desde: f.desde.toISOString(), por: { id: f.por, nombre: nombres.get(f.por) ?? "[Usuario no disponible]" }, origen: f.origen })),
+            precios: filas.map((f) => ({ valor: f.valor, desde: f.desde.toISOString(), por: { id: f.por, nombre: nombreDe(nombres, f.por) }, origen: f.origen })),
           };
         },
       });
@@ -192,12 +190,10 @@ export function crearCatalogo(bd: BaseDeDatos, identidad: Pick<Identidad, "nombr
             const creados = porCodigo.size - existentes.size;
             await registrar(tx, [
               {
-                organizacionId: actor.organizacionId,
+                ...autoria(actor, correlacion),
                 agregadoTipo: "organizacion",
                 agregadoId: actor.organizacionId,
                 tipoEvento: "catalogo_importado",
-                autorId: actor.usuarioId,
-                correlacion,
                 valorNuevo: { creados, actualizados: existentes.size },
               },
             ]);

@@ -5,6 +5,7 @@ import type { MensajeDeInforme, TextoPropio } from "@teins/documentos";
 import { elegir, type ContenidoVersion, type SeleccionInforme } from "@teins/dominio";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
+  ErrorDeCarga,
   Aviso,
   Boton,
   BotonIcono,
@@ -25,25 +26,24 @@ import {
   Mail,
   MessageCircle,
   moverEnLista,
-  RefreshCw,
   SelectorDeArchivo,
   Send,
   Trash,
   TriangleAlert,
+  useConexion,
   useNotificar,
   type AnclaDeHoja,
 } from "@teins/ui";
 import { cliente, consultas, esSesionVencida } from "../api";
 import { useBorrador } from "../borrador";
-import { aFechaCorta, aHora } from "../formato";
+import { aFechaCorta, aHora, diaConSemana, enLista } from "../formato";
 import { mensajeDeAdministracion } from "../administracion";
 import { mensajeDeInforme, resumenDelAvance, subirPlano, useGuardarInforme, usePublicarInforme } from "../informes";
 import { consultasDeProgramacion } from "../programacion";
 import { type Plantillas } from "../documentos";
-import { useConexion } from "../conexion";
 import { useGuardadoAutomatico } from "../guardado";
 import { capituloDe, useRecursosDelInforme } from "../vistaInforme";
-import { ClienteArchivado, copiasEnviadas, Destinatarios, enLista, PanelEnvios, receptores, useCancelarEnvio } from "./Envios";
+import { ClienteArchivado, copiasEnviadas, Destinatarios, PanelEnvios, receptores, useCancelarEnvio } from "./Envios";
 import { AvisoDeConflicto, EstadoDeGuardado } from "./Guardado";
 import { BotonMostrarVista, CorreoDeContactos, EditorConVista, Lienzo, PestanasDeVista, useVistaPrevia, VistaDeDocumento, type EdicionDeCorreo, type QueSeVe } from "./Lienzo";
 import { QueSaleEnElInforme } from "./QueSaleEnElInforme";
@@ -68,7 +68,6 @@ const enElPortalDe = (informe: Informe) => informe.versiones.find((v) => v.retir
 /** Qué ve el cliente mientras la vigente no tiene PDF. */
 const loQueVeElCliente = (numero: number | undefined) => (numero ? `Mientras, el cliente ve la versión ${numero}` : "Mientras, el cliente no ve ninguna");
 
-const dia = (aaaaMmDd: string) => new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${aaaaMmDd}T00:00:00Z`)).replace(",", "");
 
 const migas = (
   <Link to="/informes" className="migas">
@@ -104,16 +103,7 @@ export function InformeDeVisita({ id }: { id: string }) {
     return (
       <>
         <EncabezadoPagina migas={migas} titulo="Informe" />
-        <Aviso tono="error">
-          <b>{noExiste ? "Este informe no existe o no pertenece a su organización." : "No se pudo cargar el informe."}</b>
-          {!noExiste && (
-            <div>
-              <Boton tamano="pequeno" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-                Reintentar
-              </Boton>
-            </div>
-          )}
-        </Aviso>
+        <ErrorDeCarga texto={noExiste ? "Este informe no existe o no pertenece a su organización." : "No se pudo cargar el informe."} reintentar={noExiste ? undefined : () => void consulta.refetch()} />
       </>
     );
   }
@@ -307,7 +297,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
           descripcion={
             <>
               <span>{informe.visita.sitio}</span>
-              <span>Visita del {dia(informe.visita.programadaPara)}</span>
+              <span>Visita del {diaConSemana(informe.visita.programadaPara)}</span>
               <span>{informe.visita.motivo}</span>
               {contactos.data && (
                 <span>
@@ -741,7 +731,7 @@ function Versiones({ informe, recargar, envios }: { informe: Informe; recargar: 
                     PDF
                   </Boton>
                 ) : v.pdf === "generando" ? (
-                  <span className="sec" style={{ fontSize: 13 }} aria-live="polite">
+                  <span className="sec text-ayuda" aria-live="polite">
                     Generando el PDF…
                   </span>
                 ) : (

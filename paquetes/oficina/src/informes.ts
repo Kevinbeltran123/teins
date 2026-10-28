@@ -1,8 +1,8 @@
 import type { TextoPropio } from "@teins/documentos";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ErrorApi, type CuerpoEntrada, type Respuesta } from "@teins/protocolo";
+import type { CuerpoEntrada, Respuesta } from "@teins/protocolo";
 import { cliente } from "./api";
-import { textoDelServidor } from "./mensajes";
+import { errorComun, textoDelServidor } from "./mensajes";
 
 type VersionPublicada = Respuesta<"obtenerInforme">["versiones"][number];
 
@@ -70,8 +70,10 @@ export async function subirPlano(archivo: File): Promise<{ huella: string; nombr
 }
 
 /** Qué decirle a oficina sobre un error del informe. */
-export function mensajeDeInforme(error: unknown, nombreDe: (id: string) => string): string[] {
-  if (!(error instanceof ErrorApi)) return [error instanceof PlanoRechazado ? `${error.message}. Verifique que sea un PDF.` : "No se pudo completar la acción. Intente de nuevo."];
+export function mensajeDeInforme(problema: unknown, nombreDe: (id: string) => string): string[] {
+  if (problema instanceof PlanoRechazado) return [`${problema.message}. Verifique que sea un PDF.`];
+  const error = errorComun(problema, "No se guardó nada", "No se pudo completar la acción. Intente de nuevo.");
+  if (typeof error === "string") return [error];
   switch (error.codigo) {
     case "informe_invalido":
       return (error.problema.erroresInforme ?? []).map((e) => {

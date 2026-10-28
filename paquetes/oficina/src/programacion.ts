@@ -1,8 +1,8 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ErrorApi, ErrorDeRed } from "@teins/protocolo";
+import { ErrorApi } from "@teins/protocolo";
 import { conTransicion } from "@teins/ui";
 import { cliente } from "./api";
-import { textoDelServidor } from "./mensajes";
+import { errorComun, textoDelServidor } from "./mensajes";
 
 export type Vista = "proximas" | "anteriores" | "canceladas";
 
@@ -53,17 +53,15 @@ export function mensajeDeCliente(error: unknown): string {
   return mensajeDeProgramacion(error);
 }
 
-export function mensajeDeProgramacion(error: unknown): string {
-  if (error instanceof ErrorDeRed) return "Sin conexión con el servidor. No se guardó nada; intente de nuevo al recuperar la conexión.";
-  if (!(error instanceof ErrorApi)) return "No se pudo guardar. Intente de nuevo.";
+export function mensajeDeProgramacion(problema: unknown): string {
+  const error = errorComun(problema, "No se guardó nada", "No se pudo guardar. Intente de nuevo.");
+  if (typeof error === "string") return error;
   switch (error.codigo) {
     case "conflicto_de_version":
       return "Otra persona cambió esta visita mientras usted la tenía abierta. La lista ya muestra lo último: revise y vuelva a intentar.";
     case "estado_invalido":
       // Cancelada, o el cliente o el sitio se archivó con el diálogo abierto: el servidor dice cuál.
       return error.problema.detail ?? "La visita ya está cancelada.";
-    case "no_autenticado":
-      return "Su sesión venció. Inicie sesión de nuevo.";
     // Alguien programó al mismo técnico a esa hora mientras el diálogo estaba abierto (ADR-0037).
     case "tecnico_ocupado":
       return `${error.message}: elija otra hora u otro técnico.`;

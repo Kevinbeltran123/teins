@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { ErrorApi, type Respuesta } from "@teins/protocolo";
 import {
+  ErrorDeCarga,
   Aviso,
   Boton,
   Building,
@@ -26,7 +27,6 @@ import {
   MenuAcciones,
   Pencil,
   Plus,
-  RefreshCw,
   Tabla,
   TriangleAlert,
   Users,
@@ -94,14 +94,7 @@ export function DetalleCliente({ id }: { id: string }) {
     return (
       <>
         <EncabezadoPagina migas={migas} titulo="Cliente" />
-        <Aviso tono="error">
-          <p>{noExiste ? "Este cliente no existe o no pertenece a su organización." : "No se pudo cargar el cliente."}</p>
-          {!noExiste && (
-            <Boton className="mt-3" icono={RefreshCw} onClick={() => void consulta.refetch()}>
-              Reintentar
-            </Boton>
-          )}
-        </Aviso>
+        <ErrorDeCarga texto={noExiste ? "Este cliente no existe o no pertenece a su organización." : "No se pudo cargar el cliente."} reintentar={noExiste ? undefined : () => void consulta.refetch()} />
       </>
     );
   }
@@ -195,7 +188,7 @@ export function DetalleCliente({ id }: { id: string }) {
                         {c.correo ?? "Sin correo"}
                       </span>
                       {c.correoRebotado && (
-                        <span style={{ color: "var(--alerta)", fontWeight: 700, fontSize: 13 }}>
+                        <span className="alerta-fuerte text-ayuda">
                           <TriangleAlert aria-hidden size={14} />
                           {`El correo rebotó el ${dia(c.correoRebotado.en)}: revíselo`}
                         </span>

@@ -1,4 +1,5 @@
 import type { Respuesta } from "@teins/protocolo";
+import { fechaEnColombia, ZONA_COLOMBIA } from "@teins/dominio";
 
 /*
   El horario de una visita (ADR-0037), como lo entiende oficina: el mismo criterio que el servidor usa para rechazar
@@ -34,8 +35,8 @@ export function duracionTexto(minutos: number): string {
 /** Minuto del día en Colombia de un momento, o null si cae en otro día que `fecha`. */
 function minutoDelDia(momento: string, fecha: string): number | null {
   const d = new Date(momento);
-  if (d.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }) !== fecha) return null;
-  const [h, m] = d.toLocaleTimeString("en-GB", { timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit", hour12: false }).split(":");
+  if (fechaEnColombia(d) !== fecha) return null;
+  const [h, m] = d.toLocaleTimeString("en-GB", { timeZone: ZONA_COLOMBIA, hour: "2-digit", minute: "2-digit", hour12: false }).split(":");
   return Number(h) * 60 + Number(m);
 }
 
@@ -82,13 +83,13 @@ export function ocupadoTexto(o: Ocupacion): string {
 export function horarioTexto(v: Horario & { terminada: { en: string } | null }): { hora: string; detalle: string | null } {
   if (!v.horaInicio) return { hora: "Todo el día", detalle: null };
   if (v.horaFin) return { hora: `${hora12(v.horaInicio)} a ${hora12(v.horaFin)}`, detalle: null };
-  return { hora: `Desde ${hora12(v.horaInicio)}`, detalle: v.terminada ? `Terminó ${hora12(new Date(v.terminada.en).toLocaleTimeString("en-GB", { timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit", hour12: false }))}` : "Hasta que la terminen" };
+  return { hora: `Desde ${hora12(v.horaInicio)}`, detalle: v.terminada ? `Terminó ${hora12(new Date(v.terminada.en).toLocaleTimeString("en-GB", { timeZone: ZONA_COLOMBIA, hour: "2-digit", minute: "2-digit", hour12: false }))}` : "Hasta que la terminen" };
 }
 
 /** Sin hora de fin, ya empezó hoy y nadie la ha terminado: en curso. */
 export function enCurso(v: Horario & { programadaPara: string; terminada: unknown }, hoy: string, ahora = new Date()): boolean {
   if (!v.horaInicio || v.horaFin || v.terminada || v.programadaPara !== hoy) return false;
-  const [h, m] = ahora.toLocaleTimeString("en-GB", { timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit", hour12: false }).split(":");
+  const [h, m] = ahora.toLocaleTimeString("en-GB", { timeZone: ZONA_COLOMBIA, hour: "2-digit", minute: "2-digit", hour12: false }).split(":");
   return Number(h) * 60 + Number(m) >= aMinutos(v.horaInicio);
 }
 
