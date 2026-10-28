@@ -1,12 +1,12 @@
 # Verificación manual de todas las fases
 
-Recorrido completo, a mano, de lo construido en los cortes 0 a 5 y las iteraciones 6 a 19 (la fase N es la iteración N; la 14 cambió la interfaz y no tiene fase propia). Lo que llegó después, de la iteración 20 en adelante, todavía no tiene fase aquí. Las pruebas automáticas ya cubren la lógica; esto confirma lo que solo una persona con un teléfono real puede confirmar: que la app instalada en iPhone sobrevive sin señal, que las pantallas se entienden y que todo el recorrido funciona de punta a punta.
+Recorrido completo, a mano, de lo construido en los cortes 0 a 5 y las iteraciones 6 a 44 (la fase N es la iteración N). No tienen fase propia: la 14 (cambió la interfaz), la 22, la 26, la 29 y la 30 (ya aprobadas; sus pantallas se recorren en las fases 20, 21, 32 y 38) y la 33 (solo se ve después de limpiar el entorno). Las pruebas automáticas ya cubren la lógica; esto confirma lo que solo una persona con un teléfono real puede confirmar: que la app instalada en iPhone sobrevive sin señal, que las pantallas se entienden y que todo el recorrido funciona de punta a punta.
 
 **Todo se hace en el entorno de pruebas** (datos ficticios, R5). Producción solo se toca en la fase 8, sin crear datos.
 
-Tiempo total: unas 2 horas y media, que se pueden repartir en varias sesiones siguiendo el orden de las fases.
+Tiempo total: unas 2 horas y media hasta la fase 19 y unas 3 horas más de la 20 a la 44, que se pueden repartir en varias sesiones siguiendo el orden de las fases. Cada fase dice al empezar si se hace en el iPhone, en el computador o en los dos.
 
-**Nombres de botones.** Las fases se escribieron con la interfaz de su momento; las iteraciones 22, 23, 32 y 36 rehicieron campo y oficina. Lo que se sabe que cambió ya está corregido abajo. Si un botón no aparece con el nombre que dice el paso, anote el que encontró.
+**Nombres de botones.** Las fases se escribieron con la interfaz de su momento; las iteraciones 22, 23, 32, 34, 36 y 38 rehicieron campo y oficina. Lo que se sabe que cambió ya está corregido abajo. Si un botón no aparece con el nombre que dice el paso, anote el que encontró.
 
 ## Antes de empezar
 
@@ -17,6 +17,8 @@ Tiempo total: unas 2 horas y media, que se pueden repartir en varias sesiones si
 | App autenticadora en el iPhone (Google Authenticator o Microsoft Authenticator, gratis) | Para el segundo factor de la fase 6 |
 | Contraseñas de `tecnico.prueba` y `oficina.prueba` | `privado/entorno-de-pruebas.txt` en el computador de Kevin |
 | Un cliente con una visita de hoy y un técnico para revocar | Desde la limpieza del 2026-10-02 el entorno no los tiene: `sembrar` crea "Cliente de prueba" con una visita de hoy para `tecnico.prueba` ([`entorno-de-pruebas.md`](entorno-de-pruebas.md)); para la fase 2, cree en Administración el técnico `tecnico.revocable` y prográmele una visita ("Cliente revocación") como en la fase 5 |
+| Direcciones de correo para los contactos de prueba | Las de prueba de Resend: `delivered@resend.dev` (llega) y `bounced@resend.dev` (rebota). Nunca un correo real (R5) |
+| Un computador con Windows, si hay | Para los atajos de las fases 36 y 37 |
 
 Direcciones del entorno de pruebas:
 
@@ -61,7 +63,7 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
    - Debe: aparecer su visita "Cliente revocación".
 2. Inicie un levantamiento en esa visita y escriba algo, sin enviarlo.
 3. En el computador, en oficina con `oficina.prueba`, vaya a **Administración** (si pide activar el segundo factor, haga primero los pasos 1 a 4 de la fase 6 y vuelva).
-4. En "Usuarios", toque **Desactivar a Técnico revocable** → **Sí, desactivar a Técnico revocable**.
+4. En "Usuarios", abra el menú de Técnico revocable → **Desactivar usuario** y confirme con **Desactivar usuario**.
 5. En el iPhone, **sin cerrar sesión**, salga de la app y vuelva a abrirla, con señal.
    - Debe: aparecer "Se cerró el acceso de Técnico revocable en este teléfono y se borraron sus datos".
    - Si antes cerró sesión, ese aviso no sale, pero el borrado ocurre igual (el paso 7 lo confirma). Y si intenta entrar con `tecnico.revocable`, dice "Usuario o contraseña incorrectos": es a propósito, para no revelar que la cuenta existe.
@@ -91,7 +93,7 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 2. Marque el levantamiento para incluirlo y escriba una introducción y unas conclusiones.
    - Debe: se guarda solo; junto a «Publicar» dice «Guardado» (no hay «Guardar borrador»).
 3. En "Agregar planos en PDF", suba un PDF cualquiera que no tenga información real.
-4. Toque **Publicar versión 1** → **Sí, publicar la versión 1**.
+4. Toque **Publicar versión 1** y confirme con **Publicar versión 1** (o **Publicar y enviar a N**, si el cliente tiene contactos).
    - Debe: "Generando el PDF…" y, en menos de un minuto, **Descargar PDF de la versión 1**.
 5. Descargue el PDF y ábralo.
    - Debe: estar la visita, la introducción, los datos del levantamiento con la corrección de la fase 3, las fotos, las conclusiones y, al final, el plano anexo. Cada página con su pie.
@@ -132,7 +134,7 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
    - Debe: mostrar su contraseña temporal una sola vez, en un diálogo que no se cierra por accidente, hasta **Ya la entregué**.
 7. Entre con ese técnico en el iPhone (cierre la sesión de `tecnico.prueba` antes).
    - Debe: entrar. Después vuelva a `tecnico.prueba`.
-8. En "Accesos de clientes", cree el acceso del cliente de la fase 4 ("Cliente de prueba"); si ya tiene uno de pruebas anteriores, use **Regenerar el acceso**.
+8. En "Accesos de clientes", cree el acceso del cliente de la fase 4 ("Cliente de prueba"); si ya tiene uno de pruebas anteriores, use **Regenerar acceso**.
    - Debe: mostrar la clave y el QR una sola vez. **No cierre ese bloque todavía**: se usa en la fase 7.
 
 ## Fase 7 · Portal del cliente (corte 5)
@@ -145,10 +147,10 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
    - Debe: ver "Informes de Cliente de prueba" con la versión vigente (la 2 de la fase 4).
 4. Descargue el PDF en el iPhone.
    - Debe: abrirse y ser el mismo que descargó oficina.
-5. En oficina, en el informe, toque **Retirar la versión 2 del portal**, escriba el motivo y confirme.
+5. En oficina, en el informe, toque **Retirar del portal** en la versión 2, escriba el motivo y confirme con **Retirar la versión 2**.
 6. En el portal del iPhone, recargue.
    - Debe: ver la versión 1. Si retira también la 1, el informe desaparece del portal.
-7. En oficina, en "Accesos de clientes", **Regenerar el acceso** de ese cliente. En el iPhone, recargue el portal.
+7. En oficina, en "Accesos de clientes", **Regenerar acceso** de ese cliente. En el iPhone, recargue el portal.
    - Debe: volver a pedir la clave, con el aviso "Su sesión se cerró: pasaron 30 minutos sin usarla o TEINS le entregó una clave nueva". La clave anterior ya no entra; la nueva sí.
 
 ## Fase 8 · Producción (iteración 8)
@@ -290,6 +292,8 @@ Antes: en el iPhone, borre TEINS de la pantalla de inicio si ya estaba (los dato
 
 ## Fase 16 · Firma del cliente (iteración 16)
 
+Desde la iteración 34 la constancia es una sola pantalla: los pasos 2 a 4 se ven como dice la fase 34.
+
 1. En el iPhone, con la app actualizada (v7), inicie un levantamiento en la visita de hoy y vaya a "Cierre de la visita".
    - Debe: "Firma de quien recibe la visita" con **Entregar el teléfono**.
 2. Toque **Entregar el teléfono**.
@@ -300,7 +304,7 @@ Antes: en el iPhone, borre TEINS de la pantalla de inicio si ya estaba (los dato
    - Debe: vuelve al levantamiento con la firma, "Nombre · Cargo" y "Firmó hoy a las …". El trazo sigue al dedo sin retraso.
 5. Si hay una tableta con lápiz: firme con el lápiz apoyando la mano.
    - Debe: la palma no dibuja.
-6. **Volver a firmar** → **Cancelar**: la firma sigue. Envíe el levantamiento.
+6. **Repetir** → **Cancelar**: la firma sigue. Envíe el levantamiento.
 7. En oficina, abra el levantamiento.
    - Debe: la firma, "Firmó el …, en el teléfono de …" y la constancia; hay **Comentar** pero no **Corregir**.
 8. Márquelo revisado, publique el informe y descargue el PDF.
@@ -371,8 +375,356 @@ Con la app 10 instalada y la biblioteca de prueba publicada en el entorno (`semb
 
 **Anotar:** qué símbolos faltan para los croquis de TEINS, y si el tamaño con que caen sirve o casi siempre hay que cambiarlo.
 
+## Fase 20 · Informe por correo y WhatsApp (iteraciones 20 y 30)
+
+Computador. En el entorno de pruebas el correo sale de verdad por Resend; WhatsApp está simulado y rechaza los celulares que terminan en 000.
+
+1. En oficina, **Clientes** → "Cliente de prueba" → **Nuevo contacto**: nombre ficticio, correo `delivered@resend.dev`, recibe informes y cotizaciones por correo.
+   - Debe: el contacto en la lista del cliente; en **Clientes**, la fila ya no dice "Nadie".
+2. Agregue otro con `bounced@resend.dev` y un tercero solo por WhatsApp, con un celular inventado que termine en 000.
+   - Debe: el de WhatsApp no se guarda sin marcar la autorización; guardado, dice "Lo confirmó … el …".
+3. Revise un levantamiento de ese cliente y abra el informe (fases 3 y 4). En la pestaña **Correo** de la vista previa, escriba sobre el texto del correo.
+   - Debe: lo escrito queda dentro del correo, con "Con su texto. Volver al texto de TEINS".
+4. **Publicar versión N**, con los tres marcados → **Publicar y enviar a 3**.
+   - Debe: en "Envíos de la versión N", los tres "En cola" hasta que el PDF está listo. Después, el primero "Entregado" con "· con su texto"; el rebotado y el de WhatsApp, **No llegó** con su motivo.
+5. Abra **Informes**.
+   - Debe: el informe con **Envío sin entregar**.
+6. Cambie el correo del rebotado a `delivered@resend.dev` y, en el informe, toque **Volver a enviar** en su fila.
+   - Debe: pasa a "Entregado".
+7. Toque **Enviar a otro contacto**.
+   - Debe: solo aparece el de WhatsApp, que no lo recibió; **Ver cómo llega** muestra al lado lo que recibe, y junto a los botones, "Lo enviado no se puede recuperar.".
+
+## Fase 21 · Cotizaciones (iteración 21)
+
+Computador, con `oficina.prueba` como administrador con segundo factor (fase 6). Precios inventados.
+
+1. En **Catálogo**, toque **Solo sin precio (N)**. En "Cable de prueba uno" (fase 17), **Cambiar precio** a 12.000.
+   - Debe: el precio en "Precio sin IVA" y la historia del ítem en el diálogo.
+2. En el iPhone, en un levantamiento de "Cliente de prueba", agregue "Cable de prueba uno" con **Del catálogo** y una **Línea libre**, y envíe. En oficina, revíselo y **Marcar revisado**.
+3. **Cotizaciones** → **Nueva cotización** → elija esa visita → **Crear cotización**.
+   - Debe: las líneas salen de las cantidades revisadas; el cable con su precio; la línea libre sin precio, con el aviso junto a ella y `[Precio]` en la hoja de la derecha.
+4. Ponga el precio de la línea libre. **Agregar línea** para la mano de obra. Quite una línea y toque **Deshacer**. Elija **AIU**.
+   - Debe: la hoja cambia mientras escribe y destella lo que cambió; la línea quitada vuelve a su lugar; los totales en pesos, sin decimales.
+5. Pestaña **Correo** de la hoja.
+   - Debe: lo que recibe el contacto de la fase 20, con el asunto y el adjunto.
+6. **Publicar versión 1** → **Publicar y enviar a 1**. Descargue el PDF.
+   - Debe: el número `COT-<año>-<consecutivo>`, el PDF con el logo y el envío en "Entregado".
+
+**Anotar:** si la cotización se parece a la que entrega TEINS hoy (P29).
+
+## Fase 23 · Oficina, para aprobarla (iteración 23)
+
+Computador. La 23 ordenó cada pantalla de oficina; la letra y los colores cambiaron después, con la base visual Precisión. Esta fase aprueba el orden.
+
+1. Recorra el menú: Levantamientos, Visitas, Clientes, Catálogo, Informes, Cotizaciones y Administración.
+   - Debe: el título es la sección y sus partes son pestañas; sin recuadros dentro de recuadros; se sabe qué hacer primero.
+2. En cada lista, busque parte de un nombre, sin tildes ni mayúsculas.
+   - Debe: filtra; en Levantamientos, por cliente, sitio, técnico o formato.
+3. En Levantamientos, mire "Lleva esperando".
+   - Debe: "Hoy", "Desde ayer" o "N días", en ámbar desde dos días.
+4. En **Mi cuenta** → Tema, pruebe "Del sistema", "Claro" y "Oscuro".
+   - Debe: todo legible en los tres.
+
+**Anotar:** cada pantalla que se vea cargada o confusa. Si no hay ninguna, la 23 queda aprobada.
+
+## Fase 24 · Nada se pierde ni se hace sin querer (iteración 24)
+
+iPhone y computador.
+
+1. En el iPhone, en un paso con fotos, abra una foto y toque **Eliminar foto**.
+   - Debe: "Foto eliminada" con **Deshacer** encima del visor; tocarlo la devuelve.
+2. Toque dos veces seguidas, rápido, **Iniciar levantamiento**.
+   - Debe: se crea uno solo.
+3. En oficina, abra un informe en dos pestañas. En una, **Mi cuenta** → **Cerrar sesión**. En la otra, escriba en la introducción.
+   - Debe: "Su sesión venció" encima de la pantalla, sin cerrarla. Al entrar: "Sesión recuperada: lo que estaba haciendo sigue aquí", con lo escrito.
+
+## Fase 25 · Usuarios y cuenta propia (iteración 25)
+
+iPhone y computador.
+
+1. En oficina, **Administración** → **Nuevo usuario**: un técnico ficticio. Anote la contraseña temporal en `privado/`.
+2. En el iPhone, cierre sesión y entre con ese técnico.
+   - Debe: "Crea tu contraseña" antes de ver sus visitas; no acepta la temporal como nueva.
+3. Cree la nueva. En **Tu cuenta** → **Cambiar contraseña**, primero en modo avión y después con señal.
+   - Debe: sin señal, "Necesita señal" y no abre; con señal, la cambia y la sesión sigue abierta.
+4. En oficina, menú del técnico → **Desactivar usuario**; después, en su fila, **Reactivar usuario**.
+   - Debe: la confirmación dice "Le entrega una contraseña temporal" y "No recupera sesiones, llaves ni segundo factor"; la temporal se muestra una sola vez.
+5. En el iPhone, entre con la temporal nueva.
+   - Debe: otra vez "Crea tu contraseña".
+6. En oficina, **Mi cuenta**, sección "Acceso".
+   - Debe: **Cambiar contraseña** abre un diálogo; el segundo factor dice "Obligatorio para administrar", sin botón para quitarlo.
+
+## Fase 27 · Flujos (iteración 27)
+
+iPhone y computador. Mira el movimiento: que nada salte y que cada acción diga qué sigue. Con "Reducir movimiento" activo nada se mueve, y es lo esperado.
+
+1. En el iPhone, en la siguiente visita, toque **Iniciar levantamiento**.
+   - Debe: la tarjeta se convierte en la cabecera de la captura, sin pantalla en blanco.
+2. Avance y retroceda entre pasos.
+   - Debe: solo se desliza el cuerpo; la cabecera se queda y la barra de avance crece.
+3. Abra y cierre el croquis y la firma.
+   - Debe: suben y bajan.
+4. Envíe y toque **Ver la siguiente visita**.
+   - Debe: vuelve al inicio con lo enviado resaltado en "Enviados" y, al vaciarse la cola, "Todo subido" en verde.
+5. En oficina, cambie de sección y abra un levantamiento de la bandeja.
+   - Debe: el contenido se desvanece y el menú no se mueve; el título de la fila pasa a ser el del detalle.
+6. Tómelo y márquelo revisado.
+   - Debe: el estado cambia en su lugar, con "Marcado revisado" y "Siguiente: …".
+7. Publique un informe con contactos.
+   - Debe: arriba del editor, el avance (publicada, PDF, en el portal y cada envío) cambia en su lugar.
+8. Cancele una visita.
+   - Debe: la fila sale y la notificación trae **Ver en Canceladas**, que lleva a esa pestaña.
+
+**Anotar:** lo que se sienta lento, brusco o animado de más.
+
+## Fase 28 · Datos que se corrigen (iteración 28)
+
+Computador y iPhone.
+
+1. Publique un informe con un contacto (fase 20) y, apenas publique, mientras el envío dice "En cola", toque **Cancelar** en su fila.
+   - Debe: sin confirmar; la notificación ofrece **Deshacer**; la fila queda tachada con "… cancelado por …: no sale".
+2. En la cotización de la fase 21, **Retirar versión**, con motivo.
+   - Debe: solo en la vigente; la cotización queda "Sin versión vigente" en su pantalla y en la lista; el PDF se sigue descargando.
+3. En **Clientes**, en un cliente ficticio: **Editar** el nombre; en el menú de un sitio, **Editar sitio** y cambie la dirección.
+   - Debe: el encabezado dice "Cambiado por … · …".
+4. Con una visita por hacer, menú del cliente → **Archivar cliente**.
+   - Debe: no deja, y dice qué visitas lo impiden, con fecha, sitio y técnicos.
+5. Cancele esa visita y archívelo.
+   - Debe: sale de la lista y de "Programar visita"; está en **Archivados** con quién y cuándo; **Recuperar** lo devuelve.
+6. En una revisión, pestaña «Comentarios», menú de un comentario propio: **Editar** y después **Borrar**.
+   - Debe: "Editado …"; al borrar, "Comentario retirado por …" con **Deshacer**. En el iPhone, al abrir la app, el técnico ya no lo ve.
+7. En el iPhone, inicie un levantamiento, tome una foto y, al final del recorrido, **Descartar levantamiento**.
+   - Debe: la confirmación dice qué pasa y cuántas fotos tiene; después, "Levantamiento descartado" con **Ver en Descartados**.
+8. **Tu cuenta** → **Descartados** → **Recuperar**.
+   - Debe: antes, "Se borra el …"; al recuperar, vuelve a "Mis visitas" igual, con su foto.
+
+## Fase 31 · Visitas con horario (iteración 31)
+
+Computador y iPhone, con `tecnico.prueba`.
+
+1. En oficina, **Programar visita**: hoy, a la próxima media hora, duración **No sé cuánto dura**.
+   - Debe: el diálogo se ve entero; "Libres a esa hora · N" y "Ocupados · N", con el motivo de cada ocupado.
+2. Abra otra vez **Programar visita** a la misma hora.
+   - Debe: Técnico de prueba aparece en "Ocupados", no en libres.
+3. Mire **Visitas**.
+   - Debe: la columna "Hora", ordenada por hora.
+4. En el iPhone, abra la app.
+   - Debe: la visita con su horario ("Hoy · Desde …").
+5. Llegada la hora (fase 41, paso 1), active el modo avión y toque **Terminar visita** → **Terminar visita**.
+   - Debe: "Visita terminada: oficina lo sabrá cuando tengas señal", y la visita dice "Terminada …".
+6. Quite el modo avión. En oficina, abra **Programar visita** a esa hora.
+   - Debe: Técnico de prueba vuelve a estar libre.
+7. Con los avisos activos (fase 15), programe una visita con hora.
+   - Debe: el aviso dice la hora.
+
+## Fase 32 · Pantallas de campo, segunda vuelta (iteración 32)
+
+iPhone.
+
+1. Abra **Tu cuenta**.
+   - Debe: una lista con el tema (tres iconos), **Cambiar contraseña**, **Descartados** con su número y **Diagnóstico del teléfono**; **Cerrar sesión** sola al final y la versión de la app. Cada fila abre dentro de la misma hoja, con "‹ Cuenta".
+2. En Tableros, **Agregar tablero** dos veces y llene uno.
+   - Debe: una fila por tablero con su foto y su avance, y "1 de 2 completos".
+3. Abra un tablero.
+   - Debe: el nombre es el título; **Cambiar nombre** y **Quitar tablero** en el menú "⋯"; abajo, "Siguiente: Tablero 2" y **Volver a la lista**, o "Listo, ver los 2" en el último.
+4. En Materiales, **Del catálogo** y agregue dos ítems.
+   - Debe: "Agregar del catálogo"; abajo, nada hasta agregar algo, y después lo agregado con **Ver materiales**.
+5. Abra el croquis.
+   - Debe: sube una sola vez, ya cargado; abajo, una barra fija con las hojas, los símbolos y **Listo** a la derecha.
+6. Firme (fase 34) y vuelva al paso.
+   - Debe: la constancia grande, con la firma sobre su línea, quién firmó y la declaración tal como sale en el informe; **Repetir** pide confirmar.
+7. Toque **Revisar y enviar**.
+   - Debe: "Revisa y envía" con cliente, sitio y formato; tres cifras (fotos, repeticiones, materiales); cada paso con lo que lleva y un visto, lo que falta en ámbar; tocar una fila lleva a su paso.
+8. Envíe y vuelva a "Mis visitas".
+   - Debe: en "Enviados", dos líneas: cliente y sitio con la hora; el estado corto ("En revisión", "Revisado", "Se envía al tener señal") y el formato. Lo que no entró sale arriba, en "Necesita atención".
+
+**Anotar:** si las hojas y los pasos se sienten rápidos o con retraso.
+
+## Fase 34 · Firma en una pantalla (iteración 34)
+
+iPhone.
+
+1. En el paso "Firma del cliente", toque **Entregar el teléfono**.
+   - Debe: una sola pantalla clara: el logo y **Cancelar**; "Constancia de visita · Cliente de prueba" y "Confirme la visita de …"; la declaración; "Su nombre" y "Cargo (opcional)" en una fila; el recuadro con "Firme aquí con el dedo" y **Borrar**; **Firmar** abajo. Sin pantalla de bienvenida.
+2. Toque **Firmar** sin nada.
+   - Debe: "Faltan su nombre y su firma.", y cada campo marcado.
+3. Escriba un nombre y un cargo ficticios, firme y toque **Firmar**.
+   - Debe: el trazo sigue al dedo; vuelve al paso con la constancia firmada.
+
+**Anotar:** si el teclado tapa el recuadro al escribir el nombre, y si todo cabe sin desplazar.
+
+## Fase 35 · Qué sale en el informe (iteración 35)
+
+Computador. Necesita un levantamiento nuevo con el formato de prueba 9 (el último que publica `sembrar`), con fotos de llegada, croquis y dos fotos del equipo.
+
+1. Revíselo y abra el informe.
+   - Debe: bajo el levantamiento, **Qué sale en el informe**; "Llegada" no sale ("Solo para la empresa (lo marca el formato)") y el croquis tampoco ("Croquis de campo: adjunte el plano en Planos anexos").
+2. Apague una sección; en "Fotos del equipo", **Elegir fotos** y quite una.
+   - Debe: en la hoja, lo oculto rayado con **Mostrar**.
+3. Pase el puntero sobre una foto de la hoja y toque **Ocultar**.
+   - Debe: un solo «Ocultar» a la vez; la foto queda rayada. Igual en Safari.
+4. Publique y descargue el PDF.
+   - Debe: sin la llegada, sin el croquis de campo y sin lo oculto. Lo que volvió a mostrar con **Mostrar**, sí.
+
+## Fase 36 · Usabilidad de oficina (iteración 36)
+
+Computador: Mac y, si puede, Windows.
+
+1. Abra un informe, escriba en la introducción y deje de escribir.
+   - Debe: en un par de segundos, "Guardado" junto a «Publicar»; no hay «Guardar borrador».
+2. Escriba y cierre la pestaña enseguida. Ábrala de nuevo.
+   - Debe: lo escrito sigue.
+3. Abra el mismo informe en dos ventanas y escriba distinto en cada una.
+   - Debe: el aviso de conflicto con **Guardar la mía encima** y **Cargar la guardada**.
+4. Apague el wifi, escriba y vuelva a prenderlo.
+   - Debe: se guarda solo al volver la conexión.
+5. En la vista previa: arrastre el divisor y dele doble clic; **Ampliar la vista previa** y **Volver al editor**; **Ocultar la vista previa** y, en la barra, **Mostrar la vista previa**. Recargue con la vista oculta.
+   - Debe: el divisor también se mueve con las flechas y el doble clic vuelve al ancho de siempre; al recargar, sigue oculta.
+6. Pliegue el menú con el icono junto al logo y con ⌘B (Ctrl + B en Windows).
+   - Debe: queda en iconos y se recuerda.
+7. En Levantamientos, Clientes y Visitas, elija una pestaña y busque algo; vaya a otra sección y vuelva.
+   - Debe: la misma pestaña y la misma búsqueda; en la bandeja, marcada la fila que abrió.
+8. En el informe, ordene los levantamientos incluidos y los planos con el asa, y con el teclado (Espacio la toma, las flechas la mueven, Espacio la suelta).
+   - Debe: el orden nuevo en la hoja y en el PDF.
+9. En Windows, abra una confirmación y la lista de atajos («?»).
+   - Debe: «Ctrl + …» y «Enter», no ⌘ ni ↵.
+
+## Fase 37 · Buscar en todo y revisar con el teclado (iteración 37)
+
+Computador: Mac y, si puede, Windows.
+
+1. ⌘K (Ctrl + K), o **Buscar** en el menú.
+   - Debe: "Buscar en oficina" con recientes, acciones («Programar visita», «Nuevo cliente», «Nueva cotización», «Tomar el más antiguo») y secciones.
+2. Escriba parte del nombre de un cliente, sin tildes, y Enter.
+   - Debe: resultados por grupo; abre el cliente. Una visita abre Visitas buscando ese cliente.
+3. Elija «Programar visita». Después, vuelva con Atrás.
+   - Debe: Visitas con el formulario abierto; al volver, no se abre otra vez.
+4. En Levantamientos: J y K (o ↓ y ↑), Enter y «/».
+   - Debe: la fila marcada se mueve, Enter la abre y «/» va al buscador.
+5. En la revisión: T, R, S y Esc.
+   - Debe: T toma, R pide confirmar el revisado, S va al siguiente y Esc vuelve a la bandeja. Las letras no hacen nada mientras escribe en un campo.
+6. Toque «?».
+   - Debe: "Atajos del teclado".
+7. En Safari, abra la búsqueda con resultados.
+   - Debe: la lista entera, no aplastada.
+
+## Fase 38 · La revisión al lado (iteración 38)
+
+Computador, con la ventana ancha (1440 px o más) y después angosta.
+
+1. Abra un levantamiento enviado.
+   - Debe: los datos a la izquierda; a la derecha, un panel a todo el alto con «En el informe», «Comentarios» e «Historial», abierto en «En el informe» la primera vez. En la barra: "Esperando revisión · nadie la ha tomado" y **Tomar para revisar**.
+2. Tómelo.
+   - Debe: "En revisión · la tomó usted" con **Marcar revisado**.
+3. Corrija un dato sin guardar; después guarde.
+   - Debe: en «En el informe», el valor nuevo enmarcado con "· sin guardar"; guardado, resaltado con "Antes: …".
+4. Arrastre el divisor; **Ampliar** y **Volver a la revisión**; oculte el panel y vuelva a abrirlo con **Mostrar el panel**.
+   - Debe: el ancho, el oculto y la pestaña se recuerdan, aparte de los del informe.
+5. Márquelo revisado.
+   - Debe: "Revisado · por usted, <hora>" con **Abrir el informe**, y "Siguiente: …" encima de los datos.
+6. Angoste la ventana a menos de 1280 px.
+   - Debe: el panel sale de la pantalla; **Mostrar el panel**, en la barra, lo abre en hoja lateral.
+
+## Fase 39 · Conversaciones con campo (iteración 39)
+
+iPhone y computador, con los avisos activos en los dos (fase 15).
+
+1. En oficina, tome un levantamiento de `tecnico.prueba`. En un dato, toque el icono de comentar, escriba una pregunta y **Enviar comentario**.
+   - Debe: en «Comentarios», "Lo que escriba aquí le llega a Técnico de prueba en su teléfono."
+2. Con el iPhone bloqueado, espere.
+   - Debe: el aviso "Oficina · Cliente de prueba" con el texto; tocarlo abre el chat.
+3. En "Mis visitas".
+   - Debe: en "Enviados", "Oficina te escribió" y un punto azul; en el levantamiento, la fila "Oficina" con el número de sin leer.
+4. Abra el chat.
+   - Debe: "N mensajes sin leer"; la pregunta con un recuadro del dato y lo que respondió; abajo, "Respondiendo a Oficina".
+5. En modo avión, escriba una respuesta y envíela.
+   - Debe: el globo más claro con "Se envía cuando haya señal"; arriba, "Esperando señal…"; en "Enviados", "1 respuesta por enviar".
+6. Quite el modo avión.
+   - Debe: "Enviado". En oficina, en menos de 15 s y sin recargar: punto azul en la bandeja con "Técnico de prueba respondió · <hora>", y el aviso del navegador.
+7. En oficina, en «Comentarios», responda en "Responder…" con ↵.
+   - Debe: la línea "Nuevo" antes de lo del técnico. En el iPhone llega la respuesta y, bajo su mensaje, "Leído".
+8. En el iPhone, en modo avión, escriba otra respuesta. En oficina, **Marcar revisado** (la confirmación dice "Las conversaciones se cierran"). Quite el modo avión.
+   - Debe: "No se envió: oficina ya lo había marcado revisado. Si es importante, llama a oficina." y, en lugar del campo, "La conversación quedó cerrada".
+
+**Anotar:** si llegó un aviso con el chat abierto (Safari a veces lo muestra igual; es una limitación conocida).
+
+## Fase 40 · Lo atendido no es la siguiente visita (iteración 40)
+
+iPhone, con una sola visita de hoy para `tecnico.prueba`.
+
+1. Envíe el levantamiento de esa visita y toque **Ver la siguiente visita**.
+   - Debe: no hay "Siguiente visita": dice "No tienes visitas pendientes", y la visita está abajo, en "Atendidas hoy".
+2. En oficina, programe otra para mañana. En el iPhone, abra la app.
+   - Debe: la de mañana es la siguiente; la de hoy sigue en "Atendidas hoy".
+3. Al día siguiente, abra la app con señal.
+   - Debe: la visita de ayer ya no está; su levantamiento sigue en "Enviados".
+
+## Fase 41 · Nada queda a medias (iteración 41)
+
+iPhone y computador. Lo de fondo (trabajos recuperados, retención de 30 días, poda del servidor) lo cubren las pruebas automáticas; aquí va lo que se ve.
+
+1. Programe una visita de hoy a la próxima media hora con **No sé cuánto dura**, y deje la app de campo abierta en "Mis visitas" sin tocarla.
+   - Debe: al llegar la hora, sin recargar, "En curso · desde …" y **Terminar visita**. Si otra visita ocupa la tarjeta de arriba, **Terminar visita** también está en la fila.
+2. Con un cliente cuya única visita de hoy ya tiene un levantamiento enviado, **Archivar cliente**.
+   - Debe: lo deja archivar; esa visita no cuenta como por hacer.
+3. En **Informes**, mire un informe con todas sus versiones retiradas (fase 7, paso 6).
+   - Debe: "Retirado del portal", no "Borrador".
+4. Publique una versión nueva de un informe que ya tenía vigente y mire el avance mientras se genera el PDF.
+   - Debe: "Mientras, el cliente ve la versión N".
+5. Con un contacto que tiene correo y WhatsApp y solo recibió por correo, **Enviar a otro contacto**.
+   - Debe: lo ofrece por WhatsApp.
+6. Cree un usuario de oficina ficticio, tome con él un levantamiento y desactívelo desde `oficina.prueba`.
+   - Debe: el levantamiento dice "En revisión · nadie la tiene desde que se desactivó a …", y **Tomar para revisar** lo toma sin reasignar.
+
+## Fase 42 · Lo que se ve sale de lo guardado (iteración 42)
+
+iPhone y computador.
+
+1. En el iPhone, inicie un levantamiento. En Tableros, **Agregar tablero**, vuelva a la lista sin llenarlo y quítelo ("⋯" → **Quitar tablero**).
+   - Debe: **Revisar y enviar** no pide datos del tablero quitado ni muestra nombres internos como `ubicacion` o `tableros~…`.
+2. Llene el cuarto técnico (un dato con "No se pudo obtener" y su motivo), avance hasta Materiales y vuelva con la flecha.
+   - Debe: los datos y el motivo siguen ahí.
+3. En Materiales, agregue tres líneas y baje una a cero.
+   - Debe: **Deshacer** devuelve solo esa línea, en su lugar, y las otras siguen; un segundo toque no la duplica.
+4. Opcional: llene varias hojas del croquis de trazos y envíe.
+   - Debe: se envía y oficina ve el croquis completo.
+5. Al día siguiente, mire "Enviados".
+   - Debe: cada fila con su cliente y su sitio, no solo "Formato de prueba"; el número de fotos no cuenta los materiales.
+6. En oficina, abra el informe de una visita y, con ⌘K → recientes, el de otra.
+   - Debe: el segundo muestra lo suyo, no el borrador del primero.
+7. En **Visitas**, la de "Cliente revocación" (fase 2) → **Reasignar**.
+   - Debe: la fila dice "Se desactivó a Técnico revocable" con "Sin técnico"; en el diálogo, "Se desactivó a Técnico revocable: sale de la visita", y se guarda con otro técnico.
+8. En una revisión, escriba un comentario sin enviarlo, cambie de pestaña del panel y vuelva.
+   - Debe: lo escrito sigue. **Marcar revisado** dice que se pierde.
+9. Cambie el celular de un contacto que recibe por WhatsApp.
+   - Debe: la autorización se desmarca y hay que confirmarla de nuevo.
+10. Corrija la dirección de un sitio con una visita por hacer de `tecnico.prueba`. En el iPhone, abra la app.
+    - Debe: la visita con la dirección nueva.
+
+## Fase 43 · Retirar una versión cancela sus envíos (iteración 43)
+
+Computador, como administrador.
+
+1. Publique una versión nueva de un informe con un contacto marcado y, mientras dice "Generando el PDF…", **Retirar del portal** → motivo → **Retirar la versión N**.
+   - Debe: el envío queda **Cancelado**, con "Versión retirada" y "no sale"; no dice **No llegó** y no ofrece reanudarlo. Si alcanzó a salir, queda "Enviado" o "Entregado": también es correcto (ADR-0047).
+2. Lo mismo con una cotización y **Retirar versión**.
+   - Debe: igual.
+
+## Fase 44 · Nada cambió (iteración 44)
+
+iPhone y computador, después del primer despliegue con el flujo «Desplegar». La 44 reordenó el código sin cambiar lo que hace: es una pasada corta.
+
+1. En el iPhone, capture un levantamiento completo (foto, tablero, material, croquis y firma) y envíelo.
+   - Debe: como antes; fechas y horas de Colombia.
+2. En oficina, tómelo, corrija, comente y márquelo revisado.
+   - Debe: como antes, con el historial de siempre.
+3. Publique el informe y una cotización y descargue los PDF.
+   - Debe: fechas y pesos como antes.
+4. En la pestaña **Correo** del informe, toque el texto del correo para escribir, en tema claro y en oscuro.
+   - Debe: un borde punteado gris alrededor del texto, que pasa a borde azul al escribir. Es el único cambio a la vista: esos colores salen ahora de los tokens.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados de [`historia/00-captura-sin-conexion.md`](historia/00-captura-sin-conexion.md).
 - Todo lo que no se vio como "Debe": en una lista con fase, paso y lo que se vio. Con eso se abren los arreglos.
-- Si todo pasó: los cortes 1, 2 y 3 dejan de decir "falta la prueba en iPhone" en el mapa del plan.
+- Si todo pasó: en el mapa del plan, las iteraciones que dicen "falta iPhone" o "falta que Kevin la pruebe" pasan a probadas, y la 23 a aprobada.

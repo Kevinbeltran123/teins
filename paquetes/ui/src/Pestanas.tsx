@@ -4,8 +4,8 @@ import { conTransicion, nombreDeTransicion } from "./transicion";
 export interface Pestana<T extends string> {
   valor: T;
   etiqueta: string;
-  /** Conteo opcional junto a la etiqueta. */
-  cantidad?: number | undefined;
+  /** Conteo opcional junto a la etiqueta; `null` mientras llega: guarda su lugar para que las pestañas no se corran. */
+  cantidad?: number | null | undefined;
 }
 
 /**
@@ -44,7 +44,11 @@ export function Pestanas<T extends string>({ pestanas, activa, onCambio, etiquet
             onKeyDown={(e) => teclado(e, i)}
           >
             {p.etiqueta}
-            {p.cantidad !== undefined && <span className="num">{p.cantidad}</span>}
+            {p.cantidad === null ? (
+              <span aria-hidden className="num inline-block h-2.5 w-[2ch] rounded-control bg-division motion-safe:animate-pulse" />
+            ) : (
+              p.cantidad !== undefined && <span className="num">{p.cantidad}</span>
+            )}
             {seleccionada && <i aria-hidden className="indicador" style={{ viewTransitionName: indicador }} />}
           </button>
         );

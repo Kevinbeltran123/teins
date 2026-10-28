@@ -481,6 +481,26 @@ describe("descartar un borrador (ADR-0035)", () => {
     // La foto que solo usaba el viejo se borró; la que también usa otro, no.
     expect((await repo.obtenerArchivos([h("b"), h("c")])).map((a) => a.id)).toEqual([h("c")]);
   });
+
+  it("con poco espacio, el técnico vacía ya su papelera; lo que no descartó y la papelera de otro se quedan (ADR-0035)", async () => {
+    const db = nuevaBase();
+    const repo = repositorioDexie(db);
+    const [suyo, vigente, deOtro] = ["0192f0e0-0000-7000-8000-000000000540", "0192f0e0-0000-7000-8000-000000000541", "0192f0e0-0000-7000-8000-000000000542"];
+    await repo.crear(crearLevantamiento(formato, suyo, ahora), "t1");
+    await repo.crear(crearLevantamiento(formato, vigente, ahora), "t1");
+    await repo.crear(crearLevantamiento(formato, deOtro, ahora), "t2");
+    await repo.agregarFoto(suyo, "s", "fotos", archivo(h("d")), ahora);
+    await repo.agregarFoto(suyo, "s", "fotos", archivo(h("e")), ahora);
+    await repo.agregarFoto(vigente, "s", "fotos", archivo(h("e")), ahora);
+    await repo.descartar(suyo, despues);
+    await repo.descartar(deOtro, despues);
+
+    expect(await repo.vaciarPapeleraDe("t1")).toBe(1);
+    expect(await repo.descartados("t1")).toEqual([]);
+    expect((await repo.listar("t1")).map((l) => l.id)).toEqual([vigente]);
+    expect((await repo.descartados("t2")).map((l) => l.id)).toEqual([deOtro]);
+    expect((await repo.obtenerArchivos([h("d"), h("e")])).map((a) => a.id)).toEqual([h("e")]);
+  });
 });
 
 describe("copias viejas y escrituras tardías (iteración 42)", () => {

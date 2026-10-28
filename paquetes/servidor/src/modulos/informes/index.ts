@@ -115,6 +115,9 @@ const mensajeDe = (c: ContenidoVersion): MensajeDeInforme => ({
   nombreArchivo: nombreDelPdfDeInforme(c.visita, c.numero),
 });
 
+/** Una versión de informe se retira del portal: el cliente ya no la ve (ADR-0034). */
+const RETIRADA = "La versión está retirada del portal";
+
 const invalido = (errores: ErrorInforme[]) => problema("informe_invalido", "El informe no cumple sus reglas", { erroresInforme: errores.map((e) => ({ ...e })) });
 
 /** Lo único que necesita el worker: generar el PDF de una versión desde su copia congelada. */
@@ -497,7 +500,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               // Bloquea la fila: si el PDF queda listo al mismo tiempo, uno espera al otro y ningún envío queda en cola sin salir.
               .for("update");
             if (!fila) throw problema("no_encontrado", "La versión no existe");
-            exigirEnviable(fila, "La versión está retirada del portal: publique una nueva para enviarla");
+            exigirEnviable(fila, RETIRADA, "enviar");
             const programados = await programarEnvios(tx, {
               organizacionId: actor.organizacionId,
               versionId: fila.id,
@@ -542,7 +545,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               version: fila,
               envioId: envio,
               por: actor.usuarioId,
-              retirada: "La versión está retirada del portal: no se puede reanudar el envío",
+              retirada: RETIRADA,
             });
             await registrar(tx, [
               { ...autoria(actor, correlacion), agregadoTipo: "informe", agregadoId: id, tipoEvento: accion === "cancelar" ? "envio_cancelado" : "envio_reanudado", valorNuevo: { numero, envio } },

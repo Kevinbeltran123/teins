@@ -42,6 +42,8 @@ export interface RepositorioLevantamientos {
   recuperar(id: string): Promise<{ suelto: boolean }>;
   /** Borra lo que lleva más de 30 días en la papelera, con las fotos y dibujos que nada más usa. Devuelve cuántos. */
   vaciarPapelera(ahora: Date): Promise<number>;
+  /** Borra ya todo lo de este técnico en la papelera: con poco espacio, y solo si él lo confirma (ADR-0035). Devuelve cuántos. */
+  vaciarPapeleraDe(tecnicoId: string): Promise<number>;
   /**
    * Borra los archivos que ningún levantamiento usa: las fotos de un tablero quitado o las que reemplazó «No se pudo
    * obtener» (iteración 42). Corre al abrir la app, nunca mientras un «Deshacer» las puede devolver. Devuelve cuántos.

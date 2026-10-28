@@ -250,7 +250,10 @@ describe("envío de una cotización publicada (ADR-0029)", () => {
     const detalle = (await oficina("GET", `/api/cotizaciones/${id}`)).json();
     expect(detalle.versiones.map((v: { numero: number; retirada: unknown }) => [v.numero, v.retirada !== null])).toEqual([[2, true], [1, false]]);
     const contacto = (await oficina("GET", `/api/clientes/${detalle.clienteId}`)).json().contactos[0];
-    expect((await oficina("POST", `/api/cotizaciones/${id}/versiones/2/enviar`, { destinos: [{ contactoId: contacto.id }] })).json()).toMatchObject({ codigo: "estado_invalido" });
+    expect((await oficina("POST", `/api/cotizaciones/${id}/versiones/2/enviar`, { destinos: [{ contactoId: contacto.id }] })).json()).toMatchObject({
+      codigo: "estado_invalido",
+      detail: "La versión está retirada: publique una nueva para enviarla",
+    });
 
     // Retirar también la 1: la cotización queda sin vigente.
     expect((await comoAdmin("POST", `/api/cotizaciones/${id}/versiones/1/retirar`, { motivo: "Ya no aplica" })).statusCode).toBe(200);
@@ -269,6 +272,17 @@ describe("envío de una cotización publicada (ADR-0029)", () => {
     expect(cancelado.json().envios[0]).toMatchObject({ estado: "cancelado", cancelado: { por: { nombre: "Oficina de prueba" } } });
     const reanudado = await oficina("POST", `/api/cotizaciones/${id}/versiones/1/envios/${envio!.id}/reanudar`);
     expect(reanudado.json().envios[0]).toMatchObject({ estado: "en_cola", cancelado: null });
+  }, 120_000);
+
+  it("una versión retirada no reanuda sus envíos", async () => {
+    const { id, enviar, oficina, comoAdmin } = await publicada();
+    await s.propietario.pool.query("update cotizaciones.versiones set pdf_estado = 'generando' where cotizacion_id = $1", [id]);
+    const [envio] = (await enviar()).json().envios as { id: string }[];
+    expect((await comoAdmin("POST", `/api/cotizaciones/${id}/versiones/1/retirar`, { motivo: "El precio estaba mal" })).statusCode).toBe(200);
+    expect((await oficina("POST", `/api/cotizaciones/${id}/versiones/1/envios/${envio!.id}/reanudar`)).json()).toMatchObject({
+      codigo: "estado_invalido",
+      detail: "La versión está retirada: no se puede reanudar el envío",
+    });
   }, 120_000);
 
   it("el mensaje lleva el nombre de la organización que quedó en el PDF, aunque cambie después", async () => {

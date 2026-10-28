@@ -11,7 +11,7 @@ export function terminarVisita(db: BaseCampo, tecnicoId: string, visitaId: strin
     if (!visita) throw new Error("La visita ya no está en este teléfono");
     if (visita.terminacionPendiente) return visita.terminacionPendiente;
     const terminacion: TerminacionPendiente = { llave: crypto.randomUUID(), en: ahora.toISOString(), intentos: 0, proximoIntentoEn: 0 };
-    await db.visitas.update([tecnicoId, visitaId], { terminacionPendiente: terminacion });
+    await db.visitas.update([tecnicoId, visitaId], { terminacionPendiente: terminacion, terminacionRechazada: undefined });
     return terminacion;
   });
 }

@@ -61,3 +61,15 @@ jobs:
           railway up --service campo --ci
           for servicio in oficina portal worker; do railway up --service "$servicio" --ci; done
           railway up infra/respaldos --path-as-root --service respaldos --ci
+      # Las direcciones son variables de cada entorno de GitHub. Tras construir, Railway tarda en cambiar
+      # de contenedor: se reintenta hasta 5 minutos antes de dar el despliegue por fallido.
+      - name: /salud responde en campo, oficina y portal
+        env:
+          CAMPO_URL: ${{ vars.CAMPO_URL }}
+          OFICINA_URL: ${{ vars.OFICINA_URL }}
+          PORTAL_URL: ${{ vars.PORTAL_URL }}
+        run: |
+          for url in "$CAMPO_URL" "$OFICINA_URL" "$PORTAL_URL"; do
+            curl --fail --silent --show-error --retry 30 --retry-delay 10 --retry-all-errors --max-time 15 "$url/salud" > /dev/null
+            echo "$url/salud responde"
+          done

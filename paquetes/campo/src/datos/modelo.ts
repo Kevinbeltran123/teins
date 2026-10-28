@@ -164,6 +164,8 @@ export type VisitaLocal = VisitaAsignada & {
   motivoSalida?: "reasignada" | "cancelada";
   /** El técnico la terminó en este teléfono y falta que el servidor lo sepa (ADR-0037). */
   terminacionPendiente?: TerminacionPendiente | undefined;
+  /** El servidor rechazó sin remedio la última terminación: el técnico lo ve junto a «Terminar visita» hasta volver a tocarlo. */
+  terminacionRechazada?: true | undefined;
 };
 
 /**
@@ -181,7 +183,7 @@ export interface TerminacionPendiente {
 }
 
 /** Lo que va a la vista en una visita guardada; lo demás (cliente, sitio, dirección, motivo, horario) va sellado. */
-type AlaVistaDeVisita = "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida" | "terminacionPendiente";
+type AlaVistaDeVisita = "id" | "tecnicoId" | "fueraDeAlcance" | "motivoSalida" | "terminacionPendiente" | "terminacionRechazada";
 
 /** Como se guarda: cliente, sitio, dirección, motivo y horario van sellados. */
 export type VisitaGuardada = Pick<VisitaLocal, AlaVistaDeVisita> & Partial<Omit<VisitaLocal, AlaVistaDeVisita>> & { sellado?: Sellado | undefined };

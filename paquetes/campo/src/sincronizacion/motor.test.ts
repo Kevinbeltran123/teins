@@ -610,6 +610,15 @@ describe("terminar visita (ADR-0037)", () => {
     expect(s.llamadas.filter((l) => l === "terminarVisita")).toHaveLength(1);
   });
 
+  it("el rechazo sin remedio queda marcado en la visita para decírselo al técnico, hasta que vuelve a terminarla (iteración 29)", async () => {
+    const { db, s, motor } = await terminadaSinSenal();
+    s.cancelar(idVisita);
+    await motor.sincronizar();
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionRechazada).toBe(true);
+    await terminarVisita(db, "t1", idVisita, new Date("2026-09-24T20:45:00Z"));
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionRechazada).toBeUndefined();
+  });
+
   it("mientras cambia la contraseña temporal (403) no la pierde: sale después (iteración 42)", async () => {
     const { db, s, reloj, motor, llave } = await terminadaSinSenal();
     s.programar("terminarVisita", "cambio_de_contrasena");

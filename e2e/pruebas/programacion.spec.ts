@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { nuevoUsuario } from "../consola";
+import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
 import { CAMPO, OFICINA } from "../destino";
 import { iniciarSesion, irAlPaso, irAlRecorrido } from "./ayudas";
 
@@ -92,4 +92,26 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
 
   await telefono.close();
   await escritorio.close();
+});
+
+test("lo que uno crea queda primero aunque otra persona cree un cliente al mismo tiempo", async ({ browser }) => {
+  const o = await (await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" })).newPage();
+  await o.goto(`${OFICINA}/`);
+  await iniciarSesion(o, nuevoUsuario("oficina", "oficina"));
+  await o.getByRole("link", { name: "Clientes" }).click();
+  await expect(o.getByRole("button", { name: "Nuevo cliente" })).toBeVisible();
+  await expect(o.getByRole("row").nth(1)).toBeVisible();
+  // Otra persona crea uno mientras la pantalla está abierta; su nombre va antes del nuestro en el orden alfabético.
+  nuevaVisitaConCliente(nuevoUsuario("tecnico", "tecnico.e2e"));
+  const cliente = `Cliente Programado ${randomBytes(3).toString("hex")}`;
+  await o.getByRole("button", { name: "Nuevo cliente" }).click();
+  await o.getByLabel("Nombre del cliente").fill(cliente);
+  await o.getByLabel("Nombre del sitio").fill("Sede norte");
+  await o.getByLabel("Dirección del sitio").fill("Calle [N] # [N]-[N]");
+  await o.getByLabel("Nombre", { exact: true }).fill("Contacto E2E");
+  await o.getByRole("textbox", { name: "Correo" }).fill("contacto@example.com");
+  await o.getByRole("button", { name: "Crear cliente" }).click();
+  await expect(o.getByText(`Cliente creado: ${cliente}`)).toBeVisible();
+  await expect(o.getByRole("row").nth(1)).toContainText(cliente);
+  await o.context().close();
 });

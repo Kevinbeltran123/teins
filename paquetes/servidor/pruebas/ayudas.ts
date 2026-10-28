@@ -126,13 +126,14 @@ export async function servidorDePrueba(opciones: { config?: Partial<Record<strin
   /**
    * Ejecuta los trabajos pendientes, como lo haría el worker. Los archivos de pruebas corren en paralelo
    * y comparten la cola: una pasada puede terminar mientras otro archivo aún procesa un trabajo, así que
-   * se repite hasta que no quede ninguno listo ni en curso.
+   * se repite hasta que no quede ninguno listo ni en curso. Uno que nunca se intentó cuenta aunque su hora sea futura:
+   * bajo carga el reloj de la base puede retroceder unas décimas y dejar lo recién encolado "para después".
    */
   async function procesarCola() {
     for (let i = 0; i < 200; i++) {
       await runOnce({ pgPool: propietario.pool, taskList: tareas });
       const { rows } = await propietario.pool.query(
-        "select count(*)::int as n from graphile_worker.jobs where task_identifier = any($1) and (locked_at is not null or (run_at <= now() and attempts < max_attempts))",
+        "select count(*)::int as n from graphile_worker.jobs where task_identifier = any($1) and (locked_at is not null or attempts = 0 or (run_at <= now() and attempts < max_attempts))",
         [Object.keys(tareas)],
       );
       if (rows[0].n === 0) return;

@@ -4,6 +4,13 @@ export interface EstadoAlmacenamiento {
   cuotaBytes: number | undefined;
 }
 
+/** Libre bajo esta parte de la cuota, el diagnóstico avisa de poco espacio y ofrece vaciar Descartados (ADR-0035). */
+const PARTE_LIBRE_MINIMA = 0.1;
+
+export function pocoEspacio({ usoBytes, cuotaBytes }: Pick<EstadoAlmacenamiento, "usoBytes" | "cuotaBytes">): boolean {
+  return usoBytes !== undefined && cuotaBytes !== undefined && cuotaBytes - usoBytes < cuotaBytes * PARTE_LIBRE_MINIMA;
+}
+
 /** ADR-0002: sin almacenamiento persistente, Safari puede borrar los datos bajo presión de espacio. */
 export async function solicitarPersistencia(): Promise<boolean> {
   if (!navigator.storage?.persist) return false;

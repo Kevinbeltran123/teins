@@ -64,6 +64,23 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
     return g ? abrirLevantamiento(db, g) : undefined;
   }
 
+  /** Borra de la papelera los que cumplen `cuales`, con las fotos y dibujos que nada más usa. Devuelve cuántos. */
+  function borrarDescartados(cuales: (g: LevantamientoGuardado) => boolean): Promise<number> {
+    return db.transaction("rw", [db.levantamientos, db.archivos, db.envios], async () => {
+      const borrados = await db.levantamientos.filter((g) => !!g.descartadoEn && cuales(g)).toArray();
+      if (borrados.length === 0) return 0;
+      const quedan = await db.levantamientos.filter((g) => !borrados.some((v) => v.id === g.id)).toArray();
+      // Las huellas de cada levantamiento están a la vista: no hace falta abrir ninguno.
+      const enUso = new Set(quedan.flatMap((g) => referencias(g).archivos));
+      const huellas = [...new Set(borrados.flatMap((g) => referencias(g).archivos))].filter((h) => !enUso.has(h));
+      await db.archivos.bulkDelete(huellas);
+      await db.levantamientos.bulkDelete(borrados.map((g) => g.id));
+      // Un envío rechazado se descarta con su levantamiento: sin él, quedaría contando como «por enviar».
+      await db.envios.bulkDelete(borrados.map((g) => g.id));
+      return borrados.length;
+    });
+  }
+
   /**
    * En esta pestaña, las escrituras de un levantamiento van en fila y en el orden en que se pidieron:
    * la última tecla escrita es la que queda. Entre pestañas decide la comprobación optimista.
@@ -214,21 +231,12 @@ export function repositorioDexie(db: BaseCampo): RepositorioLevantamientos {
         return { resultado: { suelto: otroEnLaVisita }, levantamiento: recuperado };
       });
     },
-    async vaciarPapelera(ahora) {
+    vaciarPapelera(ahora) {
       const limite = new Date(ahora.getTime() - DIAS_EN_LA_PAPELERA * 24 * 60 * 60 * 1000).toISOString();
-      return db.transaction("rw", [db.levantamientos, db.archivos, db.envios], async () => {
-        const vencidos = await db.levantamientos.filter((g) => !!g.descartadoEn && g.descartadoEn < limite).toArray();
-        if (vencidos.length === 0) return 0;
-        const quedan = await db.levantamientos.filter((g) => !vencidos.some((v) => v.id === g.id)).toArray();
-        // Las huellas de cada levantamiento están a la vista: no hace falta abrir ninguno.
-        const enUso = new Set(quedan.flatMap((g) => referencias(g).archivos));
-        const huellas = [...new Set(vencidos.flatMap((g) => referencias(g).archivos))].filter((h) => !enUso.has(h));
-        await db.archivos.bulkDelete(huellas);
-        await db.levantamientos.bulkDelete(vencidos.map((g) => g.id));
-        // Un envío rechazado se descarta con su levantamiento: sin él, quedaría contando como «por enviar».
-        await db.envios.bulkDelete(vencidos.map((g) => g.id));
-        return vencidos.length;
-      });
+      return borrarDescartados((g) => g.descartadoEn! < limite);
+    },
+    vaciarPapeleraDe(tecnicoId) {
+      return borrarDescartados((g) => g.tecnicoId === tecnicoId);
     },
     async limpiarArchivosSinUso() {
       return db.transaction("rw", [db.levantamientos, db.archivos], async () => {

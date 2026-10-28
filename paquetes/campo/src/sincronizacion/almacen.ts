@@ -19,7 +19,7 @@ export interface AlmacenSincronizacion {
   reintentarTerminacion(tecnicoId: string, visitaId: string, llave: string, cambios: Pick<TerminacionPendiente, "intentos" | "proximoIntentoEn">): Promise<void>;
   /**
    * El servidor respondió: con `terminada`, la visita queda como él dice; con null (la rechazó sin remedio), se quita
-   * la terminación local y la visita vuelve a lo que dice el servidor.
+   * la terminación local, la visita vuelve a lo que dice el servidor y queda marcada para decírselo al técnico.
    */
   resolverTerminacion(tecnicoId: string, visitaId: string, llave: string, terminada: { en: string } | null): Promise<void>;
   /**
@@ -206,7 +206,7 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
         if (actual?.terminacionPendiente?.llave !== llave) return;
         // Si una bajada la cambió entre tanto, lo sellado ya no sirve: se reintenta (el servidor responde lo mismo).
         if (nueva && mismoSellado(actual, previa)) await db.visitas.put(nueva);
-        else if (!nueva) await db.visitas.update([tecnicoId, visitaId], { terminacionPendiente: undefined });
+        else if (!nueva) await db.visitas.update([tecnicoId, visitaId], { terminacionPendiente: undefined, terminacionRechazada: true });
       });
     },
     async respuestasListas(ahora, tecnicoId) {

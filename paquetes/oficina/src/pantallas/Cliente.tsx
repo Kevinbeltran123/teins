@@ -33,6 +33,7 @@ import {
   useNotificar,
   enfocarPrimerError,
   useLoNuevo,
+  primeroLoNuevo,
 } from "@teins/ui";
 import { cliente } from "../api";
 import { aFechaHora } from "../formato";
@@ -102,7 +103,7 @@ export function DetalleCliente({ id }: { id: string }) {
   const detalle = consulta.data;
   const sitiosActivos = detalle.sitios.filter((s) => !s.archivado);
   // Lo creado entra primero y resaltado en la misma transición; lo cambiado se resalta en su lugar (iteración 27).
-  const contactos = [...detalle.contactos.filter((c) => esNuevo(c.id)), ...detalle.contactos.filter((c) => !esNuevo(c.id))];
+  const contactos = primeroLoNuevo(detalle.contactos, esNuevo, recientes);
   const guardado = (actualizado: Detalle, nombre: string, nuevo: boolean) => {
     const anteriores = new Set(detalle.contactos.map((c) => c.id));
     const id = nuevo ? actualizado.contactos.find((c) => !anteriores.has(c.id))?.id : editando !== "nuevo" ? editando?.id : undefined;

@@ -72,7 +72,7 @@ La conexión del rol dueño de la base (`DATABASE_URL_PROPIETARIO`, que migra y 
 
 Se despliega por lotes, a mano, desde GitHub: pestaña Actions → «Desplegar» → «Run workflow».
 
-1. En «Use workflow from», la rama: `corte-0` para pruebas, `master` para producción. Se despliega el último commit de esa rama.
+1. En «Use workflow from», la rama: `corte-0` para pruebas, `master` para producción. Se despliega el último commit de esa rama. A pruebas, antes de fusionar el pull request: el commit de `git merge -s ours` que sincroniza `corte-0` después no pasa por la integración, y el flujo lo rechaza (después de fusionar, despliega a pruebas desde `master`).
 2. En «Entorno», `pruebas` o `produccion`. Para producción, escribe `produccion` en la confirmación; desde otra rama que no sea `master` el flujo se niega.
 3. El flujo comprueba que ese commit pasó la integración continua y despliega en el orden de `montar.sh`: `campo` (migra en su pre-deploy), `oficina`, `portal`, `worker` y `respaldos`. Si una construcción falla, se detiene ahí.
 4. Comprueba que `/salud` responde en las tres direcciones.
@@ -81,6 +81,7 @@ Lo que necesita, una vez por entorno (en GitHub, Settings → Environments):
 
 - Entornos `pruebas` y `produccion`. En `produccion`, «Deployment branches» limitado a `master`.
 - En cada uno, el secreto `RAILWAY_TOKEN`: un token de proyecto de Railway de ese proyecto y su entorno `production` (en Railway, Project Settings → Tokens). Nunca en el repositorio.
+- En cada uno, las variables `CAMPO_URL`, `OFICINA_URL` y `PORTAL_URL` (sin `/` al final), con las que el flujo comprueba `/salud`. No son secretas.
 
 Si GitHub Actions no está disponible, se despliega desde el computador con el proyecto enlazado, en el mismo orden:
 

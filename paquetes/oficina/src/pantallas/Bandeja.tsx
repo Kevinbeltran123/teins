@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, ChevronRight, EncabezadoPagina, EsqueletoLista, EstadoVacio, FilaTabla, Inbox, Marcado, nombreDeTransicion, Pestanas, PieLista, RefreshCw, SinResultados, Tabla } from "@teins/ui";
+import { Aviso, BarraLista, Boton, Buscador, CeldaTabla, ChevronRight, EncabezadoPagina, EsqueletoLista, EsqueletoTexto, EstadoVacio, FilaTabla, Inbox, Marcado, nombreDeTransicion, Pestanas, PieLista, RefreshCw, SinResultados, Tabla } from "@teins/ui";
 import { consultas } from "../api";
 import { aFechaCorta, aHora, cuantoLleva, iniciales } from "../formato";
 import { mensajeDeError } from "../mensajes";
@@ -39,10 +39,10 @@ export function Bandeja() {
 
   const total = esperando.data?.pages[0]?.total ?? 0;
   const masAntiguo = esperando.data?.pages[0]?.elementos[0];
-  const cantidad = (e: Estado) => bandejas[e].data?.pages[0]?.total;
+  const cantidad = (e: Estado) => (bandejas[e].isPending ? null : bandejas[e].data?.pages[0]?.total);
   const otras = ESTADOS.filter((e) => e !== estado && (cantidad(e) ?? 0) > 0);
 
-  const meta = esperando.isPending ? undefined : total === 0 ? (
+  const meta = esperando.isPending ? <EsqueletoTexto etiqueta="Cargando el resumen" /> : total === 0 ? (
     <span>Nada por revisar.</span>
   ) : (
     <>
