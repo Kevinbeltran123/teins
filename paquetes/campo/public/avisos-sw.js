@@ -15,24 +15,29 @@ self.addEventListener("message", (evento) => {
 });
 
 self.addEventListener("push", (evento) => {
-  let datos;
+  let datos = null;
   try {
     datos = evento.data ? evento.data.json() : null;
   } catch {
-    return;
+    // Una carga ilegible se muestra igual, con un texto genérico (abajo).
   }
-  const aviso = datos && datos.notification;
-  if (!aviso || !aviso.title) return;
+  let aviso = datos && datos.notification;
+  // Safari retira el permiso de avisos si un push no muestra nada: sin título legible, igual se muestra uno.
+  if (!aviso || !aviso.title) aviso = { title: "TEINS", body: "Abre la app para ver las novedades." };
   const opciones = { body: aviso.body, tag: aviso.tag, lang: aviso.lang, dir: aviso.dir, icon: "/icono-192.png", data: { navigate: aviso.navigate } };
   evento.waitUntil(
-    self.clients.matchAll({ type: "window" }).then(async (ventanas) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (ventanas) => {
       const mirando = ventanas.find((v) => v.focused && abiertas.get(v.id) === aviso.tag);
-      if (!mirando) return self.registration.showNotification(aviso.title, opciones);
-      // Con la conversación a la vista no hay aviso: el navegador exige mostrar algo, así que se muestra en silencio,
-      // se cierra al instante y la pantalla consulta de una vez.
-      await self.registration.showNotification(aviso.title, { ...opciones, silent: true });
-      for (const n of await self.registration.getNotifications({ tag: aviso.tag })) n.close();
-      mirando.postMessage({ tipo: "consultar" });
+      if (!mirando) await self.registration.showNotification(aviso.title, opciones);
+      else {
+        // Con la conversación a la vista no hay aviso: el navegador exige mostrar algo, así que se muestra en silencio
+        // y se cierra al instante.
+        await self.registration.showNotification(aviso.title, { ...opciones, silent: true });
+        for (const n of await self.registration.getNotifications({ tag: aviso.tag })) n.close();
+      }
+      // Todas las ventanas consultan, la conversación esté o no a la vista: si no, el inicio no se entera hasta la
+      // siguiente bajada (hasta 5 minutos).
+      for (const v of ventanas) v.postMessage({ tipo: "consultar" });
     }),
   );
 });
