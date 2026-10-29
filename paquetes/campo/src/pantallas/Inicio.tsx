@@ -17,7 +17,7 @@ import { horaDelChat, sinLeerDe, ultimoDeOficina } from "../conversacion";
 import { ponerInsignia } from "../dispositivo/insignia";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
-import { agendaDeVisitas, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, terminadaEn } from "../visitas";
+import { agendaDeVisitas, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, sePuedeIniciar, terminadaEn } from "../visitas";
 import { permisoLocal } from "../sesion/permiso";
 import { VERSION_APP } from "../version";
 import { AvisoDeAlmacenamiento } from "./AvisoDeAlmacenamiento";
@@ -130,9 +130,11 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
   const iniciado = useRef(false);
   const [iniciar] = useSinRepetir(async (visitaId: string, formato: VersionFormato) => {
     if (iniciado.current) return;
+    const visita = visitas?.find((v) => v.id === visitaId);
+    // Defensa: la pantalla no ofrece el botón antes del día, y si por otro camino llega aquí, no se crea nada.
+    if (visita && !sePuedeIniciar(visita, hoyLocal())) return;
     const levantamiento = crearLevantamiento(formato, uuidv7(), new Date(), visitaId, nuevoIdDeRepeticion);
     // Lo nombra aunque la visita salga del teléfono cuando ya esté atendida (iteración 42).
-    const visita = visitas?.find((v) => v.id === visitaId);
     await repositorio.crear(levantamiento, usuario.id, visita ? { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre } : undefined);
     iniciado.current = true;
     abrir(levantamiento.id);
@@ -579,6 +581,8 @@ function Acciones({
   }
   // Una visita que ya no es del técnico no admite levantamientos nuevos.
   if (visita.fueraDeAlcance) return null;
+  // Una visita de otro día no se inicia (iteración 46): en lugar del botón, cuándo. La tarjeta cambia sola al llegar el día.
+  if (!sePuedeIniciar(visita, hoyLocal())) return <p className="text-ayuda text-texto-secundario">{cuandoSePodraIniciar(visita.programadaPara, hoyLocal())}</p>;
   if (contexto.bloqueado) {
     return (
       <Boton variante={variante} className="w-full" disabled>

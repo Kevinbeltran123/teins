@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VisitaLocal } from "./datos/modelo";
-import { agendaDeVisitas, enCurso, fechaDeVisita, horaCorta, horarioDeVisita, terminadaEn } from "./visitas";
+import { agendaDeVisitas, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horarioDeVisita, sePuedeIniciar, terminadaEn } from "./visitas";
 
 const hoy = "2026-09-24";
 const visita = (id: string, programadaPara: string, cliente = `Cliente ${id}`, horario: Partial<VisitaLocal> = {}): VisitaLocal => ({
@@ -125,5 +125,28 @@ describe("fechaDeVisita", () => {
     expect(fechaDeVisita("2026-09-25", hoy)).toBe("Mañana");
     expect(fechaDeVisita("2026-09-23", hoy)).toBe("Ayer");
     expect(fechaDeVisita("2026-09-30", hoy)).toMatch(/30/);
+  });
+});
+
+describe("cuándo se puede iniciar una visita (iteración 46)", () => {
+  it("la de un día futuro no se puede iniciar; la de hoy, a cualquier hora, y las atrasadas, sí", () => {
+    expect(sePuedeIniciar({ programadaPara: "2026-10-30" }, "2026-10-29")).toBe(false);
+    expect(sePuedeIniciar({ programadaPara: "2026-11-03" }, "2026-10-29")).toBe(false);
+    expect(sePuedeIniciar({ programadaPara: "2026-10-29" }, "2026-10-29")).toBe(true);
+    expect(sePuedeIniciar({ programadaPara: "2026-10-28" }, "2026-10-29")).toBe(true);
+  });
+
+  it("el día no cambia por la hora de la visita: el horario no la bloquea dentro del día", () => {
+    expect(sePuedeIniciar(visita("noche", "2026-10-29", "Cliente", { horaInicio: "21:00" }), "2026-10-29")).toBe(true);
+  });
+
+  it("dice cuándo: mañana, o el día con su nombre", () => {
+    expect(cuandoSePodraIniciar("2026-10-30", "2026-10-29")).toBe("Podrás iniciarla mañana");
+    expect(cuandoSePodraIniciar("2026-11-03", "2026-10-29")).toBe("Podrás iniciarla el martes, 3 de noviembre");
+  });
+
+  it("cruza el fin de mes y de año", () => {
+    expect(cuandoSePodraIniciar("2026-11-01", "2026-10-31")).toBe("Podrás iniciarla mañana");
+    expect(cuandoSePodraIniciar("2027-01-01", "2026-12-31")).toBe("Podrás iniciarla mañana");
   });
 });

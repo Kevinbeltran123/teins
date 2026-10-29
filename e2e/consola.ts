@@ -52,12 +52,13 @@ export function nuevaVisita(tecnico: Usuario): string {
   return nuevaVisitaConCliente(tecnico).cliente;
 }
 
-export function nuevaVisitaConCliente(tecnico: Usuario): { cliente: string; clienteId: string; visitaId: string } {
+/** `diasDespues`: la visita se programa para dentro de tantos días (hoy en Bogotá si es 0). */
+export function nuevaVisitaConCliente(tecnico: Usuario, diasDespues = 0): { cliente: string; clienteId: string; visitaId: string } {
   const cliente = `Cliente E2E ${randomBytes(3).toString("hex")}`;
   const salida = comando("crear-cliente", ["--organizacion", ORGANIZACION, "--nombre", cliente, "--sitio", "Sede E2E", "--direccion", "Calle [N] # [N]-[N]"]);
   const [clienteId, sitioId] = [...salida.matchAll(/creado: ([0-9a-f-]{36})/g)].map((m) => m[1]!);
-  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
-  const visita = comando("crear-visita", ["--organizacion", ORGANIZACION, "--cliente", clienteId!, "--sitio", sitioId!, "--motivo", "Mantenimiento", "--fecha", hoy, "--tecnicos", tecnico.usuario]);
+  const fecha = new Date(Date.now() + diasDespues * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+  const visita = comando("crear-visita", ["--organizacion", ORGANIZACION, "--cliente", clienteId!, "--sitio", sitioId!, "--motivo", "Mantenimiento", "--fecha", fecha, "--tecnicos", tecnico.usuario]);
   return { cliente, clienteId: clienteId!, visitaId: /Visita creada: ([0-9a-f-]{36})/.exec(visita)![1]! };
 }
 

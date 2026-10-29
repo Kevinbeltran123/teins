@@ -19,6 +19,19 @@ export function fechaDeVisita(programadaPara: string, hoy: string): string {
   return formatearDia(programadaPara, { weekday: "short", day: "numeric", month: "short" });
 }
 
+/**
+ * Una visita se inicia desde su día (iteración 46): la de un día futuro no. El día programado se inicia a cualquier
+ * hora —el horario es del compromiso con el cliente, no una cerradura— y las atrasadas se siguen iniciando. La regla
+ * corre en el teléfono con su fecha local; el servidor no rechaza nada, así que un inicio hecho sin señal no se pierde.
+ */
+export const sePuedeIniciar = (v: Pick<VisitaLocal, "programadaPara">, hoy: string) => v.programadaPara <= hoy;
+
+/** Lo que dice la tarjeta en lugar de «Iniciar levantamiento»: «Podrás iniciarla mañana» o el día con su nombre. */
+export const cuandoSePodraIniciar = (programadaPara: string, hoy: string) =>
+  programadaPara === sumarDias(hoy, 1)
+    ? "Podrás iniciarla mañana"
+    : `Podrás iniciarla el ${formatearDia(programadaPara, { weekday: "long", day: "numeric", month: "long" })}`;
+
 /** "14:05" → "2:05 p. m.": la forma en que se dice la hora en Colombia, igual en todos los teléfonos. */
 export function horaCorta(hhmm: string): string {
   const [h = 0, m = 0] = hhmm.split(":").map(Number);
