@@ -13,7 +13,7 @@ import { plataforma } from "../dispositivo/instalacion";
 import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/useConexion";
 import { formatoDe, nombreDeFormato, useFormatos, vigentes } from "../formatos";
 import { claseDeTono, estadoCorto } from "../mensajes";
-import { armarChat, horaDelChat, sinLeer } from "../conversacion";
+import { horaDelChat, sinLeerDe, ultimoDeOficina } from "../conversacion";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 import { agendaDeVisitas, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, terminadaEn } from "../visitas";
@@ -32,7 +32,8 @@ const Diagnostico = lazy(() => import("./Diagnostico").then((m) => ({ default: m
 
 interface Props {
   usuario: UsuarioLocal;
-  abrir: (id: string) => void;
+  /** `chat`: abre directo el chat con oficina (iteración 46). */
+  abrir: (id: string, chat?: boolean) => void;
   /** El levantamiento que se acaba de cerrar: se resalta en su lista (lo enviado, en "Enviados"). */
   recien?: string | undefined;
   /** Cambia cuando se pide abrir la papelera desde fuera ("Ver en Descartados" al descartar). */
@@ -63,7 +64,7 @@ interface Contexto {
   visitas: ReadonlyMap<string, VisitaLocal>;
   /** Vencido el permiso de trabajo local, no se crea ni se edita nada (ADR-0009, parte 2). */
   bloqueado: boolean;
-  abrir: (id: string) => void;
+  abrir: (id: string, chat?: boolean) => void;
   iniciar: (visitaId: string, formato: VersionFormato) => void;
   recien: string | undefined;
 }
@@ -155,7 +156,13 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
 
   // Lo que no entró va aparte y arriba: es lo único de la lista que pide hacer algo (iteración 32).
   const noEntraron = (lista ?? []).filter((l) => l.estado === "enviado" && envios?.get(l.id)?.estado === "error" && !servidor?.has(l.id));
-  const enviados = (lista ?? []).filter((l) => l.estado === "enviado" && !noEntraron.includes(l));
+  // Lo que oficina escribió y el técnico no ha leído sube también (iteración 46): el aviso se puede perder; esto no. Al
+  // leerlo vuelve a «Enviados». El más reciente primero.
+  const sinLeerEn = (l: LevantamientoLocal) => sinLeerDe(servidor?.get(l.id), chats?.leido.get(l.id) ?? null);
+  const porResponder = (lista ?? [])
+    .filter((l) => l.estado === "enviado" && !noEntraron.includes(l) && sinLeerEn(l) > 0)
+    .sort((a, b) => ultimoDeOficina(servidor?.get(b.id)).localeCompare(ultimoDeOficina(servidor?.get(a.id))));
+  const enviados = (lista ?? []).filter((l) => l.estado === "enviado" && !noEntraron.includes(l) && !porResponder.includes(l));
   const borradoresSueltos = sueltos.filter((l) => l.estado === "borrador");
   const primerNombre = usuario.nombre.split(" ")[0] ?? usuario.nombre;
 
@@ -233,12 +240,13 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
               </EstadoVacio>
             )}
 
-            {noEntraron.length > 0 && (
+            {(noEntraron.length > 0 || porResponder.length > 0) && (
               <section aria-labelledby="titulo-atencion" className="flex flex-col gap-2.5">
                 <h2 id="titulo-atencion" className="pt-2 text-ayuda font-extrabold text-texto-secundario">
                   Necesita atención
                 </h2>
-                <Filas levantamientos={noEntraron} contexto={contexto} atencion />
+                {noEntraron.length > 0 && <Filas levantamientos={noEntraron} contexto={contexto} atencion />}
+                {porResponder.length > 0 && <Filas levantamientos={porResponder} contexto={contexto} />}
               </section>
             )}
 
@@ -621,7 +629,7 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
   const servidor = contexto.servidor.get(l.id);
   const estado = l.estado === "borrador" ? { texto: "Borrador", tono: "pendiente" as const } : estadoCorto(envio, servidor, contexto.enLinea);
   // El chat con oficina (ADR-0040): lo nuevo de oficina, o lo que el técnico respondió y espera señal.
-  const nuevos = servidor?.comentarios?.length ? sinLeer(armarChat(servidor.comentarios, []), contexto.chats.leido.get(l.id) ?? null) : 0;
+  const nuevos = sinLeerDe(servidor, contexto.chats.leido.get(l.id) ?? null);
   const enCola = contexto.chats.enCola.get(l.id) ?? 0;
   const visita = l.visitaId ? contexto.visitas.get(l.visitaId) : undefined;
   // La visita atendida sale del teléfono al día siguiente (ADR-0041): lo enviado sigue diciendo dónde fue (iteración 42).
@@ -632,7 +640,8 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
   return (
     <button
       type="button"
-      onClick={() => contexto.abrir(l.id)}
+      // Lo sin leer abre directo el chat (iteración 46); lo demás, el levantamiento.
+      onClick={() => contexto.abrir(l.id, nuevos > 0)}
       // La lista de enviados crece: la fila lleva su nombre de transición solo mientras se ve.
       ref={enPantalla}
       className={`grid min-h-tactil w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-3 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco ${contexto.recien === l.id ? "animate-resaltar" : ""}`}

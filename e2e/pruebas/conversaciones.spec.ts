@@ -63,10 +63,11 @@ test("el técnico responde desde el teléfono, oficina ve el punto y contesta; s
   // Campo: «Oficina te escribió»; el chat muestra el dato del que habla y se responde.
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
   await sincronizar(page);
-  const enviados = page.getByRole("region", { name: "Enviados" });
-  await expect(enviados.getByText("Oficina te escribió")).toBeVisible({ timeout: 30_000 });
-  await enviados.getByRole("button").first().click();
-  await page.getByRole("button", { name: /^Oficina/ }).click();
+  // Lo sin leer sube a «Necesita atención» (iteración 46): sale de «Enviados» y tocarlo abre el chat, sin pasar por el enviado.
+  const atencion = page.getByRole("region", { name: "Necesita atención" });
+  await expect(atencion.getByText("Oficina te escribió")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("region", { name: "Enviados" })).toHaveCount(0);
+  await atencion.getByRole("button").first().click();
   const chat = page.getByRole("dialog", { name: "Chat con oficina" });
   await expect(chat.getByText("1 mensaje sin leer")).toBeVisible();
   await expect(chat.getByRole("button", { name: /Tu respuesta · Cuarto técnico Potencia nominal 12 kVA/ })).toBeVisible();

@@ -120,15 +120,14 @@ test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios
   // Campo: la siguiente bajada trae el estado y el comentario.
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  const esta = page.getByRole("region", { name: "Enviados" });
+  // El comentario sin leer sube a «Necesita atención» (iteración 46): la fila dice que oficina escribió y abre el chat (ADR-0040).
+  const esta = page.getByRole("region", { name: "Necesita atención" });
   await expect(esta.getByText("Revisado", { exact: true })).toBeVisible({ timeout: 30_000 });
-  // El comentario abre el chat con oficina (ADR-0040): la fila dice que oficina escribió.
   await expect(esta.getByText("Oficina te escribió")).toBeVisible();
   await esta.getByRole("button").first().click();
-  await expect(page.getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();
   // En el chat, el comentario lleva el dato del que habla; revisado, la conversación está cerrada (ADR-0040).
-  await page.getByRole("button", { name: /^Oficina/ }).click();
   const chat = page.getByRole("dialog", { name: "Chat con oficina" });
+  await expect(chat.getByText("Revisa la placa: la potencia estaba mal")).toBeVisible();
   await expect(chat.getByRole("button", { name: /Tu respuesta · Cuarto técnico.*Potencia nominal/ })).toBeVisible();
   await expect(chat.getByText("La conversación quedó cerrada")).toBeVisible();
 
