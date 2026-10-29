@@ -14,6 +14,7 @@ import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/u
 import { formatoDe, nombreDeFormato, useFormatos, vigentes } from "../formatos";
 import { claseDeTono, estadoCorto } from "../mensajes";
 import { horaDelChat, sinLeerDe, ultimoDeOficina } from "../conversacion";
+import { ponerInsignia } from "../dispositivo/insignia";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
 import { agendaDeVisitas, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, terminadaEn } from "../visitas";
@@ -163,6 +164,10 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
     .filter((l) => l.estado === "enviado" && !noEntraron.includes(l) && sinLeerEn(l) > 0)
     .sort((a, b) => ultimoDeOficina(servidor?.get(b.id)).localeCompare(ultimoDeOficina(servidor?.get(a.id))));
   const enviados = (lista ?? []).filter((l) => l.estado === "enviado" && !noEntraron.includes(l) && !porResponder.includes(l));
+  // El número del ícono (iteración 46): solo con todo leído, para no apagarlo mientras la pantalla aún carga.
+  useEffect(() => {
+    if (!cargando && chats !== undefined) void ponerInsignia(porResponder.length);
+  }, [cargando, chats, porResponder.length]);
   const borradoresSueltos = sueltos.filter((l) => l.estado === "borrador");
   const primerNombre = usuario.nombre.split(" ")[0] ?? usuario.nombre;
 

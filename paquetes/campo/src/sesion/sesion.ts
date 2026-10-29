@@ -1,6 +1,7 @@
 import { ErrorDeRed } from "@teins/protocolo";
 import { db, repositorio, sellarEnSegundoPlano } from "../datos/instancia";
 import { quitarSuscripcion } from "../dispositivo/avisos";
+import { ponerInsignia } from "../dispositivo/insignia";
 import { almacen, cliente, sincronizarEnSegundoPlano } from "../sincronizacion/instancia";
 import { VERSION_APP } from "../version";
 
@@ -75,6 +76,8 @@ export async function salirSinCambiar(): Promise<void> {
  * señal, la sesión sigue abierta en el servidor hasta que `completarCierrePendiente` la cierra.
  */
 export async function cerrarSesion(): Promise<void> {
+  // El número del ícono es de esta persona (iteración 46): no se queda para la siguiente.
+  void ponerInsignia(0);
   // Con la sesión todavía abierta: el servidor solo deja quitar la suscripción propia (ADR-0023).
   await quitarSuscripcion().catch(() => undefined);
   const sinSenal = await cliente.cerrarSesion().then(
