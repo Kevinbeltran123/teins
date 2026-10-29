@@ -120,6 +120,8 @@ stateDiagram-v2
   cancelada --> [*]
 ```
 
+En el teléfono, una visita se inicia desde su día: la de un día futuro no ofrece «Iniciar levantamiento» y dice «Podrás iniciarla mañana» (o el día con su nombre); el día programado se inicia a cualquier hora, las atrasadas se siguen iniciando y un borrador empezado siempre se continúa. La regla corre en el teléfono con su fecha local (`paquetes/campo/src/visitas.ts:sePuedeIniciar`); el servidor no rechaza nada, así un inicio hecho sin señal nunca se pierde. Si oficina necesita adelantar una visita, la reprograma.
+
 Reasignar no cambia las marcas: en una visita cerrada corrige quién la hizo ([ADR-0042](../adr/0042-reprogramar-reabre-una-visita-cerrada.md)). Cambiar solo el motivo tampoco reabre. Programar, reprogramar y reasignar rechazan con `tecnico_ocupado` si el horario se cruza con otra visita del técnico.
 
 En el teléfono, la visita sale con un cambio `fuera_de_alcance` y un motivo: `reasignada`, `cancelada` o `atendida`. Si el técnico tiene trabajo en ella, se queda marcada (`fueraDeAlcance`) para terminarlo; con `atendida`, se quita solo si no queda borrador ni envío por llegar.
@@ -221,6 +223,8 @@ sequenceDiagram
 ```
 
 El motor también envía las terminaciones de visita y las respuestas del chat ([ADR-0040](../adr/0040-conversaciones-entre-oficina-y-campo.md)) antes de bajar, con la misma espera. Una sola sincronización corre a la vez, también entre pestañas.
+
+Los avisos no esperan la siguiente bajada: en cada aviso el service worker (`paquetes/campo/public/avisos-sw.js`) le pide consultar a **todas** las ventanas abiertas, esté o no a la vista esa conversación, y la pantalla baja de inmediato (`escucharAvisos`). Lo que oficina escribió y el técnico no ha leído sube a «Necesita atención» (`paquetes/campo/src/conversacion.ts:sinLeerDe`) y tocarlo abre el chat; al leerlo, el levantamiento vuelve a «Enviados». El número de conversaciones sin leer va también en el ícono de la app (`paquetes/campo/src/dispositivo/insignia.ts`); con la app cerrada no sube solo, porque el servidor no sabe qué leyó el técnico en su teléfono.
 
 | Paso | Dónde en el código | ADR |
 |---|---|---|

@@ -634,7 +634,7 @@ iPhone y computador, con los avisos activos en los dos (fase 15).
 2. Con el iPhone bloqueado, espere.
    - Debe: el aviso "Oficina · Cliente de prueba" con el texto; tocarlo abre el chat.
 3. En "Mis visitas".
-   - Debe: en "Enviados", "Oficina te escribió" y un punto azul; en el levantamiento, la fila "Oficina" con el número de sin leer.
+   - Debe: en "Necesita atención" (iteración 46), "Oficina te escribió" y un punto azul; tocarla abre el chat. En el levantamiento, la fila "Oficina" con el número de sin leer.
 4. Abra el chat.
    - Debe: "N mensajes sin leer"; la pregunta con un recuadro del dato y lo que respondió; abajo, "Respondiendo a Oficina".
 5. En modo avión, escriba una respuesta y envíela.
@@ -722,6 +722,25 @@ iPhone y computador, después del primer despliegue con el flujo «Desplegar». 
    - Debe: fechas y pesos como antes.
 4. En la pestaña **Correo** del informe, toque el texto del correo para escribir, en tema claro y en oscuro.
    - Debe: un borde punteado gris alrededor del texto, que pasa a borde azul al escribir. Es el único cambio a la vista: esos colores salen ahora de los tokens.
+
+## Fase 46 · El chat a la vista y las visitas que aún no tocan (iteración 46)
+
+iPhone con la app instalada y los avisos activos, y oficina en el computador.
+
+1. Con la app abierta en «Mis visitas» (sin entrar al levantamiento), oficina comenta un dato de un levantamiento enviado de `tecnico.prueba`.
+   - Debe: en segundos, sin tocar nada, el levantamiento aparece en «Necesita atención» con «Oficina te escribió», y sale de «Enviados».
+2. Toque esa fila.
+   - Debe: abre directo el chat con oficina, sin pasar por el levantamiento.
+3. Mire el ícono de la app en la pantalla de inicio del iPhone antes y después de leer el chat.
+   - Debe: el número de conversaciones sin leer baja al leerlas y desaparece con cero. Con la app cerrada no sube solo: se actualiza al abrirla (límite conocido).
+4. En oficina, programe una visita para mañana para `tecnico.prueba`. En el iPhone, abra la app.
+   - Debe: en lugar de «Iniciar levantamiento», dice «Podrás iniciarla mañana». La de hoy sí tiene el botón.
+5. Programe una visita para dentro de varios días.
+   - Debe: dice «Podrás iniciarla el <día>, <número> de <mes>».
+6. Empiece un levantamiento de una visita de hoy y, sin enviarlo, oficina la reprograma para mañana.
+   - Debe: el borrador se sigue pudiendo continuar («Continuar levantamiento»).
+
+**Anotar:** si Safari mostró el aviso con la app abierta en el inicio (es lo esperado; lo nuevo es que la pantalla se entera sola).
 
 ## Al terminar
 
