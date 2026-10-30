@@ -97,7 +97,11 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   await restablecer.getByRole("button", { name: "Cancelar" }).click();
   await page.getByRole("searchbox", { name: "Buscar usuarios" }).fill(admin.usuario);
   await expect(page.getByRole("row").filter({ hasText: admin.usuario })).toBeVisible();
-  await expect(page.getByRole("button", { name: `Más acciones para ${admin.nombre}` })).toHaveCount(0);
+  // La propia cuenta solo ofrece la cédula (iteración 47): restablecerse, desactivarse o quitarse la administración no.
+  await page.getByRole("button", { name: `Más acciones para ${admin.nombre}` }).click();
+  await expect(page.getByRole("menuitem", { name: "Poner cédula" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Restablecer contraseña|Desactivar usuario|administración/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await page.getByRole("searchbox", { name: "Buscar usuarios" }).fill("");
 
   // El técnico entra a campo con esa contraseña; su teléfono aparece en administración.

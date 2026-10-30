@@ -185,6 +185,21 @@
       ]
     },
     {
+      "clave": "materiales",
+      "titulo": "Materiales",
+      "campos": [
+        {
+          "clave": "materiales",
+          "etiqueta": "Materiales",
+          "tipo": "cantidades",
+          "unidades": [
+            "und",
+            "m"
+          ]
+        }
+      ]
+    },
+    {
       "clave": "acometida",
       "titulo": "Acometida",
       "tablas": [
@@ -276,21 +291,6 @@
           "tipo": "medida",
           "unidades": [
             "Hz"
-          ]
-        }
-      ]
-    },
-    {
-      "clave": "materiales",
-      "titulo": "Materiales",
-      "campos": [
-        {
-          "clave": "materiales",
-          "etiqueta": "Materiales",
-          "tipo": "cantidades",
-          "unidades": [
-            "und",
-            "m"
           ]
         }
       ]
