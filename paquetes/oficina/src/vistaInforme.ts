@@ -11,12 +11,18 @@ import { consultas } from "./api";
 
 type Detalle = Respuesta<"obtenerLevantamiento">;
 
+/** Lo que firma el capítulo (ADR-0051), que el informe en edición trae junto a sus candidatos. */
+export type FirmasDelCapitulo = Pick<Respuesta<"obtenerInforme">["candidatos"][number], "tecnicoDocumento" | "revisorDocumento" | "revisadoEn">;
+
 /** El capítulo de un levantamiento, como queda en la copia congelada de la versión. */
-export const capituloDe = (d: Detalle): ContenidoVersion["levantamientos"][number] => ({
+export const capituloDe = (d: Detalle, firmas: FirmasDelCapitulo = {}): ContenidoVersion["levantamientos"][number] => ({
   id: d.id,
   formato: d.formatoDefinicion,
   tecnico: d.tecnico.nombre,
   revisor: d.revisor?.nombre ?? "[Revisor]",
+  ...(firmas.tecnicoDocumento ? { tecnicoDocumento: firmas.tecnicoDocumento } : {}),
+  ...(firmas.revisorDocumento ? { revisorDocumento: firmas.revisorDocumento } : {}),
+  ...(firmas.revisadoEn ? { revisadoEn: firmas.revisadoEn } : {}),
   recibidoEn: d.recibidoEn,
   respuestas: d.respuestas,
   ...(Object.keys(d.repeticiones).length > 0 ? { repeticiones: d.repeticiones } : {}),

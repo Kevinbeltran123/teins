@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { nombreDelPdfDeInforme, piePagina, plantillaInforme, type HojaDelInforme } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
-import { aplicarSeleccion, bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
+import { aplicarSeleccion, numeroDeOrden, bocetosReferenciados, esFirma, firmaASvg, fotosReferenciadas, hojaASvg, hojasDe, leerBoceto, validarBorrador, validarParaPublicar, type BorradorInforme, type ContenidoVersion, type ErrorInforme, type LevantamientoParaInforme } from "@teins/dominio";
 import type { Config } from "../../config";
 import { claveDeObjeto, leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } from "../../plataforma/base-de-datos";
@@ -18,7 +18,7 @@ import { cancelarEnviosDeVersion, cancelarOReanudarEnvio, enviarAlQuedarListo, e
 import type { Formatos } from "../formatos";
 import { nombreDe, type Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
-import type { Visitas } from "../visitas";
+import type { VisitaAsignada, Visitas } from "../visitas";
 import { fuenteIncrustada, imprimirPdf, producirPdf } from "../../plataforma/pdf";
 import { informes, versionesPublicadas, type EstadoPdf } from "./esquema";
 
@@ -29,7 +29,7 @@ interface Dependencias {
   archivos: Pick<Archivos, "estados">;
   levantamientos: Pick<Levantamientos, "deVisita">;
   visitas: Pick<Visitas, "existe" | "resumenes" | "clienteDe" | "canceladas">;
-  identidad: Pick<Identidad, "nombres" | "nombreDeOrganizacion">;
+  identidad: Pick<Identidad, "nombres" | "nombreDeOrganizacion" | "documentos">;
   formatos: Pick<Formatos, "obtener">;
 }
 
@@ -39,6 +39,19 @@ export interface VersionVigente {
   publicadaEn: Date;
   visita: ContenidoVersion["visita"];
 }
+
+/**
+ * Lo que el encabezado del informe pide de la visita (ADR-0051), solo lo que hay: lo que falta no se escribe y el informe
+ * lo dice con un marcador. El número de orden se escribe aquí, para que una versión publicada no cambie si cambia cómo se
+ * escribe.
+ */
+const encabezadoDe = (v: VisitaAsignada) => ({
+  ...(v.cliente.nit ? { nit: v.cliente.nit } : {}),
+  ...(v.sitio.ciudad ? { ciudad: v.sitio.ciudad } : {}),
+  ...(v.solicitante ? { solicitante: { nombre: v.solicitante.nombre, ...(v.solicitante.celular ? { telefono: v.solicitante.celular } : {}) } } : {}),
+  ...(v.ordenDeServicio ? { ordenDeServicio: numeroDeOrden(v.ordenDeServicio) } : {}),
+  ...(v.referencia ? { referencia: v.referencia } : {}),
+});
 
 /** La visita tal como quedó congelada en la versión: de la misma fila, sin otra consulta. */
 const visitaDeLaVersion = sql<ContenidoVersion["visita"]>`${versionesPublicadas.contenido} -> 'visita'`;
@@ -296,7 +309,8 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               if (!nombresDeFormato.has(k)) nombresDeFormato.set(k, (await formatos.obtener(tx, l.formato, l.versionFormato))?.nombre ?? l.formato);
             }
             const versiones = await versionesDe(tx, id);
-            return { informe, visita, lista, nombresDeFormato, versiones, clienteId: await visitas.clienteDe(tx, informe.visitaId), envios: await enviosDeVersiones(tx, versiones.map((v) => v.id), (ids) => identidad.nombres(actor.organizacionId, ids, tx)) };
+            const documentos = await identidad.documentos(actor.organizacionId, [...new Set(lista.flatMap((l) => [l.tecnicoId, ...(l.revisorId ? [l.revisorId] : [])]))], tx);
+            return { informe, visita, lista, documentos, nombresDeFormato, versiones, clienteId: await visitas.clienteDe(tx, informe.visitaId), envios: await enviosDeVersiones(tx, versiones.map((v) => v.id), (ids) => identidad.nombres(actor.organizacionId, ids, tx)) };
           });
           if (!r.visita) throw problema("no_encontrado", "La visita del informe no existe");
           const nombres = await identidad.nombres(actor.organizacionId, [
@@ -306,7 +320,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             id: r.informe.id,
             visitaId: r.informe.visitaId,
             clienteId: r.clienteId ?? "",
-            visita: { cliente: r.visita.cliente.nombre, sitio: r.visita.sitio.nombre, direccion: r.visita.sitio.direccion, motivo: r.visita.motivo, programadaPara: r.visita.programadaPara },
+            visita: { cliente: r.visita.cliente.nombre, sitio: r.visita.sitio.nombre, direccion: r.visita.sitio.direccion, motivo: r.visita.motivo, programadaPara: r.visita.programadaPara, ...encabezadoDe(r.visita) },
             version: r.informe.version,
             introduccion: r.informe.introduccion,
             conclusiones: r.informe.conclusiones,
@@ -319,6 +333,9 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               tecnico: nombreDe(nombres, l.tecnicoId),
               estado: l.estado,
               recibidoEn: l.recibidoEn.toISOString(),
+              ...(r.documentos.get(l.tecnicoId) ? { tecnicoDocumento: r.documentos.get(l.tecnicoId)! } : {}),
+              ...(l.revisorId && r.documentos.get(l.revisorId) ? { revisorDocumento: r.documentos.get(l.revisorId)! } : {}),
+              ...(l.revisadoEn ? { revisadoEn: l.revisadoEn.toISOString() } : {}),
             })),
             versiones: r.versiones.map((v) => comoVersion(v, nombres, r.envios.get(v.id))),
           };
@@ -384,6 +401,8 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             if (!visita) throw problema("no_encontrado", "La visita del informe no existe");
             const incluidos = informe.levantamientos.map((lid) => lista.find((l) => l.id === lid)!);
             const nombres = await identidad.nombres(actor.organizacionId, [...new Set([actor.usuarioId, ...incluidos.flatMap((l) => [l.tecnicoId, l.revisorId ?? ""])])], tx);
+            // Las cédulas de quienes firman, copiadas a la versión (regla 7): lo que cambie en la cuenta no la cambia.
+            const documentos = await identidad.documentos(actor.organizacionId, [...new Set(incluidos.flatMap((l) => [l.tecnicoId, ...(l.revisorId ? [l.revisorId] : [])]))], tx);
             const [{ numero } = { numero: 0 }] = await tx
               .select({ numero: sql<number>`coalesce(max(${versionesPublicadas.numero}), 0)` })
               .from(versionesPublicadas)
@@ -397,7 +416,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               publicadaEn: publicadaEn.toISOString(),
               publicadaPor: nombreDe(nombres, actor.usuarioId),
               organizacion: { nombre: organizacion },
-              visita: { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, motivo: visita.motivo, programadaPara: visita.programadaPara },
+              visita: { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, motivo: visita.motivo, programadaPara: visita.programadaPara, ...encabezadoDe(visita) },
               introduccion: informe.introduccion,
               conclusiones: informe.conclusiones,
               levantamientos: [],
@@ -414,6 +433,9 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
                     formato,
                     tecnico: nombreDe(nombres, l.tecnicoId),
                     revisor: nombreDe(nombres, l.revisorId),
+                    ...(documentos.get(l.tecnicoId) ? { tecnicoDocumento: documentos.get(l.tecnicoId)! } : {}),
+                    ...(l.revisorId && documentos.get(l.revisorId) ? { revisorDocumento: documentos.get(l.revisorId)! } : {}),
+                    ...(l.revisadoEn ? { revisadoEn: l.revisadoEn.toISOString() } : {}),
                     recibidoEn: l.recibidoEn.toISOString(),
                     respuestas: l.respuestas,
                     ...(Object.keys(l.repeticiones).length > 0 ? { repeticiones: l.repeticiones } : {}),

@@ -171,6 +171,7 @@ export async function deVisita(tx: TxOrganizacion, visitaId: string) {
       versionFormato: levantamientos.versionFormato,
       tecnicoId: levantamientos.tecnicoId,
       revisorId: levantamientos.revisorId,
+      revisadoEn: levantamientos.revisadoEn,
       recibidoEn: levantamientos.recibidoEn,
       respuestas: levantamientos.respuestas,
       repeticiones: levantamientos.repeticiones,

@@ -455,7 +455,22 @@ export const VersionPublicada = z
   })
   .meta({ id: "VersionPublicada" });
 
-const VisitaDelInforme = z.object({ cliente: z.string(), sitio: z.string(), direccion: z.string(), motivo: z.string(), programadaPara: z.iso.date() });
+/**
+ * La visita de un informe. Los datos del encabezado (ADR-0051) son opcionales: solo el detalle los llena, y lo que falta
+ * sale como marcador en el informe. El número de orden va ya escrito, como queda en la versión.
+ */
+const VisitaDelInforme = z.object({
+  cliente: z.string(),
+  sitio: z.string(),
+  direccion: z.string(),
+  motivo: z.string(),
+  programadaPara: z.iso.date(),
+  nit: z.string().optional(),
+  ciudad: z.string().optional(),
+  solicitante: z.object({ nombre: z.string(), telefono: z.string().optional() }).optional(),
+  ordenDeServicio: z.string().optional(),
+  referencia: z.string().optional(),
+});
 
 export const PaginaInformes = z
   .object({
@@ -495,7 +510,19 @@ export const DetalleInforme = z
     planos: z.array(Plano),
     seleccion: SeleccionInforme,
     /** Levantamientos de la visita, incluidos o no, para componer (solo los revisados se pueden incluir). */
-    candidatos: z.array(z.object({ id: Uuid, formato: z.string(), tecnico: z.string(), estado: EstadoLevantamiento, recibidoEn: Fecha })),
+    candidatos: z.array(
+      z.object({
+        id: Uuid,
+        formato: z.string(),
+        tecnico: z.string(),
+        estado: EstadoLevantamiento,
+        recibidoEn: Fecha,
+        /** Lo que firma el informe (ADR-0051): la cédula de quien capturó y de quien revisó, y cuándo revisó. */
+        tecnicoDocumento: z.string().optional(),
+        revisorDocumento: z.string().optional(),
+        revisadoEn: Fecha.optional(),
+      }),
+    ),
     versiones: z.array(VersionPublicada),
   })
   .meta({ id: "DetalleInforme" });

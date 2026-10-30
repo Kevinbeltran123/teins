@@ -241,6 +241,57 @@ describe("informe (corte 4)", () => {
     expect(createHash("sha256").update(pdf).digest("hex")).toBe(antes.rows[0].pdf_huella);
   }, 90_000);
 
+  it("publicar congela el encabezado de la visita, las cédulas y la hora en que se revisó; la vista de oficina los trae igual (ADR-0051)", async () => {
+    const { oficina, tecnico, visitaId, revisado, informeId, organizacionId } = await visitaConRevisado();
+    const sql = (texto: string, valores: unknown[]) => s.propietario.pool.query(texto, valores);
+    await sql("update identidad.usuarios set documento = '79888777' where id = $1", [tecnico.id]);
+    await sql("update identidad.usuarios set documento = '52123456' where id = $1", [oficina.id]);
+    await sql("update clientes.clientes set nit = '900.123.456-7' where id = (select cliente_id from visitas.visitas where id = $1)", [visitaId]);
+    await sql("update clientes.sitios set ciudad = 'Ibagué' where id = (select sitio_id from visitas.visitas where id = $1)", [visitaId]);
+    await sql("update visitas.visitas set referencia_cliente = 'TKT-4821' where id = $1", [visitaId]);
+    const contactoId = randomUUID();
+    await sql(
+      "insert into clientes.contactos (id, organizacion_id, cliente_id, nombre, cargo, celular) select $1, $2, cliente_id, 'Laura Gómez', 'Mantenimiento', '+573105550142' from visitas.visitas where id = $3",
+      [contactoId, organizacionId, visitaId],
+    );
+    await sql("update visitas.visitas set solicitante_contacto_id = $1 where id = $2", [contactoId, visitaId]);
+
+    // La vista en vivo de oficina trae lo mismo que quedará en la versión.
+    const detalle = (await get(oficina.cookie, `/api/informes/${informeId}`)).json();
+    expect(detalle.visita).toMatchObject({ nit: "900.123.456-7", ciudad: "Ibagué", referencia: "TKT-4821", solicitante: { nombre: "Laura Gómez", telefono: "+573105550142" } });
+    expect(detalle.visita.ordenDeServicio).toMatch(/^\d{4,}$/);
+    expect(detalle.candidatos.find((c: { id: string }) => c.id === revisado)).toMatchObject({ tecnicoDocumento: "79888777", revisorDocumento: "52123456", revisadoEn: expect.any(String) });
+
+    const v = (await get(oficina.cookie, `/api/informes/${informeId}`)).json().version;
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: v, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [] })).statusCode).toBe(200);
+    const publicada = await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: v + 1 });
+    expect(publicada.statusCode, publicada.body).toBe(201);
+
+    const { rows } = await sql("select contenido from informes.versiones where informe_id = $1", [informeId]);
+    const contenido = rows[0].contenido;
+    expect(contenido.visita).toMatchObject({ nit: "900.123.456-7", ciudad: "Ibagué", referencia: "TKT-4821", solicitante: { nombre: "Laura Gómez", telefono: "+573105550142" } });
+    // El número sale ya escrito: una versión publicada no cambia aunque cambie cómo se escribe.
+    expect(contenido.visita.ordenDeServicio).toBe(detalle.visita.ordenDeServicio);
+    expect(contenido.levantamientos[0]).toMatchObject({ tecnico: "Técnico de prueba", tecnicoDocumento: "79888777", revisor: "Oficina de prueba", revisorDocumento: "52123456", revisadoEn: expect.any(String) });
+
+    // Lo que cambie después no toca la versión publicada (regla 7).
+    await sql("update identidad.usuarios set documento = '11111111' where id = $1", [oficina.id]);
+    const despues = await sql("select contenido from informes.versiones where informe_id = $1", [informeId]);
+    expect(despues.rows[0].contenido.levantamientos[0].revisorDocumento).toBe("52123456");
+  }, 90_000);
+
+  it("una versión anterior a esta, sin cédulas ni encabezado, se publica igual: lo que falta no se inventa (ADR-0051)", async () => {
+    const { oficina, visitaId, revisado, informeId } = await visitaConRevisado();
+    await s.propietario.pool.query("update visitas.visitas set orden_de_servicio = null where id = $1", [visitaId]);
+    const v = (await get(oficina.cookie, `/api/informes/${informeId}`)).json().version;
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: v, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [] })).statusCode).toBe(200);
+    expect((await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: v + 1 })).statusCode).toBe(201);
+    const { rows } = await s.propietario.pool.query("select contenido from informes.versiones where informe_id = $1", [informeId]);
+    expect(rows[0].contenido.visita).not.toHaveProperty("nit");
+    expect(rows[0].contenido.visita).not.toHaveProperty("ordenDeServicio");
+    expect(rows[0].contenido.levantamientos[0]).not.toHaveProperty("tecnicoDocumento");
+  }, 90_000);
+
   it("una versión nueva deja la anterior intacta, y la base no deja modificar una publicada (QA-9)", async () => {
     const { oficina, organizacionId, revisado, informeId } = await visitaConRevisado();
     const borrador = (version: number, introduccion: string) => post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version, introduccion, conclusiones: "", levantamientos: [revisado], planos: [] });

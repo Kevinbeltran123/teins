@@ -51,6 +51,8 @@ export interface LevantamientoDeVisita {
   versionFormato: number;
   tecnicoId: string;
   revisorId: string | null;
+  /** Cuándo se marcó revisado: la firma electrónica del revisor (ADR-0051). */
+  revisadoEn: Date | null;
   recibidoEn: Date;
   respuestas: Respuestas;
   repeticiones: Repeticiones;

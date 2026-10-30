@@ -180,7 +180,7 @@ function Composicion({ informe, recargar }: { informe: Informe; recargar: () => 
     visita: informe.visita,
     introduccion: borrador.introduccion,
     conclusiones: borrador.conclusiones,
-    levantamientos: detalles.map(capituloDe),
+    levantamientos: detalles.map((d) => capituloDe(d, informe.candidatos.find((c) => c.id === d.id))),
     planos: borrador.planos,
   };
   const mensajeDeVersion = (p: Plantillas, numero: number): MensajeDeInforme => ({
