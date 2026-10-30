@@ -8,3 +8,9 @@ export const UUID = /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB
 
 /** Id corto y estable de una repetición o de una línea de cantidades. */
 export const ID_CORTO = /^[a-z0-9]{8}$/;
+
+/** Hora del día como "HH:MM", de 00:00 a 23:59 (horario de un campo). */
+export const HORA_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Cédula de ciudadanía: solo dígitos, de 5 a 12. */
+export const DOCUMENTO_DE_IDENTIDAD = /^\d{5,12}$/;

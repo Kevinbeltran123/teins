@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DECIMAL_CANONICO, HUELLA_SHA256, ID_LINEA, ID_REPETICION, LIMITES, LIMITES_CANTIDADES, LIMITES_FIRMA } from "@teins/dominio";
+import { DECIMAL_CANONICO, DOCUMENTO_DE_IDENTIDAD, HORA_HHMM, HUELLA_SHA256, ID_LINEA, ID_REPETICION, LIMITES, LIMITES_CANTIDADES, LIMITES_FIRMA } from "@teins/dominio";
 import type * as dominio from "@teins/dominio";
 
 /**
@@ -9,6 +9,8 @@ import type * as dominio from "@teins/dominio";
 export const Huella = z.string().regex(HUELLA_SHA256).meta({ id: "Huella", description: "SHA-256 en hexadecimal minúscula" });
 export const Uuid = z.uuid();
 export const Fecha = z.iso.datetime({ offset: true });
+/** Hora del día como "HH:MM" (ADR-0050). */
+export const Hora = z.string().regex(HORA_HHMM);
 
 /** Línea de cantidad (F9): la forma; la regla 6 (cantidad positiva, unidad permitida) la aplica `dominio`. */
 export const LineaCantidad = z
@@ -41,8 +43,14 @@ export const Valor = z
         cargo: z.string().max(LIMITES_FIRMA.cargo).optional(),
         firmadoEn: Fecha,
         declaracion: z.string().max(LIMITES_FIRMA.declaracion),
+        /** Cédula de quien firmó, si el formato la pide (ADR-0050). */
+        documento: z.string().regex(DOCUMENTO_DE_IDENTIDAD).optional(),
       })
       .strict(),
+    /** Varias opciones elegidas y su «Otro» (ADR-0050): un objeto, para no confundirse con una lista de fotos. */
+    z.object({ elegidas: z.array(z.string().min(1).max(LIMITES.opcion)).max(20).readonly(), otro: z.string().min(1).max(LIMITES.otro).optional() }).strict(),
+    /** Hora de llegada y de salida (ADR-0050). */
+    z.object({ desde: Hora, hasta: Hora.optional() }).strict(),
     z.object({ noObtenido: z.literal(true), motivo: z.string().max(LIMITES.motivo) }).strict(),
   ])
   .meta({ id: "Valor" });
@@ -64,14 +72,26 @@ export const Repeticiones = z
 
 /** Respuestas frecuentes de un campo, que se eligen con un toque (rediseño Recorrido). */
 const ValoresComunes = z.array(z.string().min(1).max(40)).min(1).max(8).readonly();
+/** Las opciones de una selección (ADR-0050): de 2 a 20, cada una de 1 a 60 caracteres. */
+const Opciones = z.array(z.string().min(1).max(LIMITES.opcion)).min(2).max(20).readonly();
 const CampoBase = { clave: ClaveEsquema, etiqueta: z.string().min(1).max(200), obligatorio: z.boolean().optional() };
 export const DefinicionCampo = z.discriminatedUnion("tipo", [
   z.object({ ...CampoBase, tipo: z.literal("texto"), largo: z.boolean().optional(), valoresComunes: ValoresComunes.optional() }),
   z.object({ ...CampoBase, tipo: z.literal("medida"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly(), valoresComunes: ValoresComunes.optional() }),
-  z.object({ ...CampoBase, tipo: z.literal("foto"), min: z.int().min(0).max(LIMITES.fotosPorCampo).optional(), puestos: z.array(z.string().min(1).max(40)).min(1).max(LIMITES.fotosPorCampo).readonly().optional() }),
+  z.object({ ...CampoBase, tipo: z.literal("opcion"), opciones: Opciones, otro: z.boolean().optional() }),
+  z.object({ ...CampoBase, tipo: z.literal("opciones"), opciones: Opciones, otro: z.boolean().optional() }),
+  z.object({ ...CampoBase, tipo: z.literal("horario") }),
+  z.object({
+    ...CampoBase,
+    tipo: z.literal("foto"),
+    min: z.int().min(0).max(LIMITES.fotosPorCampo).optional(),
+    puestos: z.array(z.string().min(1).max(40)).min(1).max(LIMITES.fotosPorCampo).readonly().optional(),
+    /** La foto lleva la franja de hora, ubicación y mapa (ADR-0052). Una app anterior la ignora, pero no recibe el formato (appMinima). */
+    sello: z.object({ ubicacion: z.boolean().optional(), mapa: z.boolean().optional() }).optional(),
+  }),
   z.object({ ...CampoBase, tipo: z.literal("boceto") }),
   z.object({ ...CampoBase, tipo: z.literal("cantidades"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly() }),
-  z.object({ ...CampoBase, tipo: z.literal("firma"), declaracion: z.string().min(1).max(LIMITES_FIRMA.declaracion).optional() }),
+  z.object({ ...CampoBase, tipo: z.literal("firma"), declaracion: z.string().min(1).max(LIMITES_FIRMA.declaracion).optional(), documento: z.enum(["opcional", "obligatorio"]).optional() }),
 ]);
 
 export const VersionFormato = z
@@ -93,6 +113,18 @@ export const VersionFormato = z
               min: z.int().min(0).max(LIMITES.repeticiones).optional(),
               max: z.int().min(1).max(LIMITES.repeticiones).optional(),
             })
+            .optional(),
+          /** Mediciones por fase en filas y columnas (ADR-0050). Las reglas de fondo las aplica `validarDefinicionFormato`. */
+          tablas: z
+            .array(
+              z.object({
+                titulo: z.string().min(1).max(60).optional(),
+                columnas: z.array(z.string().min(1).max(20)).min(1).max(4).readonly(),
+                filas: z.array(z.object({ etiqueta: z.string().min(1).max(60), campos: z.array(ClaveEsquema).min(1).max(4).readonly() })).min(1).max(30).readonly(),
+              }),
+            )
+            .max(4)
+            .readonly()
             .optional(),
           campos: z.array(DefinicionCampo).readonly(),
         }),

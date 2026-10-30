@@ -104,3 +104,49 @@ describe("marcar revisado", () => {
     expect(marcarRevisado(enRevision, "ana", formato, { s: {} })).toMatchObject({ ok: false, motivo: "respuestas_invalidas" });
   });
 });
+
+describe("corregir los tipos nuevos (ADR-0050, regla 8)", () => {
+  const nuevo: VersionFormato = {
+    formato: "prueba",
+    version: 1,
+    secciones: [
+      {
+        clave: "s",
+        titulo: "S",
+        campos: [
+          { clave: "estado", etiqueta: "Estado", tipo: "opcion", opciones: ["Totalmente", "Parcialmente"] },
+          { clave: "sistemas", etiqueta: "Sistemas", tipo: "opciones", opciones: ["CCTV", "UPS"] },
+          { clave: "horario", etiqueta: "Horario", tipo: "horario" },
+        ],
+      },
+    ],
+  };
+
+  it("oficina corrige una selección, varias y un horario, y queda el valor anterior", () => {
+    const r = corregir(
+      nuevo,
+      { s: { estado: "Totalmente", sistemas: { elegidas: ["CCTV"] }, horario: { desde: "08:00", hasta: "09:00" } } },
+      [
+        { seccion: "s", campo: "estado", valor: "Parcialmente" },
+        { seccion: "s", campo: "sistemas", valor: { elegidas: ["CCTV", "UPS"] } },
+        { seccion: "s", campo: "horario", valor: { desde: "08:00", hasta: "10:15" } },
+      ],
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.cambios.map((c) => [c.campo, c.anterior, c.nuevo])).toEqual([
+        ["estado", "Totalmente", "Parcialmente"],
+        ["sistemas", { elegidas: ["CCTV"] }, { elegidas: ["CCTV", "UPS"] }],
+        ["horario", { desde: "08:00", hasta: "09:00" }, { desde: "08:00", hasta: "10:15" }],
+      ]);
+    }
+  });
+
+  it("rechaza lo que el envío rechazaría, y reescribir lo mismo no es un cambio", () => {
+    const antes = { s: { sistemas: { elegidas: ["CCTV"] } } };
+    const mal = corregir(nuevo, antes, [{ seccion: "s", campo: "sistemas", valor: { elegidas: ["Radar"] } }]);
+    expect(mal).toEqual({ ok: false, errores: [{ seccion: "s", campo: "sistemas", codigo: "opcion_invalida" }] });
+    const igual = corregir(nuevo, antes, [{ seccion: "s", campo: "sistemas", valor: { elegidas: ["CCTV"] } }]);
+    expect(igual).toMatchObject({ ok: true, cambios: [] });
+  });
+});
