@@ -4,7 +4,7 @@ PWA de campo: captura sin conexión, cola de envío (outbox), sincronización, c
 
 - **Dependencias:** `dominio`, `protocolo` y `ui`. Sin Motion: el movimiento es CSS (regla 10).
 - **ADR:** 0002, 0003, 0004, 0009, 0015, 0017, 0019, 0022 a 0027, 0030, 0035, 0037, 0038, 0040, 0041, 0044, 0045.
-- **Versión de la app:** `VERSION_APP` 15 en `src/version.ts`. Súbala cuando la app aprenda un tipo de campo nuevo o cambie lo que entiende de la bajada; los formatos que lo usen declaran `appMinima`.
+- **Versión de la app:** `VERSION_APP` 16 en `src/version.ts`. Súbala cuando la app aprenda un tipo de campo nuevo o cambie lo que entiende de la bajada; los formatos que lo usen declaran `appMinima`.
 - La historia de cada iteración está en [`docs/proceso/historia/`](../../docs/proceso/historia/).
 
 ## Cómo se usa
@@ -45,6 +45,11 @@ PWA de campo: captura sin conexión, cola de envío (outbox), sincronización, c
 - Inicio de sesión con contraseña o con llave de acceso (Face ID, huella o PIN). Después de entrar con contraseña, Inicio propone crear la llave (`pantallas/SugerirLlave.tsx`; "Ahora no" se recuerda en ese teléfono).
 - **Contraseña temporal (ADR-0033):** "Crea tu contraseña" dentro del ingreso (`pantallas/IniciarSesion.tsx`). `prepararSesion` lanza `ContrasenaTemporal` y el teléfono no guarda el usuario ni baja nada hasta cambiarla (`sesion.ts`). Errores del servidor en `cuenta.ts`.
 - Un borrador bloqueado con la sesión vencida ofrece "Iniciar sesión" ahí mismo (`pedirSesion` de `Captura`).
+
+### Foto de llegada y controles de formato (iteración 47, ADR-0050 y ADR-0052)
+
+- **Controles:** `captura/Campo.tsx` dibuja `opcion`, `opciones` y `horario` con los componentes de `ui`; `captura/TablaDeCampos.tsx` dibuja una tabla de medidas de la sección donde está el primero de sus campos (cada celda se guarda como `CampoMedida`, con `crearMedida`). La llegada de un horario se **sugiere** (`llegada.ts`: la hora de la foto de un campo con `sello` o, sin foto, el inicio del levantamiento) y nunca se llena sola.
+- **Franja de la foto:** `fotos/sello.ts` tiene las funciones puras con su prueba (`lineasDelSello`, `aGradosMinutosSegundos`, `formatoDeMomento`, `mejorPosicion`, `desplazamientoEnPixeles`) y `dibujarSello`, que pinta el degradado, el texto a la derecha y el mapa con su pin y su atribución. `fotos/useUbicacion.ts` sigue la posición mientras el paso está a la vista; `fotos/prepararSello.ts` pide la hora de red y el mapa con 3 segundos de tope; `procesarFoto(original, ahora, sello?)` dibuja antes de calcular la huella y sigue quitando el EXIF. La organización sale de `ajustes.organizacion`, que se guarda al iniciar sesión.
 
 ### Pantallas (`src/pantallas/`)
 

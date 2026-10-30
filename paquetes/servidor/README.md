@@ -115,6 +115,13 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 - Al verificar un plano se cuentan las páginas que anexaría (`paginasDePlano` en `plataforma/pdf.ts`, los mismos pasos del worker; 0 si no se puede anexar) y se guardan en `archivos.paginas`; `estadoDePlano` las entrega a oficina.
 - Las URL firmadas de descarga del PDF llevan `Content-Disposition: attachment` con un nombre legible (`firmarDescarga(clave, { descargarComo })`): oficina y el portal lo descargan sin salir de la pantalla. Fotos y bocetos van en línea.
 
+### Datos de la visita, número de orden y cédula (ADR-0051)
+
+- Migración `0040`: `clientes.clientes.nit`, `clientes.sitios.ciudad`, `visitas.visitas.solicitante_contacto_id`, `orden_de_servicio` (único por organización) y `referencia_cliente`, `visitas.consecutivos_de_orden` (con aislamiento por organización) e `identidad.usuarios.documento`.
+- `visitas.crear` asigna el número con un upsert que incrementa el consecutivo en la misma transacción; reprogramar lo conserva y cancelar no lo libera. `fijarConsecutivoDeOrdenes` (comando `fijar-consecutivo-de-ordenes`) nunca baja ni repite. El solicitante se valida contra los contactos del mismo cliente por `clientesYSitios.contactos`; uno que oficina quitó conserva el nombre y pierde el celular.
+- `documento` lo pone y lo ve solo quien administra (`fijarDocumentoDeUsuario`); `identidad.documentos` lo da al informe, que lo copia a la versión. El registro dice `documento_cambiado` con `tieneCedula`, nunca el valor.
+- Al publicar un informe, `informes` copia el encabezado (`encabezadoDe`), las cédulas y `revisadoEn` (regla 7).
+
 ### Clientes y visitas (ADR-0035, ADR-0037, ADR-0041)
 
 - `crearCliente` acepta el contacto principal (opcional en la API) y lo crea en la misma transacción.

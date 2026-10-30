@@ -45,6 +45,7 @@ stateDiagram-v2
 
 Lo que el diagrama no dibuja para no llenarlo de flechas:
 
+- **La foto de llegada** ([ADR-0052](../adr/0052-hora-ubicacion-y-mapa-en-la-foto-de-llegada.md), iteración 47): en un campo de fotos con `sello`, mientras el paso está a la vista el teléfono sigue la ubicación y guarda la mejor de los últimos 2 minutos (`paquetes/campo/src/fotos/useUbicacion.ts`). Al tomar la foto, `prepararSello` pide la hora de red (`horaDelServidor`) y el mapa (`mapaDeLlegada`) en paralelo, solo con señal y con 3 segundos como máximo en total, y `procesarFoto` dibuja la franja en la imagen (`fotos/sello.ts:dibujarSello`). El servidor redondea las coordenadas a 3 decimales antes de pedir el mapa a Geoapify y no las registra; el pin exacto lo dibuja el teléfono. Sin señal, sin permiso o con el mapa caído, la foto se guarda igual con lo que haya.
 - **Revocación** ([ADR-0022](../adr/0022-cifrado-local-en-campo.md), [ADR-0009](../adr/0009-identidad-y-acceso.md)): si el servidor ordena borrar a un usuario, `borrarDatosDe` destruye su clave y sus datos desde cualquier estado, también los borradores.
 - **Época nueva** ([ADR-0038](../adr/0038-epoca-de-la-bajada.md)): `reiniciarPorEpoca` y la bajada completa quitan lo `recibido` que el servidor ya no conoce. Nunca tocan borradores ni lo que falta por enviar.
 - **Estado de oficina:** el teléfono guarda aparte (`estadosServidor`) el estado que baja del servidor (`enviado`, `en_revision`, `revisado`) con los comentarios. El levantamiento local sigue en `enviado`.
@@ -119,6 +120,8 @@ stateDiagram-v2
   cerrada --> cancelada : cancelarVisita, oficina
   cancelada --> [*]
 ```
+
+Al programar, `visitas.crear` asigna el siguiente número de orden de servicio con un upsert que incrementa `visitas.consecutivos_de_orden` en la misma transacción (el mismo patrón de las cotizaciones); reprogramar, reasignar y cancelar no lo tocan, y `fijar-consecutivo-de-ordenes` permite seguir desde el último número de TEINS sin bajarlo ([ADR-0051](../adr/0051-encabezado-y-firmas-del-informe.md)). El solicitante se valida contra los contactos del mismo cliente por la interfaz pública de `clientes`.
 
 En el teléfono, una visita se inicia desde su día: la de un día futuro no ofrece «Iniciar levantamiento» y dice «Podrás iniciarla mañana» (o el día con su nombre); el día programado se inicia a cualquier hora, las atrasadas se siguen iniciando y un borrador empezado siempre se continúa. La regla corre en el teléfono con su fecha local (`paquetes/campo/src/visitas.ts:sePuedeIniciar`); el servidor no rechaza nada, así un inicio hecho sin señal nunca se pierde. Si oficina necesita adelantar una visita, la reprograma.
 
@@ -240,7 +243,7 @@ Los avisos no esperan la siguiente bajada: en cada aviso el service worker (`paq
 
 ## 5. Versiones del informe y la cotización
 
-El informe y la cotización tienen un borrador que oficina edita y versiones publicadas que nadie edita (regla 7). Publicar congela una copia con número consecutivo; corregir es publicar la siguiente. Dos cosas avanzan por separado en cada versión: su PDF, que genera el worker ([ADR-0013](../adr/0013-generacion-de-pdf.md)), y si está retirada. La vigente es la de mayor número sin retirar ([ADR-0034](../adr/0034-cancelar-envios-y-retirar-cotizaciones.md)); el portal muestra la de mayor número sin retirar con el PDF listo.
+El informe y la cotización tienen un borrador que oficina edita y versiones publicadas que nadie edita (regla 7). Al publicar un informe, la copia congelada incluye el encabezado de la visita (NIT, ciudad, solicitante, referencia y el número de orden ya escrito) y, por capítulo, la cédula del técnico y del revisor y la hora en que se marcó revisado: son las firmas electrónicas ([ADR-0051](../adr/0051-encabezado-y-firmas-del-informe.md)); el PDF las dibuja en la fila de firmas junto a la firma dibujada de quien acompañó la visita (`paquetes/servidor/src/modulos/informes/index.ts:encabezadoDe`, `paquetes/documentos/src/informe.ts`). Publicar congela una copia con número consecutivo; corregir es publicar la siguiente. Dos cosas avanzan por separado en cada versión: su PDF, que genera el worker ([ADR-0013](../adr/0013-generacion-de-pdf.md)), y si está retirada. La vigente es la de mayor número sin retirar ([ADR-0034](../adr/0034-cancelar-envios-y-retirar-cotizaciones.md)); el portal muestra la de mayor número sin retirar con el PDF listo.
 
 ```mermaid
 stateDiagram-v2

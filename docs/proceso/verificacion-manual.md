@@ -742,6 +742,46 @@ iPhone con la app instalada y los avisos activos, y oficina en el computador.
 
 **Anotar:** si Safari mostró el aviso con la app abierta en el inicio (es lo esperado; lo nuevo es que la pantalla se entera sola).
 
+## Fase 47 · Los formatos reales de TEINS y la foto de llegada (iteración 47)
+
+La fase es larga: se divide en iPhone y oficina. Usa el formato de prueba v10 (`sembrar` lo publica; en el entorno de pruebas viene con el despliegue). Con el formato de TEINS (`visita-tecnica` o `servicio-ups`), publicado con `publicar-formato`, los pasos son los mismos.
+
+**iPhone, con la app instalada, y oficina en el computador**
+
+1. En oficina, cree un cliente con **NIT** y un sitio con **Ciudad**, con un contacto que tenga celular. Programe una visita para hoy con ese **Solicitante** y una **Referencia del cliente**.
+   - Debe: la fila de la visita dice «Orden 0001» (o el número que siga) antes del sitio y la dirección.
+2. En el iPhone, abra la app con señal.
+   - Debe: la tarjeta de la visita dice «Pregunta por <contacto>» con su celular como enlace; al tocarlo, el teléfono ofrece llamar.
+3. Inicie el levantamiento. En la **Llegada**, deje que el iPhone pida el permiso de ubicación (toque «Permitir al usar la app»).
+   - Debe: sobre las tomas, «Buscando ubicación…» y después «Ubicación lista (±N m)».
+4. Tome una foto de **Fachada** con señal.
+   - Debe: la miniatura aparece sin demorarse más de unos segundos. Ábrala: arriba a la derecha, en blanco con sombra sobre un degradado oscuro, «Red: <hora>», «Teléfono: <hora>», las coordenadas en grados con su precisión, la dirección registrada con la ciudad y «<organización> · <cliente> · <sitio>»; arriba a la izquierda, el mapa con un pin y, dentro, «Powered by Geoapify · © OpenMapTiles · © OpenStreetMap contributors».
+   - **Anotar:** si el mapa no sale (en pruebas puede faltar la llave de Geoapify: la foto sale igual, sin mapa), si algún texto se corta o se lee mal sobre una pared clara, si el pin cae donde usted estaba, y cuánto tardó en aparecer la miniatura.
+5. En modo avión, tome otra foto.
+   - Debe: sale igual, con «Red: sin señal», sin mapa y con las coordenadas si el iPhone las tenía. Quite el modo avión.
+6. Revoque el permiso de ubicación (Ajustes › Safari o la app › Ubicación › Nunca) y tome otra foto.
+   - Debe: la línea dice «Sin permiso de ubicación: la foto sale sin coordenadas» y la foto se guarda con las dos horas y sin coordenadas ni mapa.
+7. En **Servicio**: escriba una **Hora de inicio y final**; toque «Ahora» en la llegada; toque la foto de llegada sugerida («Usar … (foto de llegada)») en un horario vacío.
+   - Debe: la salida está deshabilitada hasta que haya llegada; con las dos, el total («3 h 16 min»); una salida menor dice «la salida es al día siguiente».
+8. En el mismo paso: elija varios en «Sistema revisado» y «Otro» con texto; en «Solucionado», elija una y toque la misma otra vez.
+   - Debe: cada fila se toca entera y es de 44 px o más; la elegida de nuevo se quita (es opcional); «Otro» abre su texto.
+9. En **Acometida**, escriba voltajes con coma y con punto, una frecuencia y una letra.
+   - Debe: tres casillas por fila bajo F1, F2 y F3 (en un iPhone de 360 px o menos, las tres en una fila bajo la etiqueta); la letra marca «Escribe solo el número, por ejemplo 12,5».
+10. Envíe el levantamiento. En «Ver lo que enviaste», revise.
+    - Debe: el horario con su total, «CCTV, UPS y otro: …», «Parcialmente».
+
+**Oficina**
+
+11. Tome el levantamiento, corrija una selección y un horario con su motivo, y márquelo revisado.
+    - Debe: los editores muestran las mismas opciones; el historial guarda el valor anterior y el nuevo.
+12. En Administración, ponga la **Cédula** a su cuenta (menú de su fila) y a la del técnico. Abra el informe de esa visita, componga y publique.
+    - Debe: la vista en vivo muestra el encabezado en rejilla con el logo, NIT, orden de servicio, ciudad, solicitante, teléfono y referencia.
+13. Descargue el PDF.
+    - Debe: cada selección con todas sus opciones y cuadritos marcados o vacíos; las medidas en una tabla F1, F2, F3; al final del capítulo, la fila «Técnico que asistió» (con «C. C. …» y «Firmó electrónicamente al enviar, el …»), la firma de quien acompañó y «Supervisado o validado por» (con su cédula y «Validó en TEINS el …»). Sin la cédula puesta, dice «[C. C.]».
+    - **Anotar:** cualquier texto cortado, una tabla que parte la página a la mitad o una fila de firmas que no cabe.
+
+**Anotar siempre:** que la franja con ubicación **no** se active en producción hasta que TEINS tenga la autorización previa de sus técnicos (Ley 1581): el formato real se publica sin `sello.ubicacion` o con la producción apagada.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados de [`historia/00-captura-sin-conexion.md`](historia/00-captura-sin-conexion.md).
