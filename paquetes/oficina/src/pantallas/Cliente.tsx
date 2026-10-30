@@ -120,6 +120,11 @@ export function DetalleCliente({ id }: { id: string }) {
         transicion={nombreDeTransicion("nombre", detalle.id)}
         descripcion={
           <>
+            {detalle.nit && (
+              <span>
+                NIT <b>{detalle.nit}</b>
+              </span>
+            )}
             <span>
               <b>{sitiosActivos.length}</b> {sitiosActivos.length === 1 ? "sitio" : "sitios"}
             </span>
@@ -241,7 +246,7 @@ export function DetalleCliente({ id }: { id: string }) {
                   <b>
                     {s.nombre} {s.archivado && <Insignia tono="anulado">Archivado</Insignia>}
                   </b>
-                  <small>{s.archivado ? `${s.direccion} · archivado por ${s.archivado.por.nombre}` : s.direccion}</small>
+                  <small>{[s.direccion, s.ciudad, s.archivado ? `archivado por ${s.archivado.por.nombre}` : null].filter(Boolean).join(" · ")}</small>
                 </div>
                 {detalle.archivado ? null : s.archivado ? (
                   <Boton
@@ -436,8 +441,10 @@ type Sitio = Detalle["sitios"][number];
 function EditarCliente({ detalle, alCerrar, alGuardar }: { detalle: Detalle; alCerrar: () => void; alGuardar: () => void }) {
   const formulario = useId();
   const [nombre, setNombre] = useState(detalle.nombre);
+  const [nit, setNit] = useState(detalle.nit ?? "");
   const [falta, setFalta] = useState<string | undefined>();
-  const guardar = useAccionDeProgramacion(() => cliente.llamar("editarCliente", { parametros: { id: detalle.id }, cuerpo: { nombre: nombre.trim() } }));
+  // Vacío quita el NIT; el informe dirá «[NIT]» (ADR-0051).
+  const guardar = useAccionDeProgramacion(() => cliente.llamar("editarCliente", { parametros: { id: detalle.id }, cuerpo: { nombre: nombre.trim(), nit: nit.trim() === "" ? null : nit.trim() } }));
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -474,6 +481,7 @@ function EditarCliente({ detalle, alCerrar, alGuardar }: { detalle: Detalle; alC
     >
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
         <CampoTexto etiqueta="Nombre del cliente" valorInicial={detalle.nombre} onCambio={(t) => (setNombre(t), setFalta(undefined))} error={falta} />
+        <CampoTexto etiqueta="NIT" ejemplo="Opcional" valorInicial={detalle.nit ?? ""} onCambio={setNit} />
         <p className="ayuda">Queda registrado quién lo cambió y cuándo. Los informes y cotizaciones publicados no cambian: son copias.</p>
         {guardar.isError && <Aviso tono="error">{mensajeDeCliente(guardar.error)}</Aviso>}
       </form>
@@ -485,8 +493,11 @@ function EditarSitio({ clienteId, sitio, alCerrar, alGuardar }: { clienteId: str
   const formulario = useId();
   const [nombre, setNombre] = useState(sitio.nombre);
   const [direccion, setDireccion] = useState(sitio.direccion);
+  const [ciudad, setCiudad] = useState(sitio.ciudad ?? "");
   const [errores, setErrores] = useState<{ nombre?: string; direccion?: string }>({});
-  const guardar = useAccionDeProgramacion(() => cliente.llamar("editarSitio", { parametros: { id: clienteId, sitioId: sitio.id }, cuerpo: { nombre: nombre.trim(), direccion: direccion.trim() } }));
+  const guardar = useAccionDeProgramacion(() =>
+    cliente.llamar("editarSitio", { parametros: { id: clienteId, sitioId: sitio.id }, cuerpo: { nombre: nombre.trim(), direccion: direccion.trim(), ciudad: ciudad.trim() === "" ? null : ciudad.trim() } }),
+  );
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -522,6 +533,7 @@ function EditarSitio({ clienteId, sitio, alCerrar, alGuardar }: { clienteId: str
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
         <CampoTexto etiqueta="Nombre del sitio" valorInicial={sitio.nombre} onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
         <CampoTexto etiqueta="Dirección" valorInicial={sitio.direccion} onCambio={(t) => (setDireccion(t), setErrores((e) => sinError(e, "direccion")))} error={errores.direccion} />
+        <CampoTexto etiqueta="Ciudad" ejemplo="Opcional" valorInicial={sitio.ciudad ?? ""} onCambio={setCiudad} />
         {guardar.isError && <Aviso tono="error">{mensajeDeCliente(guardar.error)}</Aviso>}
       </form>
     </Dialogo>

@@ -223,13 +223,18 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
   const [nombre, setNombre] = useState("");
   const [sitio, setSitio] = useState("");
   const [direccion, setDireccion] = useState("");
+  // NIT y ciudad son opcionales: salen en el encabezado del informe y, si faltan, el informe lo dice (ADR-0051).
+  const [nit, setNit] = useState("");
+  const [ciudad, setCiudad] = useState("");
   const [errores, setErrores] = useState<{ nombre?: string; sitio?: string; direccion?: string }>({});
   const [erroresContacto, setErroresContacto] = useState<ErroresDeContacto>({});
   const [error, setError] = useState<string | null>(null);
   // El contacto principal va con el cliente (iteración 29): sin él, los documentos no le llegan a nadie.
   const contacto = useCamposDeContacto(null, { algunCanal: true, recibeCotizaciones: true });
   const crear = useAccionDeProgramacion(() =>
-    cliente.llamar("crearCliente", { cuerpo: { nombre: nombre.trim(), sitio: { nombre: sitio.trim(), direccion: direccion.trim() }, contacto: contacto.datos() } }),
+    cliente.llamar("crearCliente", {
+      cuerpo: { nombre: nombre.trim(), ...(nit.trim() ? { nit: nit.trim() } : {}), sitio: { nombre: sitio.trim(), direccion: direccion.trim(), ...(ciudad.trim() ? { ciudad: ciudad.trim() } : {}) }, contacto: contacto.datos() },
+    }),
   );
 
   async function enviar(evento: FormEvent) {
@@ -274,7 +279,10 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
         <fieldset className="bloque-form">
           <legend>Cliente</legend>
-          <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" ejemplo="Como sale en el informe" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
+          <div className="fila-campos">
+            <CampoTexto etiqueta="Nombre del cliente" nombre="cliente" ejemplo="Como sale en el informe" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
+            <CampoTexto etiqueta="NIT" nombre="nit" ejemplo="Opcional" valorInicial="" onCambio={setNit} />
+          </div>
         </fieldset>
         <fieldset className="bloque-form">
           <legend>Primer sitio</legend>
@@ -282,6 +290,7 @@ function NuevoCliente({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (c
             <CampoTexto etiqueta="Nombre del sitio" nombre="sitio" ejemplo="Por ejemplo: Torre A" valorInicial="" onCambio={(t) => (setSitio(t), setErrores((e) => sinError(e, "sitio")))} error={errores.sitio} />
             <CampoTexto etiqueta="Dirección del sitio" nombre="direccion" valorInicial="" onCambio={(t) => (setDireccion(t), setErrores((e) => sinError(e, "direccion")))} error={errores.direccion} />
           </div>
+          <CampoTexto etiqueta="Ciudad" nombre="ciudad" ejemplo="Opcional" valorInicial="" onCambio={setCiudad} />
         </fieldset>
         <fieldset className="bloque-form">
           <legend>Contacto principal</legend>
@@ -298,9 +307,10 @@ export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nomb
   const formulario = useId();
   const [nombre, setNombre] = useState("");
   const [direccion, setDireccion] = useState("");
+  const [ciudad, setCiudad] = useState("");
   const [errores, setErrores] = useState<{ nombre?: string; direccion?: string }>({});
   const [error, setError] = useState<string | null>(null);
-  const agregar = useAccionDeProgramacion(() => cliente.llamar("agregarSitio", { parametros: { id: c.id }, cuerpo: { nombre: nombre.trim(), direccion: direccion.trim() } }));
+  const agregar = useAccionDeProgramacion(() => cliente.llamar("agregarSitio", { parametros: { id: c.id }, cuerpo: { nombre: nombre.trim(), direccion: direccion.trim(), ...(ciudad.trim() ? { ciudad: ciudad.trim() } : {}) } }));
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -341,6 +351,7 @@ export function AgregarSitio({ c, alCerrar, alAgregar }: { c: { id: string; nomb
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
         <CampoTexto etiqueta="Nombre del sitio" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
         <CampoTexto etiqueta="Dirección" valorInicial="" onCambio={(t) => (setDireccion(t), setErrores((e) => sinError(e, "direccion")))} error={errores.direccion} />
+        <CampoTexto etiqueta="Ciudad" ejemplo="Opcional" valorInicial="" onCambio={setCiudad} />
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>

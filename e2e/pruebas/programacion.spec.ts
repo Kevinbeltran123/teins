@@ -37,9 +37,14 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await expect(o.getByText("De 9:00 a. m. a 11:00 a. m.")).toBeVisible();
   await o.getByLabel("Buscar técnico").fill(tecnico.nombre);
   await o.getByRole("checkbox", { name: tecnico.nombre }).check();
+  // Quien pidió la visita y la referencia del cliente (iteración 47, ADR-0051): opcionales, el solicitante es un contacto del cliente.
+  await o.getByLabel("Solicitante").selectOption({ label: "Contacto E2E" });
+  await o.getByLabel("Referencia del cliente").fill("TKT-E2E-47");
   await o.getByRole("button", { name: /^Programar con / }).click();
   const fila = o.getByRole("row").filter({ hasText: cliente });
   await expect(fila).toContainText("9:00 a. m. a 11:00 a. m.");
+  // La fila lleva el número de orden de servicio, que asigna el servidor al programar.
+  await expect(fila).toContainText(/Orden \d{4,} · Sede norte/);
   // Las visitas van agrupadas por día: la de hoy queda bajo "Hoy · …" (rediseño de oficina, iteración 23).
   const diaDe = () => o.locator("tbody").filter({ has: fila }).getByText(/^Hoy · /);
   await expect(diaDe()).toBeVisible();
@@ -52,6 +57,8 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   const siguiente = t.getByRole("region", { name: "Siguiente visita" });
   await expect(siguiente.getByText(cliente)).toBeVisible();
   await expect(siguiente.getByText("Hoy")).toBeVisible();
+  // El técnico sabe por quién preguntar al llegar.
+  await expect(siguiente.getByText("Pregunta por Contacto E2E")).toBeVisible();
 
   // El técnico ya empezó algo en esa visita: una visita de otro día no se inicia (iteración 46), así que se empieza hoy.
   await siguiente.getByRole("button", { name: "Iniciar levantamiento" }).click();

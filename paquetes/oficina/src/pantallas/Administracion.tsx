@@ -40,6 +40,7 @@ import {
   Bell,
   LogOut,
   History,
+  IdCard,
   useNotificar,
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
@@ -307,6 +308,8 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
   const consulta = useQuery(consultasDeAdministracion.usuarios());
   const [nuevos, setNuevos] = useState<string[]>([]);
   const [pendiente, setPendiente] = useState<Pendiente | null>(null);
+  // La cédula de quien firma los informes (ADR-0051): la pone y la ve solo quien administra.
+  const [editandoCedula, setEditandoCedula] = useState<Usuario | null>(null);
   const [credencial, setCredencial] = useState<{ nombre: string; usuario: string; contrasena: string; entrega: EntregaDeUsuario } | null>(null);
   const notificar = useNotificar();
   // Lo cambiado queda resaltado en su lugar, sin saltar arriba, y la notificación dice qué pasó (iteración 27).
@@ -357,6 +360,8 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
                       Administra{u.segundoFactor ? "" : <strong style={{ color: "var(--alerta)" }}> · sin segundo factor</strong>}
                     </span>
                   )}
+                  {/* Sin cédula, el informe dice «[C. C.]» donde firma esta persona: se completa desde su menú. */}
+                  {activo && !u.documento && <span className="sub">Sin cédula</span>}
                 </CeldaTabla>
                 <CeldaTabla>
                   {activo ? (
@@ -378,10 +383,11 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
                       Reactivar usuario
                     </Boton>
                   )}
-                  {activo && !propio && (
+                  {activo && (
                     <MenuAcciones
                       etiqueta={`Más acciones para ${u.nombre}`}
                       opciones={[
+                        { texto: u.documento ? "Cambiar cédula" : "Poner cédula", icono: IdCard, alElegir: () => setEditandoCedula(u) },
                         // La propia se cambia desde "Mi cuenta" (24d): restablecerla aquí quitaría el segundo factor de quien administra.
                         !propio && { texto: "Restablecer contraseña", icono: KeyRound, alElegir: () => setPendiente({ accion: "restablecer", u }) },
                         u.rol === "oficina" &&
@@ -404,6 +410,17 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
             setCreando(false);
             setNuevos((n) => [r.id, ...n]);
             setCredencial({ nombre: r.nombre, usuario: r.usuario, contrasena: r.contrasena, entrega: "creado" });
+          }}
+        />
+      )}
+
+      {editandoCedula && (
+        <EditarCedula
+          u={editandoCedula}
+          alCerrar={() => setEditandoCedula(null)}
+          alGuardar={(texto) => {
+            cambiado(editandoCedula, texto);
+            setEditandoCedula(null);
           }}
         />
       )}
@@ -512,15 +529,17 @@ function NuevoUsuario({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (r
   const [nombre, setNombre] = useState("");
   const [usuario, setUsuario] = useState("");
   const [rol, setRol] = useState<Rol>("tecnico");
-  const [errores, setErrores] = useState<{ nombre?: string; usuario?: string }>({});
+  const [documento, setDocumento] = useState("");
+  const [errores, setErrores] = useState<{ nombre?: string; usuario?: string; documento?: string }>({});
   const [error, setError] = useState<string | null>(null);
-  const crear = useAccion(() => cliente.llamar("crearUsuarioAdministrado", { cuerpo: { nombre: nombre.trim(), usuario: usuario.trim(), rol } }));
+  const crear = useAccion(() => cliente.llamar("crearUsuarioAdministrado", { cuerpo: { nombre: nombre.trim(), usuario: usuario.trim(), rol, ...(documento.trim() ? { documento: documento.trim() } : {}) } }));
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     const faltan = {
       ...(nombre.trim() === "" ? { nombre: "Escriba el nombre completo." } : {}),
       ...(!USUARIO_VALIDO.test(usuario.trim()) ? { usuario: "De 3 a 30 letras minúsculas, números, punto o guion, sin espacios." } : {}),
+      ...(documento.trim() !== "" && !CEDULA_VALIDA.test(documento.trim()) ? { documento: MENSAJE_DE_CEDULA } : {}),
     };
     setErrores(faltan);
     if (Object.keys(faltan).length > 0) enfocarPrimerError(formulario);
@@ -555,7 +574,61 @@ function NuevoUsuario({ alCerrar, alCrear }: { alCerrar: () => void; alCrear: (r
         <CampoTexto etiqueta="Nombre completo" nombre="nombre" valorInicial="" onCambio={(t) => (setNombre(t), setErrores((e) => sinError(e, "nombre")))} error={errores.nombre} />
         <CampoTexto etiqueta="Usuario para iniciar sesión" nombre="nuevo-usuario" valorInicial="" onCambio={(t) => (setUsuario(t), setErrores((e) => sinError(e, "usuario")))} error={errores.usuario} />
         <GrupoDeOpciones etiqueta="Rol" valor={rol} onCambio={setRol} opciones={[{ valor: "tecnico", texto: "Técnico (campo)" }, { valor: "oficina", texto: "Oficina" }]} />
+        <CampoTexto etiqueta="Cédula" nombre="cedula" ejemplo="Opcional" modoEntrada="numeric" valorInicial="" onCambio={(t) => (setDocumento(t), setErrores((e) => sinError(e, "documento")))} error={errores.documento} />
+        <p className="ayuda">Sale en la firma de los informes que esta persona atiende o revisa. Solo la ve quien administra.</p>
         {error && <Aviso tono="error">{error}</Aviso>}
+      </form>
+    </Dialogo>
+  );
+}
+
+const CEDULA_VALIDA = /^\d{5,12}$/;
+const MENSAJE_DE_CEDULA = "Escriba de 5 a 12 dígitos, sin puntos ni espacios.";
+
+/** Pone, cambia o quita la cédula de una persona (ADR-0051). El registro dice que cambió, nunca el valor (regla 18). */
+function EditarCedula({ u, alCerrar, alGuardar }: { u: Usuario; alCerrar: () => void; alGuardar: (texto: string) => void }) {
+  const formulario = useId();
+  const [documento, setDocumento] = useState(u.documento ?? "");
+  const [falta, setFalta] = useState<string | undefined>();
+  const guardar = useAccion(() => cliente.llamar("fijarDocumentoDeUsuario", { parametros: { id: u.id }, cuerpo: { documento: documento.trim() === "" ? null : documento.trim() } }));
+
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    if (documento.trim() !== "" && !CEDULA_VALIDA.test(documento.trim())) {
+      setFalta(MENSAJE_DE_CEDULA);
+      enfocarPrimerError(formulario);
+      return;
+    }
+    try {
+      await guardar.mutateAsync(undefined);
+      alGuardar(documento.trim() === "" ? `Cédula quitada: ${u.nombre}` : `Cédula guardada: ${u.nombre}`);
+    } catch {
+      // El error queda a la vista en el diálogo.
+    }
+  }
+
+  return (
+    <Dialogo
+      forma="formulario"
+      titulo="Cédula"
+      subtitulo={u.nombre}
+      cerrable={!guardar.isPending}
+      alCerrar={alCerrar}
+      pie={
+        <>
+          <Boton onClick={alCerrar} disabled={guardar.isPending}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" form={formulario} variante="principal" cargando={guardar.isPending}>
+            Guardar cédula
+          </Boton>
+        </>
+      }
+    >
+      <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-4">
+        <CampoTexto etiqueta="Cédula" modoEntrada="numeric" valorInicial={u.documento ?? ""} onCambio={(t) => (setDocumento(t), setFalta(undefined))} error={falta} />
+        <p className="ayuda">Sale en la firma de los informes que esta persona atiende o revisa. Queda registrado quién la cambió y cuándo, pero no su valor. Déjela vacía para quitarla.</p>
+        {guardar.isError && <Aviso tono="error">{mensajeDeAdministracion(guardar.error)}</Aviso>}
       </form>
     </Dialogo>
   );

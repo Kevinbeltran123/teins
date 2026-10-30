@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, fotosReferenciadas, sinRespuestasHuerfanas, type VersionFormato } from "@teins/dominio";
-import { Activity, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useMinuto, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
+import { Activity, UserRound, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useMinuto, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
@@ -417,6 +417,29 @@ const iniciales = (nombre: string) =>
     .map((p) => p[0]!.toUpperCase())
     .join("");
 
+/** «+573105550142» → «+57 310 555 0142»: como se lee y se marca. */
+const celularLegible = (e164: string) => (e164.startsWith("+57") && e164.length === 13 ? `+57 ${e164.slice(3, 6)} ${e164.slice(6, 9)} ${e164.slice(9)}` : e164);
+
+/**
+ * A quién buscar al llegar (ADR-0051): quien pidió la visita, con su celular para llamarlo. Sin solicitante no se
+ * dice nada; sin celular, solo el nombre.
+ */
+function Solicitante({ visita }: { visita: VisitaLocal }) {
+  const s = visita.solicitante;
+  if (!s) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-x-1.5">
+      <UserRound aria-hidden className="size-3.5 shrink-0" />
+      <span>{`Pregunta por ${s.nombre}${s.cargo ? ` (${s.cargo})` : ""}`}</span>
+      {s.celular && (
+        <a href={`tel:${s.celular}`} className="inline-flex min-h-11 items-center font-medium text-superficie focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco">
+          {celularLegible(s.celular)}
+        </a>
+      )}
+    </span>
+  );
+}
+
 /**
  * Punto focal (DESIGN.md; prototipos/base-visual, campo): la visita de ahora en una tarjeta de borde fino, con
  * cuándo es en azul, el avance del levantamiento por pasos y la única acción principal.
@@ -447,6 +470,7 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
           <MapPin aria-hidden className="mt-0.5 size-3.5 shrink-0" />
           {visita.sitio.nombre} · {visita.sitio.direccion}
         </span>
+        <Solicitante visita={visita} />
         <span>{visita.motivo}</span>
         {abierta && (
           <span className="flex items-center gap-1.5">
