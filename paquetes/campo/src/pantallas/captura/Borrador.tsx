@@ -2,20 +2,22 @@ import { useContext, useEffect, useRef, useState, type ReactNode, type RefObject
 import { pasosDe, type Paso } from "../../recorrido";
 import { cifrasDelBorrador, claveDeError, progreso, resumenDePaso } from "../../resumen";
 import { useLiveQuery } from "dexie-react-hooks";
-import { bloques, claveDeRepeticion, esFirma, leerClave, fotosReferenciadas, nombreDeDato, rutaLegible, sinRespuestasHuerfanas, type CodigoErrorValidacion, type DefinicionCampo, type ErrorValidacion, type Valor, type VersionFormato } from "@teins/dominio";
+import { bloques, claveDeRepeticion, type DefinicionSeccion, type TablaDeMedidas, esFirma, leerClave, fotosReferenciadas, nombreDeDato, rutaLegible, sinRespuestasHuerfanas, type CodigoErrorValidacion, type DefinicionCampo, type ErrorValidacion, type Valor, type VersionFormato } from "@teins/dominio";
 import { Aviso, BarraDePaso, Boton, BotonSiguiente, CifrasDeRepaso, EncabezadoDePaso, FilaDeRepaso, FranjaSincronizacion, ListaRecorrido, PasoDelRecorrido, Repaso, conTransicion, type EstadoDePaso, CircleAlert, Confirmacion, Dialogo, ListaFaltantes, type DatoFaltante, Send, Smartphone, TriangleAlert, Trash } from "@teins/ui";
 import { db, repositorio } from "../../datos/instancia";
-import { cuantosPorSubir } from "../../datos/lecturasDeCaptura";
+import { cuantosPorSubir, momentosDeArchivos } from "../../datos/lecturasDeCaptura";
+import { huellasConSello, sugerenciaDeLlegada } from "../../llegada";
 import type { LevantamientoLocal } from "../../datos/modelo";
 import { mensajeDeValidacion } from "../../mensajes";
 import { useServidorAlcanzable } from "../../dispositivo/useConexion";
 import { sincronizarEnSegundoPlano } from "../../sincronizacion/disparar";
 import { PasoCroquis } from "./Boceto";
 import { Campo } from "./Campo";
+import { TablaDeCampos } from "./TablaDeCampos";
 import { MiniaturaDeFirma, soloHora } from "./Firma";
 import { MiniaturasDeFotos } from "./Fotos";
 import { Repeticion, Repeticiones } from "./Repeticiones";
-import { anclaDeDato, anclaDeSeccion, CabeceraDeLaVisita, PasoPropio, VigilarGuardado } from "./contexto";
+import { anclaDeDato, anclaDeSeccion, CabeceraDeLaVisita, PasoPropio, SugerenciaDeLlegada, VigilarGuardado } from "./contexto";
 
 /** Lleva al dato del error y le da el foco; si es de una sección (faltan repeticiones), a la sección. */
 function irAlError(e: ErrorValidacion) {
@@ -77,6 +79,10 @@ export function Borrador({
   const cabecera = useContext(CabeceraDeLaVisita);
   const enLinea = useServidorAlcanzable();
   const porSubir = useLiveQuery(() => cuantosPorSubir(db), []);
+  // La llegada que se sugiere en un campo de horario sale de la foto de llegada (ADR-0050): solo se sugiere.
+  const deLlegada = huellasConSello(formato, actual.respuestas);
+  const tomadasEn = useLiveQuery(() => momentosDeArchivos(db, deLlegada), [deLlegada.join()]);
+  const llegada = sugerenciaDeLlegada(formato, actual.respuestas, actual.creadoEn, tomadasEn ?? new Map());
   // Qué datos ya se le señalaron al técnico (al tocar «Siguiente» o «Enviar»): lo que se muestra sale siempre de la
   // validación de ahora, así un tablero quitado o una foto devuelta con «Deshacer» dejan de pedirse (iteración 42).
   const [senalados, setSenalados] = useState<ReadonlySet<string> | null>(null);
@@ -244,22 +250,38 @@ export function Borrador({
     throw new Error(resultado.motivo);
   }
 
-  const campos = (lista: readonly DefinicionCampo[], clave: string) =>
-    lista.map((campo) => (
-      <Campo
-        // Con la sección: dos pasos seguidos con un campo de la misma clave no comparten lo escrito (iteración 42).
-        key={`${clave}.${campo.clave}`}
-        id={id}
-        seccion={clave}
-        campo={campo}
-        // Cada paso y cada tablero montan sus campos al abrirse: parten de lo guardado, no de lo que había al abrir el
-        // borrador. Si no, volver a un paso lo mostraba vacío y agregar un material borraba los demás (iteración 42).
-        inicial={actual.respuestas[clave]?.[campo.clave]}
-        actual={actual.respuestas[clave]?.[campo.clave]}
-        error={porClave.get(claveDeError(clave, campo.clave))}
-        alGuardar={() => alGuardar(clave, campo.clave)}
-      />
-    ));
+  /**
+   * Los campos de un paso o de una repetición. Los que pertenecen a una tabla de medidas de la sección se dibujan juntos,
+   * como la tabla, donde está el primero de ellos; los demás se saltan (ADR-0050). El progreso no cambia: sale de la
+   * validación, que sigue viendo un campo por celda.
+   */
+  const campos = (lista: readonly DefinicionCampo[], clave: string, seccion: DefinicionSeccion) => {
+    const enLista = new Map(lista.map((c) => [c.clave, c] as const));
+    const dibujadas = new Set<TablaDeMedidas>();
+    return lista.map((campo) => {
+      const tabla = seccion.tablas?.find((t) => t.filas.some((f) => f.campos.includes(campo.clave)));
+      if (tabla) {
+        if (dibujadas.has(tabla)) return null;
+        dibujadas.add(tabla);
+        return <TablaDeCampos key={`${clave}.tabla.${campo.clave}`} id={id} seccion={clave} tabla={tabla} campos={enLista} respuestas={actual.respuestas[clave]} alGuardar={(c) => alGuardar(clave, c)} />;
+      }
+      return (
+        <Campo
+          // Con la sección: dos pasos seguidos con un campo de la misma clave no comparten lo escrito (iteración 42).
+          key={`${clave}.${campo.clave}`}
+          id={id}
+          seccion={clave}
+          campo={campo}
+          // Cada paso y cada tablero montan sus campos al abrirse: parten de lo guardado, no de lo que había al abrir el
+          // borrador. Si no, volver a un paso lo mostraba vacío y agregar un material borraba los demás (iteración 42).
+          inicial={actual.respuestas[clave]?.[campo.clave]}
+          actual={actual.respuestas[clave]?.[campo.clave]}
+          error={porClave.get(claveDeError(clave, campo.clave))}
+          alGuardar={() => alGuardar(clave, campo.clave)}
+        />
+      );
+    });
+  };
   const total = pasos.length + 1;
   const fotosDelBorrador = fotosReferenciadas(sinRespuestasHuerfanas(actual).respuestas).length;
   const contador = `${hechos}/${pasos.length}`;
@@ -342,7 +364,7 @@ export function Borrador({
               abrir={(r) => ir({ tipo: "repeticion", seccion: paso.seccion.clave, repeticion: r })}
             />
           ) : (
-            <PasoPropio.Provider value={paso.campos.length === 1}>{campos(paso.campos, paso.seccion.clave)}</PasoPropio.Provider>
+            <PasoPropio.Provider value={paso.campos.length === 1}>{campos(paso.campos, paso.seccion.clave, paso.seccion)}</PasoPropio.Provider>
           )}
         </main>
         {/* Sin firma, la acción del paso es entregar el teléfono (la pone la firma). */}
@@ -371,7 +393,7 @@ export function Borrador({
         volver={alPaso}
         abrirSiguiente={() => ir({ tipo: "repeticion", seccion: seccion.clave, repeticion: lista[lista.indexOf(r) + 1]!.id })}
       >
-        {campos(seccion.campos, claveDeRepeticion(seccion.clave, r.id))}
+        {campos(seccion.campos, claveDeRepeticion(seccion.clave, r.id), seccion)}
       </Repeticion>
     ) : (
       // Se quitó (o no existe): de vuelta a la lista de su sección.
@@ -437,6 +459,7 @@ export function Borrador({
   }, [faltantesDelPaso, faltanDelPaso.length]);
   return (
     <VigilarGuardado.Provider value={vigilar}>
+      <SugerenciaDeLlegada.Provider value={llegada}>
       {pantalla}
       {/* Fijo arriba: el técnico puede estar lejos del principio de la página cuando falla. */}
       {noGuardo && (
@@ -518,6 +541,7 @@ export function Borrador({
           <p>Después de enviar ya no podrás editar este levantamiento. Oficina lo revisará.</p>
         </Confirmacion>
       )}
+      </SugerenciaDeLlegada.Provider>
     </VigilarGuardado.Provider>
   );
 }
