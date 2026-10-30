@@ -240,7 +240,8 @@ test("revisar en serie con el teclado: J, Enter, T, R y S; «?» muestra los ata
   const filas = o.getByRole("tabpanel").getByRole("row");
   await expect.poll(() => filas.count()).toBeGreaterThan(0);
   // Corrido suelto, sin las pruebas de campo antes, no hay nada que revisar.
-  test.skip((await filas.count()) < 3, "No hay levantamientos esperando revisión");
+  // `filas` cuenta también la fila del encabezado: hacen falta tres levantamientos para pasar de uno a otro con «S».
+  test.skip((await filas.count()) < 4, "No hay levantamientos esperando revisión");
 
   await o.keyboard.press("?");
   const atajos = o.getByRole("dialog", { name: "Atajos del teclado" });
@@ -264,6 +265,9 @@ test("revisar en serie con el teclado: J, Enter, T, R y S; «?» muestra los ata
   await o.keyboard.press("Enter");
   await expect(revision.getByText("Revisado", { exact: true })).toBeVisible();
 
+  // «S» solo funciona cuando la fila «Siguiente» ya cargó (depende de la lista de pendientes): se espera a verla, como haría
+  // una persona, y no se presiona en cuanto aparece «Revisado» (a veces la lista llega después).
+  await expect(o.getByRole("button", { name: /Siguiente:/ })).toBeVisible();
   await o.keyboard.press("s");
   await expect.poll(() => o.url()).not.toBe(primero);
   await expect(revision.getByText("Esperando revisión")).toBeVisible();
