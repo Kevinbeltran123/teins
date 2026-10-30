@@ -120,10 +120,14 @@ describe("visitas asignadas", () => {
       tipo: "visita",
       visita: {
         id: visitaId,
-        cliente: { nombre: "Cliente ficticio" },
-        sitio: { nombre: "Sede de prueba", direccion: "Calle [N] # [N]-[N]" },
+        // Lo que falta sale vacío, no inventado (ADR-0051): sin NIT, sin ciudad, sin solicitante ni referencia.
+        cliente: { nombre: "Cliente ficticio", nit: null },
+        sitio: { nombre: "Sede de prueba", direccion: "Calle [N] # [N]-[N]", ciudad: null },
         motivo: "Mantenimiento",
         programadaPara: "2026-09-30",
+        ordenDeServicio: expect.any(Number),
+        referencia: null,
+        solicitante: null,
         // Sin horario: todo el día (ADR-0037).
         horaInicio: null,
         horaFin: null,

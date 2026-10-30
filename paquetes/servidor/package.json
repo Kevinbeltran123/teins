@@ -15,6 +15,7 @@
     "desactivar-usuario": "tsx --env-file=.env src/cli/desactivar-usuario.ts",
     "crear-cliente": "tsx --env-file=.env src/cli/crear-cliente.ts",
     "crear-visita": "tsx --env-file=.env src/cli/crear-visita.ts",
+    "fijar-consecutivo-de-ordenes": "tsx --env-file=.env src/cli/fijar-consecutivo-de-ordenes.ts",
     "reasignar-visita": "tsx --env-file=.env src/cli/reasignar-visita.ts",
     "publicar-formato": "tsx --env-file=.env src/cli/publicar-formato.ts",
     "publicar-simbolos": "tsx --env-file=.env src/cli/publicar-simbolos.ts",

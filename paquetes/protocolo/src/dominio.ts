@@ -10,7 +10,7 @@ export const Huella = z.string().regex(HUELLA_SHA256).meta({ id: "Huella", descr
 export const Uuid = z.uuid();
 export const Fecha = z.iso.datetime({ offset: true });
 /** Hora del día como "HH:MM" (ADR-0050). */
-export const Hora = z.string().regex(HORA_HHMM);
+const Hora = z.string().regex(HORA_HHMM);
 
 /** Línea de cantidad (F9): la forma; la regla 6 (cantidad positiva, unidad permitida) la aplica `dominio`. */
 export const LineaCantidad = z

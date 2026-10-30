@@ -29,6 +29,7 @@ export type TipoEvento =
   | "usuario_creado"
   | "contrasena_restablecida"
   | "administrador_cambiado"
+  | "documento_cambiado"
   | "segundo_factor_activado"
   | "llave_de_acceso_creada"
   | "llave_de_acceso_quitada"

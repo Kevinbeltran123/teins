@@ -54,6 +54,7 @@ export { enviarLevantamiento } from "./estados";
 export { validarDefinicionFormato } from "./meta-esquema";
 export { versionesVigentes } from "./vigencia";
 export { describirValor } from "./describir";
+export { numeroDeOrden } from "./orden";
 export type { BorradorInforme, ContenidoVersion, ErrorInforme, LevantamientoParaInforme, Plano } from "./informe";
 export { LIMITES_INFORME, validarBorrador, validarParaPublicar } from "./informe";
 export type { CapituloSeleccionable, SeleccionInforme } from "./seleccion";
