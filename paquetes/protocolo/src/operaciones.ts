@@ -1754,6 +1754,33 @@ export const operaciones = {
     respuesta: UrlDeArchivo,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
   },
+  // La foto de llegada (iteración 47, ADR-0052)
+  horaDelServidor: {
+    metodo: "GET",
+    ruta: "/api/hora",
+    resumen: "La hora oficial del servidor, la «hora de red» de la franja de la foto de llegada",
+    estadoExito: 200,
+    respuesta: z.object({ ahora: Fecha }),
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  mapaDeLlegada: {
+    metodo: "GET",
+    ruta: "/api/mapa",
+    resumen:
+      "El mapa de la foto de llegada, como imagen incrustada. Las coordenadas se redondean a 3 decimales antes de pedirlo y nunca se registran; la llave del servicio no sale del servidor. 30 por minuto por técnico",
+    consulta: z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) }),
+    estadoExito: 200,
+    respuesta: z.object({
+      /** `data:` con el JPEG: campo la dibuja en el lienzo sin problemas de origen. */
+      imagen: z.string().startsWith("data:image/"),
+      /** El punto central ya redondeado: campo calcula desde él dónde dibujar el pin exacto. */
+      centro: z.object({ lat: z.number(), lon: z.number() }),
+      zoom: z.number(),
+      /** Va dentro del mapa, al tamaño final: en una foto reenviada no hay enlace que seguir. */
+      atribucion: z.string(),
+    }),
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida", "demasiadas_solicitudes", "no_disponible"],
+  },
   // Avisos push (ADR-0023)
   configuracionAvisos: {
     metodo: "GET",

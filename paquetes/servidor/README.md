@@ -143,6 +143,13 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 - `crearCotizacion` toma las cantidades de los levantamientos revisados (`levantamientos.cantidadesRevisadas`) con los precios vigentes; `publicarCotizacion` congela líneas, impuestos y totales, encola `cotizaciones.generarPdf` y programa los envíos con el mensaje de tipo `cotizacion`.
 - `retirarVersionDeCotizacion` (administración, con motivo) marca `retirada_en`, cancela sus envíos en cola y deja vigente la anterior no retirada (`todasRetiradas` en la lista).
 
+### La foto de llegada (ADR-0052)
+
+- `GET /api/hora` da la hora oficial del servidor, la «hora de red» de la franja. `GET /api/mapa?lat&lon` da el mapa como imagen incrustada (`data:`) con su `centro`, `zoom` y `atribucion`; solo el técnico los pide.
+- El mapa lo genera Geoapify Static Maps (`osm-bright`, zoom 16, 400 × 400 a escala 2, JPEG) desde `src/modulos/mapas`. El servidor **redondea las coordenadas a 3 decimales** antes de pedirlo, la llave (`GEOAPIFY_LLAVE`) nunca sale del servidor y las rutas de `/api/mapa` no entran en los registros de solicitudes, porque llevan las coordenadas en la dirección.
+- Límite de 30 mapas por minuto y por técnico (`demasiadas_solicitudes`). Sin la llave, o si Geoapify falla o tarda más de 2,5 s, responde `no_disponible` (503) y la foto sale sin mapa.
+- `GEOAPIFY_URL` solo cambia en pruebas (`pruebas/llegada.test.ts` levanta un Geoapify simulado). `GEOAPIFY_LLAVE` va en `.env.example` sin valor y en Railway; nunca en el repositorio.
+
 ### Envíos al cliente (ADR-0028, ADR-0034, ADR-0036, ADR-0047)
 
 - Los contactos viven en `clientes.contactos` y los envíos en `envios.envios`. Publicar con `destinatarios` crea los envíos "En cola"; el worker los encola al marcar el PDF listo (`enviarAlQuedarListo`) y los manda con el trabajo `envios.enviar`.

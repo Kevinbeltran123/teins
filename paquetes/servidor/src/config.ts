@@ -83,6 +83,13 @@ const Esquema = z.object({
    * apagados. El rol web solo necesita la pública; el worker, las tres. El contacto va en cada envío para que
    * el servicio de avisos pueda escribir si hay un problema.
    */
+  /**
+   * Mapa de la foto de llegada (ADR-0052): Geoapify Static Maps, con la cuenta a nombre de TEINS. Sin la llave, el entorno no
+   * tiene mapa y la foto sale sin él. La dirección base solo cambia en pruebas.
+   */
+  GEOAPIFY_LLAVE: z.string().min(1).optional(),
+  GEOAPIFY_URL: z.url().default("https://maps.geoapify.com"),
+
   AVISOS_VAPID_PUBLICA: z.string().regex(/^[A-Za-z0-9_-]{80,100}$/, "Clave pública VAPID en base64url").optional(),
   AVISOS_VAPID_PRIVADA: z.string().regex(/^[A-Za-z0-9_-]{40,50}$/, "Clave privada VAPID en base64url").optional(),
   AVISOS_CONTACTO: z.string().regex(/^(mailto:|https:\/\/)\S+$/, "Use mailto:correo o una URL https").optional(),

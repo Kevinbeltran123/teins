@@ -68,7 +68,16 @@ export default defineRailway((ctx) => {
     // El SDK aplica este campo (railway config pull lo genera) pero todavía no lo tipa.
     // @ts-expect-error preDeployTimeoutSeconds falta en DeployConfig
     deploy: { preDeployTimeoutSeconds: 300, restartPolicyMaxRetries: 5 },
-    env: { ...comun, ...propietario, PORT: "3000", SUPERFICIE_CAMPO_HOST: ref("campo", "RAILWAY_PUBLIC_DOMAIN"), AVISOS_VAPID_PUBLICA: ref("worker", "AVISOS_VAPID_PUBLICA") },
+    env: {
+      ...comun,
+      ...propietario,
+      PORT: "3000",
+      SUPERFICIE_CAMPO_HOST: ref("campo", "RAILWAY_PUBLIC_DOMAIN"),
+      AVISOS_VAPID_PUBLICA: ref("worker", "AVISOS_VAPID_PUBLICA"),
+      // El mapa de la foto de llegada (ADR-0052) lo pide el técnico, que entra por campo. La llave es de la cuenta de Geoapify
+      // a nombre de TEINS: la pone Kevin en Railway (pruebas y producción), nunca este archivo ni el repositorio.
+      GEOAPIFY_LLAVE: preserve(),
+    },
   });
   const oficina = service("oficina", {
     ...web,
