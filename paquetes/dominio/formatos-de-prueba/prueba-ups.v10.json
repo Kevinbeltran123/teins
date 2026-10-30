@@ -1,0 +1,323 @@
+{
+  "formato": "prueba-ups",
+  "version": 10,
+  "nombre": "Formato de prueba",
+  "appMinima": 16,
+  "secciones": [
+    {
+      "clave": "llegada",
+      "titulo": "Llegada",
+      "soloEmpresa": true,
+      "campos": [
+        {
+          "clave": "fotos_llegada",
+          "etiqueta": "Fotos de llegada",
+          "tipo": "foto",
+          "puestos": [
+            "Fachada",
+            "Acceso"
+          ],
+          "sello": {
+            "ubicacion": true,
+            "mapa": true
+          }
+        },
+        {
+          "clave": "quien_recibe",
+          "etiqueta": "¿Quién te recibe?",
+          "tipo": "texto",
+          "largo": true
+        }
+      ]
+    },
+    {
+      "clave": "servicio",
+      "titulo": "Servicio",
+      "campos": [
+        {
+          "clave": "horario",
+          "etiqueta": "Hora de inicio y final",
+          "tipo": "horario"
+        },
+        {
+          "clave": "sistema_revisado",
+          "etiqueta": "Sistema revisado",
+          "tipo": "opciones",
+          "opciones": [
+            "Control de acceso",
+            "CCTV",
+            "UPS",
+            "Alarma",
+            "Red de datos",
+            "Red de energía"
+          ],
+          "otro": true
+        },
+        {
+          "clave": "solucionado",
+          "etiqueta": "Solucionado",
+          "tipo": "opcion",
+          "opciones": [
+            "Totalmente",
+            "Parcialmente",
+            "No solucionado"
+          ]
+        },
+        {
+          "clave": "se_emplearon",
+          "etiqueta": "¿Se emplearon materiales o equipos?",
+          "tipo": "opcion",
+          "opciones": [
+            "Sí",
+            "No"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "cuarto_tecnico",
+      "titulo": "Cuarto técnico",
+      "campos": [
+        {
+          "clave": "potencia_nominal",
+          "etiqueta": "Potencia nominal",
+          "tipo": "medida",
+          "unidades": [
+            "kVA",
+            "kW"
+          ],
+          "obligatorio": true,
+          "valoresComunes": [
+            "15",
+            "30",
+            "45",
+            "75",
+            "112,5"
+          ]
+        },
+        {
+          "clave": "distancia_tablero",
+          "etiqueta": "Distancia al tablero",
+          "tipo": "medida",
+          "unidades": [
+            "m",
+            "cm"
+          ]
+        },
+        {
+          "clave": "fotos_equipo",
+          "etiqueta": "Fotos del equipo",
+          "tipo": "foto",
+          "obligatorio": true,
+          "puestos": [
+            "Placa",
+            "Vista general",
+            "Tablero abierto"
+          ]
+        },
+        {
+          "clave": "descripcion",
+          "etiqueta": "Descripción del sitio",
+          "tipo": "texto",
+          "largo": true
+        }
+      ]
+    },
+    {
+      "clave": "tableros",
+      "titulo": "Tableros",
+      "repetible": {
+        "etiqueta": "Tablero",
+        "min": 0,
+        "max": 10
+      },
+      "campos": [
+        {
+          "clave": "ubicacion",
+          "etiqueta": "Ubicación del tablero",
+          "tipo": "texto",
+          "obligatorio": true,
+          "valoresComunes": [
+            "Sótano",
+            "Piso 1",
+            "Piso 2",
+            "Cubierta"
+          ]
+        },
+        {
+          "clave": "corriente",
+          "etiqueta": "Corriente nominal",
+          "tipo": "medida",
+          "unidades": [
+            "A"
+          ],
+          "obligatorio": true,
+          "valoresComunes": [
+            "32",
+            "63",
+            "100",
+            "125"
+          ]
+        },
+        {
+          "clave": "circuitos",
+          "etiqueta": "Circuitos",
+          "tipo": "medida",
+          "unidades": [
+            "und"
+          ],
+          "valoresComunes": [
+            "6",
+            "12",
+            "18",
+            "24"
+          ]
+        },
+        {
+          "clave": "foto",
+          "etiqueta": "Foto del tablero",
+          "tipo": "foto",
+          "puestos": [
+            "Abierto",
+            "Placa"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "acometida",
+      "titulo": "Acometida",
+      "tablas": [
+        {
+          "titulo": "Mediciones de entrada",
+          "columnas": [
+            "F1",
+            "F2",
+            "F3"
+          ],
+          "filas": [
+            {
+              "etiqueta": "Voltaje F-N",
+              "campos": [
+                "v_f1",
+                "v_f2",
+                "v_f3"
+              ]
+            },
+            {
+              "etiqueta": "Corriente de entrada",
+              "campos": [
+                "i_f1",
+                "i_f2",
+                "i_f3"
+              ]
+            },
+            {
+              "etiqueta": "Frecuencia",
+              "campos": [
+                "frecuencia"
+              ]
+            }
+          ]
+        }
+      ],
+      "campos": [
+        {
+          "clave": "v_f1",
+          "etiqueta": "Voltaje F-N, F1",
+          "tipo": "medida",
+          "unidades": [
+            "V"
+          ]
+        },
+        {
+          "clave": "v_f2",
+          "etiqueta": "Voltaje F-N, F2",
+          "tipo": "medida",
+          "unidades": [
+            "V"
+          ]
+        },
+        {
+          "clave": "v_f3",
+          "etiqueta": "Voltaje F-N, F3",
+          "tipo": "medida",
+          "unidades": [
+            "V"
+          ]
+        },
+        {
+          "clave": "i_f1",
+          "etiqueta": "Corriente de entrada, F1",
+          "tipo": "medida",
+          "unidades": [
+            "A"
+          ]
+        },
+        {
+          "clave": "i_f2",
+          "etiqueta": "Corriente de entrada, F2",
+          "tipo": "medida",
+          "unidades": [
+            "A"
+          ]
+        },
+        {
+          "clave": "i_f3",
+          "etiqueta": "Corriente de entrada, F3",
+          "tipo": "medida",
+          "unidades": [
+            "A"
+          ]
+        },
+        {
+          "clave": "frecuencia",
+          "etiqueta": "Frecuencia",
+          "tipo": "medida",
+          "unidades": [
+            "Hz"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "materiales",
+      "titulo": "Materiales",
+      "campos": [
+        {
+          "clave": "materiales",
+          "etiqueta": "Materiales",
+          "tipo": "cantidades",
+          "unidades": [
+            "und",
+            "m"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "croquis",
+      "titulo": "Croquis",
+      "campos": [
+        {
+          "clave": "croquis",
+          "etiqueta": "Croquis del cuarto",
+          "tipo": "boceto"
+        }
+      ]
+    },
+    {
+      "clave": "cierre",
+      "titulo": "Firma del cliente",
+      "campos": [
+        {
+          "clave": "firma_cliente",
+          "etiqueta": "Firma de quien recibe la visita",
+          "tipo": "firma",
+          "declaracion": "Confirmo que {tecnico}, de TEINS, visitó {sitio} el {fecha}.",
+          "documento": "opcional"
+        }
+      ]
+    }
+  ]
+}

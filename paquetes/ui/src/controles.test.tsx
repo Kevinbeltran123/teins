@@ -131,6 +131,11 @@ describe("TablaDeMedidas", () => {
     expect(html.match(/inputMode="decimal"/g)).toHaveLength(4);
   });
 
+  it("una fila de varias casillas es un grupo con su nombre; la de una sola, no: la casilla ya lleva el suyo", () => {
+    expect(html).toContain('role="group" aria-label="Voltaje F-N"');
+    expect(html).not.toContain('role="group" aria-label="Frecuencia"');
+  });
+
   it("muestra lo que ya tenía escrito", () => {
     expect(html).toContain('value="127"');
     expect(html).toContain('value="60"');

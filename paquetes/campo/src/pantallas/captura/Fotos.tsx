@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { DefinicionCampo } from "@teins/dominio";
+import { visitaDe } from "../../datos/lecturas";
+import { useUsuario } from "../../sesion/usuario";
+import { db } from "../../datos/instancia";
 import { Aviso, CampoFotos, useNotificar } from "@teins/ui";
 import { repositorio } from "../../datos/instancia";
 import type { ArchivoNuevo } from "../../datos/repositorio";
 import { procesarFoto } from "../../fotos/procesar";
+import { prepararSello } from "../../fotos/prepararSello";
+import { textoDeUbicacion } from "../../fotos/sello";
+import { useUbicacion } from "../../fotos/useUbicacion";
 import { sincronizarEnSegundoPlano } from "../../sincronizacion/disparar";
 
 /** Las primeras fotos de un paso, en el repaso; si hay más, cuántas. */
@@ -37,6 +43,23 @@ export function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: strin
   const notificar = useNotificar();
   const [procesando, setProcesando] = useState(false);
   const [fallo, setFallo] = useState<string | null>(null);
+  // La foto de llegada lleva su franja (ADR-0052): solo los campos con `sello`. Sin él, nada de esto se activa.
+  const sello = campo.tipo === "foto" ? campo.sello : undefined;
+  const usuario = useUsuario();
+  const ubicacion = useUbicacion(Boolean(sello?.ubicacion));
+  const lugar = useLiveQuery(async () => {
+    if (!sello || !usuario) return undefined;
+    const l = await repositorio.obtener(id);
+    const visita = l?.visitaId ? await visitaDe(db, usuario.id, l.visitaId) : null;
+    const organizacion = await db.ajustes.get("organizacion");
+    return {
+      organizacion: organizacion?.clave === "organizacion" ? organizacion.valor : undefined,
+      cliente: visita?.cliente.nombre ?? l?.lugar?.cliente ?? "",
+      sitio: visita?.sitio.nombre ?? l?.lugar?.sitio ?? "",
+      direccion: visita?.sitio.direccion,
+      ciudad: visita?.sitio.ciudad ?? undefined,
+    };
+  }, [sello?.ubicacion, usuario?.id, id]);
 
   async function agregar(originales: File[]) {
     setProcesando(true);
@@ -45,7 +68,12 @@ export function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: strin
     let fallidas = 0;
     for (const original of originales) {
       try {
-        const archivo = await procesarFoto(original, new Date());
+        // La hora de red y el mapa se piden con señal y como mucho 3 s: la foto nunca se bloquea por ellos.
+        const datos =
+          sello && lugar
+            ? await prepararSello({ sello, posicion: ubicacion.vigente(), lugar: { organizacion: lugar.organizacion, cliente: lugar.cliente, sitio: lugar.sitio }, direccion: lugar.direccion, ciudad: lugar.ciudad })
+            : undefined;
+        const archivo = await procesarFoto(original, new Date(), datos);
         await repositorio.agregarFoto(id, seccion, campo.clave, archivo, new Date());
         alGuardar();
       } catch (error) {
@@ -97,7 +125,7 @@ export function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: strin
 
   return (
     <div className="flex flex-col gap-3">
-      <CampoFotos etiqueta={campo.etiqueta} obligatorio={campo.obligatorio} error={error} fotos={fotos} procesando={procesando} onAgregar={agregar} onQuitar={(h) => void quitar(h)} puestos={campo.tipo === "foto" ? campo.puestos : undefined} />
+      <CampoFotos etiqueta={campo.etiqueta} obligatorio={campo.obligatorio} error={error} fotos={fotos} procesando={procesando} onAgregar={agregar} onQuitar={(h) => void quitar(h)} puestos={campo.tipo === "foto" ? campo.puestos : undefined} estado={sello?.ubicacion ? textoDeUbicacion(ubicacion.estado, ubicacion.mejor) : undefined} />
       {fallo && <Aviso tono="error">{fallo}</Aviso>}
     </div>
   );

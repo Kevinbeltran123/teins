@@ -52,7 +52,7 @@ export function TablaDeMedidas({ titulo, columnas, filas, onCambio, deshabilitad
       {filas.map((fila, i) => {
         const hayError = fila.celdas.some((c) => invalidas.has(c.clave));
         return (
-          <div key={fila.etiqueta} role="group" aria-label={fila.etiqueta} className="flex flex-col gap-1.5">
+          <div key={fila.etiqueta} {...(fila.celdas.length > 1 ? { role: "group", "aria-label": fila.etiqueta } : {})} className="flex flex-col gap-1.5">
             <p className="text-cuerpo font-medium">
               {fila.etiqueta}
               <span className="ml-2 text-ayuda font-normal text-texto-secundario">{fila.unidad}</span>

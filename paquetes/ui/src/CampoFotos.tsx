@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { EtiquetaCampo, MensajeError } from "./Etiqueta";
 import { Camera } from "./iconos";
 import { VisorFotos, type FotoVisible } from "./VisorFotos";
@@ -17,10 +17,12 @@ interface Props {
   soloLectura?: boolean;
   /** Las tomas que se esperan, con su nombre: cada una es un lugar en la cuadrícula (el formato las declara). */
   puestos?: readonly string[] | undefined;
+  /** Una línea sobre las tomas, antes de tomar la foto: el estado de lo que la foto necesita (la ubicación, ADR-0052). */
+  estado?: ReactNode;
 }
 
 /** Fotos de un dato: miniaturas que se abren a pantalla completa, y la captura con la cámara trasera. */
-export function CampoFotos({ etiqueta, fotos, procesando, onAgregar, onQuitar, obligatorio, error, soloLectura, puestos = [] }: Props) {
+export function CampoFotos({ etiqueta, fotos, procesando, onAgregar, onQuitar, obligatorio, error, soloLectura, puestos = [], estado }: Props) {
   const id = useId();
   const [abierta, setAbierta] = useState<number | null>(null);
   // Solo la foto recién tomada entra animada; las que ya estaban no se animan otra vez al volver al paso.
@@ -37,6 +39,11 @@ export function CampoFotos({ etiqueta, fotos, procesando, onAgregar, onQuitar, o
           fotos.length > 0 && <span className="text-ayuda text-texto-secundario">{fotos.length === 1 ? "1 foto" : `${fotos.length} fotos`}</span>
         )}
       </div>
+      {estado && !soloLectura && (
+        <p role="status" className="text-ayuda text-texto-secundario">
+          {estado}
+        </p>
+      )}
       {soloLectura && fotos.length === 0 ? (
         <p className="text-ayuda text-texto-secundario">Sin fotos.</p>
       ) : (

@@ -289,4 +289,6 @@ export type Ajuste =
   /** Usuarios cuyos datos ya se borraron y falta avisarle al servidor. */
   | { clave: "borrados_por_confirmar"; valor: string[] }
   /** Se cerró la sesión sin señal: falta cerrarla en el servidor (desde cuándo). */
-  | { clave: "cierre_pendiente"; valor: string };
+  | { clave: "cierre_pendiente"; valor: string }
+  /** Cómo se llama la organización: sale en la franja de la foto de llegada (ADR-0052). Se guarda al iniciar sesión. */
+  | { clave: "organizacion"; valor: string };

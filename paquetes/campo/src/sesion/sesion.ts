@@ -42,7 +42,7 @@ export async function iniciarSesionConLlave(): Promise<void> {
 }
 
 async function prepararSesion(): Promise<void> {
-  const { usuario: datos, permisoLocalHasta } = await cliente.llamar("obtenerSesion");
+  const { usuario: datos, permisoLocalHasta, organizacion } = await cliente.llamar("obtenerSesion");
   if (datos.rol !== "tecnico") {
     await cliente.cerrarSesion().catch(() => undefined);
     throw new RolNoPermitido();
@@ -50,6 +50,8 @@ async function prepararSesion(): Promise<void> {
   if (datos.debeCambiarContrasena) throw new ContrasenaTemporal();
   await almacen.renovarPermiso(datos.id, permisoLocalHasta, VERSION_APP);
   await db.ajustes.put({ clave: "usuario", valor: datos });
+  // El nombre de la organización sale en la franja de la foto de llegada (ADR-0052).
+  await db.ajustes.put({ clave: "organizacion", valor: organizacion.nombre });
   await db.ajustes.delete("acceso_cerrado");
   await repositorio.asignarSinResponsable(datos.id);
   // Lo que no tenía responsable ya lo tiene: se cifra con su clave.
