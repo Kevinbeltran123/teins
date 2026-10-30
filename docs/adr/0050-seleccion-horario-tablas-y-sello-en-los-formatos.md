@@ -61,6 +61,7 @@ Condiciones: la regla 6 (los formatos son datos, no código), la regla 7 (las ve
 - **A favor:** los formatos de TEINS son JSON publicados con `publicar-formato`; lo dudoso se corrige publicando otra versión, sin tocar código.
 - **A favor:** un formato nuevo con selección, horario o tablas no exige que cambie nada más.
 - **En contra:** hay cuatro controles nuevos que mantener en campo, oficina y el informe. Se mitiga con que cada uno vive en `paquetes/ui` con sus pruebas y con que `describirValor` es la única fuente del texto de un valor.
+- **En contra:** el contrato y la validación de los tipos nuevos viajan en el JavaScript inicial de campo (la bajada valida los formatos antes de abrir la captura): el presupuesto de ADR-0030 sube de 135 a 136 KB. Los controles van en la captura, que se carga aparte.
 - **En contra:** una tabla no puede tener celdas obligatorias. Se acepta: en el papel, una celda en blanco es válida.
 
 ## Cuándo revisarla

@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState, type FormEvent } from "react";
-import { crearMedida, esCantidades, esNoObtenido, type DefinicionCampo, type Valor, type ValorMedida } from "@teins/dominio";
+import { crearMedida, duracionTexto, esCantidades, esHorario, esNoObtenido, esOpciones, minutosDeHorario, type DefinicionCampo, type Valor, type ValorMedida } from "@teins/dominio";
 import { ErrorApi } from "@teins/protocolo";
-import { Aviso, Boton, CampoMedida, CampoTexto, FileText, MarcaNoObtenido, RefreshCw } from "@teins/ui";
+import { Aviso, Boton, CampoHorario, CampoMedida, CampoOpcion, CampoOpciones, CampoTexto, FileText, MarcaNoObtenido, RefreshCw } from "@teins/ui";
 import { mensajeDeError, mensajeDeValidacion, pideRecargar } from "../../mensajes";
 import { useCorregir, type Escrito, type Levantamiento } from "../../revision";
 import { SinEnviar } from "../../sinEnviar";
@@ -107,6 +107,41 @@ export function EditorCorreccion({
           />
         );
       }
+      case "opcion":
+        return (
+          <CampoOpcion
+            etiqueta={`Nuevo valor de ${campo.etiqueta.toLowerCase()}`}
+            opciones={campo.opciones}
+            otro={campo.otro}
+            valorInicial={typeof valor === "string" ? valor : undefined}
+            deshabilitado={marcado}
+            error={marcado ? undefined : mensajeCampo}
+            onCambio={(escrito) => desdeElControl(escrito)}
+          />
+        );
+      case "opciones":
+        return (
+          <CampoOpciones
+            etiqueta={`Nuevo valor de ${campo.etiqueta.toLowerCase()}`}
+            opciones={campo.opciones}
+            otro={campo.otro}
+            valorInicial={esOpciones(valor) ? valor : undefined}
+            deshabilitado={marcado}
+            error={marcado ? undefined : mensajeCampo}
+            onCambio={(escrito) => desdeElControl(escrito)}
+          />
+        );
+      case "horario":
+        return (
+          <CampoHorario
+            etiqueta={`Nuevo valor de ${campo.etiqueta.toLowerCase()}`}
+            valorInicial={esHorario(valor) ? valor : undefined}
+            total={(desde, hasta) => duracionTexto(minutosDeHorario({ desde, hasta }) ?? 0)}
+            deshabilitado={marcado}
+            error={marcado ? undefined : mensajeCampo}
+            onCambio={(escrito) => desdeElControl(escrito)}
+          />
+        );
       case "cantidades": {
         const lineas = esCantidades(valor) ? valor : [];
         return <CorregirCantidades etiqueta={`Líneas corregidas de ${campo.etiqueta.toLowerCase()}`} inicial={lineas} unidades={campo.unidades} deshabilitado={marcado} error={marcado ? undefined : mensajeCampo} onCambio={(v) => desdeElControl(v)} />;

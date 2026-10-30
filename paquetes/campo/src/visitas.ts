@@ -1,5 +1,5 @@
 import type { VisitaLocal } from "./datos/modelo";
-import { formatearDia } from "@teins/dominio";
+import { formatearDia, horaCorta } from "@teins/dominio";
 
 /** Fecha de hoy en el teléfono, como AAAA-MM-DD (la misma forma de `programadaPara`). */
 export const hoyLocal = (ahora = new Date()) => ahora.toLocaleDateString("en-CA");
@@ -32,11 +32,8 @@ export const cuandoSePodraIniciar = (programadaPara: string, hoy: string) =>
     ? "Podrás iniciarla mañana"
     : `Podrás iniciarla el ${formatearDia(programadaPara, { weekday: "long", day: "numeric", month: "long" })}`;
 
-/** "14:05" → "2:05 p. m.": la forma en que se dice la hora en Colombia, igual en todos los teléfonos. */
-export function horaCorta(hhmm: string): string {
-  const [h = 0, m = 0] = hhmm.split(":").map(Number);
-  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")} ${h < 12 ? "a. m." : "p. m."}`;
-}
+// "14:05" → "2:05 p. m.": una sola fuente en `dominio`, igual en todas partes y en todos los teléfonos.
+export { horaCorta };
 
 /** Hora del teléfono de un momento ISO, como `horaCorta`: la de "Terminada 3:40 p. m.". */
 export const horaDe = (iso: string) => {
