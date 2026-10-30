@@ -46,7 +46,7 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0003](0003-estrategia-de-sincronizacion.md) | Sincronización asimétrica por documento | Aceptada; ampliada por 0040, 0041 y 0044 |
 | [0004](0004-almacenamiento-en-el-dispositivo.md) | Almacenamiento local: IndexedDB con Dexie | Aceptada |
 | [0005](0005-base-de-datos-del-servidor.md) | Base de datos: PostgreSQL relacional + documental | Aceptada |
-| [0006](0006-formatos-y-respuestas.md) | Formatos como esquema de dominio versionado | Aceptada |
+| [0006](0006-formatos-y-respuestas.md) | Formatos como esquema de dominio versionado | Aceptada; ampliada por 0050 |
 | [0007](0007-archivos.md) | Archivos: almacenamiento de objetos, direccionado por contenido | Aceptada; ampliada por 0048 |
 | [0008](0008-trazabilidad-e-integridad.md) | Trazabilidad semántica con cadena de hashes por agregado | Aceptada |
 | [0012](0012-eventos-y-trabajos.md) | Cola transaccional en PostgreSQL como outbox | Aceptada; ampliada por 0043 |
@@ -56,12 +56,15 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0044](0044-retencion-y-poda.md) | Retención en el teléfono y poda en el servidor (amplía 0003) | Aceptada; ampliada por 0048 |
 | [0045](0045-volver-a-borrador-un-envio-rechazado.md) | Un envío que oficina nunca recibió vuelve a borrador para corregirlo (amplía 0035) | Aceptada |
 | [0048](0048-limpiar-archivos-sin-uso.md) | Los archivos de campo que nadie usa se borran a los 120 días (amplía 0007 y 0044) | Aceptada |
+| [0050](0050-seleccion-horario-tablas-y-sello-en-los-formatos.md) | Selección, horario, tablas de medidas y sello en los formatos (amplía 0006) | Aceptada |
+| [0051](0051-encabezado-y-firmas-del-informe.md) | El encabezado y las firmas del informe salen de la visita y de las cuentas | Aceptada |
+| [0052](0052-hora-ubicacion-y-mapa-en-la-foto-de-llegada.md) | Hora, ubicación y mapa en la foto de llegada (reemplaza en parte 0009) | Aceptada |
 
 ### Identidad y acceso
 
 | ADR | Decisión | Estado |
 |---|---|---|
-| [0009](0009-identidad-y-acceso.md) | Sesiones revocables, autorización central y seguridad por fila en el portal | Aceptada; la parte 5 la concreta 0022 |
+| [0009](0009-identidad-y-acceso.md) | Sesiones revocables, autorización central y seguridad por fila en el portal | Aceptada; la parte 5 la concreta 0022; 0052 reemplaza su fila «sin GPS en fotos» |
 | [0033](0033-reactivar-usuarios-y-cuenta-propia.md) | Reactivar usuarios y administrar la cuenta propia | Aceptada |
 
 ### Visitas

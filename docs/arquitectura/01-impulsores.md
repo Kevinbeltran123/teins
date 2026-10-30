@@ -23,7 +23,7 @@ Fuentes: resumen de la reunión con el dueño de TEINS, respuestas a las pregunt
 
 ### Decisiones del cliente que acotan el alcance
 
-- No se registra ubicación GPS.
+- No se registra ubicación GPS, salvo en las fotos de llegada cuyo formato lo pide, con la autorización previa de los técnicos (ADR-0052). Los metadatos EXIF se siguen quitando.
 - No se requiere verificación de autenticidad de informes.
 - La política de tratamiento de datos personales se aplaza. La Ley 1581 de 2012 sigue aplicando.
 - Quién mantendrá el sistema no condiciona las decisiones técnicas.
