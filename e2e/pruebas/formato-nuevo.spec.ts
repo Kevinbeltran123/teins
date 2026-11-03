@@ -62,7 +62,7 @@ test("selección, horario y tabla de medidas se capturan, se guardan al salir y 
   await sistemas.getByText("CCTV", { exact: true }).click();
   await sistemas.getByText("UPS", { exact: true }).click();
   await sistemas.getByText("Otro", { exact: true }).click();
-  await page.getByRole("textbox", { name: "Sistema revisado: escribe cuál" }).fill("cerca eléctrica");
+  await page.getByRole("textbox", { name: "Sistema revisado: ¿cuál?" }).fill("cerca eléctrica");
   // Selección única: tocar la elegida la quita (el campo es opcional).
   const solucionado = page.getByRole("radiogroup", { name: "Solucionado" });
   await solucionado.getByText("Parcialmente", { exact: true }).click();
@@ -87,7 +87,7 @@ test("selección, horario y tabla de medidas se capturan, se guardan al salir y 
   await expect(page.getByLabel("Llegada", { exact: true })).toHaveValue("08:14");
   await expect(page.getByLabel("Salida", { exact: true })).toHaveValue("11:30");
   await expect(page.getByRole("group", { name: "Sistema revisado" }).getByRole("checkbox", { name: "CCTV" })).toBeChecked();
-  await expect(page.getByRole("textbox", { name: "Sistema revisado: escribe cuál" })).toHaveValue("cerca eléctrica");
+  await expect(page.getByRole("textbox", { name: "Sistema revisado: ¿cuál?" })).toHaveValue("cerca eléctrica");
   await irAlPaso(page, "Acometida");
   await expect(page.getByLabel("Voltaje F-N, F1")).toHaveValue("127,4");
 

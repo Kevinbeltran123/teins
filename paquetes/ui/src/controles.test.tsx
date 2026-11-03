@@ -38,9 +38,11 @@ describe("CampoOpcion", () => {
   it("marca lo guardado y, si es un «Otro» ya escrito, abre su texto", () => {
     expect(pintar({ valorInicial: "Parcialmente" })).toContain('checked=""');
     const libre = pintar({ otro: true, valorInicial: "Cerca eléctrica" });
-    expect(libre).toContain('aria-label="Solucionado: escribe cuál"');
+    expect(libre).toContain('aria-label="Solucionado: ¿cuál?"');
     expect(libre).toContain('value="Cerca eléctrica"');
-    expect(pintar({ otro: true })).not.toContain("escribe cuál");
+    expect(pintar({ otro: true })).not.toContain("¿cuál?");
+    // Sin «Otro» en el formato, un valor que no está en la lista no abre un texto que no se podría guardar.
+    expect(pintar({ valorInicial: "Cerca eléctrica" })).not.toContain("¿cuál?");
   });
 
   it("muestra el error junto al control", () => {
@@ -65,7 +67,9 @@ describe("CampoOpciones", () => {
     const html = pintar({ otro: true });
     expect(html.match(/type="checkbox"/g)).toHaveLength(4);
     expect(html).toContain('role="group"');
-    expect(html).toContain("elige todas las que apliquen");
+    // Neutro: los controles los usan campo (tú) y oficina (usted).
+    expect(html).toContain("todas las que apliquen");
+    expect(html).not.toMatch(/elige|escribe/i);
   });
 
   it("marca lo guardado y abre «Otro» con su texto", () => {

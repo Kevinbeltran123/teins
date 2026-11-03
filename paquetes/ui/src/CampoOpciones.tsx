@@ -74,7 +74,7 @@ export function CampoOpciones({ etiqueta, opciones, otro, valorInicial, onCambio
         <EtiquetaCampo id={`${id}-etiqueta`} obligatorio={obligatorio}>
           {etiqueta}
         </EtiquetaCampo>
-        <span className="ml-2 text-ayuda font-normal text-texto-secundario">elige todas las que apliquen</span>
+        <span className="ml-2 text-ayuda font-normal text-texto-secundario">todas las que apliquen</span>
       </legend>
       <div role="group" aria-labelledby={`${id}-etiqueta`} aria-describedby={error ? `${id}-error` : undefined} className="flex flex-col gap-2">
         {opciones.map((o) => fila(o, o, elegidas.has(o), () => alternar(o)))}
@@ -83,8 +83,8 @@ export function CampoOpciones({ etiqueta, opciones, otro, valorInicial, onCambio
       {otro && otroMarcado && (
         <input
           type="text"
-          aria-label={`${etiqueta}: escribe cuál`}
-          placeholder="Escribe cuál"
+          aria-label={`${etiqueta}: ¿cuál?`}
+          placeholder="¿Cuál?"
           autoComplete="off"
           maxLength={120}
           className={`${claseControl} ${error ? claseConError : ""}`}

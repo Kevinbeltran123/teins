@@ -33,7 +33,7 @@ const claseFoco = "has-focus-visible:outline-3 has-focus-visible:outline-offset-
  */
 export function CampoOpcion({ etiqueta, opciones, otro, valorInicial, onCambio, obligatorio, error, deshabilitado }: Props) {
   const id = useId();
-  const esLibre = valorInicial !== undefined && !opciones.includes(valorInicial);
+  const esLibre = Boolean(otro) && valorInicial !== undefined && !opciones.includes(valorInicial);
   // La opción marcada: una de la lista, "Otro" (con o sin texto todavía) o ninguna.
   const [marcada, setMarcada] = useState<string | undefined>(esLibre ? OTRO : valorInicial);
   const [texto, setTexto] = useState(esLibre ? valorInicial : "");
@@ -86,8 +86,8 @@ export function CampoOpcion({ etiqueta, opciones, otro, valorInicial, onCambio, 
       {marcada === OTRO && (
         <input
           type="text"
-          aria-label={`${etiqueta}: escribe cuál`}
-          placeholder="Escribe cuál"
+          aria-label={`${etiqueta}: ¿cuál?`}
+          placeholder="¿Cuál?"
           autoComplete="off"
           maxLength={120}
           className={`${claseControl} ${error ? claseConError : ""}`}
