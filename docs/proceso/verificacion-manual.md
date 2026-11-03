@@ -127,17 +127,17 @@ Prueba lo más riesgoso del sistema: que Safari no borre lo capturado sin señal
 2. Escriba su contraseña y toque **Continuar**.
 3. Escanee el QR con la app autenticadora del iPhone. **Guarde los códigos de respaldo** (en `privado/`, no en el repositorio).
 4. Escriba los 6 dígitos que muestra la app y toque **Verificar y activar**.
-   - Debe: aparecer las pestañas Usuarios, Teléfonos de campo y Accesos de clientes.
+   - Debe: aparecer las pestañas Usuarios y Teléfonos de campo (desde la iteración 48, los accesos al portal van en cada contacto: fase 48).
 5. **Cerrar sesión** y vuelva a entrar con `oficina.prueba`.
    - Debe: después de la contraseña, pedir el código. Pruebe primero uno equivocado (debe rechazarlo) y después el correcto.
 6. En "Usuarios", cree un técnico ficticio.
    - Debe: mostrar su contraseña temporal una sola vez, en un diálogo que no se cierra por accidente, hasta **Ya la entregué**.
 7. Entre con ese técnico en el iPhone (cierre la sesión de `tecnico.prueba` antes).
    - Debe: entrar. Después vuelva a `tecnico.prueba`.
-8. En "Accesos de clientes", cree el acceso del cliente de la fase 4 ("Cliente de prueba"); si ya tiene uno de pruebas anteriores, use **Regenerar acceso**.
-   - Debe: mostrar la clave y el QR una sola vez. **No cierre ese bloque todavía**: se usa en la fase 7.
 
 ## Fase 7 · Portal del cliente (corte 5)
+
+Desde la iteración 48 el portal ya no entra con QR y clave: esta fase se reemplaza por la **fase 48**. Los pasos de abajo quedan como registro de cómo era.
 
 1. Con la **cámara del iPhone**, escanee el QR que quedó en la pantalla de oficina.
    - Debe: abrir el portal con el código de acceso ya puesto ("Código de acceso tomado del QR").
@@ -781,6 +781,37 @@ La fase es larga: se divide en iPhone y oficina. Usa el formato de prueba v10 (`
     - **Anotar:** cualquier texto cortado, una tabla que parte la página a la mitad o una fila de firmas que no cabe.
 
 **Anotar siempre:** que la franja con ubicación **no** se active en producción hasta que TEINS tenga la autorización previa de sus técnicos (Ley 1581): el formato real se publica sin `sello.ubicacion` o con la producción apagada.
+
+## Fase 48 · El portal por contacto, con código por correo (iteración 48)
+
+En el entorno de pruebas el correo sale de verdad (Resend): use **un correo suyo** para el contacto. En el iPhone y en el computador.
+
+1. En oficina, abra **Clientes** › "Cliente de prueba" y cree un contacto con su correo, que reciba informes y cotizaciones.
+   - Debe: en la columna «Portal», el interruptor apagado y «Sin acceso». Un contacto sin correo dice «Agregue un correo para darle acceso» y su interruptor no se puede tocar.
+2. Toque el interruptor de ese contacto.
+   - Debe: preguntar «¿Dar acceso al portal a …?», con a qué correo le llega la invitación y qué verá. Al confirmar, «Aún no entra» y un correo «TEINS le dio acceso a sus informes y cotizaciones» en su buzón, con «Entrar al portal».
+3. En el iPhone, toque **Entrar al portal** en ese correo.
+   - Debe: el portal pide el correo. Escríbalo (con mayúsculas, si quiere) y toque **Enviar código**: «Revise su correo», con «Reenviar código en 1:00» que baja segundo a segundo.
+4. Vaya al correo y vuelva al portal (aunque Safari recargue la página).
+   - Debe: el código llegó con el asunto «Su código para entrar al portal de TEINS: 123 456»; el portal sigue en «Revise su correo»; el iPhone ofrece el código sobre el teclado.
+5. Escriba un código equivocado y toque **Entrar**; después, el correcto.
+   - Debe: primero «El código no es correcto o venció. Pida uno nuevo.»; después, el cliente como título y las pestañas Informes y Cotizaciones con su número.
+6. Descargue un informe; vaya a Cotizaciones.
+   - Debe: el PDF baja sin salir del portal; en Cotizaciones, las publicadas o «Todavía no hay cotizaciones publicadas.».
+7. Arriba, cambie el tema a **Oscuro**, recargue, y vuelva a **Del sistema**.
+   - Debe: el portal en oscuro, que se queda al recargar; con «Del sistema», sigue al iPhone.
+8. En oficina, recargue el cliente.
+   - Debe: «Último ingreso: …» con la fecha de hoy.
+9. Publique una versión nueva de un informe de ese cliente, enviándola a ese contacto. En el correo, toque **Ver en el portal**.
+   - Debe: el botón lleva a ese informe (la dirección termina en `/informes/…`) y el portal lo muestra resaltado, con «Descargar» principal. A un contacto sin acceso, el correo le llega sin el botón.
+10. En oficina, apague el interruptor del contacto.
+    - Debe: se apaga al instante, con la notificación «Acceso al portal quitado: …» y **Deshacer**. En el iPhone, al recargar, el portal vuelve a pedir el correo.
+11. Toque **Deshacer** (o vuelva a darle acceso).
+    - Debe: el acceso vuelve; con **Deshacer**, sin otra invitación.
+12. En Administración (con la marca y el segundo factor).
+    - Debe: solo las pestañas Usuarios y Teléfonos de campo.
+
+**Anotar:** si algún correo llegó a correo no deseado, y cuánto tardó el código en llegar.
 
 ## Al terminar
 

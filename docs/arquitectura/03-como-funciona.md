@@ -243,7 +243,7 @@ Los avisos no esperan la siguiente bajada: en cada aviso el service worker (`paq
 
 ## 5. Versiones del informe y la cotización
 
-El informe y la cotización tienen un borrador que oficina edita y versiones publicadas que nadie edita (regla 7). Al publicar un informe, la copia congelada incluye el encabezado de la visita (NIT, ciudad, solicitante, referencia y el número de orden ya escrito) y, por capítulo, la cédula del técnico y del revisor y la hora en que se marcó revisado: son las firmas electrónicas ([ADR-0051](../adr/0051-encabezado-y-firmas-del-informe.md)); el PDF las dibuja en la fila de firmas junto a la firma dibujada de quien acompañó la visita (`paquetes/servidor/src/modulos/informes/index.ts:encabezadoDe`, `paquetes/documentos/src/informe.ts`). Publicar congela una copia con número consecutivo; corregir es publicar la siguiente. Dos cosas avanzan por separado en cada versión: su PDF, que genera el worker ([ADR-0013](../adr/0013-generacion-de-pdf.md)), y si está retirada. La vigente es la de mayor número sin retirar ([ADR-0034](../adr/0034-cancelar-envios-y-retirar-cotizaciones.md)); el portal muestra la de mayor número sin retirar con el PDF listo.
+El informe y la cotización tienen un borrador que oficina edita y versiones publicadas que nadie edita (regla 7). Al publicar un informe, la copia congelada incluye el encabezado de la visita (NIT, ciudad, solicitante, referencia y el número de orden ya escrito) y, por capítulo, la cédula del técnico y del revisor y la hora en que se marcó revisado: son las firmas electrónicas ([ADR-0051](../adr/0051-encabezado-y-firmas-del-informe.md)); el PDF las dibuja en la fila de firmas junto a la firma dibujada de quien acompañó la visita (`paquetes/servidor/src/modulos/informes/index.ts:encabezadoDe`, `paquetes/documentos/src/informe.ts`). Publicar congela una copia con número consecutivo; corregir es publicar la siguiente. Dos cosas avanzan por separado en cada versión: su PDF, que genera el worker ([ADR-0013](../adr/0013-generacion-de-pdf.md)), y si está retirada. La vigente es la de mayor número sin retirar ([ADR-0034](../adr/0034-cancelar-envios-y-retirar-cotizaciones.md)); el portal muestra la de mayor número sin retirar con el PDF listo, de los informes y de las cotizaciones ([ADR-0053](../adr/0053-acceso-al-portal-por-contacto.md)).
 
 ```mermaid
 stateDiagram-v2
@@ -278,7 +278,27 @@ Retirar deja la versión y su PDF, pero sus envíos en cola ya no salen. Un PDF 
 
 ---
 
-## 6. Mapa de componentes
+## 6. Entrar al portal con un código
+
+Cada contacto con «Acceso al portal» entra con su correo y un código de 6 dígitos que le llega ([ADR-0053](../adr/0053-acceso-al-portal-por-contacto.md)). El código no se guarda: se deriva del pedido con un secreto del servidor (`paquetes/servidor/src/modulos/portal/claves.ts`), así que el worker que envía el correo llega al mismo sin que pase por la cola. Ve lo que recibe; quitar el acceso, quitar el contacto, cambiarle el correo o archivar el cliente cierran sus sesiones (`accesosDelPortal` en `paquetes/servidor/src/modulos/portal/index.ts`, llamado por `paquetes/servidor/src/modulos/clientes/index.ts`).
+
+```mermaid
+sequenceDiagram
+  participant P as Portal (navegador)
+  participant W as Rol web
+  participant C as Worker
+  P->>W: pedir código (correo)
+  W->>W: cuenta el intento (correo y origen)
+  W-->>P: 202 {} y cookie del pedido (10 min), con o sin acceso
+  W->>C: si tiene acceso: guarda el pedido y encola el correo
+  C->>C: deriva el código del pedido
+  C-->>P: correo con el código
+  P->>W: entrar (correo, código, cookie)
+  W->>W: suma el intento; compara cookie y código; borra el pedido
+  W-->>P: sesión (30 min desde el último uso)
+```
+
+## 7. Mapa de componentes
 
 Un monolito modular con dos roles del mismo código: web atiende solicitudes y worker hace el trabajo en segundo plano desde una cola en PostgreSQL ([ADR-0001](../adr/0001-estilo-del-sistema.md), [ADR-0012](../adr/0012-eventos-y-trabajos.md)). Cada superficie se sirve en su propio host con la API en el mismo origen ([ADR-0016](../adr/0016-infraestructura-y-despliegue.md)). Los binarios no pasan por el servidor: van y vienen de S3 con URLs firmadas.
 

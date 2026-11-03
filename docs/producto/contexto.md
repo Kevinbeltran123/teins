@@ -12,7 +12,7 @@ Antes de cotizar o intervenir, un técnico visita la instalación y levanta la i
 
 ## Flujo objetivo
 
-Solicitud → registro de visita → captura en campo (con o sin conexión) → envío a oficina → revisión y corrección con trazabilidad → composición del informe con planos → publicación (versión inmutable + PDF) → consulta del cliente con QR y clave.
+Solicitud → registro de visita → captura en campo (con o sin conexión) → envío a oficina → revisión y corrección con trazabilidad → composición del informe con planos → publicación (versión inmutable + PDF) → consulta del cliente en el portal, con su correo y un código (desde la iteración 48; antes, QR y clave).
 
 ## Alcance de la primera versión
 
@@ -23,7 +23,7 @@ Solicitud → registro de visita → captura en campo (con o sin conexión) → 
 - Envío a oficina al recuperar conexión.
 - Revisión con correcciones atribuibles y comentarios al técnico.
 - Informe PDF con planos anexos; versiones conservadas.
-- Portal del cliente con QR y clave, por cliente.
+- Portal del cliente por contacto, con código por correo: informes y cotizaciones (ADR-0053; antes, QR y clave por cliente).
 - Tabla de cantidades exportable.
 - Usuarios y permisos: técnico, oficina, supervisor, administrador, cliente.
 
