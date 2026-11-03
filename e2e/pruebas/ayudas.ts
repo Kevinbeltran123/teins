@@ -43,8 +43,11 @@ export async function iniciarSesion(page: Page, u: { usuario: string; contrasena
   if (await seguir.isVisible()) await seguir.click();
   await usuario.fill(u.usuario);
   await page.getByLabel("Contraseña").fill(u.contrasena);
+  // Un límite agotado (429) falla aquí, con su motivo, y no 15 s después esperando la pantalla siguiente.
+  const respuesta = page.waitForResponse((r) => r.url().endsWith("/api/auth/sign-in/username"), { timeout: 15_000 }).catch(() => null);
   // Campo dice "Iniciar sesión"; oficina, "Ingresar".
   await page.getByRole("button", { name: /^(Iniciar sesión|Ingresar)$/ }).click();
+  if ((await respuesta)?.status() === 429) throw new Error("El servidor rechazó el inicio de sesión por el límite de intentos (429)");
 }
 
 /** La pestaña se oculta y vuelve a la vista: así relee sus datos la app (refetchOnWindowFocus). */
