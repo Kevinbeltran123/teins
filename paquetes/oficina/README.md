@@ -52,6 +52,11 @@ Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizac
 - "En el informe" muestra el capítulo con lo corregido resaltado y, mientras se escribe la corrección, el valor nuevo.
 - **Comentarios (ADR-0035 y ADR-0040):** conversaciones como hilos (`Comentarios` y `ResponderEnHilo`): el dato del que habla, avatar, nombre y hora por grupo, "N respuestas", "Nuevo" y "Responder…" (↵ envía, ⇧↵ otra línea). Bajo cada dato, el resumen con "Ver la conversación". Con la conversación a la vista se consulta cada 15 s y se marca leída (`useLeerConversacion`); `?hilo=<id>` abre un hilo. Se cierran al marcar revisado. "⋯" en el comentario propio: "Editar" y "Borrar" con "Deshacer", hasta Revisado. Un comentario enviado vacía su campo solo si sigue diciendo lo enviado (`vaciarSiSigue`).
 
+### Datos de la visita y cédulas (iteración 47, ADR-0051)
+
+- **Clientes y sitios:** «NIT» al crear y editar un cliente y «Ciudad» al agregar y editar un sitio (opcionales; el informe dice `[NIT]` y `[Ciudad]` si faltan). **Visitas:** `pantallas/DatosDelPedido.tsx` agrega el «Solicitante» (un contacto del cliente) y la «Referencia del cliente» al programar y al reprogramar; la fila muestra «Orden 0774» y la búsqueda la encuentra. **Administración:** «Cédula» al crear un usuario y «Poner/Cambiar cédula» en su menú (solo quien administra; el registro dice que cambió, nunca el valor).
+- **Correcciones de la revisión:** `EditorCorreccion` suma los editores de `opcion`, `opciones` y `horario`; las celdas de una tabla de medidas usan el de `medida`.
+
 ### Informes y cotizaciones
 
 - **Vista en vivo (ADR-0031):** el editor a la izquierda y, a la derecha, la hoja que recibe el cliente ("Informe" o "Cotización", y "Correo"), dibujada con las plantillas de `paquetes/documentos`. Al pasar a una sección del editor, la hoja va hasta esa parte. `EditorConVista`, `useVistaPrevia` y `BotonMostrarVista` en `pantallas/Lienzo.tsx`: ampliar, ocultar y el divisor. Bajo 1280 px, "Vista previa" la abre en hoja lateral (`useHojaAlLado`).

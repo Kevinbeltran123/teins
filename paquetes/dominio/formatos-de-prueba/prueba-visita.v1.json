@@ -1,0 +1,148 @@
+{
+  "formato": "prueba-visita",
+  "version": 1,
+  "nombre": "Visita de prueba",
+  "appMinima": 16,
+  "secciones": [
+    {
+      "clave": "llegada",
+      "titulo": "Llegada",
+      "soloEmpresa": true,
+      "campos": [
+        {
+          "clave": "fotos_llegada",
+          "etiqueta": "Fotos de llegada",
+          "tipo": "foto",
+          "puestos": [
+            "Fachada",
+            "Acceso"
+          ],
+          "sello": {
+            "ubicacion": true,
+            "mapa": true
+          }
+        }
+      ]
+    },
+    {
+      "clave": "servicio",
+      "titulo": "Servicio",
+      "campos": [
+        {
+          "clave": "horario",
+          "etiqueta": "Hora de inicio y final",
+          "tipo": "horario"
+        },
+        {
+          "clave": "sistema_revisado",
+          "etiqueta": "Sistema revisado",
+          "tipo": "opciones",
+          "opciones": [
+            "Control de acceso",
+            "CCTV",
+            "UPS",
+            "Alarma"
+          ],
+          "otro": true
+        }
+      ]
+    },
+    {
+      "clave": "estado_inicial",
+      "titulo": "Estado inicial",
+      "campos": [
+        {
+          "clave": "estado_inicial",
+          "etiqueta": "Estado inicial",
+          "tipo": "texto",
+          "largo": true
+        }
+      ]
+    },
+    {
+      "clave": "diagnostico",
+      "titulo": "Diagnóstico",
+      "campos": [
+        {
+          "clave": "diagnostico",
+          "etiqueta": "Diagnóstico",
+          "tipo": "texto",
+          "largo": true
+        }
+      ]
+    },
+    {
+      "clave": "correccion",
+      "titulo": "Corrección",
+      "campos": [
+        {
+          "clave": "correccion",
+          "etiqueta": "Corrección",
+          "tipo": "texto",
+          "largo": true
+        },
+        {
+          "clave": "solucionado",
+          "etiqueta": "Solucionado",
+          "tipo": "opcion",
+          "opciones": [
+            "Totalmente",
+            "Parcialmente",
+            "No solucionado",
+            "Solucionado remotamente",
+            "Reprogramar visita"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "materiales",
+      "titulo": "Materiales o equipos",
+      "campos": [
+        {
+          "clave": "se_emplearon",
+          "etiqueta": "¿Se emplearon materiales o equipos?",
+          "tipo": "opcion",
+          "opciones": [
+            "Sí",
+            "No"
+          ]
+        },
+        {
+          "clave": "materiales",
+          "etiqueta": "Cantidad, referencia, modelo, serial",
+          "tipo": "cantidades",
+          "unidades": [
+            "und",
+            "m",
+            "global"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "observaciones",
+      "titulo": "Observaciones adicionales",
+      "campos": [
+        {
+          "clave": "observaciones",
+          "etiqueta": "Observaciones adicionales",
+          "tipo": "boceto"
+        }
+      ]
+    },
+    {
+      "clave": "firmas",
+      "titulo": "Firmas",
+      "campos": [
+        {
+          "clave": "acompanamiento",
+          "etiqueta": "Acompañamiento realizado por",
+          "tipo": "firma",
+          "documento": "opcional",
+          "declaracion": "Confirmo que {tecnico} visitó {sitio} el {fecha}."
+        }
+      ]
+    }
+  ]
+}

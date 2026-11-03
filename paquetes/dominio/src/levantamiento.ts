@@ -25,8 +25,22 @@ export interface ValorFirma {
   firma: string;
   nombre: string;
   cargo?: string | undefined;
+  /** Cédula de quien firmó, si el formato la pide (ADR-0050). */
+  documento?: string | undefined;
   firmadoEn: string;
   declaracion: string;
+}
+
+/** Varias opciones elegidas y, si el campo lo permite, el texto de «Otro» (ADR-0050). Un objeto, nunca un arreglo: no se confunde con fotos. */
+export interface ValorOpciones {
+  elegidas: readonly string[];
+  otro?: string | undefined;
+}
+
+/** Hora de llegada y, al terminar, de salida, como "HH:MM" (ADR-0050). Una salida menor que la llegada es del día siguiente. */
+export interface ValorHorario {
+  desde: string;
+  hasta?: string | undefined;
 }
 
 /** Regla 3: un dato obligatorio que no se pudo obtener se marca con su motivo. */
@@ -35,10 +49,12 @@ export interface ValorNoObtenido {
   motivo: string;
 }
 
-export type Valor = string | ValorMedida | ValorFotos | ValorBoceto | ValorCantidades | ValorFirma | ValorNoObtenido;
+export type Valor = string | ValorMedida | ValorFotos | ValorBoceto | ValorCantidades | ValorFirma | ValorOpciones | ValorHorario | ValorNoObtenido;
 
 export const esBoceto = (valor: unknown): valor is ValorBoceto => typeof valor === "object" && valor !== null && !Array.isArray(valor) && "boceto" in valor;
 export const esFirma = (valor: unknown): valor is ValorFirma => typeof valor === "object" && valor !== null && !Array.isArray(valor) && "firma" in valor;
+export const esOpciones = (valor: unknown): valor is ValorOpciones => typeof valor === "object" && valor !== null && !Array.isArray(valor) && "elegidas" in valor;
+export const esHorario = (valor: unknown): valor is ValorHorario => typeof valor === "object" && valor !== null && !Array.isArray(valor) && "desde" in valor;
 
 /** Respuestas por clave de sección y clave de campo. */
 export type Respuestas = Readonly<Record<string, Readonly<Record<string, Valor>>>>;

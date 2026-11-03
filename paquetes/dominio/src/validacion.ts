@@ -1,10 +1,10 @@
 import type { DefinicionCampo, VersionFormato } from "./formato";
-import { esBoceto, esFirma, esNoObtenido, type Respuestas } from "./levantamiento";
+import { esBoceto, esFirma, esHorario, esNoObtenido, esOpciones, type Respuestas } from "./levantamiento";
 import { LIMITES_FIRMA } from "./firma";
 import { LIMITES } from "./limites";
 import { bloques, ID_REPETICION, leerClave, type Repeticiones } from "./repeticiones";
 import { lineasValidas } from "./cantidades";
-import { DECIMAL_CANONICO } from "./patrones";
+import { DECIMAL_CANONICO, DOCUMENTO_DE_IDENTIDAD, HORA_HHMM } from "./patrones";
 
 export { DECIMAL_CANONICO, LIMITES };
 
@@ -32,6 +32,10 @@ export type CodigoErrorValidacion =
   | "cantidades_invalidas"
   /** Una firma sin sus trazos, sin el nombre de quien firmó, sin fecha o sin la constancia (ADR-0024). */
   | "firma_invalida"
+  /** Una opción que no es del campo, repetida, o un «Otro» que el campo no admite o que no es texto (ADR-0050). */
+  | "opcion_invalida"
+  /** Una hora que no es HH:MM, de 00:00 a 23:59 (ADR-0050). */
+  | "horario_invalido"
   /** Oficina no corrige este tipo de campo (hoy, fotos). */
   | "no_corregible"
   /** El archivo de un boceto o una firma pesa más de lo que recibe el servidor: lo mide el teléfono antes de enviar (iteración 42). */
@@ -139,6 +143,29 @@ export function validarCampo(campo: DefinicionCampo, valor: unknown): CodigoErro
       if (typeof valor.unidad !== "string" || !campo.unidades.includes(valor.unidad)) return "unidad_no_permitida";
       return null;
     }
+    case "opcion": {
+      if (valor === undefined) return campo.obligatorio ? "campo_obligatorio" : null;
+      if (typeof valor !== "string") return "tipo_invalido";
+      if (valor.trim() === "") return campo.obligatorio ? "campo_obligatorio" : null;
+      if (campo.opciones.includes(valor)) return null;
+      return campo.otro && valor.length <= LIMITES.otro ? null : "opcion_invalida";
+    }
+    case "opciones": {
+      if (valor === undefined) return campo.obligatorio ? "campo_obligatorio" : null;
+      if (!esOpciones(valor) || Object.keys(valor).some((k) => k !== "elegidas" && k !== "otro")) return "tipo_invalido";
+      const { elegidas, otro } = valor;
+      if (!Array.isArray(elegidas)) return "tipo_invalido";
+      if (elegidas.some((o) => typeof o !== "string" || !campo.opciones.includes(o)) || new Set(elegidas).size !== elegidas.length) return "opcion_invalida";
+      if (otro !== undefined && (!campo.otro || typeof otro !== "string" || otro.trim() === "" || otro.length > LIMITES.otro)) return "opcion_invalida";
+      return elegidas.length === 0 && otro === undefined && campo.obligatorio ? "campo_obligatorio" : null;
+    }
+    case "horario": {
+      if (valor === undefined) return campo.obligatorio ? "campo_obligatorio" : null;
+      if (!esHorario(valor) || Object.keys(valor).some((k) => k !== "desde" && k !== "hasta")) return "tipo_invalido";
+      const { desde, hasta } = valor;
+      if (typeof desde !== "string" || !HORA_HHMM.test(desde) || (hasta !== undefined && (typeof hasta !== "string" || !HORA_HHMM.test(hasta)))) return "horario_invalido";
+      return hasta === undefined && campo.obligatorio ? "campo_obligatorio" : null;
+    }
     case "foto": {
       const minimo = Math.max(campo.min ?? 0, campo.obligatorio ? 1 : 0);
       if (valor === undefined) return minimo > 0 ? (campo.obligatorio ? "campo_obligatorio" : "fotos_insuficientes") : null;
@@ -164,20 +191,23 @@ export function validarCampo(campo: DefinicionCampo, valor: unknown): CodigoErro
     case "firma": {
       if (valor === undefined) return campo.obligatorio ? "campo_obligatorio" : null;
       if (!esFirma(valor) || Object.keys(valor).some((k) => !CLAVES_FIRMA.has(k))) return "tipo_invalido";
-      const { firma, nombre, cargo, firmadoEn, declaracion } = valor;
+      const { firma, nombre, cargo, firmadoEn, declaracion, documento } = valor;
+      // La cédula solo la recibe un formato que la pide (ADR-0050); si llega, tiene que ser válida.
+      const documentoValido = documento === undefined ? campo.documento !== "obligatorio" : campo.documento !== undefined && typeof documento === "string" && DOCUMENTO_DE_IDENTIDAD.test(documento);
       const texto = (t: unknown, maximo: number) => typeof t === "string" && t.trim() !== "" && t.length <= maximo;
       const valida =
         typeof firma === "string" && HUELLA_SHA256.test(firma) &&
         texto(nombre, LIMITES_FIRMA.nombre) &&
         (cargo === undefined || texto(cargo, LIMITES_FIRMA.cargo)) &&
         typeof firmadoEn === "string" && !Number.isNaN(Date.parse(firmadoEn)) &&
-        texto(declaracion, LIMITES_FIRMA.declaracion);
+        texto(declaracion, LIMITES_FIRMA.declaracion) &&
+        documentoValido;
       return valida ? null : "firma_invalida";
     }
   }
 }
 
-const CLAVES_FIRMA = new Set(["firma", "nombre", "cargo", "firmadoEn", "declaracion"]);
+const CLAVES_FIRMA = new Set(["firma", "nombre", "cargo", "firmadoEn", "declaracion", "documento"]);
 
 /**
  * Recorre las respuestas una sola vez y junta las huellas de archivos, sin repetir. Un tipo de valor nuevo con

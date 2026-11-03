@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, fotosReferenciadas, sinRespuestasHuerfanas, type VersionFormato } from "@teins/dominio";
-import { Activity, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useMinuto, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
+import { Activity, UserRound, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useMinuto, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
 import { resumenDeRecorrido } from "../recorrido";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
@@ -13,10 +13,11 @@ import { plataforma } from "../dispositivo/instalacion";
 import { useConexionDelNavegador, useServidorAlcanzable } from "../dispositivo/useConexion";
 import { formatoDe, nombreDeFormato, useFormatos, vigentes } from "../formatos";
 import { claseDeTono, estadoCorto } from "../mensajes";
-import { armarChat, horaDelChat, sinLeer } from "../conversacion";
+import { horaDelChat, sinLeerDe, ultimoDeOficina } from "../conversacion";
+import { ponerInsignia } from "../dispositivo/insignia";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
-import { agendaDeVisitas, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, terminadaEn } from "../visitas";
+import { agendaDeVisitas, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, sePuedeIniciar, terminadaEn } from "../visitas";
 import { permisoLocal } from "../sesion/permiso";
 import { VERSION_APP } from "../version";
 import { AvisoDeAlmacenamiento } from "./AvisoDeAlmacenamiento";
@@ -32,7 +33,8 @@ const Diagnostico = lazy(() => import("./Diagnostico").then((m) => ({ default: m
 
 interface Props {
   usuario: UsuarioLocal;
-  abrir: (id: string) => void;
+  /** `chat`: abre directo el chat con oficina (iteración 46). */
+  abrir: (id: string, chat?: boolean) => void;
   /** El levantamiento que se acaba de cerrar: se resalta en su lista (lo enviado, en "Enviados"). */
   recien?: string | undefined;
   /** Cambia cuando se pide abrir la papelera desde fuera ("Ver en Descartados" al descartar). */
@@ -63,7 +65,7 @@ interface Contexto {
   visitas: ReadonlyMap<string, VisitaLocal>;
   /** Vencido el permiso de trabajo local, no se crea ni se edita nada (ADR-0009, parte 2). */
   bloqueado: boolean;
-  abrir: (id: string) => void;
+  abrir: (id: string, chat?: boolean) => void;
   iniciar: (visitaId: string, formato: VersionFormato) => void;
   recien: string | undefined;
 }
@@ -128,9 +130,11 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
   const iniciado = useRef(false);
   const [iniciar] = useSinRepetir(async (visitaId: string, formato: VersionFormato) => {
     if (iniciado.current) return;
+    const visita = visitas?.find((v) => v.id === visitaId);
+    // Defensa: la pantalla no ofrece el botón antes del día, y si por otro camino llega aquí, no se crea nada.
+    if (visita && !sePuedeIniciar(visita, hoyLocal())) return;
     const levantamiento = crearLevantamiento(formato, uuidv7(), new Date(), visitaId, nuevoIdDeRepeticion);
     // Lo nombra aunque la visita salga del teléfono cuando ya esté atendida (iteración 42).
-    const visita = visitas?.find((v) => v.id === visitaId);
     await repositorio.crear(levantamiento, usuario.id, visita ? { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre } : undefined);
     iniciado.current = true;
     abrir(levantamiento.id);
@@ -155,7 +159,17 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
 
   // Lo que no entró va aparte y arriba: es lo único de la lista que pide hacer algo (iteración 32).
   const noEntraron = (lista ?? []).filter((l) => l.estado === "enviado" && envios?.get(l.id)?.estado === "error" && !servidor?.has(l.id));
-  const enviados = (lista ?? []).filter((l) => l.estado === "enviado" && !noEntraron.includes(l));
+  // Lo que oficina escribió y el técnico no ha leído sube también (iteración 46): el aviso se puede perder; esto no. Al
+  // leerlo vuelve a «Enviados». El más reciente primero.
+  const sinLeerEn = (l: LevantamientoLocal) => sinLeerDe(servidor?.get(l.id), chats?.leido.get(l.id) ?? null);
+  const porResponder = (lista ?? [])
+    .filter((l) => l.estado === "enviado" && !noEntraron.includes(l) && sinLeerEn(l) > 0)
+    .sort((a, b) => ultimoDeOficina(servidor?.get(b.id)).localeCompare(ultimoDeOficina(servidor?.get(a.id))));
+  const enviados = (lista ?? []).filter((l) => l.estado === "enviado" && !noEntraron.includes(l) && !porResponder.includes(l));
+  // El número del ícono (iteración 46): solo con todo leído, para no apagarlo mientras la pantalla aún carga.
+  useEffect(() => {
+    if (!cargando && chats !== undefined) void ponerInsignia(porResponder.length);
+  }, [cargando, chats, porResponder.length]);
   const borradoresSueltos = sueltos.filter((l) => l.estado === "borrador");
   const primerNombre = usuario.nombre.split(" ")[0] ?? usuario.nombre;
 
@@ -233,12 +247,13 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
               </EstadoVacio>
             )}
 
-            {noEntraron.length > 0 && (
+            {(noEntraron.length > 0 || porResponder.length > 0) && (
               <section aria-labelledby="titulo-atencion" className="flex flex-col gap-2.5">
                 <h2 id="titulo-atencion" className="pt-2 text-ayuda font-extrabold text-texto-secundario">
                   Necesita atención
                 </h2>
-                <Filas levantamientos={noEntraron} contexto={contexto} atencion />
+                {noEntraron.length > 0 && <Filas levantamientos={noEntraron} contexto={contexto} atencion />}
+                {porResponder.length > 0 && <Filas levantamientos={porResponder} contexto={contexto} />}
               </section>
             )}
 
@@ -402,6 +417,29 @@ const iniciales = (nombre: string) =>
     .map((p) => p[0]!.toUpperCase())
     .join("");
 
+/** «+573105550142» → «+57 310 555 0142»: como se lee y se marca. */
+const celularLegible = (e164: string) => (e164.startsWith("+57") && e164.length === 13 ? `+57 ${e164.slice(3, 6)} ${e164.slice(6, 9)} ${e164.slice(9)}` : e164);
+
+/**
+ * A quién buscar al llegar (ADR-0051): quien pidió la visita, con su celular para llamarlo. Sin solicitante no se
+ * dice nada; sin celular, solo el nombre.
+ */
+function Solicitante({ visita }: { visita: VisitaLocal }) {
+  const s = visita.solicitante;
+  if (!s) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-x-1.5">
+      <UserRound aria-hidden className="size-3.5 shrink-0" />
+      <span>{`Pregunta por ${s.nombre}${s.cargo ? ` (${s.cargo})` : ""}`}</span>
+      {s.celular && (
+        <a href={`tel:${s.celular}`} className="inline-flex min-h-11 items-center font-medium text-superficie focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco">
+          {celularLegible(s.celular)}
+        </a>
+      )}
+    </span>
+  );
+}
+
 /**
  * Punto focal (DESIGN.md; prototipos/base-visual, campo): la visita de ahora en una tarjeta de borde fino, con
  * cuándo es en azul, el avance del levantamiento por pasos y la única acción principal.
@@ -432,6 +470,7 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
           <MapPin aria-hidden className="mt-0.5 size-3.5 shrink-0" />
           {visita.sitio.nombre} · {visita.sitio.direccion}
         </span>
+        <Solicitante visita={visita} />
         <span>{visita.motivo}</span>
         {abierta && (
           <span className="flex items-center gap-1.5">
@@ -566,6 +605,8 @@ function Acciones({
   }
   // Una visita que ya no es del técnico no admite levantamientos nuevos.
   if (visita.fueraDeAlcance) return null;
+  // Una visita de otro día no se inicia (iteración 46): en lugar del botón, cuándo. La tarjeta cambia sola al llegar el día.
+  if (!sePuedeIniciar(visita, hoyLocal())) return <p className="text-ayuda text-texto-secundario">{cuandoSePodraIniciar(visita.programadaPara, hoyLocal())}</p>;
   if (contexto.bloqueado) {
     return (
       <Boton variante={variante} className="w-full" disabled>
@@ -621,7 +662,7 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
   const servidor = contexto.servidor.get(l.id);
   const estado = l.estado === "borrador" ? { texto: "Borrador", tono: "pendiente" as const } : estadoCorto(envio, servidor, contexto.enLinea);
   // El chat con oficina (ADR-0040): lo nuevo de oficina, o lo que el técnico respondió y espera señal.
-  const nuevos = servidor?.comentarios?.length ? sinLeer(armarChat(servidor.comentarios, []), contexto.chats.leido.get(l.id) ?? null) : 0;
+  const nuevos = sinLeerDe(servidor, contexto.chats.leido.get(l.id) ?? null);
   const enCola = contexto.chats.enCola.get(l.id) ?? 0;
   const visita = l.visitaId ? contexto.visitas.get(l.visitaId) : undefined;
   // La visita atendida sale del teléfono al día siguiente (ADR-0041): lo enviado sigue diciendo dónde fue (iteración 42).
@@ -632,7 +673,8 @@ function Fila({ levantamiento: l, contexto }: { levantamiento: LevantamientoLoca
   return (
     <button
       type="button"
-      onClick={() => contexto.abrir(l.id)}
+      // Lo sin leer abre directo el chat (iteración 46); lo demás, el levantamiento.
+      onClick={() => contexto.abrir(l.id, nuevos > 0)}
       // La lista de enviados crece: la fila lleva su nombre de transición solo mientras se ve.
       ref={enPantalla}
       className={`grid min-h-tactil w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-3 text-left transition-colors hover:bg-panel-hundido focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-foco ${contexto.recien === l.id ? "animate-resaltar" : ""}`}

@@ -1,4 +1,4 @@
-import type { ComentarioDeOficina, RespuestaPendiente } from "./datos/modelo";
+import type { ComentarioDeOficina, EstadoServidor, RespuestaPendiente } from "./datos/modelo";
 
 /*
   El chat con oficina de un levantamiento enviado (ADR-0040, prototipos/hilos, «Campo»): un solo chat por
@@ -41,6 +41,16 @@ export function armarChat(comentarios: readonly ComentarioDeOficina[], pendiente
 
 /** Lo de oficina que el técnico no ha visto: lo posterior a lo último que leyó. */
 export const sinLeer = (chat: readonly MensajeDelChat[], leidoHasta: string | null) => chat.filter((m) => m.de === "oficina" && (!leidoHasta || m.en > leidoHasta)).length;
+
+/** Lo sin leer de un levantamiento enviado, tal como bajó del servidor: la cuenta de la fila y de «Necesita atención». */
+export const sinLeerDe = (servidor: Pick<EstadoServidor, "comentarios"> | undefined, leidoHasta: string | null) =>
+  servidor?.comentarios?.length ? sinLeer(armarChat(servidor.comentarios, []), leidoHasta) : 0;
+
+/** Cuándo escribió oficina por última vez ("" si no ha escrito): ordena lo sin leer, lo más reciente primero. */
+export const ultimoDeOficina = (servidor: Pick<EstadoServidor, "comentarios"> | undefined) =>
+  armarChat(servidor?.comentarios ?? [], [])
+    .filter((m) => m.de === "oficina")
+    .reduce((ultimo, m) => (m.en > ultimo ? m.en : ultimo), "");
 
 export type FilaDelChat =
   | { tipo: "hora"; en: string }

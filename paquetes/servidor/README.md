@@ -91,7 +91,8 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 | `desactivar-usuario` | Revoca: cierra sus sesiones, no vuelve a entrar y sus teléfonos borran sus datos al conectarse; lo que tenía en revisión queda sin tomar |
 | `marcar-administrador` | Marca (o con `--quitar`, desmarca) a una persona de oficina como administradora; para administrar debe activar además el segundo factor en oficina |
 | `crear-cliente` | Cliente con su primer sitio |
-| `crear-visita`, `reasignar-visita` | Programa una visita para uno o varios técnicos (no valida cruces de horario); al reasignar, sale del teléfono de quien deja de tenerla |
+| `crear-visita`, `reasignar-visita` | Programa una visita para uno o varios técnicos (no valida cruces de horario); al reasignar, sale del teléfono de quien deja de tenerla. Al programar se le asigna el siguiente número de orden de servicio |
+| `fijar-consecutivo-de-ordenes` | `--organizacion <uuid> --ultimo <n>`: la siguiente visita sigue desde el número de TEINS (ADR-0051). Nunca baja ni repite un número |
 | `publicar-formato` | Publica una versión de formato desde un JSON; llega a los teléfonos en la siguiente bajada |
 | `publicar-simbolos` | Publica la biblioteca de símbolos desde un JSON (ADR-0027): crea o cambia cada símbolo y retira los que ya no están. La de prueba es `@teins/dominio/formatos-de-prueba/simbolos-prueba.json`, que `sembrar` publica |
 | `crear-acceso-cliente`, `regenerar-acceso-cliente` | Acceso de un cliente al portal: muestra una sola vez identificador, clave y QR (`--qr archivo.svg` lo guarda); regenerar invalida el anterior y sus sesiones |
@@ -113,6 +114,13 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 - Una foto o un boceto guardado sin su fila (base restaurada, entorno limpio) se adopta como subido si es idéntico a lo declarado; un PDF sin fila se rechaza (no se distingue de uno generado).
 - Al verificar un plano se cuentan las páginas que anexaría (`paginasDePlano` en `plataforma/pdf.ts`, los mismos pasos del worker; 0 si no se puede anexar) y se guardan en `archivos.paginas`; `estadoDePlano` las entrega a oficina.
 - Las URL firmadas de descarga del PDF llevan `Content-Disposition: attachment` con un nombre legible (`firmarDescarga(clave, { descargarComo })`): oficina y el portal lo descargan sin salir de la pantalla. Fotos y bocetos van en línea.
+
+### Datos de la visita, número de orden y cédula (ADR-0051)
+
+- Migración `0040`: `clientes.clientes.nit`, `clientes.sitios.ciudad`, `visitas.visitas.solicitante_contacto_id`, `orden_de_servicio` (único por organización) y `referencia_cliente`, `visitas.consecutivos_de_orden` (con aislamiento por organización) e `identidad.usuarios.documento`.
+- `visitas.crear` asigna el número con un upsert que incrementa el consecutivo en la misma transacción; reprogramar lo conserva y cancelar no lo libera. `fijarConsecutivoDeOrdenes` (comando `fijar-consecutivo-de-ordenes`) nunca baja ni repite. El solicitante se valida contra los contactos del mismo cliente por `clientesYSitios.contactos`; uno que oficina quitó conserva el nombre y pierde el celular.
+- `documento` lo pone y lo ve solo quien administra (`fijarDocumentoDeUsuario`); `identidad.documentos` lo da al informe, que lo copia a la versión. El registro dice `documento_cambiado` con `tieneCedula`, nunca el valor.
+- Al publicar un informe, `informes` copia el encabezado (`encabezadoDe`), las cédulas y `revisadoEn` (regla 7).
 
 ### Clientes y visitas (ADR-0035, ADR-0037, ADR-0041)
 
@@ -141,6 +149,13 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 - La lista de precios vive en `catalogo.precios` (una fila por cambio, el vigente es el más reciente; cambiarla o importarla con precios exige administración con segundo factor). Las cotizaciones viven en el esquema `cotizaciones`; las versiones publicadas solo dejan cambiar las columnas de su PDF.
 - `crearCotizacion` toma las cantidades de los levantamientos revisados (`levantamientos.cantidadesRevisadas`) con los precios vigentes; `publicarCotizacion` congela líneas, impuestos y totales, encola `cotizaciones.generarPdf` y programa los envíos con el mensaje de tipo `cotizacion`.
 - `retirarVersionDeCotizacion` (administración, con motivo) marca `retirada_en`, cancela sus envíos en cola y deja vigente la anterior no retirada (`todasRetiradas` en la lista).
+
+### La foto de llegada (ADR-0052)
+
+- `GET /api/hora` da la hora oficial del servidor, la «hora de red» de la franja. `GET /api/mapa?lat&lon` da el mapa como imagen incrustada (`data:`) con su `centro`, `zoom` y `atribucion`; solo el técnico los pide.
+- El mapa lo genera Geoapify Static Maps (`osm-bright`, zoom 16, 400 × 400 a escala 2, JPEG) desde `src/modulos/mapas`. El servidor **redondea las coordenadas a 3 decimales** antes de pedirlo, la llave (`GEOAPIFY_LLAVE`) nunca sale del servidor y las rutas de `/api/mapa` no entran en los registros de solicitudes, porque llevan las coordenadas en la dirección.
+- Límite de 30 mapas por minuto y por técnico (`demasiadas_solicitudes`). Sin la llave, o si Geoapify falla o tarda más de 2,5 s, responde `no_disponible` (503) y la foto sale sin mapa.
+- `GEOAPIFY_URL` solo cambia en pruebas (`pruebas/llegada.test.ts` levanta un Geoapify simulado). `GEOAPIFY_LLAVE` va en `.env.example` sin valor y en Railway; nunca en el repositorio.
 
 ### Envíos al cliente (ADR-0028, ADR-0034, ADR-0036, ADR-0047)
 

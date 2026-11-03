@@ -7,7 +7,13 @@ const enCI = Boolean(process.env.CI);
  * activarlos. No es un secreto; la privada no existe aquí porque en el extremo a extremo no corre el worker.
  */
 const CLAVE_PUBLICA_AVISOS = "BOXZWm72IS92BJJBRVsOr18iQm923oFhf1AEZDwBe6t-q8GJISfEGyTTVn4agceqiue9pH2hTy8V1NqMosVxqpk";
-const servidor = { cwd: "../paquetes/servidor", env: { INICIOS_DE_SESION_POR_MINUTO: "1000", AVISOS_VAPID_PUBLICA: CLAVE_PUBLICA_AVISOS } };
+/**
+ * Inicios de sesión: Better Auth cuenta todos los de una IP (aquí, 127.0.0.1) y solo vuelve a cero tras 60 s sin
+ * ninguno; el contador vive en la base y sobrevive al reinicio del servidor. Una ronda hace unos 220: con 1000, la
+ * cuarta o quinta ronda seguida se quedaba un minuto sin poder entrar (la ráfaga de la iteración 47). 10 000 es el
+ * máximo que acepta config.ts.
+ */
+const servidor = { cwd: "../paquetes/servidor", env: { INICIOS_DE_SESION_POR_MINUTO: "10000", AVISOS_VAPID_PUBLICA: CLAVE_PUBLICA_AVISOS } };
 
 /**
  * Extremo a extremo (ADR-0018, nivel 5): Chromium y WebKit sobre el sistema completo.

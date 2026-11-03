@@ -24,6 +24,8 @@ export interface NuevoUsuario {
   contrasena: string;
   /** La contraseña se entrega como temporal (desde oficina): debe cambiarla al entrar (ADR-0033). */
   temporal?: boolean;
+  /** Cédula, para firmar los informes (ADR-0051). */
+  documento?: string | undefined;
 }
 
 type Ejecutor = BaseDeDatos | TxOrganizacion;
@@ -57,6 +59,11 @@ export interface Identidad {
    * retiene una puede agotarlo y dejar todas las solicitudes esperando.
    */
   nombres(organizacionId: string, ids: readonly string[], en?: Ejecutor): Promise<Map<string, string>>;
+  /**
+   * Cédulas por id, solo de quienes tienen (ADR-0051). Para el informe, que lleva nombre y cédula de quien firma;
+   * nunca para listas ni registros (regla 18).
+   */
+  documentos(organizacionId: string, ids: readonly string[], en?: Ejecutor): Promise<Map<string, string>>;
   /** Personas cuyo nombre contiene el texto: para buscar por técnico (iteración 23). Igual que `nombres` con `en`. */
   buscarPorNombre(organizacionId: string, texto: string, en?: Ejecutor): Promise<string[]>;
   /** Con `contexto`, queda el evento `usuario_creado` (desde oficina o por comando). */
@@ -98,6 +105,7 @@ const columnasAdministradas = {
   segundoFactor: usuarios.twoFactorEnabled,
   desactivadoEn: usuarios.desactivadoEn,
   debeCambiarContrasena: usuarios.debeCambiarContrasena,
+  documento: usuarios.documento,
   creadoEn: usuarios.createdAt,
   organizacionId: usuarios.organizacionId,
 };
@@ -110,6 +118,7 @@ interface FilaAdministrada {
   segundoFactor: boolean;
   desactivadoEn: Date | null;
   debeCambiarContrasena: boolean;
+  documento: string | null;
   creadoEn: Date;
   organizacionId: string;
 }
@@ -123,6 +132,7 @@ const comoAdministrado = (f: FilaAdministrada) => ({
   segundoFactor: f.segundoFactor,
   desactivadoEn: f.desactivadoEn?.toISOString() ?? null,
   debeCambiarContrasena: f.debeCambiarContrasena,
+  documento: f.documento,
   creadoEn: f.creadoEn.toISOString(),
 });
 
@@ -383,6 +393,15 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config, { alDesactivar }
       return new Map(filas.map((f) => [f.id, f.nombre]));
     },
 
+    async documentos(organizacionId, ids, en = bd) {
+      if (ids.length === 0) return new Map();
+      const filas = await en
+        .select({ id: usuarios.id, documento: usuarios.documento })
+        .from(usuarios)
+        .where(and(eq(usuarios.organizacionId, organizacionId), inArray(usuarios.id, [...ids]), isNotNull(usuarios.documento)));
+      return new Map(filas.flatMap((f) => (f.documento ? [[f.id, f.documento] as const] : [])));
+    },
+
     async buscarPorNombre(organizacionId, texto, en = bd) {
       const filas = await en
         .select({ id: usuarios.id })
@@ -391,7 +410,7 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config, { alDesactivar }
       return filas.map((f) => f.id);
     },
 
-    async crearUsuario({ organizacionId, usuario, nombre, rol, contrasena, temporal = false }, contexto) {
+    async crearUsuario({ organizacionId, usuario, nombre, rol, contrasena, temporal = false, documento }, contexto) {
       const nombreDeUsuario = usuario.trim().toLowerCase();
       if (!USUARIO_VALIDO.test(nombreDeUsuario)) throw new Error("Usuario: 3 a 30 caracteres entre a-z, 0-9, punto, guion y guion bajo");
       if (contrasena.length < 10) throw new Error("La contraseña debe tener al menos 10 caracteres");
@@ -414,6 +433,8 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config, { alDesactivar }
           userId: creado.id,
           password: await contextoAuth.password.hash(contrasena),
         });
+        // Dentro del mismo intento: si la cédula no se guarda, el usuario no queda a medias y se puede reintentar.
+        if (documento) await bd.update(usuarios).set({ documento }).where(eq(usuarios.id, creado.id));
       } catch (error) {
         await contextoAuth.internalAdapter.deleteUser(creado.id);
         throw error;
@@ -422,7 +443,8 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config, { alDesactivar }
       if (contexto) {
         await enOrganizacion(bd, organizacionId, (tx) =>
           registrar(tx, [
-            { organizacionId, agregadoTipo: "usuario", agregadoId: creado.id, tipoEvento: "usuario_creado", autorId: contexto.autorId, correlacion: contexto.correlacion, valorNuevo: { usuario: nombreDeUsuario, rol } },
+            // La cédula no entra al registro: queda que la tiene, no cuál es (regla 18).
+            { organizacionId, agregadoTipo: "usuario", agregadoId: creado.id, tipoEvento: "usuario_creado", autorId: contexto.autorId, correlacion: contexto.correlacion, valorNuevo: { usuario: nombreDeUsuario, rol, ...(documento ? { conCedula: true } : {}) } },
           ]),
         );
       }
@@ -582,13 +604,30 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config, { alDesactivar }
           const contrasena = contrasenaTemporal();
           let id: string;
           try {
-            ({ id } = await this.crearUsuario({ organizacionId: actor.organizacionId, usuario: cuerpo.usuario, nombre: cuerpo.nombre, rol: cuerpo.rol, contrasena, temporal: true }, { autorId: actor.usuarioId, correlacion }));
+            ({ id } = await this.crearUsuario({ organizacionId: actor.organizacionId, usuario: cuerpo.usuario, nombre: cuerpo.nombre, rol: cuerpo.rol, contrasena, temporal: true, documento: cuerpo.documento }, { autorId: actor.usuarioId, correlacion }));
           } catch (error) {
             // El nombre de usuario es único en todo el sistema: es con lo que se inicia sesión.
             if (esViolacionUnica(error)) throw problema("conflicto", "Ese nombre de usuario ya existe");
             throw error;
           }
           return { usuario: comoAdministrado(await administrado(actor.organizacionId, id)), contrasena };
+        },
+      });
+
+      registrarOperacion(app, "fijarDocumentoDeUsuario", {
+        politica: politicas.administrador,
+        manejar: async ({ parametros: { id }, cuerpo, actor, correlacion }) => {
+          const fila = await administrado(actor.organizacionId, id);
+          if (fila.documento !== cuerpo.documento) {
+            await enOrganizacion(bd, fila.organizacionId, async (tx) => {
+              await tx.update(usuarios).set({ documento: cuerpo.documento }).where(eq(usuarios.id, fila.id));
+              // Queda que cambió y quién lo hizo, nunca el valor: el registro no se borra y la cédula sí puede quitarse (regla 18).
+              await registrar(tx, [
+                { organizacionId: fila.organizacionId, agregadoTipo: "usuario", agregadoId: fila.id, tipoEvento: "documento_cambiado", autorId: actor.usuarioId, correlacion, rutaCampo: "documento", valorAnterior: { tieneCedula: fila.documento !== null }, valorNuevo: { tieneCedula: cuerpo.documento !== null } },
+              ]);
+            });
+          }
+          return comoAdministrado(await administrado(actor.organizacionId, id));
         },
       });
 

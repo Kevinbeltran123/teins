@@ -1,6 +1,7 @@
 import { ErrorDeRed } from "@teins/protocolo";
 import { db, repositorio, sellarEnSegundoPlano } from "../datos/instancia";
 import { quitarSuscripcion } from "../dispositivo/avisos";
+import { ponerInsignia } from "../dispositivo/insignia";
 import { almacen, cliente, sincronizarEnSegundoPlano } from "../sincronizacion/instancia";
 import { VERSION_APP } from "../version";
 
@@ -41,7 +42,7 @@ export async function iniciarSesionConLlave(): Promise<void> {
 }
 
 async function prepararSesion(): Promise<void> {
-  const { usuario: datos, permisoLocalHasta } = await cliente.llamar("obtenerSesion");
+  const { usuario: datos, permisoLocalHasta, organizacion } = await cliente.llamar("obtenerSesion");
   if (datos.rol !== "tecnico") {
     await cliente.cerrarSesion().catch(() => undefined);
     throw new RolNoPermitido();
@@ -49,6 +50,8 @@ async function prepararSesion(): Promise<void> {
   if (datos.debeCambiarContrasena) throw new ContrasenaTemporal();
   await almacen.renovarPermiso(datos.id, permisoLocalHasta, VERSION_APP);
   await db.ajustes.put({ clave: "usuario", valor: datos });
+  // El nombre de la organización sale en la franja de la foto de llegada (ADR-0052).
+  await db.ajustes.put({ clave: "organizacion", valor: organizacion.nombre });
   await db.ajustes.delete("acceso_cerrado");
   await repositorio.asignarSinResponsable(datos.id);
   // Lo que no tenía responsable ya lo tiene: se cifra con su clave.
@@ -75,6 +78,8 @@ export async function salirSinCambiar(): Promise<void> {
  * señal, la sesión sigue abierta en el servidor hasta que `completarCierrePendiente` la cierra.
  */
 export async function cerrarSesion(): Promise<void> {
+  // El número del ícono es de esta persona (iteración 46): no se queda para la siguiente.
+  void ponerInsignia(0);
   // Con la sesión todavía abierta: el servidor solo deja quitar la suscripción propia (ADR-0023).
   await quitarSuscripcion().catch(() => undefined);
   const sinSenal = await cliente.cerrarSesion().then(
@@ -85,6 +90,8 @@ export async function cerrarSesion(): Promise<void> {
     await db.ajustes.delete("usuario");
     if (sinSenal) await db.ajustes.put({ clave: "cierre_pendiente", valor: new Date().toISOString() });
   });
+  // Otra vez al final: la pantalla pudo volver a ponerlo mientras se cerraba en el servidor.
+  void ponerInsignia(0);
 }
 
 let cierreEnCurso: Promise<void> | null = null;

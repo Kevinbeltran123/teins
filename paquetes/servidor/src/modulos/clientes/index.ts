@@ -17,21 +17,38 @@ export interface Sitio {
   cliente: string;
   nombre: string;
   direccion: string;
+  /** Ciudad del sitio y NIT del cliente, para el encabezado del informe (ADR-0051). */
+  ciudad: string | null;
+  clienteNit: string | null;
   /** El sitio o su cliente están archivados: ya no se les programa (ADR-0035). */
   archivado: boolean;
+}
+
+/** Lo que el módulo de visitas lee de un contacto (ADR-0051): a quién preguntar al llegar. */
+export interface ContactoDeVisita {
+  id: string;
+  clienteId: string;
+  nombre: string;
+  cargo: string;
+  /** Sin celular si oficina quitó al contacto: se borran sus datos de contacto y queda el nombre (regla 18). */
+  celular: string | null;
+  /** Oficina lo quitó: sigue saliendo en lo ya programado, pero no se elige para una visita nueva. */
+  quitado: boolean;
 }
 
 export interface NuevoCliente {
   organizacionId: string;
   nombre: string;
-  sitio: { nombre: string; direccion: string };
+  nit?: string | undefined;
+  sitio: { nombre: string; direccion: string; ciudad?: string | undefined };
 }
 
 export interface ClienteConSitios {
   id: string;
   nombre: string;
+  nit: string | null;
   /** Sus sitios activos. */
-  sitios: { id: string; nombre: string; direccion: string }[];
+  sitios: { id: string; nombre: string; direccion: string; ciudad: string | null }[];
   /** Contactos que reciben el informe por algún canal. */
   reciben: number;
   archivadoEn: Date | null;
@@ -73,11 +90,11 @@ const recibeAlgo = and(vigente, eq(contactos.recibeInformes, true), or(eq(contac
  * pantalla (iteración 7) o con el comando `crear-cliente`.
  */
 export const clientesYSitios = {
-  async crear(tx: TxOrganizacion, { organizacionId, nombre, sitio }: NuevoCliente): Promise<{ clienteId: string; sitioId: string }> {
+  async crear(tx: TxOrganizacion, { organizacionId, nombre, nit, sitio }: NuevoCliente): Promise<{ clienteId: string; sitioId: string }> {
     const clienteId = randomUUID();
     const sitioId = randomUUID();
-    await tx.insert(clientes).values({ id: clienteId, organizacionId, nombre: nombre.trim() });
-    await tx.insert(sitios).values({ id: sitioId, organizacionId, clienteId, nombre: sitio.nombre.trim(), direccion: sitio.direccion.trim() });
+    await tx.insert(clientes).values({ id: clienteId, organizacionId, nombre: nombre.trim(), nit: nit?.trim() || null });
+    await tx.insert(sitios).values({ id: sitioId, organizacionId, clienteId, nombre: sitio.nombre.trim(), direccion: sitio.direccion.trim(), ciudad: sitio.ciudad?.trim() || null });
     return { clienteId, sitioId };
   },
 
@@ -98,9 +115,9 @@ export const clientesYSitios = {
     return tx.select({ id: clientes.id, nombre: clientes.nombre }).from(clientes).orderBy(asc(clientes.nombre));
   },
 
-  async agregarSitio(tx: TxOrganizacion, { organizacionId, clienteId, nombre, direccion }: { organizacionId: string; clienteId: string; nombre: string; direccion: string }): Promise<string> {
+  async agregarSitio(tx: TxOrganizacion, { organizacionId, clienteId, nombre, direccion, ciudad }: { organizacionId: string; clienteId: string; nombre: string; direccion: string; ciudad?: string | undefined }): Promise<string> {
     const id = randomUUID();
-    await tx.insert(sitios).values({ id, organizacionId, clienteId, nombre: nombre.trim(), direccion: direccion.trim() });
+    await tx.insert(sitios).values({ id, organizacionId, clienteId, nombre: nombre.trim(), direccion: direccion.trim(), ciudad: ciudad?.trim() || null });
     return id;
   },
 
@@ -110,13 +127,13 @@ export const clientesYSitios = {
    */
   async conSitios(tx: TxOrganizacion, ids?: readonly string[], vista: "activos" | "archivados" = "activos"): Promise<ClienteConSitios[]> {
     const lista = await tx
-      .select({ id: clientes.id, nombre: clientes.nombre, archivadoEn: clientes.archivadoEn, archivadoPor: clientes.archivadoPor })
+      .select({ id: clientes.id, nombre: clientes.nombre, nit: clientes.nit, archivadoEn: clientes.archivadoEn, archivadoPor: clientes.archivadoPor })
       .from(clientes)
       .where(ids ? inArray(clientes.id, [...ids]) : vista === "activos" ? isNull(clientes.archivadoEn) : isNotNull(clientes.archivadoEn))
       .orderBy(asc(clientes.nombre));
     if (lista.length === 0) return [];
     const deEllos = await tx
-      .select({ id: sitios.id, clienteId: sitios.clienteId, nombre: sitios.nombre, direccion: sitios.direccion })
+      .select({ id: sitios.id, clienteId: sitios.clienteId, nombre: sitios.nombre, direccion: sitios.direccion, ciudad: sitios.ciudad })
       .from(sitios)
       .where(and(inArray(sitios.clienteId, lista.map((c) => c.id)), isNull(sitios.archivadoEn)))
       .orderBy(asc(sitios.nombre));
@@ -127,7 +144,7 @@ export const clientesYSitios = {
       .groupBy(contactos.clienteId);
     return lista.map((c) => ({
       ...c,
-      sitios: deEllos.filter((s) => s.clienteId === c.id).map(({ id, nombre, direccion }) => ({ id, nombre, direccion })),
+      sitios: deEllos.filter((s) => s.clienteId === c.id).map(({ id, nombre, direccion, ciudad }) => ({ id, nombre, direccion, ciudad })),
       reciben: conteos.find((x) => x.clienteId === c.id)?.reciben ?? 0,
     }));
   },
@@ -149,14 +166,26 @@ export const clientesYSitios = {
         id: sitios.id,
         clienteId: sitios.clienteId,
         cliente: clientes.nombre,
+        clienteNit: clientes.nit,
         nombre: sitios.nombre,
         direccion: sitios.direccion,
+        ciudad: sitios.ciudad,
         archivado: sql<boolean>`(${sitios.archivadoEn} is not null or ${clientes.archivadoEn} is not null)`,
       })
       .from(sitios)
       .innerJoin(clientes, eq(clientes.id, sitios.clienteId))
       .where(inArray(sitios.id, [...ids]));
     return new Map(filas.map((f) => [f.id, f]));
+  },
+
+  /** Contactos por id, para la visita (ADR-0051): también los quitados, que conservan el nombre y pierden el celular. */
+  async contactos(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, ContactoDeVisita>> {
+    if (ids.length === 0) return new Map();
+    const filas = await tx
+      .select({ id: contactos.id, clienteId: contactos.clienteId, nombre: contactos.nombre, cargo: contactos.cargo, celular: contactos.celular, quitadoEn: contactos.quitadoEn })
+      .from(contactos)
+      .where(inArray(contactos.id, [...ids]));
+    return new Map(filas.map(({ quitadoEn, celular, ...c }) => [c.id, { ...c, celular: quitadoEn ? null : celular, quitado: quitadoEn !== null }]));
   },
 };
 
@@ -263,7 +292,8 @@ async function detalleDe(tx: TxOrganizacion, deps: Dependencias, organizacionId:
   return {
     id: cliente.id,
     nombre: cliente.nombre,
-    sitios: susSitios.map((x) => ({ id: x.id, nombre: x.nombre, direccion: x.direccion, archivado: marca(x.archivadoEn, x.archivadoPor, nombres) })),
+    nit: cliente.nit,
+    sitios: susSitios.map((x) => ({ id: x.id, nombre: x.nombre, direccion: x.direccion, ciudad: x.ciudad, archivado: marca(x.archivadoEn, x.archivadoPor, nombres) })),
     editado: marca(cliente.editadoEn, cliente.editadoPor, nombres),
     archivado: marca(cliente.archivadoEn, cliente.archivadoPor, nombres),
     visitasPorHacer: visitas.map((v) => ({
@@ -432,9 +462,9 @@ function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorre
     politica: politicas.oficina,
     manejar: async ({ cuerpo, actor, correlacion }) =>
       enOrganizacion(bd, actor.organizacionId, async (tx) => {
-        const { clienteId, sitioId } = await clientesYSitios.crear(tx, { organizacionId: actor.organizacionId, nombre: cuerpo.nombre, sitio: cuerpo.sitio });
+        const { clienteId, sitioId } = await clientesYSitios.crear(tx, { organizacionId: actor.organizacionId, nombre: cuerpo.nombre, nit: cuerpo.nit, sitio: cuerpo.sitio });
         const eventos: EntradaAuditoria[] = [
-          { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: clienteId, tipoEvento: "cliente_creado", valorNuevo: { nombre: cuerpo.nombre, sitio: { id: sitioId, ...cuerpo.sitio } } },
+          { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: clienteId, tipoEvento: "cliente_creado", valorNuevo: { nombre: cuerpo.nombre, ...(cuerpo.nit ? { nit: cuerpo.nit } : {}), sitio: { id: sitioId, ...cuerpo.sitio } } },
         ];
         // El contacto principal, en la misma transacción: o queda el cliente con su contacto, o nada (iteración 29).
         if (cuerpo.contacto) {
@@ -472,10 +502,12 @@ function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorre
         // Tomado, como al archivar o corregir un sitio: dos correcciones a la vez no registran el mismo valor anterior.
         const anterior = await leerCliente(tx, id, true);
         if (anterior.archivadoEn) throw problema("estado_invalido", "El cliente está archivado: recupérelo para corregirlo");
-        if (anterior.nombre !== cuerpo.nombre) {
-          await tx.update(clientes).set({ nombre: cuerpo.nombre, editadoPor: actor.usuarioId, editadoEn: new Date() }).where(eq(clientes.id, id));
+        // Sin `nit` no se toca; con null se quita (ADR-0051).
+        const nit = cuerpo.nit === undefined ? anterior.nit : cuerpo.nit;
+        if (anterior.nombre !== cuerpo.nombre || anterior.nit !== nit) {
+          await tx.update(clientes).set({ nombre: cuerpo.nombre, nit, editadoPor: actor.usuarioId, editadoEn: new Date() }).where(eq(clientes.id, id));
           await registrar(tx, [
-            { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_editado", valorAnterior: { nombre: anterior.nombre }, valorNuevo: { nombre: cuerpo.nombre } },
+            { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_editado", valorAnterior: { nombre: anterior.nombre, nit: anterior.nit }, valorNuevo: { nombre: cuerpo.nombre, nit } },
           ]);
           await alCorregir.cliente(tx, { organizacionId: actor.organizacionId, clienteId: id, nombre: cuerpo.nombre });
         }
@@ -523,8 +555,10 @@ function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorre
       enOrganizacion(bd, actor.organizacionId, async (tx) => {
         const { cliente, sitio } = await leerSitio(tx, id, sitioId);
         if (cliente.archivadoEn || sitio.archivadoEn) throw problema("estado_invalido", "Está archivado: recupérelo para corregirlo");
-        if (sitio.nombre !== cuerpo.nombre || sitio.direccion !== cuerpo.direccion) {
-          await tx.update(sitios).set({ nombre: cuerpo.nombre, direccion: cuerpo.direccion }).where(eq(sitios.id, sitioId));
+        // Sin `ciudad` no se toca; con null se quita (ADR-0051).
+        const ciudad = cuerpo.ciudad === undefined ? sitio.ciudad : cuerpo.ciudad;
+        if (sitio.nombre !== cuerpo.nombre || sitio.direccion !== cuerpo.direccion || sitio.ciudad !== ciudad) {
+          await tx.update(sitios).set({ nombre: cuerpo.nombre, direccion: cuerpo.direccion, ciudad }).where(eq(sitios.id, sitioId));
           await tx.update(clientes).set({ editadoPor: actor.usuarioId, editadoEn: new Date() }).where(eq(clientes.id, id));
           await registrar(tx, [
             {
@@ -532,8 +566,8 @@ function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorre
               agregadoTipo: "cliente",
               agregadoId: id,
               tipoEvento: "sitio_editado",
-              valorAnterior: { id: sitioId, nombre: sitio.nombre, direccion: sitio.direccion },
-              valorNuevo: { id: sitioId, ...cuerpo },
+              valorAnterior: { id: sitioId, nombre: sitio.nombre, direccion: sitio.direccion, ciudad: sitio.ciudad },
+              valorNuevo: { id: sitioId, nombre: cuerpo.nombre, direccion: cuerpo.direccion, ciudad },
             },
           ]);
           await alCorregir.sitio(tx, { organizacionId: actor.organizacionId, clienteId: id, sitioId });

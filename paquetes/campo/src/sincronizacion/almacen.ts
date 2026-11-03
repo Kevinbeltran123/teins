@@ -4,6 +4,7 @@ import type { ArchivoLocal, BajadaLocal, DispositivoLocal, EnvioLocal, EstadoSer
 import { enBorrado } from "../datos/cofre";
 import { abrirArchivo, abrirEnvio, abrirRespuesta, abrirVisita, referencias, sellarArchivo, sellarEstado, sellarVisita } from "../datos/registros";
 import { estadoAlmacenamiento } from "../dispositivo/almacenamiento";
+import { ponerInsignia } from "../dispositivo/insignia";
 
 /** Operaciones del motor sobre la base local. */
 export interface AlmacenSincronizacion {
@@ -420,6 +421,8 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
         const lista = pendientes?.clave === "borrados_por_confirmar" ? pendientes.valor : [];
         if (!lista.includes(tecnicoId)) await db.ajustes.put({ clave: "borrados_por_confirmar", valor: [...lista, tecnicoId] });
       });
+      // El número del ícono era de esa persona (iteración 46).
+      void ponerInsignia(0);
       // 2. Los datos. Si esto se interrumpe, lo que quede es ilegible y `completarBorrados` lo termina.
       await borrarRegistrosDe(tecnicoId);
     },

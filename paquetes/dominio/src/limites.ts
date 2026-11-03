@@ -8,6 +8,10 @@ export const LIMITES = {
   nombreDeRepeticion: 120,
   /** Caracteres de un decimal (medida, cantidad): los mismos que recibe protocolo, para que el teléfono no deje salir otro. */
   decimal: 40,
+  /** Texto que escribe el técnico en «Otro» de una selección. */
+  otro: 120,
+  /** Cada opción de una selección. */
+  opcion: 60,
 } as const;
 
 /** Bocetos (ADR-0019): suficiente para un croquis de campo, acotado para el teléfono y el servidor. */

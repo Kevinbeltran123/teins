@@ -13,6 +13,8 @@ export const clientes = esquemaClientes.table(
     id: uuid("id").primaryKey(),
     organizacionId: organizacionId(),
     nombre: text("nombre").notNull(),
+    /** NIT, para el encabezado del informe (ADR-0051). Opcional: lo que falta sale como marcador. */
+    nit: text("nit"),
     creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
     editadoPor: text("editado_por"),
     editadoEn: marcaDeTiempo("editado_en"),
@@ -32,6 +34,8 @@ export const sitios = esquemaClientes.table(
       .references(() => clientes.id),
     nombre: text("nombre").notNull(),
     direccion: text("direccion").notNull(),
+    /** Ciudad del sitio, para el encabezado del informe (ADR-0051). */
+    ciudad: text("ciudad"),
     creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
     archivadoPor: text("archivado_por"),
     archivadoEn: marcaDeTiempo("archivado_en"),

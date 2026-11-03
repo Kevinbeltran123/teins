@@ -50,8 +50,9 @@ import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../hor
 import { useIrConPedido, usePedido } from "../pedido";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
 import { AbrirInforme } from "./AbrirInforme";
+import { DatosDelPedido } from "./DatosDelPedido";
 import { CuandoVisita, resumenDeHorario, TecnicosDisponibles } from "./HorarioDeVisita";
-import { formatearDia } from "@teins/dominio";
+import { formatearDia, numeroDeOrden } from "@teins/dominio";
 
 type Visita = Respuesta<"listarVisitas">["visitas"][number];
 type Tecnico = Respuesta<"listarTecnicos">["tecnicos"][number];
@@ -140,7 +141,7 @@ export function Visitas() {
   usePedido("mostrarVisita", (pedido) => mostrarEn(pedido.vista, pedido.id));
 
   const todas = consulta.data?.visitas ?? [];
-  const filtradas = todas.filter((v) => coincide(busqueda, v.cliente.nombre, v.sitio.nombre, v.sitio.direccion, ...v.tecnicos.map((t) => t.nombre)));
+  const filtradas = todas.filter((v) => coincide(busqueda, v.cliente.nombre, v.sitio.nombre, v.sitio.direccion, v.ordenDeServicio ? numeroDeOrden(v.ordenDeServicio) : "", v.referencia ?? "", ...v.tecnicos.map((t) => t.nombre)));
   // Por día, en el orden en que llegan (el servidor ya las ordena).
   const dias: { fecha: string; visitas: Visita[] }[] = [];
   // Dentro de cada día, por hora de inicio; las de todo el día al final (ADR-0037). El orden de los días lo da el servidor.
@@ -360,7 +361,8 @@ function FilaVisita({
           <Marcado texto={v.cliente.nombre} busqueda={busqueda} />
         </span>
         <span className="sub">
-          <Marcado texto={`${v.sitio.nombre} · ${v.sitio.direccion}`} busqueda={busqueda} />
+          {/* El número de orden de servicio: con el que oficina y el cliente identifican la visita (ADR-0051). */}
+          <Marcado texto={`${v.ordenDeServicio ? `Orden ${numeroDeOrden(v.ordenDeServicio)} · ` : ""}${v.sitio.nombre} · ${v.sitio.direccion}`} busqueda={busqueda} />
         </span>
       </CeldaTabla>
       <CeldaTabla>
@@ -416,9 +418,15 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
   // Por omisión, de 9 a 11: lo más común; "Todo el día" y "No sé cuánto dura" están a un toque.
   const [horario, setHorario] = useState<Horario>({ horaInicio: "09:00", horaFin: "11:00" });
   const [elegidos, setElegidos] = useState<string[]>([]);
+  const [solicitanteId, setSolicitanteId] = useState("");
+  const [referencia, setReferencia] = useState("");
   const [errores, setErrores] = useState<{ cliente?: string; sitio?: string; tecnicos?: string }>({});
   const [error, setError] = useState<string | null>(null);
-  const programar = useAccionDeProgramacion(() => cliente.llamar("programarVisita", { cuerpo: { clienteId, sitioId, motivo, programadaPara: fecha, ...horario, tecnicos: elegidos } }));
+  const programar = useAccionDeProgramacion(() =>
+    cliente.llamar("programarVisita", {
+      cuerpo: { clienteId, sitioId, motivo, programadaPara: fecha, ...horario, ...(solicitanteId ? { solicitanteId } : {}), ...(referencia.trim() ? { referencia: referencia.trim() } : {}), tecnicos: elegidos },
+    }),
+  );
 
   const lista = clientes.data?.clientes ?? [];
   const sitios = lista.find((c) => c.id === clienteId)?.sitios ?? [];
@@ -476,6 +484,8 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
               error={errores.cliente}
               onCambio={(id) => {
                 setClienteId(id);
+                // El solicitante es un contacto del cliente anterior: no sirve para este.
+                setSolicitanteId("");
                 // Con un solo sitio, queda elegido.
                 const deEse = lista.find((c) => c.id === id)?.sitios ?? [];
                 setSitioId(deEse.length === 1 ? deEse[0]!.id : "");
@@ -494,6 +504,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
               opciones={sitios.map((x) => ({ valor: x.id, texto: x.nombre }))}
             />
           </div>
+          <DatosDelPedido clienteId={clienteId} solicitanteId={solicitanteId} referencia={referencia} alCambiar={(c) => (c.solicitanteId !== undefined && setSolicitanteId(c.solicitanteId), c.referencia !== undefined && setReferencia(c.referencia))} />
           <div className="opciones-pastilla">
             <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
           </div>
@@ -633,8 +644,16 @@ function Reprogramar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: ()
   const [fecha, setFecha] = useState(v.programadaPara < hoy ? hoy : v.programadaPara);
   const [horario, setHorario] = useState<Horario>({ horaInicio: v.horaInicio, horaFin: v.horaFin });
   const [motivo, setMotivo] = useState<Motivo>(motivoConocido(v.motivo));
+  const [solicitanteId, setSolicitanteId] = useState(v.solicitante?.id ?? "");
+  const [referencia, setReferencia] = useState(v.referencia ?? "");
   const [error, setError] = useState<string | null>(null);
-  const accion = useAccionDeProgramacion(() => cliente.llamar("reprogramarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, programadaPara: fecha, ...horario, motivo } }));
+  // Vacío los quita; el número de orden no cambia al reprogramar (ADR-0051).
+  const accion = useAccionDeProgramacion(() =>
+    cliente.llamar("reprogramarVisita", {
+      parametros: { id: v.id },
+      cuerpo: { version: v.version, programadaPara: fecha, ...horario, motivo, solicitanteId: solicitanteId === "" ? null : solicitanteId, referencia: referencia.trim() === "" ? null : referencia.trim() },
+    }),
+  );
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -672,6 +691,7 @@ function Reprogramar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: ()
         <div className="opciones-pastilla">
           <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
         </div>
+        <DatosDelPedido clienteId={v.cliente.id} solicitanteId={solicitanteId} referencia={referencia} alCambiar={(c) => (c.solicitanteId !== undefined && setSolicitanteId(c.solicitanteId), c.referencia !== undefined && setReferencia(c.referencia))} />
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>
     </Dialogo>

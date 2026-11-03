@@ -32,6 +32,8 @@ export const usuarios = identidad.table(
       .notNull()
       .references(() => organizaciones.id),
     rol: text("rol").notNull(),
+    /** Cédula, para firmar los informes (ADR-0051). La pone y la ve solo un administrador; nunca sale en listas ni registros. */
+    documento: text("documento"),
     /** Regla 13: un usuario desactivado no autentica y sus dispositivos borran sus datos; su autoría se conserva. */
     desactivadoEn: marcaDeTiempo("desactivado_en"),
     /** Persona de oficina que administra usuarios, dispositivos y accesos (iteración 6). */

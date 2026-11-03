@@ -22,6 +22,7 @@ import { crearAccesosDeClientes, crearPortal, renombrarClienteDelPortal } from "
 import { crearCatalogo } from "./modulos/catalogo";
 import { crearSimbolos } from "./modulos/simbolos";
 import { crearAvisos } from "./modulos/avisos";
+import { crearMapas } from "./modulos/mapas";
 import { crearEnvios } from "./modulos/envios";
 import { crearCotizaciones } from "./modulos/cotizaciones";
 import { fechaEnColombia } from "@teins/dominio";
@@ -52,8 +53,9 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
     genReqId: () => randomUUID(),
     logController: new LogController({
       requestIdLogLabel: "correlacion",
-      // Las verificaciones de disponibilidad llegan cada pocos segundos: no llenan los registros.
-      disableRequestLogging: (solicitud) => solicitud.url === "/salud",
+      // Las verificaciones de disponibilidad llegan cada pocos segundos: no llenan los registros. Las del mapa llevan las
+      // coordenadas del técnico en la dirección: nunca se registran (ADR-0052).
+      disableRequestLogging: (solicitud) => solicitud.url === "/salud" || solicitud.url.startsWith("/api/mapa"),
     }),
     bodyLimit: 2 * 1024 * 1024,
     // Se confía en un número fijo de proxies, contados desde el servidor: la IP del cliente es la que está justo
@@ -192,6 +194,8 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   catalogo.registrarRutas(app);
   // El rol web no envía avisos (lo hace el worker): solo guarda suscripciones y entrega la clave pública.
   crearAvisos({ bd, config }).registrarRutas(app);
+  // La hora de red y el mapa de la foto de llegada (ADR-0052).
+  crearMapas({ config }).registrarRutas(app);
   visitas.registrarRutas(app, { bd, identidad, conteos: levantamientos.conteosPorVisita });
   crearAccesosDeClientes(bd).registrarRutas(app, config);
   if (bdPortal) crearPortal({ bdPortal, almacenamiento, config }).registrarRutas(app);

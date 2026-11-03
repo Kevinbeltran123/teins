@@ -634,7 +634,7 @@ iPhone y computador, con los avisos activos en los dos (fase 15).
 2. Con el iPhone bloqueado, espere.
    - Debe: el aviso "Oficina · Cliente de prueba" con el texto; tocarlo abre el chat.
 3. En "Mis visitas".
-   - Debe: en "Enviados", "Oficina te escribió" y un punto azul; en el levantamiento, la fila "Oficina" con el número de sin leer.
+   - Debe: en "Necesita atención" (iteración 46), "Oficina te escribió" y un punto azul; tocarla abre el chat. En el levantamiento, la fila "Oficina" con el número de sin leer.
 4. Abra el chat.
    - Debe: "N mensajes sin leer"; la pregunta con un recuadro del dato y lo que respondió; abajo, "Respondiendo a Oficina".
 5. En modo avión, escriba una respuesta y envíela.
@@ -722,6 +722,65 @@ iPhone y computador, después del primer despliegue con el flujo «Desplegar». 
    - Debe: fechas y pesos como antes.
 4. En la pestaña **Correo** del informe, toque el texto del correo para escribir, en tema claro y en oscuro.
    - Debe: un borde punteado gris alrededor del texto, que pasa a borde azul al escribir. Es el único cambio a la vista: esos colores salen ahora de los tokens.
+
+## Fase 46 · El chat a la vista y las visitas que aún no tocan (iteración 46)
+
+iPhone con la app instalada y los avisos activos, y oficina en el computador.
+
+1. Con la app abierta en «Mis visitas» (sin entrar al levantamiento), oficina comenta un dato de un levantamiento enviado de `tecnico.prueba`.
+   - Debe: en segundos, sin tocar nada, el levantamiento aparece en «Necesita atención» con «Oficina te escribió», y sale de «Enviados».
+2. Toque esa fila.
+   - Debe: abre directo el chat con oficina, sin pasar por el levantamiento.
+3. Mire el ícono de la app en la pantalla de inicio del iPhone antes y después de leer el chat.
+   - Debe: el número de conversaciones sin leer baja al leerlas y desaparece con cero. Con la app cerrada no sube solo: se actualiza al abrirla (límite conocido).
+4. En oficina, programe una visita para mañana para `tecnico.prueba`. En el iPhone, abra la app.
+   - Debe: en lugar de «Iniciar levantamiento», dice «Podrás iniciarla mañana». La de hoy sí tiene el botón.
+5. Programe una visita para dentro de varios días.
+   - Debe: dice «Podrás iniciarla el <día>, <número> de <mes>».
+6. Empiece un levantamiento de una visita de hoy y, sin enviarlo, oficina la reprograma para mañana.
+   - Debe: el borrador se sigue pudiendo continuar («Continuar levantamiento»).
+
+**Anotar:** si Safari mostró el aviso con la app abierta en el inicio (es lo esperado; lo nuevo es que la pantalla se entera sola).
+
+## Fase 47 · Los formatos reales de TEINS y la foto de llegada (iteración 47)
+
+La fase es larga: se divide en iPhone y oficina. Usa el formato de prueba v10 (`sembrar` lo publica; en el entorno de pruebas viene con el despliegue). Con el formato de TEINS (`visita-tecnica` o `servicio-ups`), publicado con `publicar-formato`, los pasos son los mismos.
+
+**iPhone, con la app instalada, y oficina en el computador**
+
+1. En oficina, cree un cliente con **NIT** y un sitio con **Ciudad**, con un contacto que tenga celular. Programe una visita para hoy con ese **Solicitante** y una **Referencia del cliente**.
+   - Debe: la fila de la visita dice «Orden 0001» (o el número que siga) antes del sitio y la dirección.
+2. En el iPhone, abra la app con señal, **sin cerrar la sesión que ya tenía** (así se prueba la actualización de la versión 15 a la 16).
+   - Debe: la tarjeta de la visita dice «Pregunta por <contacto>» con su celular como enlace; al tocarlo, el teléfono ofrece llamar.
+3. Inicie el levantamiento. En la **Llegada**, deje que el iPhone pida el permiso de ubicación (toque «Permitir al usar la app»).
+   - Debe: sobre las tomas, «Buscando ubicación…» y después «Ubicación lista (±N m)». Si el iPhone deja de dar la ubicación más de 2 minutos (un cuarto sin señal de GPS), vuelve a «Buscando ubicación…».
+4. Tome una foto de **Fachada** con señal.
+   - Debe: la miniatura aparece sin demorarse más de unos segundos. Ábrala: arriba a la derecha, en blanco con sombra sobre un degradado oscuro, «Red: <hora>», «Teléfono: <hora>», las coordenadas en grados con su precisión, la dirección registrada con la ciudad y «<organización> · <cliente> · <sitio>»; arriba a la izquierda, el mapa con un pin y, dentro, «Powered by Geoapify · © OpenMapTiles · © OpenStreetMap contributors».
+   - **Anotar:** si el mapa no sale (en pruebas puede faltar la llave de Geoapify: la foto sale igual, sin mapa), si algún texto se corta o se lee mal sobre una pared clara, si el pin cae donde usted estaba, y cuánto tardó en aparecer la miniatura.
+5. En modo avión, tome otra foto.
+   - Debe: sale igual, con «Red: sin señal», sin mapa y con las coordenadas si el iPhone las tenía. Quite el modo avión.
+6. Revoque el permiso de ubicación (Ajustes › Safari o la app › Ubicación › Nunca) y tome otra foto.
+   - Debe: la línea dice «Sin permiso de ubicación: la foto sale sin coordenadas» y la foto se guarda con las dos horas y sin coordenadas ni mapa.
+7. En **Servicio**: escriba una **Hora de inicio y final**; toque «Ahora» en la llegada; toque la foto de llegada sugerida («Usar … (foto de llegada)») en un horario vacío.
+   - Debe: la salida está deshabilitada hasta que haya llegada; con las dos, el total («3 h 16 min»); una salida menor dice «la salida es al día siguiente».
+8. En el mismo paso: elija varios en «Sistema revisado» y «Otro» con texto; en «Solucionado», elija una y toque la misma otra vez.
+   - Debe: cada fila se toca entera y es de 44 px o más; la elegida de nuevo se quita (es opcional); «Otro» abre su texto.
+9. En **Acometida**, escriba voltajes con coma y con punto, una frecuencia y una letra.
+   - Debe: tres casillas por fila bajo F1, F2 y F3 (en un iPhone de 360 px o menos, las tres en una fila bajo la etiqueta); la letra marca «Escribe solo el número, por ejemplo 12,5».
+10. Envíe el levantamiento. En «Ver lo que enviaste», revise.
+    - Debe: el horario con su total, «CCTV, UPS y otro: …», «Parcialmente».
+
+**Oficina**
+
+11. Tome el levantamiento, corrija una selección y un horario con su motivo, y márquelo revisado.
+    - Debe: los editores muestran las mismas opciones; el historial guarda el valor anterior y el nuevo.
+12. En Administración, ponga la **Cédula** a su cuenta (menú de su fila) y a la del técnico. Abra el informe de esa visita, componga y publique.
+    - Debe: la vista en vivo muestra el encabezado en rejilla con el logo, NIT, orden de servicio, ciudad, solicitante, teléfono y referencia. En la fila de firmas, «C. C. registrada» en lugar del número: la cédula solo la ve quien administra (ADR-0051), y el número sale en el PDF publicado.
+13. Descargue el PDF.
+    - Debe: cada selección con todas sus opciones y cuadritos marcados o vacíos; las medidas en una tabla F1, F2, F3; al final del capítulo, la fila «Técnico que asistió» (con «C. C. …» y «Firmó electrónicamente al enviar, el …»), la firma de quien acompañó y «Supervisado o validado por» (con su cédula y «Validó en TEINS el …»). Sin la cédula puesta, dice «[C. C.]».
+    - **Anotar:** cualquier texto cortado, una tabla que parte la página a la mitad o una fila de firmas que no cabe.
+
+**Anotar siempre:** que la franja con ubicación **no** se active en producción hasta que TEINS tenga la autorización previa de sus técnicos (Ley 1581): el formato real se publica sin `sello.ubicacion` o con la producción apagada.
 
 ## Al terminar
 

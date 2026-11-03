@@ -82,6 +82,7 @@ export {
   Undo2,
   Upload,
   UserRound,
+  IdCard,
   Users,
   X,
 } from "lucide-react";

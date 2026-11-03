@@ -20,7 +20,9 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   nombre_de_repeticion_invalido: "Una repetición no tiene nombre",
   boceto_invalido: "El boceto no tiene la forma esperada",
   cantidades_invalidas: "Cada línea necesita descripción, una cantidad mayor que cero y una unidad permitida",
-  firma_invalida: "La firma no tiene sus trazos, el nombre de quien firmó, la fecha o la constancia",
+  firma_invalida: "La firma no tiene sus trazos, el nombre de quien firmó, la fecha, la constancia o una cédula válida",
+  opcion_invalida: "Elija solo opciones de la lista, sin repetir",
+  horario_invalido: "Revise las horas: deben estar entre 00:00 y 23:59",
   archivo_muy_grande: "El archivo pesa más de lo que se puede recibir.",
 };
 

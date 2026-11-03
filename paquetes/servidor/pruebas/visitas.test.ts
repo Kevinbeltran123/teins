@@ -110,10 +110,10 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
     expect(sitio.statusCode, sitio.body).toBe(200);
     // El teléfono que ya tenía la visita recibe la dirección nueva: el técnico no va a la vieja.
     const tras = (await bajar(cookie, antes.puntoDeControl)).json();
-    expect(tras.cambios).toEqual([{ tipo: "visita", visita: expect.objectContaining({ id: visita.id, sitio: { nombre: "Sede Norte", direccion: "Carrera [N] # [N]-[N]" } }) }]);
+    expect(tras.cambios).toEqual([{ tipo: "visita", visita: expect.objectContaining({ id: visita.id, sitio: { nombre: "Sede Norte", direccion: "Carrera [N] # [N]-[N]", ciudad: null } }) }]);
 
     expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}`, { nombre: "Clínica Santa Fe" })).statusCode).toBe(200);
-    expect((await bajar(cookie, tras.puntoDeControl)).json().cambios).toEqual([{ tipo: "visita", visita: expect.objectContaining({ id: visita.id, cliente: { nombre: "Clínica Santa Fe" } }) }]);
+    expect((await bajar(cookie, tras.puntoDeControl)).json().cambios).toEqual([{ tipo: "visita", visita: expect.objectContaining({ id: visita.id, cliente: { nombre: "Clínica Santa Fe", nit: null } }) }]);
   });
 
   it("programar mientras otra persona archiva el cliente: la visita espera al archivo y no queda en un cliente archivado", async () => {

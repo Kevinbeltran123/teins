@@ -36,6 +36,8 @@ export const ESTADO_POR_CODIGO = {
   version_protocolo_no_soportada: 426,
   demasiadas_solicitudes: 429,
   error_interno: 500,
+  /** Un servicio externo que no es esencial no responde o no está configurado (el mapa de la foto de llegada, ADR-0052). */
+  no_disponible: 503,
 } as const;
 
 export type CodigoProblema = keyof typeof ESTADO_POR_CODIGO;
@@ -67,6 +69,7 @@ export const REINTENTABLE: Readonly<Record<CodigoProblema, boolean>> = {
   version_protocolo_no_soportada: false,
   demasiadas_solicitudes: true,
   error_interno: true,
+  no_disponible: true,
 };
 
 export const ErrorValidacion = z.object({ seccion: z.string(), campo: z.string().optional(), codigo: z.string() });

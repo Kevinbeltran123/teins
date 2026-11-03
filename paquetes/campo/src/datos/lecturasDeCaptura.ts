@@ -21,6 +21,11 @@ export async function subidosDe(db: BaseCampo, huellas: string[]): Promise<numbe
   return (await db.archivos.bulkGet(huellas)).filter((a) => a && a.subida === "subida").length;
 }
 
+/** Cuándo se tomó cada archivo, por huella, sin abrir sus bytes (la hora no va sellada). */
+export async function momentosDeArchivos(db: BaseCampo, huellas: string[]): Promise<Map<string, string>> {
+  return new Map((await db.archivos.bulkGet(huellas)).flatMap((a) => (a ? [[a.id, a.creadoEn] as const] : [])));
+}
+
 export function itemsDelCatalogo(db: BaseCampo): Promise<ItemCatalogoLocal[]> {
   return db.catalogo.toArray();
 }

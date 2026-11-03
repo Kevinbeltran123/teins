@@ -181,3 +181,174 @@ describe("el correo que escribe oficina (iteración 30)", () => {
     expect(htmlDeCorreo(propio, { ...opciones, sinAdjunto: true })).toContain("El PDF pesa demasiado para el correo");
   });
 });
+
+describe("el informe con la estructura del formato (iteración 47, ADR-0050 y ADR-0051)", () => {
+  const formatoTeins: VersionFormato = {
+    formato: "servicio-ups",
+    version: 1,
+    nombre: "Servicio de UPS",
+    secciones: [
+      {
+        clave: "servicio",
+        titulo: "Servicio",
+        campos: [
+          { clave: "horario", etiqueta: "Hora de entrada y salida", tipo: "horario" },
+          { clave: "tipo", etiqueta: "Tipo de servicio", tipo: "opciones", opciones: ["Instalación", "Correctivo", "Preventivo"], otro: true },
+          { clave: "solucionado", etiqueta: "Solucionado", tipo: "opcion", opciones: ["Totalmente", "Parcialmente", "No solucionado"] },
+        ],
+      },
+      {
+        clave: "acometida",
+        titulo: "Acometida",
+        tablas: [
+          {
+            titulo: "Voltajes y corrientes",
+            columnas: ["F1", "F2", "F3"],
+            filas: [
+              { etiqueta: "Voltaje F-N", campos: ["v1", "v2", "v3"] },
+              { etiqueta: "Frecuencia", campos: ["hz"] },
+            ],
+          },
+        ],
+        campos: [
+          { clave: "v1", etiqueta: "V F-N F1", tipo: "medida", unidades: ["V"] },
+          { clave: "v2", etiqueta: "V F-N F2", tipo: "medida", unidades: ["V"] },
+          { clave: "v3", etiqueta: "V F-N F3", tipo: "medida", unidades: ["V"] },
+          { clave: "hz", etiqueta: "Frecuencia", tipo: "medida", unidades: ["Hz"] },
+          { clave: "nota", etiqueta: "Nota", tipo: "texto" },
+        ],
+      },
+      { clave: "firmas", titulo: "Firmas", campos: [{ clave: "cliente", etiqueta: "Nombre y sello del cliente", tipo: "firma", documento: "opcional" }] },
+    ],
+  };
+  const huellaFirma = "d".repeat(64);
+  const conTodo: ContenidoVersion = {
+    ...informe,
+    visita: {
+      ...informe.visita,
+      nit: "900.123.456-7",
+      ciudad: "Ibagué",
+      solicitante: { nombre: "Laura Gómez", telefono: "+573105550142" },
+      ordenDeServicio: "0774",
+      referencia: "TKT-4821",
+    },
+    levantamientos: [
+      {
+        id: "0192f0e0-0000-7000-8000-000000000002",
+        formato: formatoTeins,
+        tecnico: "Juan Pérez",
+        tecnicoDocumento: "79888777",
+        revisor: "Laura Méndez",
+        revisorDocumento: "52123456",
+        revisadoEn: "2026-09-29T14:15:00.000Z",
+        recibidoEn: "2026-09-28T21:40:00.000Z",
+        respuestas: {
+          servicio: { horario: { desde: "08:14", hasta: "11:30" }, tipo: { elegidas: ["Correctivo"], otro: "cerca eléctrica" }, solucionado: "Parcialmente" },
+          acometida: { v1: { valor: "127.4", unidad: "V" }, v3: { valor: "126", unidad: "V" }, hz: { valor: "60", unidad: "Hz" }, nota: "Sin novedad" },
+          firmas: { cliente: { firma: huellaFirma, nombre: "Martha Gómez", firmadoEn: "2026-09-28T20:40:00.000Z", declaracion: "Confirmo la visita.", documento: "1098765432" } },
+        },
+      },
+    ],
+  };
+  const pdf = (c: ContenidoVersion) => plantillaInforme(c, { salida: PDF, fotos: new Map(), firmas: new Map([[huellaFirma, '<svg id="trazo"></svg>']]) });
+
+  it("el encabezado va en rejilla con lo de la visita, y lo que falta va como marcador", () => {
+    const html = pdf(conTodo);
+    expect(html).toContain('class="encabezado"');
+    for (const dato of ["900.123.456-7", "0774", "Ibagué", "Laura Gómez", "+57 310 555 0142", "TKT-4821"]) expect(html).toContain(dato);
+    for (const rotulo of ["Cliente", "NIT", "Orden de servicio", "Dirección", "Ciudad", "Sede", "Solicitante", "Teléfono", "Fecha", "Referencia del cliente"]) expect(html).toContain(`>${rotulo}<`);
+    const vacio = pdf({ ...conTodo, visita: informe.visita });
+    for (const marcador of ["[NIT]", "[Ciudad]", "[Solicitante]", "[N.º de orden]"]) expect(vacio).toContain(marcador);
+    // Sin referencia no se inventa la línea.
+    expect(vacio).not.toContain("Referencia del cliente");
+  });
+
+  it("cada selección sale con todas sus opciones, marcadas o no, y su «Otro»", () => {
+    const html = pdf(conTodo);
+    expect(html).toContain('<span class="op marcada"><i></i>Correctivo</span>');
+    expect(html).toContain('<span class="op"><i></i>Instalación</span>');
+    expect(html).toContain('<span class="op"><i></i>Preventivo</span>');
+    expect(html).toContain('<span class="op marcada"><i></i>Otro: cerca eléctrica</span>');
+    expect(html).toContain('<span class="op marcada"><i></i>Parcialmente</span>');
+    expect(html).toContain('<span class="op"><i></i>Totalmente</span>');
+    // Sin «Otro» elegido, el formato que lo admite lo muestra vacío.
+    const sinOtro = pdf({ ...conTodo, levantamientos: [{ ...conTodo.levantamientos[0]!, respuestas: { ...conTodo.levantamientos[0]!.respuestas, servicio: { tipo: { elegidas: ["Instalación"] } } } }] });
+    expect(sinOtro).toContain('<span class="op"><i></i>Otro</span>');
+  });
+
+  it("el horario sale con las dos horas y el total", () => {
+    expect(pdf(conTodo)).toContain("8:14 a. m. a 11:30 a. m. · 3 h 16 min");
+  });
+
+  it("las mediciones salen en una tabla con sus columnas, y lo que no se midió queda en blanco; esas celdas no se repiten como datos", () => {
+    const html = pdf(conTodo);
+    expect(html).toContain('<table class="medidas">');
+    expect(html).toMatch(/<th[^>]*>F1<\/th><th[^>]*>F2<\/th><th[^>]*>F3<\/th>/);
+    expect(html).toContain("Voltaje F-N");
+    expect(html).toContain("127,4");
+    expect(html).toContain("126");
+    expect(html).toMatch(/Frecuencia<\/th><td[^>]*>60 Hz|60/);
+    // Cada celda aparece en la tabla, no en la lista de datos; la nota que no es de la tabla, sí.
+    expect(html).not.toContain("<th>V F-N F1</th>");
+    expect(html).toContain("<th>Nota</th>");
+  });
+
+  it("la fila de firmas lleva al técnico, a quien acompañó y al revisor, con su cédula y su hora", () => {
+    const html = pdf(conTodo);
+    expect(html).toContain('class="firmas tres"');
+    expect(html).toContain("Técnico que asistió");
+    expect(html).toContain("Juan Pérez");
+    expect(html).toContain("C. C. 79888777");
+    expect(html).toMatch(/Firmó electrónicamente al enviar, el 28 de septiembre de 2026/);
+    expect(html).toContain("Nombre y sello del cliente");
+    expect(html).toContain('<div class="trazo"><svg id="trazo"></svg><p><strong>Martha Gómez</strong>');
+    expect(html).toContain("C. C. 1098765432");
+    expect(html).toContain("Supervisado o validado por");
+    expect(html).toContain("Laura Méndez");
+    expect(html).toContain("C. C. 52123456");
+    expect(html).toMatch(/Validó en TEINS el 29 de septiembre de 2026/);
+  });
+
+  it("sin cédula, el marcador; sin campo de firma en el formato, solo el técnico y el revisor", () => {
+    const sinCedula = pdf({ ...conTodo, levantamientos: [{ ...conTodo.levantamientos[0]!, tecnicoDocumento: undefined, revisorDocumento: undefined }] });
+    expect(sinCedula.match(/\[C\. C\.\]/g)).toHaveLength(2);
+    const sinCampo = pdf({ ...informe });
+    expect(sinCampo).toContain('class="firmas dos"');
+    expect(sinCampo).toContain("Técnico que asistió");
+    expect(sinCampo).toContain("Supervisado o validado por");
+    expect(sinCampo).not.toContain("Nombre y sello del cliente");
+  });
+
+  it("con dos firmas en el formato, las dos salen en la fila, cada una con su rótulo", () => {
+    const otraFirma = "e".repeat(64);
+    const [l] = conTodo.levantamientos;
+    const secciones = l!.formato.secciones.map((s) =>
+      s.clave === "firmas" ? { ...s, campos: [...s.campos, { clave: "acompana", etiqueta: "Quien acompañó", tipo: "firma" as const }] } : s,
+    );
+    const dos = plantillaInforme(
+      {
+        ...conTodo,
+        levantamientos: [
+          {
+            ...l!,
+            formato: { ...l!.formato, secciones },
+            respuestas: { ...l!.respuestas, firmas: { ...l!.respuestas.firmas, acompana: { firma: otraFirma, nombre: "Pedro Ruiz", firmadoEn: "2026-09-28T20:41:00.000Z", declaracion: "Confirmo la visita." } } },
+          },
+        ],
+      },
+      { salida: PDF, fotos: new Map(), firmas: new Map([[huellaFirma, '<svg id="trazo"></svg>'], [otraFirma, '<svg id="otro-trazo"></svg>']]) },
+    );
+    expect(dos).toContain('class="firmas cuatro"');
+    expect(dos).toContain("Nombre y sello del cliente");
+    expect(dos).toContain('<div class="trazo"><svg id="otro-trazo"></svg><p><strong>Pedro Ruiz</strong>');
+    expect(dos).toContain("Quien acompañó");
+  });
+
+  it("una versión anterior, sin nada de esto, se dibuja igual que antes", () => {
+    const html = pdf(informe);
+    expect(html).toContain("Cuarto técnico");
+    expect(html).toContain("[NIT]");
+    expect(html).not.toContain("undefined");
+  });
+});
+

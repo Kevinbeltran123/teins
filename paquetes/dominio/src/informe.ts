@@ -83,7 +83,23 @@ export interface ContenidoVersion {
   publicadaEn: string;
   publicadaPor: string;
   organizacion: { nombre: string };
-  visita: { cliente: string; sitio: string; direccion: string; motivo: string; programadaPara: string };
+  visita: {
+    cliente: string;
+    sitio: string;
+    direccion: string;
+    motivo: string;
+    programadaPara: string;
+    /**
+     * El encabezado del formato de TEINS (ADR-0051), todo opcional: las versiones anteriores no lo tienen y lo que falta
+     * sale como marcador. El número de orden va ya escrito (`numeroDeOrden`), así una versión publicada no cambia aunque
+     * cambie cómo se escribe.
+     */
+    nit?: string | undefined;
+    ciudad?: string | undefined;
+    solicitante?: { nombre: string; telefono?: string | undefined } | undefined;
+    ordenDeServicio?: string | undefined;
+    referencia?: string | undefined;
+  };
   introduccion: string;
   conclusiones: string;
   levantamientos: {
@@ -92,6 +108,13 @@ export interface ContenidoVersion {
     tecnico: string;
     revisor: string;
     recibidoEn: string;
+    /**
+     * Las firmas electrónicas (ADR-0051): la cédula de quien capturó y de quien revisó, y cuándo marcó revisado. El técnico
+     * firma al enviar (su hora es `recibidoEn`, la oficial) y el revisor al marcar revisado. Ausentes en lo anterior.
+     */
+    tecnicoDocumento?: string | undefined;
+    revisorDocumento?: string | undefined;
+    revisadoEn?: string | undefined;
     respuestas: Respuestas;
     /** Repeticiones de las secciones repetibles (iteración 9); ausente en las versiones anteriores. */
     repeticiones?: Repeticiones | undefined;

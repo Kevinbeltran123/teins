@@ -27,6 +27,7 @@ const TITULOS: Record<CodigoProblema, string> = {
   version_protocolo_no_soportada: "La app debe actualizarse para enviar",
   demasiadas_solicitudes: "Demasiadas solicitudes",
   error_interno: "Error interno",
+  no_disponible: "El servicio no está disponible",
 };
 
 /** Error de dominio que viaja al cliente como Problem Details (RFC 9457). */

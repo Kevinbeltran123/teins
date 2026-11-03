@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ComentarioDeOficina, RespuestaPendiente } from "./datos/modelo";
-import { armarChat, filasDelChat, sinLeer } from "./conversacion";
+import { armarChat, filasDelChat, sinLeer, sinLeerDe, ultimoDeOficina } from "./conversacion";
 
 const c1: ComentarioDeOficina = {
   id: "c1",
@@ -51,6 +51,22 @@ describe("el chat con oficina (ADR-0040)", () => {
     expect(sinLeer(chat, null)).toBe(3);
     expect(sinLeer(chat, "2026-10-05T20:28:00.000Z")).toBe(1);
     expect(sinLeer(chat, "2026-10-05T21:00:00.000Z")).toBe(0);
+  });
+
+  it("lo sin leer de un levantamiento sale de lo que bajó del servidor, sin la cola del teléfono", () => {
+    const servidor = { id: "l1", tecnicoId: "t1", estado: "enviado" as const, recibidoEn: "2026-10-05T20:00:00.000Z", comentarios: [c1, c2] };
+    expect(sinLeerDe(servidor, null)).toBe(3);
+    expect(sinLeerDe(servidor, "2026-10-05T20:28:00.000Z")).toBe(1);
+    expect(sinLeerDe({ ...servidor, comentarios: [] }, null)).toBe(0);
+    expect(sinLeerDe({ ...servidor, comentarios: undefined }, null)).toBe(0);
+    expect(sinLeerDe(undefined, null)).toBe(0);
+  });
+
+  it("lo último de oficina es el mensaje suyo más reciente, aunque lo último del hilo sea del técnico", () => {
+    expect(ultimoDeOficina({ comentarios: [c1, c2] })).toBe("2026-10-05T20:31:00.000Z");
+    expect(ultimoDeOficina({ comentarios: [c2] })).toBe("2026-10-05T20:27:00.000Z");
+    expect(ultimoDeOficina({})).toBe("");
+    expect(ultimoDeOficina(undefined)).toBe("");
   });
 
   it("la hora va centrada al principio y cuando pasan 10 minutos; la franja antes de lo nuevo; los seguidos van pegados", () => {

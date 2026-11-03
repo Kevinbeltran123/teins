@@ -37,9 +37,14 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await expect(o.getByText("De 9:00 a. m. a 11:00 a. m.")).toBeVisible();
   await o.getByLabel("Buscar técnico").fill(tecnico.nombre);
   await o.getByRole("checkbox", { name: tecnico.nombre }).check();
+  // Quien pidió la visita y la referencia del cliente (iteración 47, ADR-0051): opcionales, el solicitante es un contacto del cliente.
+  await o.getByLabel("Solicitante").selectOption({ label: "Contacto E2E" });
+  await o.getByLabel("Referencia del cliente").fill("TKT-E2E-47");
   await o.getByRole("button", { name: /^Programar con / }).click();
   const fila = o.getByRole("row").filter({ hasText: cliente });
   await expect(fila).toContainText("9:00 a. m. a 11:00 a. m.");
+  // La fila lleva el número de orden de servicio, que asigna el servidor al programar.
+  await expect(fila).toContainText(/Orden \d{4,} · Sede norte/);
   // Las visitas van agrupadas por día: la de hoy queda bajo "Hoy · …" (rediseño de oficina, iteración 23).
   const diaDe = () => o.locator("tbody").filter({ has: fila }).getByText(/^Hoy · /);
   await expect(diaDe()).toBeVisible();
@@ -52,6 +57,16 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   const siguiente = t.getByRole("region", { name: "Siguiente visita" });
   await expect(siguiente.getByText(cliente)).toBeVisible();
   await expect(siguiente.getByText("Hoy")).toBeVisible();
+  // El técnico sabe por quién preguntar al llegar.
+  await expect(siguiente.getByText("Pregunta por Contacto E2E")).toBeVisible();
+
+  // El técnico ya empezó algo en esa visita: una visita de otro día no se inicia (iteración 46), así que se empieza hoy.
+  await siguiente.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await irAlPaso(t, "Cuarto técnico");
+  await t.getByRole("textbox", { name: "Descripción del sitio" }).fill("Empezado antes de cancelar (E2E)");
+  await irAlRecorrido(t);
+  await expect(t.getByText("Guardado en este teléfono", { exact: false })).toBeVisible();
+  await t.getByRole("button", { name: "Volver a mis visitas" }).click();
 
   // Reprogramada para mañana: al abrir la app, la fecha cambia.
   await fila.getByRole("button", { name: `Más acciones para la visita de ${cliente}` }).click();
@@ -67,14 +82,8 @@ test("oficina crea un cliente, programa una visita que llega al teléfono, la re
   await t.reload();
   await expect(siguiente.getByText(cliente)).toBeVisible();
   await expect(siguiente.getByText("Mañana")).toBeVisible();
-
-  // El técnico ya empezó algo en esa visita.
-  await siguiente.getByRole("button", { name: "Iniciar levantamiento" }).click();
-  await irAlPaso(t, "Cuarto técnico");
-  await t.getByRole("textbox", { name: "Descripción del sitio" }).fill("Empezado antes de cancelar (E2E)");
-  await irAlRecorrido(t);
-  await expect(t.getByText("Guardado en este teléfono", { exact: false })).toBeVisible();
-  await t.getByRole("button", { name: "Volver a mis visitas" }).click();
+  // Con el borrador empezado se continúa, aunque ahora sea de otro día.
+  await expect(siguiente.getByRole("button", { name: "Continuar levantamiento" })).toBeVisible();
 
   // Cancelada: queda en "Canceladas" con su motivo; en el teléfono solo sigue lo empezado, con el aviso (regla 17).
   await fila.getByRole("button", { name: `Más acciones para la visita de ${cliente}` }).click();
@@ -114,4 +123,34 @@ test("lo que uno crea queda primero aunque otra persona cree un cliente al mismo
   await expect(o.getByText(`Cliente creado: ${cliente}`)).toBeVisible();
   await expect(o.getByRole("row").nth(1)).toContainText(cliente);
   await o.context().close();
+});
+
+test("una visita de otro día no se inicia y dice cuándo; la de hoy sí (iteración 46)", async ({ page }) => {
+  const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
+  const deHoy = nuevaVisitaConCliente(tecnico).cliente;
+  const deManana = nuevaVisitaConCliente(tecnico, 1).cliente;
+  await page.goto(`${CAMPO}/`);
+  await iniciarSesion(page, tecnico);
+
+  const siguiente = page.getByRole("region", { name: "Siguiente visita" });
+  await expect(siguiente.getByText(deHoy)).toBeVisible();
+  await expect(siguiente.getByRole("button", { name: "Iniciar levantamiento" })).toBeVisible();
+
+  // La de mañana está en «Después»: al abrirla dice cuándo se podrá iniciar, sin el botón.
+  const fila = page.getByRole("region", { name: "Después" }).getByRole("article").filter({ hasText: deManana });
+  await fila.getByRole("button", { name: new RegExp(deManana) }).click();
+  await expect(fila.getByText("Podrás iniciarla mañana")).toBeVisible();
+  await expect(fila.getByRole("button", { name: "Iniciar levantamiento" })).toHaveCount(0);
+});
+
+test("si la única visita es de mañana, la tarjeta principal dice cuándo en lugar de ofrecer iniciarla (iteración 46)", async ({ page }) => {
+  const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
+  const cliente = nuevaVisitaConCliente(tecnico, 1).cliente;
+  await page.goto(`${CAMPO}/`);
+  await iniciarSesion(page, tecnico);
+
+  const siguiente = page.getByRole("region", { name: "Siguiente visita" });
+  await expect(siguiente.getByText(cliente)).toBeVisible();
+  await expect(siguiente.getByText("Podrás iniciarla mañana")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Iniciar levantamiento" })).toHaveCount(0);
 });

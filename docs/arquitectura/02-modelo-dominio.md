@@ -22,6 +22,11 @@ Los diagramas de estados vigentes (levantamiento, visita, envíos al cliente y v
 | **Medida** | Número acompañado siempre de una unidad del catálogo de unidades | Nunca un número suelto |
 | **Evidencia** | Foto o boceto asociado a una sección o campo | No es un plano de oficina |
 | **Boceto** | Dibujo a mano alzada hecho en campo sobre cuadrícula | No es un plano de ingeniería |
+| **Selección** | Un campo de opciones fijas: una (`opcion`) o varias (`opciones`), con «Otro» escrito si el formato lo admite. Sí/No es una selección de dos (ADR-0050) | No es un texto con valores comunes |
+| **Horario** | Un campo con la hora de llegada y la de salida; el total se calcula (ADR-0050) | No es una hora suelta |
+| **Tabla de medidas** | Cómo una sección acomoda sus campos `medida` en filas y columnas (F1, F2, F3). Solo presentación: cada celda sigue siendo un campo | No es un tipo de dato nuevo |
+| **Orden de servicio** | Número consecutivo por organización que se asigna al programar una visita y no cambia (ADR-0051) | No es el número de una cotización |
+| **Firma electrónica** | El técnico firma al enviar y el revisor al marcar revisado, con nombre, cédula y hora oficial (ADR-0051) | No es el trazo de quien acompaña la visita |
 | **Línea de cantidad** | Material o trabajo con descripción, cantidad, unidad y observación | No incluye precio |
 | **Ítem de catálogo** | Material estandarizado de la lista de TEINS | — |
 | **Comentario** | Nota de oficina dirigida al técnico; abre una conversación que el técnico responde desde el teléfono (ADR-0040) | No modifica datos; se cierra al marcar revisado |
@@ -148,7 +153,7 @@ La versión publicada es una **copia**, no una referencia. Al retirar una versi�
 
 ### Visita
 
-Su avance se **deduce** de sus levantamientos e informes. Lo explícito son tres marcas con fecha: *Cancelada* (`canceladaEn`, la pone oficina), *Terminada* (`terminadaEn`, desde la iteración 31: un técnico la termina desde su teléfono, ADR-0037) y *Cerrada* (`cerradaEn`: atendida y de un día anterior, sale de los teléfonos, ADR-0041; reprogramarla a otro día u hora la reabre, ADR-0042). Su horario puede ser todo el día, de una hora a otra, o desde una hora hasta que la terminen; mientras tanto el técnico está ocupado y no se le programa otra visita que se cruce.
+Su avance se **deduce** de sus levantamientos e informes. Lo explícito son tres marcas con fecha: *Cancelada* (`canceladaEn`, la pone oficina), *Terminada* (`terminadaEn`, desde la iteración 31: un técnico la termina desde su teléfono, ADR-0037) y *Cerrada* (`cerradaEn`: atendida y de un día anterior, sale de los teléfonos, ADR-0041; reprogramarla a otro día u hora la reabre, ADR-0042). Su horario puede ser todo el día, de una hora a otra, o desde una hora hasta que la terminen; mientras tanto el técnico está ocupado y no se le programa otra visita que se cruce. Una visita de otro día no se inicia desde el teléfono (iteración 46). Desde la iteración 47 lleva además su **número de orden de servicio** (consecutivo por organización, asignado al programar y conservado al reprogramar, ADR-0051), el **solicitante** (un contacto del mismo cliente, a quien el técnico busca al llegar) y la **referencia del cliente**; el NIT vive en el cliente y la ciudad en el sitio.
 
 ---
 
@@ -172,7 +177,9 @@ Su avance se **deduce** de sus levantamientos e informes. Lo explícito son tres
 16. **Doble hora (I-2):** todo registro guarda la hora del dispositivo (declarada) y la hora del servidor (oficial). La oficial es la del servidor.
 17. **Reasignación (I-4):** reasignar una visita no invalida levantamientos ya iniciados; oficina decide cuáles incluir en el informe.
 18. **Minimización (I-20):** las versiones publicadas incluyen los datos personales mínimos necesarios (por ejemplo, cargo en lugar de teléfono del contacto).
-19. **Las fotos no conservan metadatos** de ubicación ni del dispositivo (QA-23).
+19. **Las fotos no conservan metadatos** de ubicación ni del dispositivo (QA-23). Una foto de un campo con `sello` lleva dibujada una franja con la hora de red, la hora del teléfono y, si el formato lo pide, las coordenadas, la dirección registrada y un mapa (ADR-0052): las coordenadas quedan a la vista en la imagen, nunca en los metadatos.
+20. **El número de orden de servicio nunca se repite ni se reutiliza** y no cambia al reprogramar, reasignar ni cancelar (ADR-0051).
+21. **Las firmas electrónicas del informe** son el nombre, la cédula y la hora oficial de quien capturó (al enviar) y de quien revisó (al marcar revisado); se copian en la versión publicada y nunca salen en registros ni listas (reglas 7 y 18, ADR-0051).
 
 ---
 

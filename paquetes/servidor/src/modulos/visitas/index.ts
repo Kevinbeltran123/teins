@@ -10,15 +10,28 @@ import { avisar as avisarPush } from "../avisos";
 import { registrarCambios, type Cambio } from "../cambios";
 import type { ClientesYSitios } from "../clientes";
 import { nombreDe, type Identidad } from "../identidad";
-import { visitas } from "./esquema";
+import { consecutivosDeOrden, visitas } from "./esquema";
 import { fechaEnColombia, ZONA_COLOMBIA } from "@teins/dominio";
+
+/** Quien pidió la visita (ADR-0051): el técnico pregunta por esta persona al llegar. */
+export interface Solicitante {
+  id: string;
+  nombre: string;
+  cargo: string;
+  celular: string | null;
+}
 
 export interface VisitaAsignada {
   id: string;
-  cliente: { nombre: string };
-  sitio: { nombre: string; direccion: string };
+  /** `nit` y `ciudad`: los del encabezado del informe (ADR-0051). */
+  cliente: { nombre: string; nit: string | null };
+  sitio: { nombre: string; direccion: string; ciudad: string | null };
   motivo: string;
   programadaPara: string;
+  /** Número de orden de servicio y referencia del cliente (ADR-0051); las visitas anteriores no tienen número. */
+  ordenDeServicio: number | null;
+  referencia: string | null;
+  solicitante: Solicitante | null;
   /** Horario (ADR-0037): "HH:MM"; sin inicio, todo el día; con inicio y sin fin, hasta que la terminen. */
   horaInicio: string | null;
   horaFin: string | null;
@@ -46,6 +59,10 @@ export interface NuevaVisita extends Contexto {
   tecnicos: readonly string[];
   horaInicio?: string | null | undefined;
   horaFin?: string | null | undefined;
+  /** Un contacto del mismo cliente (ADR-0051). */
+  solicitanteContactoId?: string | null | undefined;
+  /** La referencia del cliente (el «Ticket No.»). */
+  referenciaCliente?: string | null | undefined;
 }
 
 /** Avance de una visita según sus levantamientos; lo aporta el módulo de levantamientos. */
@@ -65,13 +82,23 @@ const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const LIMITE_HISTORIA = 100;
 
 export interface Visitas {
+  /** Programa la visita y le asigna el siguiente número de orden de servicio, en la misma transacción (ADR-0051). */
   crear(tx: TxOrganizacion, datos: NuevaVisita): Promise<string>;
+  /**
+   * Fija el último número de orden de la organización, para seguir desde el de TEINS (ADR-0051). Nunca baja ni repite:
+   * un número menor o igual al último, o a cualquiera ya asignado, se rechaza.
+   */
+  fijarConsecutivoDeOrdenes(tx: TxOrganizacion, organizacionId: string, ultimo: number): Promise<void>;
   /**
    * Reemplaza los técnicos asignados. Regla 17: no invalida levantamientos ya iniciados. Con `version`,
    * rechaza si otra persona cambió la visita desde que se abrió (QA-25).
    */
   reasignar(tx: TxOrganizacion, datos: Contexto & { visitaId: string; tecnicos: readonly string[]; version?: number }): Promise<void>;
-  reprogramar(tx: TxOrganizacion, datos: Contexto & { visitaId: string; version: number; programadaPara: string; motivo: string; horaInicio?: string | null; horaFin?: string | null }): Promise<void>;
+  /** Sin `solicitanteContactoId` o `referenciaCliente` se conservan; con null se quitan. El número de orden no cambia. */
+  reprogramar(
+    tx: TxOrganizacion,
+    datos: Contexto & { visitaId: string; version: number; programadaPara: string; motivo: string; horaInicio?: string | null; horaFin?: string | null; solicitanteContactoId?: string | null; referenciaCliente?: string | null },
+  ): Promise<void>;
   /** Cancela: sale de los teléfonos; lo empezado se conserva y se puede enviar (regla 17). */
   cancelar(tx: TxOrganizacion, datos: Contexto & { visitaId: string; version: number; motivo: string }): Promise<void>;
   existe(tx: TxOrganizacion, id: string): Promise<boolean>;
@@ -111,6 +138,11 @@ export interface Visitas {
 
 /** "09:00:00" (Postgres) o "09:00" → "09:00". */
 const aHoraCorta = (hora: string | null) => (hora ? hora.slice(0, 5) : null);
+/** El solicitante de una visita como lo ven oficina y el teléfono (ADR-0051), o null si no tiene. */
+const solicitanteDe = (contactoId: string | null, contactos: ReadonlyMap<string, { id: string; nombre: string; cargo: string; celular: string | null }>): Solicitante | null => {
+  const c = contactoId ? contactos.get(contactoId) : undefined;
+  return c ? { id: c.id, nombre: c.nombre, cargo: c.cargo, celular: c.celular } : null;
+};
 const minutos = (hora: string) => Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5));
 /** Minuto del día en Colombia de un momento, o null si cae en otro día que `fecha`. */
 function minutoDelDia(momento: Date, fecha: string): number | null {
@@ -150,10 +182,19 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
     return actual;
   }
 
+  /** El solicitante es un contacto del mismo cliente y no un contacto que oficina ya quitó (ADR-0051). */
+  async function exigirSolicitante(tx: TxOrganizacion, clienteId: string, contactoId: string | null) {
+    if (contactoId === null) return;
+    const contacto = (await clientes.contactos(tx, [contactoId])).get(contactoId);
+    if (!contacto || contacto.clienteId !== clienteId) throw problema("entrada_invalida", "El solicitante no es contacto de este cliente");
+    if (contacto.quitado) throw problema("entrada_invalida", "El solicitante ya no es contacto del cliente");
+  }
+
   const publica: Visitas = {
-    async crear(tx, { organizacionId, autorId, correlacion, clienteId, sitioId, motivo, programadaPara, tecnicos, horaInicio = null, horaFin = null }) {
+    async crear(tx, { organizacionId, autorId, correlacion, clienteId, sitioId, motivo, programadaPara, tecnicos, horaInicio = null, horaFin = null, solicitanteContactoId = null, referenciaCliente = null }) {
       validarFecha(programadaPara);
       if (!motivo.trim()) throw problema("entrada_invalida", "La visita necesita un motivo");
+      const referencia = referenciaCliente?.trim() || null;
       // Con el cliente tomado, quien archiva el cliente o el sitio al mismo tiempo espera a esta visita y la ve, o esta
       // espera al archivo y lo ve en la lectura siguiente: nunca queda una visita por hacer en algo archivado.
       await clientes.bloquear(tx, clienteId);
@@ -161,15 +202,36 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       if (!sitio || sitio.clienteId !== clienteId) throw problema("entrada_invalida", "El sitio no pertenece al cliente");
       // A lo archivado ya no se le programa (ADR-0035): primero se recupera.
       if (sitio.archivado) throw problema("estado_invalido", "El cliente o el sitio están archivados: recupérelos para programarles una visita");
+      await exigirSolicitante(tx, clienteId, solicitanteContactoId);
       const unicos = [...new Set(tecnicos)];
       const id = randomUUID();
-      await tx.insert(visitas).values({ id, organizacionId, clienteId, sitioId, motivo: motivo.trim(), programadaPara, horaInicio, horaFin, tecnicos: unicos });
+      // El número se incrementa en esta transacción: nunca se repite ni se reutiliza (ADR-0051), como el de las cotizaciones.
+      const [{ ultimo: ordenDeServicio } = { ultimo: 0 }] = await tx
+        .insert(consecutivosDeOrden)
+        .values({ organizacionId, ultimo: 1 })
+        .onConflictDoUpdate({ target: consecutivosDeOrden.organizacionId, set: { ultimo: sql`${consecutivosDeOrden.ultimo} + 1` } })
+        .returning({ ultimo: consecutivosDeOrden.ultimo });
+      await tx.insert(visitas).values({ id, organizacionId, clienteId, sitioId, motivo: motivo.trim(), programadaPara, horaInicio, horaFin, tecnicos: unicos, solicitanteContactoId, ordenDeServicio, referenciaCliente: referencia });
       await registrar(tx, [
-        { organizacionId, agregadoTipo: "visita", agregadoId: id, tipoEvento: "visita_creada", autorId, correlacion, valorNuevo: { clienteId, sitioId, programadaPara, horaInicio, horaFin, tecnicos: unicos } },
+        { organizacionId, agregadoTipo: "visita", agregadoId: id, tipoEvento: "visita_creada", autorId, correlacion, valorNuevo: { clienteId, sitioId, programadaPara, horaInicio, horaFin, tecnicos: unicos, ordenDeServicio, solicitanteContactoId, referenciaCliente: referencia } },
       ]);
       await avisarPush(tx, { tipo: "visita_asignada", organizacionId, tecnicos: unicos, visitaId: id, programadaPara, horaInicio });
       await registrarCambios(tx, avisar(organizacionId, id, unicos, "cambio"));
       return id;
+    },
+
+    async fijarConsecutivoDeOrdenes(tx, organizacionId, ultimo) {
+      if (!Number.isInteger(ultimo) || ultimo < 0) throw problema("entrada_invalida", "El número de orden debe ser un entero desde 0");
+      // Tomado: dos programaciones a la vez esperan a que el número quede fijo.
+      const [actual] = await tx.select({ ultimo: consecutivosDeOrden.ultimo }).from(consecutivosDeOrden).where(eq(consecutivosDeOrden.organizacionId, organizacionId)).for("update");
+      const [{ mayor } = { mayor: null }] = await tx.select({ mayor: sql<number | null>`max(${visitas.ordenDeServicio})` }).from(visitas).where(eq(visitas.organizacionId, organizacionId));
+      const yaVa = Math.max(actual?.ultimo ?? 0, mayor ?? 0);
+      if (ultimo <= yaVa && (actual || mayor !== null)) throw problema("estado_invalido", `El consecutivo no puede bajar ni repetirse: la organización ya va en ${yaVa}`);
+      await tx
+        .insert(consecutivosDeOrden)
+        .values({ organizacionId, ultimo })
+        // Con el mayor, nunca menos: si una programación creó la fila entre la lectura y aquí, no se baja.
+        .onConflictDoUpdate({ target: consecutivosDeOrden.organizacionId, set: { ultimo: sql`greatest(${consecutivosDeOrden.ultimo}, excluded.ultimo)` } });
     },
 
     async reasignar(tx, { organizacionId, autorId, correlacion, visitaId, tecnicos, version }) {
@@ -201,7 +263,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       await registrarCambios(tx, [...avisar(organizacionId, visitaId, salen, "fuera_de_alcance"), ...avisar(organizacionId, visitaId, entran, "cambio")]);
     },
 
-    async reprogramar(tx, { organizacionId, autorId, correlacion, visitaId, version, programadaPara, motivo, horaInicio = null, horaFin = null }) {
+    async reprogramar(tx, { organizacionId, autorId, correlacion, visitaId, version, programadaPara, motivo, horaInicio = null, horaFin = null, solicitanteContactoId, referenciaCliente }) {
       validarFecha(programadaPara);
       // A lo archivado no se le reprograma, como no se le programa (ADR-0035): volvería a estar por hacer. El cliente se
       // toma antes que la visita, como al programar: quien archiva al mismo tiempo espera o se ve (iteración 42).
@@ -211,12 +273,16 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         if ((await clientes.sitios(tx, [donde.sitioId])).get(donde.sitioId)?.archivado) throw problema("estado_invalido", "El cliente o el sitio están archivados: recupérelos para reprogramar la visita");
       }
       const actual = await paraCambiar(tx, visitaId, version);
+      // Sin el dato, se conserva; con null, se quita (ADR-0051). Un solicitante nuevo tiene que ser del mismo cliente.
+      const solicitante = solicitanteContactoId === undefined ? actual.solicitanteContactoId : solicitanteContactoId;
+      if (solicitante !== actual.solicitanteContactoId) await exigirSolicitante(tx, actual.clienteId, solicitante);
+      const referencia = referenciaCliente === undefined ? actual.referenciaCliente : referenciaCliente?.trim() || null;
       // Otro día u otra hora: lo que ya se había terminado vuelve a estar por hacer.
       const cambiaHorario = actual.programadaPara !== programadaPara || aHoraCorta(actual.horaInicio) !== horaInicio || aHoraCorta(actual.horaFin) !== horaFin;
       await tx
         .update(visitas)
         // Otro día u otra hora también reabre una visita cerrada (ADR-0041).
-        .set({ programadaPara, horaInicio, horaFin, motivo: motivo.trim(), ...(cambiaHorario ? { terminadaEn: null, terminadaPor: null, cerradaEn: null } : {}), version: sql`${visitas.version} + 1` })
+        .set({ programadaPara, horaInicio, horaFin, motivo: motivo.trim(), solicitanteContactoId: solicitante, referenciaCliente: referencia, ...(cambiaHorario ? { terminadaEn: null, terminadaPor: null, cerradaEn: null } : {}), version: sql`${visitas.version} + 1` })
         .where(eq(visitas.id, visitaId));
       await registrar(tx, [
         {
@@ -226,8 +292,8 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
           tipoEvento: "visita_reprogramada",
           autorId,
           correlacion,
-          valorAnterior: { programadaPara: actual.programadaPara, horaInicio: aHoraCorta(actual.horaInicio), horaFin: aHoraCorta(actual.horaFin), motivo: actual.motivo },
-          valorNuevo: { programadaPara, horaInicio, horaFin, motivo: motivo.trim() },
+          valorAnterior: { programadaPara: actual.programadaPara, horaInicio: aHoraCorta(actual.horaInicio), horaFin: aHoraCorta(actual.horaFin), motivo: actual.motivo, solicitanteContactoId: actual.solicitanteContactoId, referenciaCliente: actual.referenciaCliente },
+          valorNuevo: { programadaPara, horaInicio, horaFin, motivo: motivo.trim(), solicitanteContactoId: solicitante, referenciaCliente: referencia },
         },
       ]);
       // Los teléfonos de sus técnicos reciben la visita con la fecha y el motivo nuevos.
@@ -345,6 +411,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         const avance = await conteos(tx, filas.map((f) => f.id));
         const nombres = await identidad.nombres(organizacionId, [...new Set(filas.flatMap((f) => [...f.tecnicos, ...(f.canceladaPor ? [f.canceladaPor] : []), ...(f.terminadaPor ? [f.terminadaPor] : [])]))], tx);
         const persona = (id: string) => ({ id, nombre: nombreDe(nombres, id) });
+        const solicitantes = await clientes.contactos(tx, filas.flatMap((f) => (f.solicitanteContactoId ? [f.solicitanteContactoId] : [])));
         return filas.flatMap((f) => {
           const sitio = sitios.get(f.sitioId);
           if (!sitio) return [];
@@ -356,6 +423,9 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
               sitio: { id: sitio.id, nombre: sitio.nombre, direccion: sitio.direccion },
               motivo: f.motivo,
               programadaPara: f.programadaPara,
+              ordenDeServicio: f.ordenDeServicio,
+              referencia: f.referenciaCliente,
+              solicitante: solicitanteDe(f.solicitanteContactoId, solicitantes),
               horaInicio: aHoraCorta(f.horaInicio),
               horaFin: aHoraCorta(f.horaFin),
               terminada: f.terminadaEn ? { en: f.terminadaEn.toISOString(), por: persona(f.terminadaPor ?? "") } : null,
@@ -420,7 +490,8 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
             // al revés, programar y reprogramar ese día a la vez se esperan uno al otro y Postgres aborta a uno.
             await tomarDia(tx, actor.organizacionId, cuerpo.programadaPara);
             // Primero se valida el pedido (fecha, sitio); el cruce se mira después, sin contarse a sí misma.
-            const id = await publica.crear(tx, { ...autoria(actor, correlacion), ...cuerpo, tecnicos });
+            const { solicitanteId, referencia, ...visita } = cuerpo;
+            const id = await publica.crear(tx, { ...autoria(actor, correlacion), ...visita, solicitanteContactoId: solicitanteId, referenciaCliente: referencia, tecnicos });
             await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, tecnicos, id);
             return una(actor.organizacionId, tx, id);
           });
@@ -450,7 +521,8 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
           return enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const [actual] = await tx.select().from(visitas).where(eq(visitas.id, id));
             if (actual) await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, actual.tecnicos.filter((t) => activos.has(t)), id);
-            await publica.reprogramar(tx, { ...autoria(actor, correlacion), visitaId: id, ...cuerpo });
+            const { solicitanteId, referencia, ...cambio } = cuerpo;
+            await publica.reprogramar(tx, { ...autoria(actor, correlacion), visitaId: id, ...cambio, ...(solicitanteId !== undefined ? { solicitanteContactoId: solicitanteId } : {}), ...(referencia !== undefined ? { referenciaCliente: referencia } : {}) });
             return una(actor.organizacionId, tx, id);
           });
         },
@@ -515,20 +587,35 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
   async function leer(tx: TxOrganizacion, ids: readonly string[], tecnicoId?: string): Promise<Map<string, VisitaAsignada>> {
     if (ids.length === 0) return new Map();
     const filas = await tx
-      .select({ id: visitas.id, sitioId: visitas.sitioId, motivo: visitas.motivo, programadaPara: visitas.programadaPara, horaInicio: visitas.horaInicio, horaFin: visitas.horaFin, terminadaEn: visitas.terminadaEn })
+      .select({
+        id: visitas.id,
+        sitioId: visitas.sitioId,
+        motivo: visitas.motivo,
+        programadaPara: visitas.programadaPara,
+        horaInicio: visitas.horaInicio,
+        horaFin: visitas.horaFin,
+        terminadaEn: visitas.terminadaEn,
+        ordenDeServicio: visitas.ordenDeServicio,
+        referenciaCliente: visitas.referenciaCliente,
+        solicitanteContactoId: visitas.solicitanteContactoId,
+      })
       .from(visitas)
       .where(and(inArray(visitas.id, [...ids]), tecnicoId ? and(arrayContains(visitas.tecnicos, [tecnicoId]), isNull(visitas.canceladaEn), isNull(visitas.cerradaEn)) : undefined));
     const sitios = await clientes.sitios(tx, filas.map((f) => f.sitioId));
+    const solicitantes = await clientes.contactos(tx, filas.flatMap((f) => (f.solicitanteContactoId ? [f.solicitanteContactoId] : [])));
     const resultado = new Map<string, VisitaAsignada>();
     for (const f of filas) {
       const sitio = sitios.get(f.sitioId);
       if (!sitio) continue;
       resultado.set(f.id, {
         id: f.id,
-        cliente: { nombre: sitio.cliente },
-        sitio: { nombre: sitio.nombre, direccion: sitio.direccion },
+        cliente: { nombre: sitio.cliente, nit: sitio.clienteNit },
+        sitio: { nombre: sitio.nombre, direccion: sitio.direccion, ciudad: sitio.ciudad },
         motivo: f.motivo,
         programadaPara: f.programadaPara,
+        ordenDeServicio: f.ordenDeServicio,
+        referencia: f.referenciaCliente,
+        solicitante: solicitanteDe(f.solicitanteContactoId, solicitantes),
         horaInicio: aHoraCorta(f.horaInicio),
         horaFin: aHoraCorta(f.horaFin),
         terminada: f.terminadaEn ? { en: f.terminadaEn.toISOString() } : null,

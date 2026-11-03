@@ -115,3 +115,94 @@ describe("propiedades del validador", () => {
     );
   });
 });
+
+describe("selección, horario y cédula de la firma (ADR-0050)", () => {
+  const opcion = (extra: Partial<Extract<DefinicionCampo, { tipo: "opcion" }>> = {}): DefinicionCampo => ({ clave: "o", etiqueta: "O", tipo: "opcion", opciones: ["Totalmente", "Parcialmente"], ...extra });
+  const opciones = (extra: Partial<Extract<DefinicionCampo, { tipo: "opciones" }>> = {}): DefinicionCampo => ({ clave: "s", etiqueta: "S", tipo: "opciones", opciones: ["CCTV", "UPS", "Alarma"], ...extra });
+  const horario = (obligatorio = false): DefinicionCampo => ({ clave: "h", etiqueta: "H", tipo: "horario", ...(obligatorio ? { obligatorio } : {}) });
+  const v = (x: unknown) => x as Valor;
+
+  it("opcion: una de las opciones; «Otro» solo si el campo lo permite", () => {
+    expect(validarCampo(opcion(), "Totalmente")).toBeNull();
+    expect(validarCampo(opcion(), "Cualquiera")).toBe("opcion_invalida");
+    expect(validarCampo(opcion({ otro: true }), "Cualquiera")).toBeNull();
+    expect(validarCampo(opcion({ otro: true }), "x".repeat(121))).toBe("opcion_invalida");
+    expect(validarCampo(opcion(), v(["Totalmente"]))).toBe("tipo_invalido");
+    expect(validarCampo(opcion(), v(3))).toBe("tipo_invalido");
+  });
+
+  it("opcion: vacía solo si no es obligatoria", () => {
+    expect(validarCampo(opcion(), undefined)).toBeNull();
+    expect(validarCampo(opcion({ obligatorio: true }), undefined)).toBe("campo_obligatorio");
+    expect(validarCampo(opcion({ obligatorio: true }), "  ")).toBe("campo_obligatorio");
+    expect(validarCampo(opcion({ obligatorio: true }), v({ noObtenido: true, motivo: "El cliente no estaba" }))).toBeNull();
+  });
+
+  it("opciones: elegidas dentro de las opciones y sin repetir", () => {
+    expect(validarCampo(opciones(), v({ elegidas: ["CCTV", "UPS"] }))).toBeNull();
+    expect(validarCampo(opciones(), v({ elegidas: ["CCTV", "Radar"] }))).toBe("opcion_invalida");
+    expect(validarCampo(opciones(), v({ elegidas: ["CCTV", "CCTV"] }))).toBe("opcion_invalida");
+    expect(validarCampo(opciones(), v({ elegidas: "CCTV" }))).toBe("tipo_invalido");
+    expect(validarCampo(opciones(), v(["CCTV"]))).toBe("tipo_invalido");
+    expect(validarCampo(opciones(), v({ elegidas: ["CCTV"], extra: 1 }))).toBe("tipo_invalido");
+  });
+
+  it("opciones: «Otro» solo si el campo lo permite, con texto", () => {
+    expect(validarCampo(opciones(), v({ elegidas: ["CCTV"], otro: "cerca eléctrica" }))).toBe("opcion_invalida");
+    expect(validarCampo(opciones({ otro: true }), v({ elegidas: ["CCTV"], otro: "cerca eléctrica" }))).toBeNull();
+    expect(validarCampo(opciones({ otro: true }), v({ elegidas: [], otro: "cerca eléctrica" }))).toBeNull();
+    expect(validarCampo(opciones({ otro: true }), v({ elegidas: ["CCTV"], otro: "  " }))).toBe("opcion_invalida");
+    expect(validarCampo(opciones({ otro: true }), v({ elegidas: ["CCTV"], otro: "x".repeat(121) }))).toBe("opcion_invalida");
+  });
+
+  it("opciones: obligatorio es al menos una elegida o un «Otro» escrito", () => {
+    expect(validarCampo(opciones({ obligatorio: true }), undefined)).toBe("campo_obligatorio");
+    expect(validarCampo(opciones({ obligatorio: true }), v({ elegidas: [] }))).toBe("campo_obligatorio");
+    expect(validarCampo(opciones({ obligatorio: true, otro: true }), v({ elegidas: [], otro: "cerca eléctrica" }))).toBeNull();
+    expect(validarCampo(opciones(), v({ elegidas: [] }))).toBeNull();
+  });
+
+  it("horario: horas HH:MM válidas; obligatorio exige las dos", () => {
+    expect(validarCampo(horario(), v({ desde: "08:14", hasta: "11:30" }))).toBeNull();
+    expect(validarCampo(horario(), v({ desde: "22:00", hasta: "01:30" }))).toBeNull();
+    expect(validarCampo(horario(), v({ desde: "08:14" }))).toBeNull();
+    expect(validarCampo(horario(true), v({ desde: "08:14" }))).toBe("campo_obligatorio");
+    expect(validarCampo(horario(true), undefined)).toBe("campo_obligatorio");
+    expect(validarCampo(horario(), v({ desde: "24:00" }))).toBe("horario_invalido");
+    expect(validarCampo(horario(), v({ desde: "8:14" }))).toBe("horario_invalido");
+    expect(validarCampo(horario(), v({ desde: "08:14", hasta: "11:60" }))).toBe("horario_invalido");
+    expect(validarCampo(horario(), v({ hasta: "11:30" }))).toBe("tipo_invalido");
+    expect(validarCampo(horario(), v("08:14"))).toBe("tipo_invalido");
+    expect(validarCampo(horario(), v({ desde: "08:14", extra: 1 }))).toBe("tipo_invalido");
+  });
+
+  describe("la firma con cédula", () => {
+    const firma = (documento?: "opcional" | "obligatorio"): DefinicionCampo => ({ clave: "f", etiqueta: "F", tipo: "firma", ...(documento ? { documento } : {}) });
+    const valor = (extra: Record<string, unknown> = {}) => v({ firma: "a".repeat(64), nombre: "Ana Pérez", firmadoEn: "2026-10-29T15:00:00.000Z", declaracion: "Confirmo", ...extra });
+
+    it("obligatoria: exige la cédula, de 5 a 12 dígitos", () => {
+      expect(validarCampo(firma("obligatorio"), valor())).toBe("firma_invalida");
+      expect(validarCampo(firma("obligatorio"), valor({ documento: "52123456" }))).toBeNull();
+      expect(validarCampo(firma("obligatorio"), valor({ documento: "1234" }))).toBe("firma_invalida");
+      expect(validarCampo(firma("obligatorio"), valor({ documento: "1234567890123" }))).toBe("firma_invalida");
+      expect(validarCampo(firma("obligatorio"), valor({ documento: "52.123.456" }))).toBe("firma_invalida");
+    });
+
+    it("opcional: sin cédula pasa; con cédula, tiene que ser válida", () => {
+      expect(validarCampo(firma("opcional"), valor())).toBeNull();
+      expect(validarCampo(firma("opcional"), valor({ documento: "52123456" }))).toBeNull();
+      expect(validarCampo(firma("opcional"), valor({ documento: "abc" }))).toBe("firma_invalida");
+    });
+
+    it("un formato que no la pide no la recibe", () => {
+      expect(validarCampo(firma(), valor())).toBeNull();
+      expect(validarCampo(firma(), valor({ documento: "52123456" }))).toBe("firma_invalida");
+    });
+  });
+
+  it("las respuestas con los tipos nuevos se validan y no se confunden con fotos", () => {
+    const formato: VersionFormato = { formato: "f", version: 1, secciones: [{ clave: "s", titulo: "S", campos: [opciones({ obligatorio: true }), horario(true)] }] };
+    expect(validarRespuestas(formato, { s: { s: v({ elegidas: ["CCTV"] }), h: v({ desde: "08:00", hasta: "09:00" }) } })).toEqual([]);
+    expect(fotosReferenciadas({ s: { s: v({ elegidas: ["CCTV"] }), h: v({ desde: "08:00", hasta: "09:00" }) } })).toEqual([]);
+  });
+});

@@ -1,5 +1,9 @@
+import { duracionTexto, horaCorta, minutosDeHorario } from "./fechas";
 import type { DefinicionCampo } from "./formato";
-import { esBoceto, esFirma, esNoObtenido, type Valor } from "./levantamiento";
+import { esBoceto, esFirma, esHorario, esNoObtenido, esOpciones, type Valor } from "./levantamiento";
+
+/** "A", "A y B", "A, B y C". */
+const unirConY = (partes: readonly string[]) => (partes.length < 2 ? (partes[0] ?? "") : `${partes.slice(0, -1).join(", ")} y ${partes.at(-1)}`);
 
 /**
  * Un valor como lo lee una persona, en español de Colombia: "12,5 kVA", "No se pudo obtener: …".
@@ -18,7 +22,20 @@ export function describirValor(campo: DefinicionCampo, valor: Valor | undefined)
     case "boceto":
       return esBoceto(valor) ? "Boceto" : "Sin dato";
     case "firma":
-      return esFirma(valor) ? `Firmada por ${valor.nombre}${valor.cargo ? ` (${valor.cargo})` : ""}` : "Sin dato";
+      return esFirma(valor) ? `Firmada por ${valor.nombre}${valor.cargo ? ` (${valor.cargo})` : ""}${valor.documento ? ` · C. C. ${valor.documento}` : ""}` : "Sin dato";
+    case "opcion":
+      return "Sin dato";
+    case "opciones": {
+      if (!esOpciones(valor)) return "Sin dato";
+      const partes = [...valor.elegidas, ...(valor.otro ? [`otro: ${valor.otro}`] : [])];
+      if (partes.length === 0) return "Sin dato";
+      return valor.elegidas.length === 0 ? `Otro: ${valor.otro}` : unirConY(partes);
+    }
+    case "horario": {
+      if (!esHorario(valor)) return "Sin dato";
+      if (valor.hasta === undefined) return `Desde ${horaCorta(valor.desde)}`;
+      return `${horaCorta(valor.desde)} a ${horaCorta(valor.hasta)} · ${duracionTexto(minutosDeHorario(valor)!)}`;
+    }
     case "medida":
       return "valor" in valor ? `${valor.valor.replace(".", ",")} ${valor.unidad}` : "Sin dato";
     case "texto":

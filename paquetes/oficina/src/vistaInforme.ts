@@ -11,12 +11,21 @@ import { consultas } from "./api";
 
 type Detalle = Respuesta<"obtenerLevantamiento">;
 
-/** El capítulo de un levantamiento, como queda en la copia congelada de la versión. */
-export const capituloDe = (d: Detalle): ContenidoVersion["levantamientos"][number] => ({
+/** Lo que firma el capítulo (ADR-0051), que el informe en edición trae junto a sus candidatos. */
+export type FirmasDelCapitulo = Partial<Pick<Respuesta<"obtenerInforme">["candidatos"][number], "tecnicoConCedula" | "revisorConCedula" | "revisadoEn">>;
+
+/**
+ * El capítulo de un levantamiento, como queda en la copia congelada de la versión. La cédula solo la ve quien
+ * administra: la vista dice «C. C. registrada», y la versión publicada, el número (lo copia el servidor).
+ */
+export const capituloDe = (d: Detalle, firmas: FirmasDelCapitulo = {}): ContenidoVersion["levantamientos"][number] => ({
   id: d.id,
   formato: d.formatoDefinicion,
   tecnico: d.tecnico.nombre,
   revisor: d.revisor?.nombre ?? "[Revisor]",
+  ...(firmas.tecnicoConCedula ? { tecnicoDocumento: "registrada" } : {}),
+  ...(firmas.revisorConCedula ? { revisorDocumento: "registrada" } : {}),
+  ...(firmas.revisadoEn ? { revisadoEn: firmas.revisadoEn } : {}),
   recibidoEn: d.recibidoEn,
   respuestas: d.respuestas,
   ...(Object.keys(d.repeticiones).length > 0 ? { repeticiones: d.repeticiones } : {}),

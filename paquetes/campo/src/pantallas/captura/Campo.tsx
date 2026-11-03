@@ -1,13 +1,13 @@
 import { Fragment, useContext, useState } from "react";
-import { crearMedida, esNoObtenido, type CodigoErrorValidacion, type DefinicionCampo, type Valor, type ValorMedida } from "@teins/dominio";
-import { CampoMedida, CampoTexto, MarcaNoObtenido, useNotificar } from "@teins/ui";
+import { crearMedida, duracionTexto, esHorario, esNoObtenido, esOpciones, minutosDeHorario, type CodigoErrorValidacion, type DefinicionCampo, type Valor, type ValorMedida } from "@teins/dominio";
+import { CampoHorario, CampoMedida, CampoOpcion, CampoOpciones, CampoTexto, MarcaNoObtenido, useNotificar } from "@teins/ui";
 import { repositorio } from "../../datos/instancia";
 import { mensajeDeValidacion } from "../../mensajes";
 import { CampoBoceto } from "./Boceto";
 import { CampoCantidades } from "./CampoCantidades";
 import { CampoFirma } from "./Firma";
 import { Fotos } from "./Fotos";
-import { anclaDeDato, VigilarGuardado } from "./contexto";
+import { anclaDeDato, SugerenciaDeLlegada, VigilarGuardado } from "./contexto";
 
 interface PropsCampo {
   id: string;
@@ -31,6 +31,7 @@ export function Campo(props: PropsCampo) {
 function ContenidoDeCampo({ id, seccion, campo, inicial: alAbrir, actual, error, alGuardar }: PropsCampo) {
   const notificar = useNotificar();
   const vigilar = useContext(VigilarGuardado);
+  const sugerenciaDeLlegada = useContext(SugerenciaDeLlegada);
   const guardar = (valor: Valor | undefined) => {
     alGuardar();
     vigilar(repositorio.guardarRespuesta(id, seccion, campo.clave, valor, new Date()));
@@ -87,6 +88,45 @@ function ContenidoDeCampo({ id, seccion, campo, inicial: alAbrir, actual, error,
           />
         );
       }
+      case "opcion":
+        return (
+          <CampoOpcion
+            etiqueta={campo.etiqueta}
+            obligatorio={campo.obligatorio}
+            error={noObtenido ? undefined : errorDelCampo}
+            deshabilitado={noObtenido}
+            opciones={campo.opciones}
+            otro={campo.otro}
+            valorInicial={typeof inicial === "string" ? inicial : undefined}
+            onCambio={(valor) => guardar(valor)}
+          />
+        );
+      case "opciones":
+        return (
+          <CampoOpciones
+            etiqueta={campo.etiqueta}
+            obligatorio={campo.obligatorio}
+            error={noObtenido ? undefined : errorDelCampo}
+            deshabilitado={noObtenido}
+            opciones={campo.opciones}
+            otro={campo.otro}
+            valorInicial={esOpciones(inicial) ? inicial : undefined}
+            onCambio={(valor) => guardar(valor)}
+          />
+        );
+      case "horario":
+        return (
+          <CampoHorario
+            etiqueta={campo.etiqueta}
+            obligatorio={campo.obligatorio}
+            error={noObtenido ? undefined : errorDelCampo}
+            deshabilitado={noObtenido}
+            valorInicial={esHorario(inicial) ? inicial : undefined}
+            total={(desde, hasta) => duracionTexto(minutosDeHorario({ desde, hasta }) ?? 0)}
+            sugerenciaDeLlegada={sugerenciaDeLlegada}
+            onCambio={(valor) => guardar(valor)}
+          />
+        );
       case "foto":
         return <Fotos id={id} seccion={seccion} campo={campo} ids={noObtenido ? [] : actual} error={noObtenido ? undefined : errorDelCampo} alGuardar={alGuardar} />;
       case "cantidades":

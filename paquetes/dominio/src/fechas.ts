@@ -20,3 +20,24 @@ export const formatearDia = (aaaaMmDd: string, opciones: Omit<Intl.DateTimeForma
  * una llamada en el nivel superior impide que el empaquetador descarte este archivo donde no se usa (campo).
  */
 export const pesos = (valor: number) => `$ ${valor.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`;
+
+/** "14:05" → "2:05 p. m.": la forma en que se dice la hora en Colombia, igual en todas partes. El mediodía es "12:00 p. m.". */
+export function horaCorta(hhmm: string): string {
+  const [h = 0, m = 0] = hhmm.split(":").map(Number);
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")} ${h < 12 ? "a. m." : "p. m."}`;
+}
+
+/** "3 h 16 min", "2 h", "45 min". */
+export function duracionTexto(minutos: number): string {
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return [h > 0 ? `${h} h` : "", m > 0 || h === 0 ? `${m} min` : ""].filter(Boolean).join(" ");
+}
+
+/** Minutos entre dos horas "HH:MM"; si la salida es menor que la entrada, fue al día siguiente. Sin salida, null. */
+export function minutosDeHorario({ desde, hasta }: { desde: string; hasta?: string | undefined }): number | null {
+  if (hasta === undefined) return null;
+  const aMinutos = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+  const diferencia = aMinutos(hasta) - aMinutos(desde);
+  return diferencia >= 0 ? diferencia : diferencia + 24 * 60;
+}

@@ -8,6 +8,11 @@ export const PasoPropio = createContext(false);
  * hasta que la siguiente funcione. Sin esto, el técnico seguiría escribiendo en algo que no se guarda.
  */
 export const VigilarGuardado = createContext<(escritura: Promise<unknown>) => void>(() => undefined);
+/**
+ * La llegada que se sugiere en un campo de horario (ADR-0050): la hora de la foto de llegada o, sin foto, la del
+ * inicio del levantamiento. Solo se sugiere; el técnico decide si la usa.
+ */
+export const SugerenciaDeLlegada = createContext<{ hora: string; texto: string } | undefined>(undefined);
 /** Ancla de un dato en la pantalla: el resumen de errores y el chat (en «Ver lo que enviaste») llevan hasta él. */
 export const anclaDeDato = (seccion: string, campo: string) => `dato-${seccion}-${campo}`.replace(/[^a-zA-Z0-9_-]/g, "");
 /** Ancla de una sección repetible: los errores sin dato (faltan repeticiones) llevan a su lista. */

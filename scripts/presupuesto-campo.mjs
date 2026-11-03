@@ -4,8 +4,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
-// ADR-0030: 135 KB desde el rediseño Recorrido (antes 120, ADR-0011).
-const PRESUPUESTO_JS_KB = 135;
+// ADR-0030: 135 KB desde el rediseño Recorrido (antes 120, ADR-0011). ADR-0050: 136 KB, porque los tipos nuevos de
+// formato (selección, horario, tablas y sello) crecen el contrato y la validación que van en el arranque: la bajada
+// valida los formatos antes de abrir la captura. Los controles, en cambio, viajan en la captura, que se carga aparte.
+const PRESUPUESTO_JS_KB = 136;
 const carpeta = "paquetes/campo/dist";
 
 const html = readFileSync(join(carpeta, "index.html"), "utf8");

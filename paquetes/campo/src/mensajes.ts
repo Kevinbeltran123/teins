@@ -20,7 +20,9 @@ export const mensajeDeValidacion: Record<CodigoErrorValidacion, string> = {
   nombre_de_repeticion_invalido: "Cada una necesita un nombre",
   boceto_invalido: "El boceto está dañado. Vuelve a dibujarlo.",
   cantidades_invalidas: "Revisa las líneas: cada una necesita descripción, una cantidad mayor que cero y una unidad.",
-  firma_invalida: "La firma quedó incompleta. Pide que vuelvan a firmar.",
+  firma_invalida: "La firma quedó incompleta. Pide que vuelvan a firmar y revisa la cédula.",
+  opcion_invalida: "Elige una de las opciones de la lista",
+  horario_invalido: "Revisa las horas: deben estar entre 00:00 y 23:59",
   archivo_muy_grande: "El dibujo pesa demasiado para enviarlo. Borra los trazos que sobren y vuelve a intentarlo.",
 };
 

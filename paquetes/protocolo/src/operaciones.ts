@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DECIMAL_CANONICO, ID_LINEA, LIMITES_SELECCION, PORCENTAJE, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
+import { DECIMAL_CANONICO, DOCUMENTO_DE_IDENTIDAD, ID_LINEA, LIMITES_SELECCION, PORCENTAJE, TIPO_ARCHIVO_BOCETO } from "@teins/dominio";
 import type * as dominio from "@teins/dominio";
 import { DocumentoBoceto, Fecha, Huella, IdFormato, Repeticiones, Respuestas, Uuid, Valor, VersionFormato } from "./dominio";
 import type { CodigoProblema } from "./problemas";
@@ -160,10 +160,16 @@ export const Hora = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora en forma
 export const VisitaAsignada = z
   .object({
     id: Uuid,
-    cliente: z.object({ nombre: z.string() }),
-    sitio: z.object({ nombre: z.string(), direccion: z.string() }),
+    /** `nit` y `ciudad`, los del encabezado del informe (ADR-0051): opcionales para las apps anteriores y para lo que falta. */
+    cliente: z.object({ nombre: z.string(), nit: z.string().nullable().optional() }),
+    sitio: z.object({ nombre: z.string(), direccion: z.string(), ciudad: z.string().nullable().optional() }),
     motivo: z.string(),
     programadaPara: z.iso.date(),
+    /** Número de orden de servicio y referencia del cliente (ADR-0051); las visitas anteriores no tienen número. */
+    ordenDeServicio: z.int().positive().nullable().optional(),
+    referencia: z.string().nullable().optional(),
+    /** Quien pidió la visita: el técnico pregunta por esta persona al llegar (ADR-0051). */
+    solicitante: z.object({ nombre: z.string(), cargo: z.string().optional(), celular: z.string().nullable().optional() }).nullable().optional(),
     /**
      * Horario (ADR-0037), opcional para las apps anteriores (ADR-0015). Sin hora de inicio es todo el día; con inicio y
      * sin fin, el técnico queda ocupado hasta que la termine.
@@ -449,7 +455,22 @@ export const VersionPublicada = z
   })
   .meta({ id: "VersionPublicada" });
 
-const VisitaDelInforme = z.object({ cliente: z.string(), sitio: z.string(), direccion: z.string(), motivo: z.string(), programadaPara: z.iso.date() });
+/**
+ * La visita de un informe. Los datos del encabezado (ADR-0051) son opcionales: solo el detalle los llena, y lo que falta
+ * sale como marcador en el informe. El número de orden va ya escrito, como queda en la versión.
+ */
+const VisitaDelInforme = z.object({
+  cliente: z.string(),
+  sitio: z.string(),
+  direccion: z.string(),
+  motivo: z.string(),
+  programadaPara: z.iso.date(),
+  nit: z.string().optional(),
+  ciudad: z.string().optional(),
+  solicitante: z.object({ nombre: z.string(), telefono: z.string().optional() }).optional(),
+  ordenDeServicio: z.string().optional(),
+  referencia: z.string().optional(),
+});
 
 export const PaginaInformes = z
   .object({
@@ -489,7 +510,22 @@ export const DetalleInforme = z
     planos: z.array(Plano),
     seleccion: SeleccionInforme,
     /** Levantamientos de la visita, incluidos o no, para componer (solo los revisados se pueden incluir). */
-    candidatos: z.array(z.object({ id: Uuid, formato: z.string(), tecnico: z.string(), estado: EstadoLevantamiento, recibidoEn: Fecha })),
+    candidatos: z.array(
+      z.object({
+        id: Uuid,
+        formato: z.string(),
+        tecnico: z.string(),
+        estado: EstadoLevantamiento,
+        recibidoEn: Fecha,
+        /**
+         * Lo que firma el informe (ADR-0051): si quien capturó y quien revisó tienen cédula, y cuándo revisó. El número
+         * no: solo lo ve quien administra; el servidor lo copia a la versión al publicar.
+         */
+        tecnicoConCedula: z.boolean(),
+        revisorConCedula: z.boolean(),
+        revisadoEn: Fecha.optional(),
+      }),
+    ),
     versiones: z.array(VersionPublicada),
   })
   .meta({ id: "DetalleInforme" });
@@ -532,9 +568,14 @@ export const UsuarioAdministrado = z
     desactivadoEn: Fecha.nullable(),
     /** Todavía tiene la contraseña temporal que se le entregó (ADR-0033). */
     debeCambiarContrasena: z.boolean(),
+    /** Cédula, para firmar los informes (ADR-0051): solo la ve quien administra. */
+    documento: z.string().nullable().default(null),
     creadoEn: Fecha,
   })
   .meta({ id: "UsuarioAdministrado" });
+
+/** La cédula como la acepta el formato de firma: de 5 a 12 dígitos. */
+const Documento = z.string().regex(DOCUMENTO_DE_IDENTIDAD, "La cédula son de 5 a 12 dígitos, sin puntos");
 
 /** Contraseñas como las acepta el ingreso: de 10 a 128 caracteres (ADR-0009). */
 const ContrasenaNueva = z.string().min(10).max(128);
@@ -572,8 +613,10 @@ export const ClienteConSitios = z
   .object({
     id: Uuid,
     nombre: z.string(),
+    /** NIT, para el encabezado del informe (ADR-0051). */
+    nit: z.string().nullable().default(null),
     /** Sus sitios activos: a los archivados ya no se les programa (ADR-0035). */
-    sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string() })),
+    sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string(), ciudad: z.string().nullable().default(null) })),
     /** Contactos que reciben el informe por algún canal: con cero, el informe solo queda en el portal. */
     reciben: z.int().nonnegative(),
     /** Archivado (ADR-0035): sale de las listas y de programar, y no recibe envíos; se recupera. */
@@ -608,8 +651,9 @@ export const DetalleCliente = z
   .object({
     id: Uuid,
     nombre: z.string(),
+    nit: z.string().nullable().default(null),
     /** Todos sus sitios, los archivados con su marca: se recuperan desde aquí. */
-    sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string(), archivado: Marca.nullable().default(null) })),
+    sitios: z.array(z.object({ id: Uuid, nombre: z.string(), direccion: z.string(), ciudad: z.string().nullable().default(null), archivado: Marca.nullable().default(null) })),
     contactos: z.array(Contacto),
     /** La última corrección del nombre (ADR-0035); el registro completo queda en la auditoría. */
     editado: Marca.nullable().default(null),
@@ -650,6 +694,11 @@ export const VisitaProgramada = z
     sitio: z.object({ id: Uuid, nombre: z.string(), direccion: z.string() }),
     motivo: z.string(),
     programadaPara: z.iso.date(),
+    /** Número de orden de servicio (ADR-0051): se asigna al programar y no cambia; las anteriores no tienen. */
+    ordenDeServicio: z.int().positive().nullable().default(null),
+    /** La referencia del cliente (el «Ticket No.») y quien pidió la visita, un contacto del mismo cliente. */
+    referencia: z.string().nullable().default(null),
+    solicitante: z.object({ id: Uuid, nombre: z.string(), cargo: z.string(), celular: z.string().nullable() }).nullable().default(null),
     /** Horario (ADR-0037): sin inicio, todo el día; con inicio y sin fin, hasta que la terminen. */
     horaInicio: Hora.nullable().default(null),
     horaFin: Hora.nullable().default(null),
@@ -790,6 +839,14 @@ const erroresDeVisita = ["no_autenticado", "sin_permiso", "no_encontrado", "conf
 const Horario = {
   horaInicio: Hora.nullable().default(null),
   horaFin: Hora.nullable().default(null),
+};
+/**
+ * Quien pidió la visita y la referencia del cliente (ADR-0051). Al programar, omitir es no tener; al reprogramar, omitir
+ * conserva lo que había y `null` lo quita.
+ */
+const DatosDePedido = {
+  solicitanteId: Uuid.nullable().optional(),
+  referencia: Texto(60).nullable().optional(),
 };
 const horarioValido = (d: { horaInicio: string | null; horaFin: string | null }, ctx: z.RefinementCtx) => {
   if (d.horaFin !== null && d.horaInicio === null) ctx.addIssue({ code: "custom", path: ["horaFin"], message: "La hora de fin necesita la de inicio" });
@@ -1183,10 +1240,20 @@ export const operaciones = {
     metodo: "POST",
     ruta: "/api/administracion/usuarios",
     resumen: "Crea un técnico o una persona de oficina con contraseña temporal (se muestra una vez)",
-    cuerpo: z.object({ usuario: NombreDeUsuario, nombre: z.string().trim().min(1).max(120), rol: Rol }),
+    cuerpo: z.object({ usuario: NombreDeUsuario, nombre: z.string().trim().min(1).max(120), rol: Rol, documento: Documento.optional() }),
     estadoExito: 201,
     respuesta: z.object({ usuario: UsuarioAdministrado, contrasena: z.string() }),
     errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "conflicto", "entrada_invalida"],
+  },
+  fijarDocumentoDeUsuario: {
+    metodo: "POST",
+    ruta: "/api/administracion/usuarios/{id}/documento",
+    resumen: "Pone, cambia o quita la cédula de una persona; el registro dice que cambió, nunca el valor (ADR-0051)",
+    parametros: z.object({ id: z.string() }),
+    cuerpo: z.object({ documento: Documento.nullable() }),
+    estadoExito: 200,
+    respuesta: UsuarioAdministrado,
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "entrada_invalida"],
   },
   restablecerContrasenaAdministrada: {
     metodo: "POST",
@@ -1457,7 +1524,8 @@ export const operaciones = {
     resumen: "Crea un cliente con su primer sitio y, si llega, su contacto principal (iteración 29)",
     cuerpo: z.object({
       nombre: Texto(200),
-      sitio: z.object({ nombre: Texto(200), direccion: Texto(300) }),
+      nit: Texto(30).optional(),
+      sitio: z.object({ nombre: Texto(200), direccion: Texto(300), ciudad: Texto(80).optional() }),
       /** Opcional para el comando y la API (expansión); oficina lo pide siempre: sin él, los documentos no le llegan a nadie. */
       contacto: DatosContacto.refine((d) => d.correo !== null || d.celular !== null, { path: ["correo"], message: "Escriba el correo, el celular o los dos" }).optional(),
     }),
@@ -1468,9 +1536,9 @@ export const operaciones = {
   editarCliente: {
     metodo: "POST",
     ruta: "/api/clientes/{id}",
-    resumen: "Corrige el nombre del cliente; lo ya publicado conserva el suyo (ADR-0035)",
+    resumen: "Corrige el nombre y el NIT del cliente; lo ya publicado conserva el suyo (ADR-0035). Sin `nit`, no se toca; con null, se quita",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object({ nombre: Texto(200) }),
+    cuerpo: z.object({ nombre: Texto(200), nit: Texto(30).nullable().optional() }),
     estadoExito: 200,
     respuesta: DetalleCliente,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
@@ -1496,9 +1564,9 @@ export const operaciones = {
   editarSitio: {
     metodo: "POST",
     ruta: "/api/clientes/{id}/sitios/{sitioId}",
-    resumen: "Corrige el nombre o la dirección de un sitio (ADR-0035)",
+    resumen: "Corrige el nombre, la dirección o la ciudad de un sitio (ADR-0035). Sin `ciudad`, no se toca; con null, se quita",
     parametros: z.object({ id: Uuid, sitioId: Uuid }),
-    cuerpo: z.object({ nombre: Texto(200), direccion: Texto(300) }),
+    cuerpo: z.object({ nombre: Texto(200), direccion: Texto(300), ciudad: Texto(80).nullable().optional() }),
     estadoExito: 200,
     respuesta: DetalleCliente,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido", "entrada_invalida"],
@@ -1564,7 +1632,7 @@ export const operaciones = {
     ruta: "/api/clientes/{id}/sitios",
     resumen: "Agrega un sitio a un cliente",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object({ nombre: Texto(200), direccion: Texto(300) }),
+    cuerpo: z.object({ nombre: Texto(200), direccion: Texto(300), ciudad: Texto(80).optional() }),
     estadoExito: 201,
     respuesta: ClienteConSitios,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida"],
@@ -1608,7 +1676,7 @@ export const operaciones = {
     metodo: "POST",
     ruta: "/api/visitas",
     resumen: "Programa una visita; llega a los teléfonos de sus técnicos en la siguiente bajada",
-    cuerpo: z.object({ clienteId: Uuid, sitioId: Uuid, motivo: Texto(120), programadaPara: z.iso.date(), ...Horario, tecnicos: z.array(z.string()).min(1).max(20) }).superRefine(horarioValido),
+    cuerpo: z.object({ clienteId: Uuid, sitioId: Uuid, motivo: Texto(120), programadaPara: z.iso.date(), ...Horario, ...DatosDePedido, tecnicos: z.array(z.string()).min(1).max(20) }).superRefine(horarioValido),
     estadoExito: 201,
     respuesta: VisitaProgramada,
     errores: ["no_autenticado", "sin_permiso", "entrada_invalida", "tecnico_ocupado"],
@@ -1647,7 +1715,7 @@ export const operaciones = {
     ruta: "/api/visitas/{id}/reprogramar",
     resumen: "Cambia la fecha, el horario y el motivo; los teléfonos lo reciben en la siguiente bajada",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object({ version: z.int().positive(), programadaPara: z.iso.date(), ...Horario, motivo: Texto(120) }).superRefine(horarioValido),
+    cuerpo: z.object({ version: z.int().positive(), programadaPara: z.iso.date(), ...Horario, ...DatosDePedido, motivo: Texto(120) }).superRefine(horarioValido),
     estadoExito: 200,
     respuesta: VisitaProgramada,
     errores: [...erroresDeVisita],
@@ -1688,6 +1756,33 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: UrlDeArchivo,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  // La foto de llegada (iteración 47, ADR-0052)
+  horaDelServidor: {
+    metodo: "GET",
+    ruta: "/api/hora",
+    resumen: "La hora oficial del servidor, la «hora de red» de la franja de la foto de llegada",
+    estadoExito: 200,
+    respuesta: z.object({ ahora: Fecha }),
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  mapaDeLlegada: {
+    metodo: "GET",
+    ruta: "/api/mapa",
+    resumen:
+      "El mapa de la foto de llegada, como imagen incrustada. Las coordenadas se redondean a 3 decimales antes de pedirlo y nunca se registran; la llave del servicio no sale del servidor. 30 por minuto por técnico",
+    consulta: z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) }),
+    estadoExito: 200,
+    respuesta: z.object({
+      /** `data:` con el JPEG: campo la dibuja en el lienzo sin problemas de origen. */
+      imagen: z.string().startsWith("data:image/"),
+      /** El punto central ya redondeado: campo calcula desde él dónde dibujar el pin exacto. */
+      centro: z.object({ lat: z.number(), lon: z.number() }),
+      zoom: z.number(),
+      /** Va dentro del mapa, al tamaño final: en una foto reenviada no hay enlace que seguir. */
+      atribucion: z.string(),
+    }),
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida", "demasiadas_solicitudes", "no_disponible"],
   },
   // Avisos push (ADR-0023)
   configuracionAvisos: {

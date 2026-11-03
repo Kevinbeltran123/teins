@@ -5,7 +5,7 @@ TypeScript puro: reglas del levantamiento, máquina de estados, meta-esquema de 
 - **Dependencias:** ninguna. Ni framework, ni red, ni base de datos.
 - **ADR:** 0001, 0006, 0018, y los de cada área (abajo).
 - **Pruebas:** `pnpm --filter @teins/dominio test`. Cada archivo de `src/` tiene su `.test.ts`; los casos de conformidad del validador están en `conformidad/validacion.json`.
-- **Formatos de prueba:** `formatos-de-prueba/` tiene los formatos ficticios que siembra el servidor (`prueba-ups` v1 a v9) y la biblioteca de símbolos de prueba (`simbolos-prueba.json`). La v9 es la v8 con la Llegada `soloEmpresa`.
+- **Formatos de prueba:** `formatos-de-prueba/` tiene los formatos ficticios que siembra el servidor (`prueba-ups` v1 a v10 y `prueba-visita` v1) y la biblioteca de símbolos de prueba (`simbolos-prueba.json`). La v9 es la v8 con la Llegada `soloEmpresa`; la v10 suma lo de la iteración 47.
 
 ## Qué contiene
 
@@ -19,7 +19,14 @@ TypeScript puro: reglas del levantamiento, máquina de estados, meta-esquema de 
 
 ### Versión mínima de la app por tipo de campo (ADR-0015)
 
-Un formato que usa un tipo de campo declara `appMinima`. Las constantes: `VERSION_APP_REPETIBLES` 4, `VERSION_APP_BOCETOS` 5, `VERSION_APP_CANTIDADES` 6, `VERSION_APP_FIRMA` 7, `VERSION_APP_CATALOGO` 8 (desde esa app la bajada trae el catálogo), `VERSION_APP_FORMAS` 9 y `VERSION_APP_SIMBOLOS` 10.
+Un formato que usa un tipo de campo declara `appMinima`. Las constantes: `VERSION_APP_REPETIBLES` 4, `VERSION_APP_BOCETOS` 5, `VERSION_APP_CANTIDADES` 6, `VERSION_APP_FIRMA` 7, `VERSION_APP_CATALOGO` 8 (desde esa app la bajada trae el catálogo), `VERSION_APP_FORMAS` 9, `VERSION_APP_SIMBOLOS` 10 y, desde la iteración 47 (ADR-0050 y ADR-0052), `VERSION_APP_OPCIONES`, `VERSION_APP_HORARIO`, `VERSION_APP_TABLAS`, `VERSION_APP_SELLO` y `VERSION_APP_DOCUMENTO_DE_FIRMA`, todas 16.
+
+### Selección, horario, tablas de medidas y sello (`formato.ts`, ADR-0050)
+
+- Tipos `opcion` (un `string`), `opciones` (`{ elegidas, otro? }`: un objeto, para no confundirse con una lista de fotos) y `horario` (`{ desde, hasta? }`, `HH:MM`; una salida menor es del día siguiente). Son datos simples. `otro` admite «Otro» escrito. Códigos de error nuevos: `opcion_invalida` y `horario_invalido`.
+- `tablas` en la sección acomoda campos `medida` en filas y columnas (de 1 a 4); `sello` en la foto (`{ ubicacion?, mapa? }`); `documento` en la firma (`opcional` u `obligatorio`, de 5 a 12 dígitos). `meta-esquema.ts` valida las opciones (de 2 a 20, sin repetir), las tablas (cada celda es una medida de una sola unidad, no obligatoria y en una sola tabla) y exige `appMinima` 16.
+- `fechas.ts` suma `horaCorta`, `duracionTexto` y `minutosDeHorario` (la fuente única de la hora «2:05 p. m.» y del total de un horario). `orden.ts:numeroDeOrden` escribe el número de orden de servicio (ADR-0051). `ubicacion.ts:coordenadaParaMapa` redondea a tres decimales la ubicación que sale del teléfono para el mapa de la foto de llegada; campo y servidor usan la misma (ADR-0052).
+- `ContenidoVersion` guarda, opcional, el encabezado de la visita y, por capítulo, `tecnicoDocumento`, `revisorDocumento` y `revisadoEn` (ADR-0051).
 
 ### Secciones repetibles (`repeticiones.ts`)
 

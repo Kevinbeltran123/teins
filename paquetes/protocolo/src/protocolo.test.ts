@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { LIMITES } from "@teins/dominio";
+import { Valor, VersionFormato } from "./dominio";
 import { documentoOpenApi } from "./openapi";
 import { Bajada, DatosContacto, EnviarLevantamiento, llaveDeEnvio, operaciones } from "./operaciones";
 import { ESTADO_POR_CODIGO, REINTENTABLE } from "./problemas";
@@ -190,5 +191,71 @@ describe("conversaciones (ADR-0040)", () => {
     expect(cuerpo.safeParse({ texto: "Gracias", enRespuestaA: id }).success).toBe(true);
     expect(cuerpo.safeParse({ texto: "a".repeat(1001) }).success).toBe(false);
     expect(operaciones.editarComentario.cuerpo.safeParse({ texto: "a".repeat(1001) }).success).toBe(false);
+  });
+});
+
+describe("selección, horario, tablas y sello (ADR-0050)", () => {
+  it("opciones es un objeto: no se confunde con una lista de fotos ni acepta llaves de más", () => {
+    expect(Valor.safeParse({ elegidas: ["CCTV", "UPS"] }).success).toBe(true);
+    expect(Valor.safeParse({ elegidas: ["CCTV"], otro: "cerca eléctrica" }).success).toBe(true);
+    expect(Valor.safeParse({ elegidas: [] }).success).toBe(true);
+    expect(Valor.safeParse({ elegidas: ["CCTV"], extra: 1 }).success).toBe(false);
+    expect(Valor.safeParse({ elegidas: "CCTV" }).success).toBe(false);
+    // Un arreglo de textos que no son huellas sigue siendo inválido: las opciones no se aceptan como arreglo.
+    expect(Valor.safeParse(["CCTV", "UPS"]).success).toBe(false);
+  });
+
+  it("horario: horas HH:MM y nada más", () => {
+    expect(Valor.safeParse({ desde: "08:14", hasta: "11:30" }).success).toBe(true);
+    expect(Valor.safeParse({ desde: "08:14" }).success).toBe(true);
+    expect(Valor.safeParse({ desde: "8:14" }).success).toBe(false);
+    expect(Valor.safeParse({ desde: "24:00" }).success).toBe(false);
+    expect(Valor.safeParse({ hasta: "11:30" }).success).toBe(false);
+    expect(Valor.safeParse({ desde: "08:14", extra: 1 }).success).toBe(false);
+  });
+
+  it("la firma admite la cédula, solo con dígitos", () => {
+    const firma = { firma: "a".repeat(64), nombre: "Ana", firmadoEn: "2026-10-29T15:00:00.000Z", declaracion: "x" };
+    expect(Valor.safeParse({ ...firma, documento: "52123456" }).success).toBe(true);
+    expect(Valor.safeParse(firma).success).toBe(true);
+    expect(Valor.safeParse({ ...firma, documento: "52.123.456" }).success).toBe(false);
+  });
+
+  const formato = {
+    formato: "prueba",
+    version: 1,
+    appMinima: 16,
+    secciones: [
+      {
+        clave: "s",
+        titulo: "S",
+        tablas: [{ titulo: "Voltaje", columnas: ["F1", "F2"], filas: [{ etiqueta: "F-N", campos: ["a", "b"] }] }],
+        campos: [
+          { clave: "a", etiqueta: "A", tipo: "medida", unidades: ["V"] },
+          { clave: "b", etiqueta: "B", tipo: "medida", unidades: ["V"] },
+          { clave: "o", etiqueta: "O", tipo: "opcion", opciones: ["Sí", "No"], obligatorio: true },
+          { clave: "p", etiqueta: "P", tipo: "opciones", opciones: ["CCTV", "UPS"], otro: true },
+          { clave: "h", etiqueta: "H", tipo: "horario" },
+          { clave: "f", etiqueta: "F", tipo: "foto", sello: { ubicacion: true, mapa: true } },
+          { clave: "g", etiqueta: "G", tipo: "firma", documento: "opcional" },
+        ],
+      },
+    ],
+  };
+
+  it("un formato con todo lo nuevo pasa el contrato y conserva lo que declara", () => {
+    const leido = VersionFormato.parse(formato);
+    const seccion = leido.secciones[0]!;
+    expect(seccion.tablas).toEqual(formato.secciones[0]!.tablas);
+    expect(seccion.campos.find((c) => c.clave === "f")).toMatchObject({ sello: { ubicacion: true, mapa: true } });
+    expect(seccion.campos.find((c) => c.clave === "g")).toMatchObject({ documento: "opcional" });
+    expect(seccion.campos.find((c) => c.clave === "p")).toMatchObject({ opciones: ["CCTV", "UPS"], otro: true });
+  });
+
+  it("rechaza una tabla sin columnas, una selección sin opciones y un documento desconocido", () => {
+    const con = (cambio: object) => VersionFormato.safeParse({ ...formato, secciones: [{ ...formato.secciones[0]!, ...cambio }] }).success;
+    expect(con({ tablas: [{ columnas: [], filas: [] }] })).toBe(false);
+    expect(con({ campos: [{ clave: "o", etiqueta: "O", tipo: "opcion", opciones: [] }] })).toBe(false);
+    expect(con({ campos: [{ clave: "g", etiqueta: "G", tipo: "firma", documento: "siempre" }] })).toBe(false);
   });
 });
