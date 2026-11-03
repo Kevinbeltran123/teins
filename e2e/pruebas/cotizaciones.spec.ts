@@ -157,8 +157,9 @@ test("cotización desde las cantidades revisadas: precio de la lista, mano de ob
   expect(await o.evaluate(() => document.scrollingElement!.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
   const pdf = o.waitForEvent("download");
   await descargar.click();
-  // WebKit entrega el nombre en forma descompuesta (NFD, como macOS): se compara normalizado.
-  expect((await pdf).suggestedFilename().normalize("NFC")).toMatch(/^Cotización COT-\d{4}-\d{4,} - .* - versión 1\.pdf$/);
+  // WebKit entrega el nombre en forma descompuesta (NFD, como macOS): se compara normalizado. En Linux, desde Playwright
+  // 1.64, cambia los espacios por guiones bajos: el nombre que manda el servidor es el mismo.
+  expect((await pdf).suggestedFilename().normalize("NFC")).toMatch(/^Cotización[ _]COT-\d{4}-\d{4,}[ _]-[ _].*[ _]-[ _]versión[ _]1\.pdf$/);
 
   // La lista muestra el total publicado.
   await menu.getByRole("link", { name: "Cotizaciones" }).click();
