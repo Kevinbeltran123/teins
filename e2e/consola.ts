@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { REMOTO } from "./destino";
 
 /**
@@ -33,10 +33,10 @@ export interface Usuario {
   contrasena: string;
 }
 
-export function nuevoUsuario(rol: "tecnico" | "oficina", prefijo: string): Usuario {
+export function nuevoUsuario(rol: "tecnico" | "oficina", prefijo: string, organizacion = ORGANIZACION): Usuario {
   const sufijo = randomBytes(3).toString("hex");
   const u = { usuario: `${prefijo}.${sufijo}`, nombre: `${rol === "oficina" ? "Oficina" : "Técnico"} E2E ${sufijo}`, contrasena: randomBytes(12).toString("base64url") };
-  comando("crear-usuario", ["--organizacion", ORGANIZACION, "--usuario", u.usuario, "--nombre", u.nombre, "--rol", rol], { TEINS_CONTRASENA: u.contrasena });
+  comando("crear-usuario", ["--organizacion", organizacion, "--usuario", u.usuario, "--nombre", u.nombre, "--rol", rol], { TEINS_CONTRASENA: u.contrasena });
   return u;
 }
 
@@ -53,13 +53,25 @@ export function nuevaVisita(tecnico: Usuario): string {
 }
 
 /** `diasDespues`: la visita se programa para dentro de tantos días (hoy en Bogotá si es 0). */
-export function nuevaVisitaConCliente(tecnico: Usuario, diasDespues = 0): { cliente: string; clienteId: string; visitaId: string } {
+export function nuevaVisitaConCliente(tecnico: Usuario, diasDespues = 0, organizacion = ORGANIZACION): { cliente: string; clienteId: string; visitaId: string } {
   const cliente = `Cliente E2E ${randomBytes(3).toString("hex")}`;
-  const salida = comando("crear-cliente", ["--organizacion", ORGANIZACION, "--nombre", cliente, "--sitio", "Sede E2E", "--direccion", "Calle [N] # [N]-[N]"]);
+  const salida = comando("crear-cliente", ["--organizacion", organizacion, "--nombre", cliente, "--sitio", "Sede E2E", "--direccion", "Calle [N] # [N]-[N]"]);
   const [clienteId, sitioId] = [...salida.matchAll(/creado: ([0-9a-f-]{36})/g)].map((m) => m[1]!);
   const fecha = new Date(Date.now() + diasDespues * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
-  const visita = comando("crear-visita", ["--organizacion", ORGANIZACION, "--cliente", clienteId!, "--sitio", sitioId!, "--motivo", "Mantenimiento", "--fecha", fecha, "--tecnicos", tecnico.usuario]);
+  const visita = comando("crear-visita", ["--organizacion", organizacion, "--cliente", clienteId!, "--sitio", sitioId!, "--motivo", "Mantenimiento", "--fecha", fecha, "--tecnicos", tecnico.usuario]);
   return { cliente, clienteId: clienteId!, visitaId: /Visita creada: ([0-9a-f-]{36})/.exec(visita)![1]! };
+}
+
+/**
+ * Organización propia de una prueba, con estos formatos de prueba publicados (`paquetes/dominio/formatos-de-prueba`).
+ * Lo que se publica en ella no cambia lo que ven las demás pruebas, que comparten `ORGANIZACION`. Solo en local: el
+ * contenedor del entorno de pruebas no lleva los archivos de formato.
+ */
+export function nuevaOrganizacion(formatos: readonly string[]): string {
+  const id = randomUUID();
+  comando("crear-organizacion", ["--id", id, "--nombre", `Organización E2E ${id.slice(0, 6)}`]);
+  for (const archivo of formatos) comando("publicar-formato", ["--organizacion", id, "--archivo", new URL(`../paquetes/dominio/formatos-de-prueba/${archivo}`, import.meta.url).pathname]);
+  return id;
 }
 
 /** Acceso de cliente al portal: identificador, clave y la URL que lleva el QR. */
