@@ -319,6 +319,31 @@ describe("el informe con la estructura del formato (iteración 47, ADR-0050 y AD
     expect(sinCampo).not.toContain("Nombre y sello del cliente");
   });
 
+  it("con dos firmas en el formato, las dos salen en la fila, cada una con su rótulo", () => {
+    const otraFirma = "e".repeat(64);
+    const [l] = conTodo.levantamientos;
+    const secciones = l!.formato.secciones.map((s) =>
+      s.clave === "firmas" ? { ...s, campos: [...s.campos, { clave: "acompana", etiqueta: "Quien acompañó", tipo: "firma" as const }] } : s,
+    );
+    const dos = plantillaInforme(
+      {
+        ...conTodo,
+        levantamientos: [
+          {
+            ...l!,
+            formato: { ...l!.formato, secciones },
+            respuestas: { ...l!.respuestas, firmas: { ...l!.respuestas.firmas, acompana: { firma: otraFirma, nombre: "Pedro Ruiz", firmadoEn: "2026-09-28T20:41:00.000Z", declaracion: "Confirmo la visita." } } },
+          },
+        ],
+      },
+      { salida: PDF, fotos: new Map(), firmas: new Map([[huellaFirma, '<svg id="trazo"></svg>'], [otraFirma, '<svg id="otro-trazo"></svg>']]) },
+    );
+    expect(dos).toContain('class="firmas cuatro"');
+    expect(dos).toContain("Nombre y sello del cliente");
+    expect(dos).toContain('<div class="trazo"><svg id="otro-trazo"></svg><p><strong>Pedro Ruiz</strong>');
+    expect(dos).toContain("Quien acompañó");
+  });
+
   it("una versión anterior, sin nada de esto, se dibuja igual que antes", () => {
     const html = pdf(informe);
     expect(html).toContain("Cuarto técnico");

@@ -251,29 +251,30 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
           return `<section class="seccion${seleccion ? " vista-ocultable" : ""}">${seleccion ? botonOcultar(claveBloque, bloqueOcultoPorOmision(bloque)) : ""}<h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${medidas}${cantidades}${galerias}${croquis}${constancias}</section>`;
         })
         .join("");
-      // La fila de firmas (ADR-0051): quien asistió firma al enviar, quien acompañó dibuja la suya y quien revisó firma al
-      // marcar revisado. Sin campo de firma en el formato —o si oficina lo ocultó—, solo el técnico y el revisor.
-      const acompanamiento = delCapitulo.flatMap((bloque) => {
+      // La fila de firmas (ADR-0051): quien asistió firma al enviar, quienes acompañaron dibujan la suya (cada campo de
+      // firma, en orden) y quien revisó firma al marcar revisado. Sin campo de firma en el formato, o si oficina lo
+      // ocultó, solo el técnico y el revisor.
+      const acompanamientos = delCapitulo.flatMap((bloque) => {
         if (elegidos ? elegidos.bloque(bloque) : fuera.has(bloque.clave)) return [];
         return bloque.seccion.campos.flatMap((campo) => {
           if (campo.tipo !== "firma" || (elegidos ? elegidos.campo(bloque, campo) : fuera.has(claveOcultable(bloque.clave, campo.clave)))) return [];
           return [{ campo, valor: l.respuestas[bloque.clave]?.[campo.clave] as Valor | undefined }];
         });
-      })[0];
+      });
       const cedula = (documento: string | undefined) => (documento?.trim() ? `C. C. ${escapar(documento)}` : "[C. C.]");
       const caja = (rotulo: string, cuerpo: string) => `<div class="caja-firma"><p class="rotulo">${escapar(rotulo)}</p>${cuerpo}</div>`;
-      const trazoDeAcompanamiento = (() => {
-        if (!acompanamiento) return "";
-        const { campo, valor } = acompanamiento;
+      const trazoDeAcompanamiento = ({ campo, valor }: (typeof acompanamientos)[number]) => {
         if (valor !== undefined && esNoObtenido(valor)) return caja(campo.etiqueta, `<div class="trazo"><div class="falta">No se pudo obtener: ${escapar(valor.motivo)}</div></div>`);
         if (!esFirma(valor)) return caja(campo.etiqueta, '<div class="trazo"><div class="falta">[FIRMA]</div><p><strong>[Nombre]</strong></p></div>');
         const svg = firmas.get(valor.firma) ?? '<div class="falta">[FIRMA]</div>';
         return caja(campo.etiqueta, `<div class="trazo">${svg}<p><strong>${escapar(valor.nombre)}</strong>${valor.cargo ? `<br><span class="tenue">${escapar(valor.cargo)}</span>` : ""}${valor.documento ? `<br>C. C. ${escapar(valor.documento)}` : ""}</p></div>`);
-      })();
-      const firmasDelCapitulo = `<section class="firmas ${acompanamiento ? "tres" : "dos"}">${caja(
+      };
+      const cajas = 2 + acompanamientos.length;
+      const columnas = cajas === 2 ? "dos" : cajas === 3 ? "tres" : cajas === 4 ? "cuatro" : "muchas";
+      const firmasDelCapitulo = `<section class="firmas ${columnas}">${caja(
         "Técnico que asistió",
         `<p class="persona"><strong>${escapar(l.tecnico)}</strong><br>${cedula(l.tecnicoDocumento)}<br><span class="tenue">Firmó electrónicamente al enviar, el ${fechaHora.format(new Date(l.recibidoEn))}</span></p>`,
-      )}${trazoDeAcompanamiento}${caja(
+      )}${acompanamientos.map(trazoDeAcompanamiento).join("")}${caja(
         "Supervisado o validado por",
         `<p class="persona"><strong>${escapar(l.revisor)}</strong><br>${cedula(l.revisorDocumento)}<br><span class="tenue">Validó en ${escapar(c.organizacion.nombre)}${l.revisadoEn ? ` el ${fechaHora.format(new Date(l.revisadoEn))}` : ""}</span></p>`,
       )}</section>`;
@@ -399,6 +400,8 @@ table.medidas tr { break-inside: avoid; }
 .firmas { break-inside: avoid; margin-top: 22pt; display: grid; gap: 20pt; }
 .firmas.tres { grid-template-columns: repeat(3, 1fr); }
 .firmas.dos { grid-template-columns: repeat(2, 1fr); }
+.firmas.cuatro { grid-template-columns: repeat(4, 1fr); }
+.firmas.muchas { grid-template-columns: repeat(3, 1fr); }
 .caja-firma { display: flex; flex-direction: column; justify-content: flex-end; }
 .caja-firma .rotulo { font-size: 8.5pt; color: ${MARCA.secundario}; margin: 0 0 4pt; }
 .caja-firma .persona { border-top: 1.5px solid ${MARCA.texto}; padding-top: 4pt; margin: 0; }
