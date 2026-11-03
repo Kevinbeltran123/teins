@@ -116,6 +116,9 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
 
   app.addHook("onSend", async (solicitud, respuesta) => {
     respuesta.header(CABECERA_CORRELACION, solicitud.id);
+    // Lo de la API son datos de una persona (contactos, cédulas): nunca quedan en la caché de un navegador compartido
+    // ni de un proxy. Las superficies ponen la suya (superficies.ts).
+    if (solicitud.url.startsWith("/api/")) respuesta.header("cache-control", "no-store");
   });
 
   app.setErrorHandler((error, solicitud, respuesta) => {
