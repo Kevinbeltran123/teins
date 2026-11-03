@@ -433,11 +433,12 @@ export function crearIdentidad(bd: BaseDeDatos, config: Config, { alDesactivar }
           userId: creado.id,
           password: await contextoAuth.password.hash(contrasena),
         });
+        // Dentro del mismo intento: si la cédula no se guarda, el usuario no queda a medias y se puede reintentar.
+        if (documento) await bd.update(usuarios).set({ documento }).where(eq(usuarios.id, creado.id));
       } catch (error) {
         await contextoAuth.internalAdapter.deleteUser(creado.id);
         throw error;
       }
-      if (documento) await bd.update(usuarios).set({ documento }).where(eq(usuarios.id, creado.id));
       // Better Auth crea el usuario con su propia conexión: el registro va después, en su transacción.
       if (contexto) {
         await enOrganizacion(bd, organizacionId, (tx) =>
