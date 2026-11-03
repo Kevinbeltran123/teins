@@ -34,7 +34,8 @@ export interface Usuario {
 }
 
 export function nuevoUsuario(rol: "tecnico" | "oficina", prefijo: string, organizacion = ORGANIZACION): Usuario {
-  const sufijo = randomBytes(3).toString("hex");
+  // Cuatro bytes: con miles de usuarios de corridas anteriores en la base local, tres ya chocaban.
+  const sufijo = randomBytes(4).toString("hex");
   const u = { usuario: `${prefijo}.${sufijo}`, nombre: `${rol === "oficina" ? "Oficina" : "Técnico"} E2E ${sufijo}`, contrasena: randomBytes(12).toString("base64url") };
   comando("crear-usuario", ["--organizacion", organizacion, "--usuario", u.usuario, "--nombre", u.nombre, "--rol", rol], { TEINS_CONTRASENA: u.contrasena });
   return u;

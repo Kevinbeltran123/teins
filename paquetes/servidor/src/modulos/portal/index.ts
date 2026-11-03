@@ -25,7 +25,7 @@ const INTENTOS_POR_CODIGO = 5;
  * pedidos o por ingresos fallidos), espera creciente (1, 2, 4… minutos, hasta una hora). Se olvidan una hora después
  * del último o del fin de la espera, lo que ocurra más tarde.
  */
-const UMBRAL = { pedidosPorCorreo: 5, origen: 20 } as const;
+const PEDIDOS_POR_CORREO = 5;
 const ESPERA_MAXIMA_S = 60 * 60;
 const olvidado = sql`greatest(${intentos.ultimoFallo}, ${intentos.bloqueadoHasta}) < now() - interval '1 hour'`;
 
@@ -61,6 +61,7 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
   /** La cookie del navegador que pidió el código: el código solo vale con ella (ADR-0053). */
   const cookiePendiente = seguro ? "__Host-teins-portal-pendiente" : "teins-portal-pendiente";
   const secreto = secretoDeCodigos(config);
+  const umbralOrigen = config.PORTAL_INTENTOS_POR_ORIGEN;
 
   async function resolverSesion(token: string): Promise<SesionDelPortal | null> {
     const tokenHuella = huellaDeToken(token);
@@ -116,8 +117,8 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
         publica: "Pedir el código de ingreso al portal: responde igual con o sin acceso, con límite de intentos (ADR-0053, QA-7)",
         manejar: async ({ cuerpo: { correo }, portal }) => {
           await contarIntento([
-            { llave: `pedido:${huellaDeToken(correo)}`, umbral: UMBRAL.pedidosPorCorreo },
-            { llave: `pedido-origen:${portal.ip}`, umbral: UMBRAL.origen },
+            { llave: `pedido:${huellaDeToken(correo)}`, umbral: PEDIDOS_POR_CORREO },
+            { llave: `pedido-origen:${portal.ip}`, umbral: umbralOrigen },
           ]);
           // La cookie sale siempre, tenga o no acceso el correo: la respuesta no lo revela.
           const navegador = nuevoToken();
@@ -143,7 +144,7 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
         publica: "Ingreso al portal con el código del correo, desde el navegador que lo pidió, con límite de intentos (ADR-0053, QA-7)",
         manejar: async ({ cuerpo: { correo, codigo }, portal, correlacion }) => {
           const llaveOrigen = `origen:${portal.ip}`;
-          await contarIntento([{ llave: llaveOrigen, umbral: UMBRAL.origen }]);
+          await contarIntento([{ llave: llaveOrigen, umbral: umbralOrigen }]);
           const navegador = portal.cookie(cookiePendiente);
           const [acceso] = await accesoDelCorreo(bdPortal, correo);
           if (!navegador || !acceso) throw noAutenticado();
@@ -176,7 +177,7 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
             // El ingreso correcto no es un fallo del origen: se descuenta lo que contó antes de comparar.
             await tx
               .update(intentos)
-              .set({ fallos: sql`${intentos.fallos} - 1`, bloqueadoHasta: sql`case when ${intentos.fallos} - 1 >= ${UMBRAL.origen} then ${intentos.bloqueadoHasta} end` })
+              .set({ fallos: sql`${intentos.fallos} - 1`, bloqueadoHasta: sql`case when ${intentos.fallos} - 1 >= ${umbralOrigen} then ${intentos.bloqueadoHasta} end` })
               .where(eq(intentos.llave, llaveOrigen));
             await tx.insert(sesionesDelPortal).values({
               tokenHuella: huellaDeToken(token),
