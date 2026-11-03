@@ -5,7 +5,7 @@ import { nombreDelPdfDeCotizacion, piePaginaCotizacion, plantillaCotizacion } fr
 import { fechaEnColombia, calcularTotales, lineasDesdeCantidades, numeroDeCotizacion, validarCotizacion, type BorradorCotizacion, type LineaDeCotizacion } from "@teins/dominio";
 import type { Config } from "../../config";
 import { claveDeObjeto, type Almacenamiento } from "../../plataforma/almacenamiento";
-import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
+import { enOrganizacion, type BaseDeDatos, type TxOrganizacion, type TxPortal } from "../../plataforma/base-de-datos";
 import { encolar } from "../../plataforma/cola";
 import { problema } from "../../plataforma/errores";
 import { fuenteIncrustada, imprimirPdf, producirPdf } from "../../plataforma/pdf";
@@ -30,6 +30,39 @@ interface Dependencias {
 }
 
 /** El PDF de una versión, en el worker. */
+/** La visita tal como quedó congelada en la versión. */
+const visitaDeLaVersion = sql<ContenidoCotizacion["visita"]>`${versionesCotizacion.contenido} -> 'visita'`;
+
+/**
+ * Lo que el portal lee de las cotizaciones (ADR-0053), siempre con la transacción del portal: la seguridad por fila ya
+ * restringe a lo publicado con PDF listo y sin retirar del cliente de la sesión.
+ */
+export const cotizacionesParaElPortal = {
+  /** Por cotización, la versión visible de número más alto; la de la visita más reciente primero. */
+  async vigentes(tx: TxPortal): Promise<{ cotizacionId: string; numero: string; version: number; publicadaEn: Date; visita: ContenidoCotizacion["visita"] }[]> {
+    const filas = await tx
+      .selectDistinctOn([versionesCotizacion.cotizacionId], {
+        cotizacionId: versionesCotizacion.cotizacionId,
+        numero: sql<string>`${versionesCotizacion.contenido} ->> 'numero'`,
+        version: versionesCotizacion.numero,
+        publicadaEn: versionesCotizacion.publicadaEn,
+        visita: visitaDeLaVersion,
+      })
+      .from(versionesCotizacion)
+      .orderBy(versionesCotizacion.cotizacionId, desc(versionesCotizacion.numero));
+    return filas.sort((a, b) => b.visita.programadaPara.localeCompare(a.visita.programadaPara) || b.publicadaEn.getTime() - a.publicadaEn.getTime());
+  },
+  async pdfVigente(tx: TxPortal, cotizacionId: string): Promise<{ version: number; huella: string; nombre: string } | undefined> {
+    const [fila] = await tx
+      .select({ version: versionesCotizacion.numero, huella: versionesCotizacion.pdfHuella, contenido: versionesCotizacion.contenido })
+      .from(versionesCotizacion)
+      .where(eq(versionesCotizacion.cotizacionId, cotizacionId))
+      .orderBy(desc(versionesCotizacion.numero))
+      .limit(1);
+    return fila?.huella ? { version: fila.version, huella: fila.huella, nombre: nombreDelPdfDeCotizacion(fila.contenido) } : undefined;
+  },
+};
+
 export interface GeneradorPdfCotizaciones {
   /** Trabajo del worker (cola `pdf`, de a uno). Idempotente: un PDF listo nunca se vuelve a generar. */
   generarPdf(datos: { organizacionId: string; versionId: string }, contexto: { ultimoIntento: boolean }): Promise<void>;
@@ -364,7 +397,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
             const versionId = randomUUID();
             const [fila] = await tx
               .insert(versionesCotizacion)
-              .values({ id: versionId, organizacionId: actor.organizacionId, cotizacionId: id, numero: contenido.version, contenido, total: contenido.totales.total, publicadaPor: actor.usuarioId, publicadaEn })
+              .values({ id: versionId, organizacionId: actor.organizacionId, cotizacionId: id, clienteId: c.clienteId, numero: contenido.version, contenido, total: contenido.totales.total, publicadaPor: actor.usuarioId, publicadaEn })
               .returning();
             await registrar(tx, [
               {

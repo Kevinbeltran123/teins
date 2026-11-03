@@ -259,3 +259,16 @@ describe("selección, horario, tablas y sello (ADR-0050)", () => {
     expect(con({ campos: [{ clave: "g", etiqueta: "G", tipo: "firma", documento: "siempre" }] })).toBe(false);
   });
 });
+
+describe("cotizaciones en el portal (ADR-0053)", () => {
+  it("la lista del portal dice qué cotización es y de cuándo, sin precios: el total va en el PDF", () => {
+    const fila = { id, numero: "COT-2026-0014", version: 2, publicadaEn: "2026-10-31T15:00:00.000Z", sitio: "Sede Norte", programadaPara: "2026-10-28", total: 1_234_000 };
+    const [leida] = operaciones.cotizacionesDelPortal.respuesta.parse({ cotizaciones: [fila] }).cotizaciones;
+    expect(leida).toEqual({ id, numero: "COT-2026-0014", version: 2, publicadaEn: "2026-10-31T15:00:00.000Z", sitio: "Sede Norte", programadaPara: "2026-10-28" });
+  });
+
+  it("el PDF de una cotización del portal se pide por su id", () => {
+    expect(operaciones.pdfDeCotizacionDelPortal.parametros.safeParse({ id: "no-es-un-id" }).success).toBe(false);
+    expect(operaciones.pdfDeCotizacionDelPortal.ruta).toBe("/api/portal/cotizaciones/{id}/pdf");
+  });
+});

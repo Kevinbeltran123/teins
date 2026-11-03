@@ -555,6 +555,25 @@ export const InformesDelCliente = z
   })
   .meta({ id: "InformesDelCliente" });
 
+/**
+ * Por cotización, la versión vigente con su PDF listo (ADR-0053): solo ver y descargar. La lista no lleva precios: el
+ * total está en el PDF, que es lo que el cliente guarda.
+ */
+export const CotizacionesDelCliente = z
+  .object({
+    cotizaciones: z.array(
+      z.object({
+        id: Uuid,
+        numero: z.string(),
+        version: z.int().positive(),
+        publicadaEn: Fecha,
+        sitio: z.string(),
+        programadaPara: z.iso.date(),
+      }),
+    ),
+  })
+  .meta({ id: "CotizacionesDelCliente" });
+
 // Administración (iteración 6): solo personas administradoras con segundo factor activo.
 
 export const UsuarioAdministrado = z
@@ -1227,6 +1246,23 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: UrlDeArchivo,
     errores: ["no_autenticado", "no_encontrado"],
+  },
+  cotizacionesDelPortal: {
+    metodo: "GET",
+    ruta: "/api/portal/cotizaciones",
+    resumen: "Cotizaciones vigentes del cliente de la sesión (ADR-0053)",
+    estadoExito: 200,
+    respuesta: CotizacionesDelCliente,
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  pdfDeCotizacionDelPortal: {
+    metodo: "GET",
+    ruta: "/api/portal/cotizaciones/{id}/pdf",
+    resumen: "URL firmada del PDF vigente de una cotización del cliente; la descarga queda registrada (ADR-0053)",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: UrlDeArchivo,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
   },
   listarUsuarios: {
     metodo: "GET",

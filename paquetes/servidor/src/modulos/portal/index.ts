@@ -9,6 +9,7 @@ import { politicas } from "../../plataforma/politicas";
 import { registrarOperacion, registrarOperacionDelPortal } from "../../plataforma/rutas";
 import { registrar } from "../auditoria";
 import { clientesYSitios } from "../clientes";
+import { cotizacionesParaElPortal } from "../cotizaciones";
 import { informesParaElPortal } from "../informes";
 import { HASH_DE_RELLENO, hashDeClave, huellaDeToken, nuevaClave, nuevoIdentificador, nuevoToken, verificarClave } from "./claves";
 import { accesosDeClientes, intentos, sesionesDelPortal } from "./esquema";
@@ -192,6 +193,50 @@ export function crearPortal({ bdPortal, almacenamiento, config }: { bdPortal: Ba
           // Otro cliente o un informe sin publicar dan lo mismo: no existe (QA-4).
           if (!pdf) throw problema("no_encontrado");
           // Se descarga, no se abre: el portal no pierde la pantalla.
+          const firma = await almacenamiento.firmarDescarga(claveDeObjeto(sesion.organizacionId, pdf.huella), { descargarComo: pdf.nombre });
+          return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
+        },
+      });
+
+      registrarOperacionDelPortal(app, "cotizacionesDelPortal", {
+        ...comun,
+        manejar: async ({ sesion }) => {
+          const vigentes = await enClienteDelPortal(bdPortal, sesion.organizacionId, sesion.clienteId, (tx) => cotizacionesParaElPortal.vigentes(tx));
+          return {
+            cotizaciones: vigentes.map((v) => ({
+              id: v.cotizacionId,
+              numero: v.numero,
+              version: v.version,
+              publicadaEn: v.publicadaEn.toISOString(),
+              sitio: v.visita.sitio,
+              programadaPara: v.visita.programadaPara,
+            })),
+          };
+        },
+      });
+
+      registrarOperacionDelPortal(app, "pdfDeCotizacionDelPortal", {
+        ...comun,
+        manejar: async ({ sesion, parametros: { id }, correlacion }) => {
+          const pdf = await enClienteDelPortal(bdPortal, sesion.organizacionId, sesion.clienteId, async (tx) => {
+            const vigente = await cotizacionesParaElPortal.pdfVigente(tx, id);
+            if (vigente) {
+              await registrar(tx, [
+                {
+                  organizacionId: sesion.organizacionId,
+                  agregadoTipo: "acceso_cliente",
+                  agregadoId: sesion.accesoId,
+                  tipoEvento: "descarga_portal",
+                  autorId: `acceso:${sesion.accesoId}`,
+                  correlacion,
+                  valorNuevo: { cotizacion: id, numero: vigente.version },
+                },
+              ]);
+            }
+            return vigente;
+          });
+          // Otro cliente, una retirada o una sin PDF dan lo mismo: no existe (QA-4).
+          if (!pdf) throw problema("no_encontrado");
           const firma = await almacenamiento.firmarDescarga(claveDeObjeto(sesion.organizacionId, pdf.huella), { descargarComo: pdf.nombre });
           return { url: firma.url, expiraEn: firma.expiraEn.toISOString() };
         },
