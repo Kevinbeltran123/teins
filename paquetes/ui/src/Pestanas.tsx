@@ -12,7 +12,20 @@ export interface Pestana<T extends string> {
  * Pestañas subrayadas de oficina (patrón WAI-ARIA tabs: flechas para moverse). La activa lleva el subrayado, que se
  * desliza hasta la elegida (iteración 27); van en la barra de la lista, con el buscador a la derecha (prototipos/oficina).
  */
-export function Pestanas<T extends string>({ pestanas, activa, onCambio, etiqueta }: { pestanas: readonly Pestana<T>[]; activa: T; onCambio: (valor: T) => void; etiqueta: string }) {
+export function Pestanas<T extends string>({
+  pestanas,
+  activa,
+  onCambio,
+  etiqueta,
+  amplio = false,
+}: {
+  pestanas: readonly Pestana<T>[];
+  activa: T;
+  onCambio: (valor: T) => void;
+  etiqueta: string;
+  /** Más grandes y con su línea de abajo, para el portal en el teléfono (ADR-0053); oficina las pone en su barra. */
+  amplio?: boolean;
+}) {
   const botones = useRef<(HTMLButtonElement | null)[]>([]);
   const indicador = nombreDeTransicion("indicador", useId());
   const cambiar = (valor: T) => void conTransicion(() => onCambio(valor));
@@ -27,7 +40,7 @@ export function Pestanas<T extends string>({ pestanas, activa, onCambio, etiquet
   }
 
   return (
-    <div role="tablist" aria-label={etiqueta} className="subrayado">
+    <div role="tablist" aria-label={etiqueta} className={amplio ? "subrayado amplio" : "subrayado"}>
       {pestanas.map((p, i) => {
         const seleccionada = p.valor === activa;
         return (

@@ -23,6 +23,8 @@ export function MarcoDeIngreso({ titulo, debajo, children }: { titulo: string; d
 
 /**
  * Campo de la tarjeta de ingreso: etiqueta encima, 46 px de alto; la contraseña empieza oculta y el ojo la muestra.
+ * `codigo`: el código del correo (ADR-0053), con teclado numérico, 6 dígitos y las cifras grandes y separadas; el
+ * teléfono lo ofrece sobre el teclado (`one-time-code`).
  * `olvido` pone junto a la etiqueta un "¿La olvidó?" que al tocarlo dice qué hacer. `mensajeError` lo dice debajo
  * del campo y lo marca, para formularios con un error por campo (cambiar la contraseña).
  */
@@ -36,9 +38,10 @@ export function CampoDeIngreso({
   error,
   mensajeError,
   olvido,
+  codigo = false,
 }: {
   etiqueta: string;
-  tipo?: "text" | "password";
+  tipo?: "text" | "password" | "email";
   autoComplete: string;
   nombre: string;
   valor: string;
@@ -46,6 +49,7 @@ export function CampoDeIngreso({
   error?: boolean;
   mensajeError?: string | undefined;
   olvido?: { pregunta: string; respuesta: string };
+  codigo?: boolean;
 }) {
   const id = useId();
   const idRespuesta = useId();
@@ -68,7 +72,9 @@ export function CampoDeIngreso({
         <input
           id={id}
           name={nombre}
-          type={tipo === "password" && !visible ? "password" : "text"}
+          type={tipo === "password" ? (visible ? "text" : "password") : tipo}
+          {...(tipo === "email" ? { inputMode: "email" as const } : {})}
+          {...(codigo ? { inputMode: "numeric" as const, maxLength: 6, pattern: "[0-9]*" } : {})}
           autoComplete={autoComplete}
           autoCapitalize="none"
           autoCorrect="off"
@@ -77,7 +83,7 @@ export function CampoDeIngreso({
           onChange={(e) => onCambio(e.target.value)}
           aria-invalid={error || Boolean(mensajeError) || undefined}
           aria-describedby={mensajeError ? idError : undefined}
-          className={`h-[46px] w-full rounded-[10px] bg-panel px-3.5 text-[16px] text-texto shadow-[inset_0_0_0_1px_var(--t-borde-suave)] outline-none focus:shadow-[inset_0_0_0_1.5px_var(--t-superficie),0_0_0_4px_var(--t-superficie-suave)] aria-invalid:shadow-[inset_0_0_0_1.5px_var(--t-error)] ${tipo === "password" ? "pr-12" : ""}`}
+          className={`h-[46px] w-full rounded-[10px] bg-panel px-3.5 text-[16px] text-texto shadow-[inset_0_0_0_1px_var(--t-borde-suave)] outline-none focus:shadow-[inset_0_0_0_1.5px_var(--t-superficie),0_0_0_4px_var(--t-superficie-suave)] aria-invalid:shadow-[inset_0_0_0_1.5px_var(--t-error)] ${tipo === "password" ? "pr-12" : ""} ${codigo ? "text-center text-[22px] font-medium tracking-[0.32em] tabular-nums" : ""}`}
         />
         {tipo === "password" && (
           <button
