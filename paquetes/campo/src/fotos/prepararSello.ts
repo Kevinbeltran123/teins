@@ -6,8 +6,10 @@ import type { DatosDelSello, PosicionDeLlegada } from "./sello";
 export const ESPERA_DEL_SELLO_MS = 3_000;
 
 /** Lo que resuelve en `null` si tarda más de `ms` o falla: un complemento no detiene la foto. */
-const conTope = <T>(promesa: Promise<T>, ms: number): Promise<T | null> =>
-  Promise.race([promesa.catch(() => null), new Promise<null>((listo) => setTimeout(() => listo(null), ms))]);
+function conTope<T>(promesa: Promise<T>, ms: number): Promise<T | null> {
+  let tope: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([promesa.catch(() => null), new Promise<null>((listo) => (tope = setTimeout(() => listo(null), ms)))]).finally(() => clearTimeout(tope));
+}
 
 /**
  * Reúne lo que dice la franja al tomar la foto. La hora de red y el mapa se piden en paralelo y solo con señal, y la foto

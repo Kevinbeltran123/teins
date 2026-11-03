@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { DefinicionCampo } from "@teins/dominio";
 import { visitaDe } from "../../datos/lecturas";
-import { completarOrganizacion } from "../../sesion/sesion";
+import { completarOrganizacion } from "../../sesion/organizacion";
 import { useUsuario } from "../../sesion/usuario";
 import { db } from "../../datos/instancia";
 import { Aviso, CampoFotos, useNotificar } from "@teins/ui";
