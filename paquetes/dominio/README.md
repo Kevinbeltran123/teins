@@ -25,7 +25,7 @@ Un formato que usa un tipo de campo declara `appMinima`. Las constantes: `VERSIO
 
 - Tipos `opcion` (un `string`), `opciones` (`{ elegidas, otro? }`: un objeto, para no confundirse con una lista de fotos) y `horario` (`{ desde, hasta? }`, `HH:MM`; una salida menor es del día siguiente). Son datos simples. `otro` admite «Otro» escrito. Códigos de error nuevos: `opcion_invalida` y `horario_invalido`.
 - `tablas` en la sección acomoda campos `medida` en filas y columnas (de 1 a 4); `sello` en la foto (`{ ubicacion?, mapa? }`); `documento` en la firma (`opcional` u `obligatorio`, de 5 a 12 dígitos). `meta-esquema.ts` valida las opciones (de 2 a 20, sin repetir), las tablas (cada celda es una medida de una sola unidad, no obligatoria y en una sola tabla) y exige `appMinima` 16.
-- `fechas.ts` suma `horaCorta`, `duracionTexto` y `minutosDeHorario` (la fuente única de la hora «2:05 p. m.» y del total de un horario). `orden.ts:numeroDeOrden` escribe el número de orden de servicio (ADR-0051).
+- `fechas.ts` suma `horaCorta`, `duracionTexto` y `minutosDeHorario` (la fuente única de la hora «2:05 p. m.» y del total de un horario). `orden.ts:numeroDeOrden` escribe el número de orden de servicio (ADR-0051). `ubicacion.ts:coordenadaParaMapa` redondea a tres decimales la ubicación que sale del teléfono para el mapa de la foto de llegada; campo y servidor usan la misma (ADR-0052).
 - `ContenidoVersion` guarda, opcional, el encabezado de la visita y, por capítulo, `tecnicoDocumento`, `revisorDocumento` y `revisadoEn` (ADR-0051).
 
 ### Secciones repetibles (`repeticiones.ts`)

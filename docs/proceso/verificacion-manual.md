@@ -750,10 +750,10 @@ La fase es larga: se divide en iPhone y oficina. Usa el formato de prueba v10 (`
 
 1. En oficina, cree un cliente con **NIT** y un sitio con **Ciudad**, con un contacto que tenga celular. Programe una visita para hoy con ese **Solicitante** y una **Referencia del cliente**.
    - Debe: la fila de la visita dice «Orden 0001» (o el número que siga) antes del sitio y la dirección.
-2. En el iPhone, abra la app con señal.
+2. En el iPhone, abra la app con señal, **sin cerrar la sesión que ya tenía** (así se prueba la actualización de la versión 15 a la 16).
    - Debe: la tarjeta de la visita dice «Pregunta por <contacto>» con su celular como enlace; al tocarlo, el teléfono ofrece llamar.
 3. Inicie el levantamiento. En la **Llegada**, deje que el iPhone pida el permiso de ubicación (toque «Permitir al usar la app»).
-   - Debe: sobre las tomas, «Buscando ubicación…» y después «Ubicación lista (±N m)».
+   - Debe: sobre las tomas, «Buscando ubicación…» y después «Ubicación lista (±N m)». Si el iPhone deja de dar la ubicación más de 2 minutos (un cuarto sin señal de GPS), vuelve a «Buscando ubicación…».
 4. Tome una foto de **Fachada** con señal.
    - Debe: la miniatura aparece sin demorarse más de unos segundos. Ábrala: arriba a la derecha, en blanco con sombra sobre un degradado oscuro, «Red: <hora>», «Teléfono: <hora>», las coordenadas en grados con su precisión, la dirección registrada con la ciudad y «<organización> · <cliente> · <sitio>»; arriba a la izquierda, el mapa con un pin y, dentro, «Powered by Geoapify · © OpenMapTiles · © OpenStreetMap contributors».
    - **Anotar:** si el mapa no sale (en pruebas puede faltar la llave de Geoapify: la foto sale igual, sin mapa), si algún texto se corta o se lee mal sobre una pared clara, si el pin cae donde usted estaba, y cuánto tardó en aparecer la miniatura.
@@ -775,7 +775,7 @@ La fase es larga: se divide en iPhone y oficina. Usa el formato de prueba v10 (`
 11. Tome el levantamiento, corrija una selección y un horario con su motivo, y márquelo revisado.
     - Debe: los editores muestran las mismas opciones; el historial guarda el valor anterior y el nuevo.
 12. En Administración, ponga la **Cédula** a su cuenta (menú de su fila) y a la del técnico. Abra el informe de esa visita, componga y publique.
-    - Debe: la vista en vivo muestra el encabezado en rejilla con el logo, NIT, orden de servicio, ciudad, solicitante, teléfono y referencia.
+    - Debe: la vista en vivo muestra el encabezado en rejilla con el logo, NIT, orden de servicio, ciudad, solicitante, teléfono y referencia. En la fila de firmas, «C. C. registrada» en lugar del número: la cédula solo la ve quien administra (ADR-0051), y el número sale en el PDF publicado.
 13. Descargue el PDF.
     - Debe: cada selección con todas sus opciones y cuadritos marcados o vacíos; las medidas en una tabla F1, F2, F3; al final del capítulo, la fila «Técnico que asistió» (con «C. C. …» y «Firmó electrónicamente al enviar, el …»), la firma de quien acompañó y «Supervisado o validado por» (con su cédula y «Validó en TEINS el …»). Sin la cédula puesta, dice «[C. C.]».
     - **Anotar:** cualquier texto cortado, una tabla que parte la página a la mitad o una fila de firmas que no cabe.
