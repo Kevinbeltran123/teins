@@ -517,9 +517,12 @@ export const DetalleInforme = z
         tecnico: z.string(),
         estado: EstadoLevantamiento,
         recibidoEn: Fecha,
-        /** Lo que firma el informe (ADR-0051): la cédula de quien capturó y de quien revisó, y cuándo revisó. */
-        tecnicoDocumento: z.string().optional(),
-        revisorDocumento: z.string().optional(),
+        /**
+         * Lo que firma el informe (ADR-0051): si quien capturó y quien revisó tienen cédula, y cuándo revisó. El número
+         * no: solo lo ve quien administra; el servidor lo copia a la versión al publicar.
+         */
+        tecnicoConCedula: z.boolean(),
+        revisorConCedula: z.boolean(),
         revisadoEn: Fecha.optional(),
       }),
     ),

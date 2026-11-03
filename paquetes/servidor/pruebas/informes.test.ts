@@ -260,7 +260,10 @@ describe("informe (corte 4)", () => {
     const detalle = (await get(oficina.cookie, `/api/informes/${informeId}`)).json();
     expect(detalle.visita).toMatchObject({ nit: "900.123.456-7", ciudad: "Ibagué", referencia: "TKT-4821", solicitante: { nombre: "Laura Gómez", telefono: "+573105550142" } });
     expect(detalle.visita.ordenDeServicio).toMatch(/^\d{4,}$/);
-    expect(detalle.candidatos.find((c: { id: string }) => c.id === revisado)).toMatchObject({ tecnicoDocumento: "79888777", revisorDocumento: "52123456", revisadoEn: expect.any(String) });
+    // La cédula solo la ve quien administra (ADR-0051): el detalle de oficina dice si la hay, no cuál es.
+    const candidato = detalle.candidatos.find((c: { id: string }) => c.id === revisado);
+    expect(candidato).toMatchObject({ tecnicoConCedula: true, revisorConCedula: true, revisadoEn: expect.any(String) });
+    expect(JSON.stringify(detalle)).not.toMatch(/79888777|52123456/);
 
     const v = (await get(oficina.cookie, `/api/informes/${informeId}`)).json().version;
     expect((await post(oficina.cookie, `/api/informes/${informeId}/borrador`, { version: v, introduccion: "", conclusiones: "", levantamientos: [revisado], planos: [] })).statusCode).toBe(200);
