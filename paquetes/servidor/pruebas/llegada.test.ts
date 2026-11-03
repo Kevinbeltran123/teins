@@ -11,6 +11,13 @@ const pedidas: URL[] = [];
 let estado = 200;
 const geoapify = createServer((pedido: IncomingMessage, respuesta) => {
   pedidas.push(new URL(pedido.url ?? "/", "http://geoapify.prueba"));
+  if (estado === 0) {
+    // Responde la cabecera y se queda callado a mitad de la imagen: el tiempo vence leyendo el cuerpo.
+    respuesta.writeHead(200, { "content-type": "image/jpeg" });
+    respuesta.write(jpegDePrueba("mapa").datos.subarray(0, 10));
+    setTimeout(() => respuesta.end(), 4_000);
+    return;
+  }
   if (estado !== 200) {
     respuesta.writeHead(estado).end("falla");
     return;
@@ -78,6 +85,14 @@ describe("el mapa de la llegada", () => {
     expect(r.statusCode).toBe(503);
     expect(r.json()).toMatchObject({ codigo: "no_disponible" });
     expect(r.body).not.toContain("llave-de-prueba");
+    estado = 200;
+  });
+
+  it("si Geoapify se queda callado a mitad de la imagen, también «no disponible», no un error interno", async () => {
+    estado = 0;
+    const r = await pedir(org.tecnico.cookie, "/api/mapa?lat=4.2&lon=-74.6");
+    expect(r.statusCode).toBe(503);
+    expect(r.json()).toMatchObject({ codigo: "no_disponible" });
     estado = 200;
   });
 

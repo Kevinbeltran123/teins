@@ -67,16 +67,18 @@ export function crearMapas({ config }: { config: Pick<Config, "GEOAPIFY_LLAVE" |
             format: "jpeg",
             apiKey: config.GEOAPIFY_LLAVE,
           }).toString();
-          let respuesta: Response;
+          let tipo: string;
+          let imagen: Buffer;
           try {
-            respuesta = await fetch(url, { signal: AbortSignal.timeout(ESPERA_MS) });
+            // El tiempo cuenta hasta leer toda la imagen, no solo la cabecera.
+            const respuesta = await fetch(url, { signal: AbortSignal.timeout(ESPERA_MS) });
+            tipo = respuesta.headers.get("content-type") ?? "";
+            if (!respuesta.ok || !/^image\/(jpeg|png)/.test(tipo)) throw new Error("respuesta sin imagen");
+            imagen = Buffer.from(await respuesta.arrayBuffer());
           } catch {
             // Sin el error original: su mensaje podría traer la dirección con la llave y las coordenadas.
             throw problema("no_disponible", "El mapa no respondió: la foto sale sin él.");
           }
-          const tipo = respuesta.headers.get("content-type") ?? "";
-          if (!respuesta.ok || !/^image\/(jpeg|png)/.test(tipo)) throw problema("no_disponible", "El mapa no respondió: la foto sale sin él.");
-          const imagen = Buffer.from(await respuesta.arrayBuffer());
           return { imagen: `data:${tipo.split(";")[0]};base64,${imagen.toString("base64")}`, centro, zoom: ZOOM, atribucion: ATRIBUCION };
         },
       });
