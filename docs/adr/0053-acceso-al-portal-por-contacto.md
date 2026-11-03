@@ -50,10 +50,11 @@ B pierde por los filtros: abren el enlace antes que la persona y lo gastan (Work
 3. **El código:**
    - 6 dígitos con `crypto.randomInt`, vence a los 10 minutos y sirve una sola vez;
    - un solo código vigente por acceso (pedir otro reemplaza el anterior);
-   - se guarda como HMAC-SHA-256 con un secreto del servidor, derivado de `AUTH_SECRETO` con HKDF y una etiqueta propia: un respaldo filtrado no permite probar los 10⁶ códigos;
+   - no se guarda: se deriva con HMAC-SHA-256 del id aleatorio del pedido y un secreto del servidor (derivado de `AUTH_SECRETO` con HKDF y una etiqueta propia). La base solo tiene el id del pedido, así que un respaldo filtrado no permite calcularlo; el worker que envía el correo llega al mismo código sin que pase por la cola, y un reintento envía el mismo;
    - 5 intentos por código; pedir códigos tiene límite por correo (5 por hora) y por origen;
    - está atado al navegador que lo pidió: una cookie `HttpOnly`, `SameSite=Strict`, de 10 minutos, cuya huella se guarda con el código;
    - pedirlo responde siempre igual, exista o no el acceso, y el correo sale en segundo plano (Graphile Worker): ni la respuesta ni su tiempo dicen si el correo tiene acceso;
+   - el portal solo puede encolar ese correo, con una función propia de la cola (`cola.encolar_correo_del_portal`), no la general;
    - un código incorrecto, vencido, ya usado o agotado responde lo mismo: «El código no es correcto o venció. Pida uno nuevo.».
 4. **Los enlaces de los correos no llevan secretos.** Apuntan a `/informes/<id>` o `/cotizaciones/<id>`; sin sesión, el portal pide el correo y el código y llega ahí.
 5. **Cotizaciones en el portal: ver y descargar** la versión vigente de cada una, con la misma seguridad por fila de los informes (cliente de la sesión, PDF listo, sin retirar).
