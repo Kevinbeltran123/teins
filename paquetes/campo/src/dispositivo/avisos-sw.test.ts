@@ -94,4 +94,12 @@ describe("avisos push: la pantalla consulta en cada aviso", () => {
     expect(registration.showNotification).toHaveBeenCalledWith("TEINS", expect.objectContaining({ body: "Abre la app para ver las novedades.", icon: "/icono-192.png" }));
     expect(inicio.postMessage).toHaveBeenCalledWith({ tipo: "consultar" });
   });
+
+  it("una carga ilegible con la app enfocada se ve y no cierra los demás avisos", async () => {
+    const enfocada = ventana("a", true);
+    const { registration, cerradas, push } = montar([enfocada]);
+    await push(null);
+    expect(registration.showNotification).toHaveBeenCalledWith("TEINS", expect.not.objectContaining({ silent: true }));
+    expect(cerradas).not.toHaveBeenCalled();
+  });
 });

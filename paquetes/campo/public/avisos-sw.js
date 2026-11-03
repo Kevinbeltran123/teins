@@ -23,7 +23,8 @@ self.addEventListener("push", (evento) => {
   }
   let aviso = datos && datos.notification;
   // Safari retira el permiso de avisos si un push no muestra nada: sin título legible, igual se muestra uno.
-  if (!aviso || !aviso.title) aviso = { title: "TEINS", body: "Abre la app para ver las novedades." };
+  // Con su propia etiqueta: sin ella se tomaba por la conversación a la vista y se cerraban todos los avisos.
+  if (!aviso || !aviso.title) aviso = { title: "TEINS", body: "Abre la app para ver las novedades.", tag: "novedades" };
   const opciones = { body: aviso.body, tag: aviso.tag, lang: aviso.lang, dir: aviso.dir, icon: "/icono-192.png", data: { navigate: aviso.navigate } };
   evento.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (ventanas) => {
