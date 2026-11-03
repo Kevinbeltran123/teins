@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { DefinicionCampo } from "@teins/dominio";
 import { visitaDe } from "../../datos/lecturas";
+import { completarOrganizacion } from "../../sesion/sesion";
 import { useUsuario } from "../../sesion/usuario";
 import { db } from "../../datos/instancia";
 import { Aviso, CampoFotos, useNotificar } from "@teins/ui";
@@ -47,6 +48,9 @@ export function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: strin
   const sello = campo.tipo === "foto" ? campo.sello : undefined;
   const usuario = useUsuario();
   const ubicacion = useUbicacion(Boolean(sello?.ubicacion));
+  useEffect(() => {
+    if (sello) void completarOrganizacion().catch(() => undefined);
+  }, [sello]);
   const lugar = useLiveQuery(async () => {
     if (!sello || !usuario) return undefined;
     const l = await repositorio.obtener(id);
