@@ -2,7 +2,6 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
-import { clientesYSitios } from "../src/modulos/clientes";
 import { autenticacion, cabecerasSync, cookiesDe, iniciarSesion, ORIGEN, servidorDePrueba } from "./ayudas";
 import { codigoTotp } from "./totp";
 
@@ -168,7 +167,7 @@ describe("usuarios (iteración 6)", () => {
   });
 });
 
-describe("dispositivos y accesos de clientes (iteración 6)", () => {
+describe("dispositivos (iteración 6)", () => {
   it("muestra la salud de los teléfonos de su organización", async () => {
     const id = randomUUID();
     const salud = { versionApp: 3, versionEsquemaLocal: 3, pendientes: 2, pendienteMasAntiguo: "2026-09-20T10:00:00.000Z", bytesUsados: null, bytesDisponibles: null, persistente: true, ultimoError: null };
@@ -181,25 +180,5 @@ describe("dispositivos y accesos de clientes (iteración 6)", () => {
     expect(informado.statusCode, informado.body).toBe(202);
     const { dispositivos } = (await pedir(admin.cookie, "GET", "/api/administracion/dispositivos")).json();
     expect(dispositivos.find((d: { id: string }) => d.id === id)).toMatchObject({ usuario: { id: org.tecnico.id, nombre: "Técnico de prueba" }, salud: { pendientes: 2 } });
-  });
-
-  it("crea el acceso de un cliente con su URL de QR, no lo duplica y lo regenera", async () => {
-    const { clienteId } = await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) =>
-      clientesYSitios.crear(tx, { organizacionId: org.organizacionId, nombre: "Cliente con acceso", sitio: { nombre: "Sede", direccion: "Calle [N]" } }),
-    );
-    const antes = (await pedir(admin.cookie, "GET", "/api/administracion/accesos")).json().clientes;
-    expect(antes.find((c: { id: string }) => c.id === clienteId)).toEqual({ id: clienteId, nombre: "Cliente con acceso", acceso: null });
-
-    const creado = await pedir(admin.cookie, "POST", `/api/administracion/accesos/${clienteId}`, {});
-    expect(creado.statusCode, creado.body).toBe(200);
-    const c = creado.json();
-    expect(c.url).toBe(`http://localhost:5175/?acceso=${c.identificador}`);
-    expect(c.url).not.toContain(c.clave);
-    expect((await pedir(admin.cookie, "POST", `/api/administracion/accesos/${clienteId}`, {})).json().codigo).toBe("conflicto");
-
-    const regenerado = (await pedir(admin.cookie, "POST", `/api/administracion/accesos/${clienteId}`, { regenerar: true })).json();
-    expect(regenerado.identificador).not.toBe(c.identificador);
-    const despues = (await pedir(admin.cookie, "GET", "/api/administracion/accesos")).json().clientes;
-    expect(despues.find((x: { id: string }) => x.id === clienteId).acceso.regeneradoEn).not.toBeNull();
   });
 });

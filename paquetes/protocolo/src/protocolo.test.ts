@@ -272,3 +272,38 @@ describe("cotizaciones en el portal (ADR-0053)", () => {
     expect(operaciones.pdfDeCotizacionDelPortal.ruta).toBe("/api/portal/cotizaciones/{id}/pdf");
   });
 });
+
+describe("acceso al portal por contacto (ADR-0053)", () => {
+  it("el código son 6 dígitos: ni letras ni otro largo", () => {
+    const entrar = (codigo: string) => operaciones.ingresarConCodigo.cuerpo.safeParse({ correo: "ana@cliente.example", codigo }).success;
+    expect(entrar("482915")).toBe(true);
+    for (const malo of ["48291", "4829150", "48291a", "482 915", ""]) expect(entrar(malo), malo).toBe(false);
+  });
+
+  it("el correo se escribe como sea: se recorta y va en minúsculas", () => {
+    expect(operaciones.pedirCodigoDelPortal.cuerpo.parse({ correo: "  Ana.Rojas@Cliente.Example " })).toEqual({ correo: "ana.rojas@cliente.example" });
+    expect(operaciones.pedirCodigoDelPortal.cuerpo.safeParse({ correo: "no es un correo" }).success).toBe(false);
+  });
+
+  it("pedir el código no responde nada: ni si el correo tiene acceso", () => {
+    expect(operaciones.pedirCodigoDelPortal.respuesta.parse({ enviado: true, contacto: "Ana" })).toEqual({});
+    expect(operaciones.pedirCodigoDelPortal.estadoExito).toBe(202);
+  });
+
+  it("la sesión dice quién entró y qué ve", () => {
+    expect(operaciones.sesionDelPortal.respuesta.parse({ cliente: "Clínica", contacto: "Ana Rojas", ve: { informes: true, cotizaciones: false } })).toEqual({
+      cliente: "Clínica",
+      contacto: "Ana Rojas",
+      ve: { informes: true, cotizaciones: false },
+    });
+  });
+
+  it("dar acceso invita por correo; «Deshacer» de quitarlo lo devuelve sin otra invitación", () => {
+    expect(operaciones.cambiarAccesoAlPortal.cuerpo.parse({ activo: true })).toEqual({ activo: true, invitar: true });
+    expect(operaciones.cambiarAccesoAlPortal.cuerpo.parse({ activo: true, invitar: false })).toEqual({ activo: true, invitar: false });
+  });
+
+  it("el QR y la clave por cliente ya no existen", () => {
+    for (const nombre of ["ingresarAlPortal", "listarAccesosDeClientes", "crearAccesoDeCliente"]) expect(Object.keys(operaciones)).not.toContain(nombre);
+  });
+});

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import { nuevaVisitaConCliente, nuevoAcceso, nuevoUsuario } from "../consola";
-import { CAMPO, OFICINA } from "../destino";
-import { iniciarSesion } from "./ayudas";
+import { codigoDelPortal, nuevaVisitaConCliente, nuevoUsuario, ultimoCodigo } from "../consola";
+import { CAMPO, OFICINA, PORTAL, REMOTO } from "../destino";
+import { iniciarSesion, nuevoContacto } from "./ayudas";
 
 /**
  * Iteración 24 (fallo 12 del grupo A): una ruta que no existe o una pantalla que falla al dibujarse lo dicen en
@@ -41,16 +41,22 @@ test("oficina: si una pantalla falla al dibujarse, lo dice en español y ofrece 
 });
 
 test("portal: si la pantalla falla al dibujarse, lo dice y ofrece volver a cargar", async ({ page }) => {
+  test.skip(REMOTO, "El código llega a un correo real en el entorno de pruebas.");
+  const oficina = nuevoUsuario("oficina", "oficina.e2e");
   const { clienteId } = nuevaVisitaConCliente(nuevoUsuario("tecnico", "tecnico.e2e"));
-  const acceso = nuevoAcceso(clienteId);
-  await page.goto(acceso.url);
-  await page.getByLabel("Clave").fill(acceso.clave);
+  const correo = `falla.${clienteId.slice(0, 8)}@cliente.example`;
+  await nuevoContacto(oficina, clienteId, { nombre: "Contacto E2E", correo, recibeInformes: true, recibeCotizaciones: false });
+  const anterior = ultimoCodigo(correo);
+  await page.goto(`${PORTAL}/`);
+  await page.getByLabel("Correo").fill(correo);
+  await page.getByRole("button", { name: "Enviar código" }).click();
+  await page.getByLabel("Código").fill(await codigoDelPortal(correo, anterior));
   await romperLosIconos(page);
-  await page.getByRole("button", { name: "Ver mis informes" }).click();
+  await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByText("Algo falló al mostrar el portal.")).toBeVisible();
-  // Volver a cargar deja el portal funcionando: con la sesión, sus informes; si el fallo llegó antes de abrirla, el ingreso.
+  // Volver a cargar deja el portal funcionando: con la sesión, sus documentos; si el fallo llegó antes de abrirla, el ingreso.
   await page.getByRole("button", { name: "Volver a cargar" }).click();
-  await expect(page.getByRole("heading", { name: /^Informes de / }).or(page.getByRole("heading", { name: "Sus informes técnicos" }))).toBeVisible();
+  await expect(page.getByRole("button", { name: "Salir" }).or(page.getByRole("heading", { name: /^(Sus informes y cotizaciones|Revise su correo)$/ }))).toBeVisible();
   await expect(page.getByText("Algo falló al mostrar el portal.")).toHaveCount(0);
 });
 

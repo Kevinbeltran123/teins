@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Config } from "../../config";
 
 /** El proveedor no lo aceptará nunca (dirección inválida, plantilla inexistente): no se reintenta. */
@@ -146,6 +149,7 @@ export function proveedoresSimulados(): Required<Proveedores> {
   return {
     correo: async (c) => {
       if (RECHAZA.test(c.para)) throw new RechazoDefinitivo("La dirección no existe (envío simulado)");
+      guardarCorreoSimulado(c);
       return { id: `simulado-${randomUUID()}` };
     },
     whatsapp: async (m) => {
@@ -153,6 +157,18 @@ export function proveedoresSimulados(): Required<Proveedores> {
       return { id: `simulado-${randomUUID()}` };
     },
   };
+}
+
+/**
+ * Carpeta del último correo simulado de cada dirección, en el equipo: la prueba de extremo a extremo lee de aquí el
+ * código del portal con `pnpm ultimo-correo` (ADR-0053). Solo existe con envíos simulados, que producción no admite.
+ */
+export const CARPETA_CORREOS_SIMULADOS = join(tmpdir(), "teins-correos-simulados");
+export const archivoDelCorreoSimulado = (para: string) => join(CARPETA_CORREOS_SIMULADOS, `${encodeURIComponent(para.toLowerCase())}.json`);
+
+function guardarCorreoSimulado(c: CorreoSaliente): void {
+  mkdirSync(CARPETA_CORREOS_SIMULADOS, { recursive: true });
+  writeFileSync(archivoDelCorreoSimulado(c.para), JSON.stringify({ para: c.para, asunto: c.asunto, texto: c.texto, en: new Date().toISOString() }));
 }
 
 /** Proveedores según la configuración; un canal sin configurar queda sin proveedor y sus envíos no llegan, con ese motivo. */

@@ -1,12 +1,22 @@
 import { expect, test } from "@playwright/test";
-import { nuevaVisitaConCliente, nuevoAcceso, nuevoAdministrador, nuevoUsuario } from "../consola";
-import { CAMPO, OFICINA } from "../destino";
-import { activarSegundoFactor, filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar } from "./ayudas";
+import { codigoDelPortal, nuevaVisitaConCliente, nuevoUsuario, ultimoCodigo } from "../consola";
+import { CAMPO, OFICINA, PORTAL, REMOTO } from "../destino";
+import { entrarAlPortal, filaDeLaBandeja, fotoDePrueba, iniciarSesion, irAlPaso, irARevisar, nuevoContacto } from "./ayudas";
 
-test("el recorrido completo: campo envía, oficina revisa y publica, y el cliente descarga su informe con el QR y la clave (QA-4)", async ({ page, browser }) => {
+/*
+  El portal por contacto (ADR-0053): oficina da el acceso, el contacto entra con el código que le llega al correo, ve lo
+  que recibe y descarga; desde el botón de un correo llega a ese documento; si oficina le quita el acceso, queda fuera.
+  El código se lee del correo simulado: solo en local (en el entorno de pruebas el correo es real).
+*/
+test.skip(REMOTO, "El código llega a un correo real en el entorno de pruebas: se prueba a mano (verificación manual).");
+
+test("el recorrido completo: campo envía, oficina publica y da acceso, y el contacto entra con su código y descarga (QA-4)", async ({ page, browser }) => {
+  test.setTimeout(180_000);
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
   const revisora = nuevoUsuario("oficina", "oficina");
   const { cliente, clienteId } = nuevaVisitaConCliente(tecnico);
+  const sufijo = clienteId.slice(0, 8);
+  const ana = { nombre: `Ana ${sufijo}`, correo: `ana.${sufijo}@cliente.example`, recibeInformes: true, recibeCotizaciones: true };
 
   // Campo.
   await page.goto(`${CAMPO}/`);
@@ -33,57 +43,83 @@ test("el recorrido completo: campo envía, oficina revisa y publica, y el client
   await o.getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Marcar revisado" }).click();
   await o.getByRole("button", { name: "Abrir el informe" }).click();
+  await o.waitForURL(/\/informes\/[0-9a-f-]{36}/);
+  const informeId = /\/informes\/([0-9a-f-]{36})/.exec(o.url())![1]!;
   await o.getByRole("checkbox", { name: new RegExp(`de ${tecnico.nombre}`) }).check();
   await o.getByRole("button", { name: "Publicar versión 1" }).click();
   await o.getByRole("dialog").getByRole("button", { name: "Publicar versión 1" }).click();
   await expect(o.getByRole("button", { name: "Descargar PDF de la versión 1" })).toBeVisible({ timeout: 60_000 });
-  await escritorio.close();
 
-  // Cliente: abre la URL del QR en su celular y escribe la clave.
-  const acceso = nuevoAcceso(clienteId);
-  expect(acceso.url).toContain(`?acceso=${acceso.identificador}`);
-  expect(acceso.url).not.toContain(acceso.clave);
+  // Oficina da el acceso desde el contacto: se confirma, porque le envía una invitación.
+  await nuevoContacto(revisora, clienteId, ana, { acceso: false });
+  await o.goto(`${OFICINA}/clientes/${clienteId}`);
+  const interruptor = o.getByRole("switch", { name: `Acceso al portal de ${ana.nombre}` });
+  await expect(interruptor).not.toBeChecked();
+  await interruptor.click();
+  const confirmar = o.getByRole("dialog", { name: `¿Dar acceso al portal a ${ana.nombre}?` });
+  await expect(confirmar.getByText(`Le enviaremos una invitación a ${ana.correo}`)).toBeVisible();
+  await confirmar.getByRole("button", { name: "Dar acceso" }).click();
+  await expect(interruptor).toBeChecked();
+  await expect(o.getByText("Aún no entra")).toBeVisible();
+
+  // El contacto, en su celular: el correo, un código equivocado y después el que le llegó.
   const celular = await browser.newContext({ locale: "es-CO", viewport: { width: 390, height: 844 } });
   const c = await celular.newPage();
-  await c.goto(acceso.url);
-  await expect(c.getByText("Código de acceso tomado del QR.")).toBeVisible();
-  await c.getByLabel("Clave").fill("equivocada");
-  await c.getByRole("button", { name: "Ver mis informes" }).click();
-  await expect(c.getByText("El código de acceso o la clave no son correctos.")).toBeVisible();
-  await c.getByLabel("Clave").fill(acceso.clave);
-  await c.getByRole("button", { name: "Ver mis informes" }).click();
-  await expect(c.getByRole("heading", { name: `Informes de ${cliente}` })).toBeVisible();
-  // El PDF baja como archivo: el cliente sigue en su lista de informes.
+  await c.goto(`${PORTAL}/`);
+  const anterior = ultimoCodigo(ana.correo);
+  await c.getByLabel("Correo").fill(ana.correo.toUpperCase());
+  await c.getByRole("button", { name: "Enviar código" }).click();
+  await expect(c.getByText(`Le enviamos un código a ${ana.correo.toUpperCase()}`, { exact: false })).toBeVisible();
+  const codigo = await codigoDelPortal(ana.correo, anterior);
+  await c.getByLabel("Código").fill(codigo === "000000" ? "111111" : "000000");
+  await c.getByRole("button", { name: "Entrar" }).click();
+  await expect(c.getByText("El código no es correcto o venció. Pida uno nuevo.")).toBeVisible();
+  await c.getByLabel("Código").fill(codigo);
+  await c.getByRole("button", { name: "Entrar" }).click();
+  await expect(c.getByRole("heading", { level: 1, name: cliente })).toBeVisible();
+  // Ve lo que recibe: informes y cotizaciones.
+  await expect(c.getByRole("tab", { name: /Informes/ })).toHaveAttribute("aria-selected", "true");
   const pdf = c.waitForEvent("download");
   await c.getByRole("button", { name: /Descargar el informe de/ }).click();
   expect((await pdf).suggestedFilename()).toMatch(/\.pdf$/);
-  await expect(c.getByRole("heading", { name: `Informes de ${cliente}` })).toBeVisible();
+  await c.getByRole("tab", { name: /Cotizaciones/ }).click();
+  await expect(c.getByText("Todavía no hay cotizaciones publicadas.")).toBeVisible();
 
-  // Una persona administradora retira la versión del portal: el cliente deja de verla (iteración 6).
-  const admin = nuevoAdministrador();
-  const administracion = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });
-  const ad = await administracion.newPage();
-  await activarSegundoFactor(ad, OFICINA, admin);
-  await ad.goto(`${OFICINA}/informes`);
-  await ad.getByRole("link", { name: cliente }).click();
-  await ad.getByRole("button", { name: "Retirar la versión 1 del portal" }).click();
-  await ad.getByLabel("Motivo del retiro de la versión 1").fill("Prueba de retiro E2E");
-  await ad.getByRole("dialog").getByRole("button", { name: "Retirar la versión 1" }).click();
-  await expect(ad.getByText("Versión 1 retirada del portal")).toBeVisible();
-  await administracion.close();
+  // Oficina ve que ya entró.
+  await o.reload();
+  await expect(o.getByText(/Último ingreso: /)).toBeVisible();
+
+  // Desde el botón de un correo, sin sesión: entra y llega a ese informe, resaltado.
+  const otroEquipo = await browser.newContext({ locale: "es-CO", viewport: { width: 1280, height: 800 } });
+  const enlace = await otroEquipo.newPage();
+  await entrarAlPortal(enlace, ana.correo, `${PORTAL}/informes/${informeId}`);
+  await expect(enlace.getByRole("listitem").filter({ has: enlace.getByRole("button", { name: /Descargar el informe de/ }) })).toHaveAttribute("aria-current", "true");
+  await otroEquipo.close();
+
+  // Oficina le quita el acceso: al instante, con «Deshacer»; su sesión queda fuera.
+  await interruptor.click();
+  await expect(o.getByText(`Acceso al portal quitado: ${ana.nombre}`)).toBeVisible();
+  await expect(interruptor).not.toBeChecked();
+  await escritorio.close();
   await c.reload();
-  await expect(c.getByText("Todavía no hay informes publicados.", { exact: false })).toBeVisible();
+  await expect(c.getByRole("button", { name: "Enviar código" })).toBeVisible();
   await celular.close();
 
-  // Otro cliente, con su propio acceso, no ve ese informe (QA-4).
+  // Otro contacto de otro cliente, que solo recibe informes: no ve el de este cliente ni la pestaña de cotizaciones (QA-4).
   const otro = nuevaVisitaConCliente(tecnico);
-  const accesoOtro = nuevoAcceso(otro.clienteId);
+  const beto = { nombre: `Beto ${sufijo}`, correo: `beto.${sufijo}@otro.example`, recibeInformes: true, recibeCotizaciones: false };
+  await nuevoContacto(revisora, otro.clienteId, beto);
   const ajeno = await browser.newContext({ locale: "es-CO" });
   const a = await ajeno.newPage();
-  await a.goto(accesoOtro.url);
-  await a.getByLabel("Clave").fill(accesoOtro.clave);
-  await a.getByRole("button", { name: "Ver mis informes" }).click();
-  await expect(a.getByRole("heading", { name: `Informes de ${otro.cliente}` })).toBeVisible();
-  await expect(a.getByText("Todavía no hay informes publicados.", { exact: false })).toBeVisible();
+  await entrarAlPortal(a, beto.correo);
+  await expect(a.getByRole("heading", { level: 1, name: otro.cliente })).toBeVisible();
+  await expect(a.getByText("Todavía no hay informes publicados.")).toBeVisible();
+  await expect(a.getByRole("tablist")).toHaveCount(0);
+
+  // El tema se elige en el encabezado y se recuerda en el equipo, como en oficina y en campo.
+  await a.getByRole("radio", { name: "Oscuro" }).click();
+  await expect(a.locator("html")).toHaveAttribute("data-tema", "oscuro");
+  await a.reload();
+  await expect(a.locator("html")).toHaveAttribute("data-tema", "oscuro");
   await ajeno.close();
 });

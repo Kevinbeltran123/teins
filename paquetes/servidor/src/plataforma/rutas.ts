@@ -118,6 +118,9 @@ export interface ContextoPortal {
   token: string | undefined;
   ponerSesion(token: string, segundos: number): void;
   quitarSesion(): void;
+  /** Otra cookie del portal (la del pedido de código, ADR-0053), con los mismos atributos que la de la sesión. */
+  cookie(nombre: string): string | undefined;
+  ponerCookie(nombre: string, valor: string, segundos: number): void;
 }
 
 export interface OpcionesPortal<N extends NombreOperacion, S> {
@@ -153,13 +156,15 @@ export function registrarOperacionDelPortal<N extends NombreOperacion, S>(app: F
       let sesion: S | null = null;
       if (!opciones.publica) {
         sesion = token ? await opciones.resolverSesion(token) : null;
-        if (!sesion) throw problema("no_autenticado", "Ingrese con su clave");
+        if (!sesion) throw problema("no_autenticado", "Entre con su correo y el código");
       }
       const portal: ContextoPortal = {
         ip: solicitud.ip,
         token,
         ponerSesion: (valor, segundos) => void respuesta.header("set-cookie", `${opciones.nombreCookie}=${valor}; Max-Age=${segundos}; ${atributos}`),
         quitarSesion: () => void respuesta.header("set-cookie", `${opciones.nombreCookie}=; Max-Age=0; ${atributos}`),
+        cookie: (nombre) => leerCookie(solicitud.headers.cookie, nombre),
+        ponerCookie: (nombre, valor, segundos) => void respuesta.header("set-cookie", `${nombre}=${valor}; Max-Age=${segundos}; ${atributos}`),
       };
       if (sesion && token) portal.ponerSesion(token, opciones.duracionSesionS);
       const resultado = await opciones.manejar({

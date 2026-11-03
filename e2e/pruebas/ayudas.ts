@@ -1,6 +1,8 @@
 import { randomInt } from "node:crypto";
 import { deflateSync } from "node:zlib";
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, request, type Locator, type Page } from "@playwright/test";
+import { codigoDelPortal, ultimoCodigo, type Usuario } from "../consola";
+import { OFICINA, PORTAL } from "../destino";
 import { codigoTotp } from "../totp";
 
 /**
@@ -207,4 +209,39 @@ export const dejarPasar = (page: Page, ms: number) => page.waitForTimeout(ms);
 
 export async function guardadoSolo(page: Page) {
   await expect(page.getByRole("status").filter({ hasText: /^Guardado$/ })).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Un contacto del cliente, creado por la API de oficina con la sesión de `oficina` (ADR-0053). Con `acceso`, también
+ * con acceso al portal (le llega la invitación al correo simulado).
+ */
+export async function nuevoContacto(
+  oficina: Usuario,
+  clienteId: string,
+  datos: { nombre: string; correo: string; recibeInformes: boolean; recibeCotizaciones: boolean },
+  { acceso = true }: { acceso?: boolean } = {},
+): Promise<string> {
+  const api = await request.newContext({ baseURL: OFICINA });
+  try {
+    const ingreso = await api.post("/api/auth/sign-in/username", { data: { username: oficina.usuario, password: oficina.contrasena } });
+    expect(ingreso.status(), await ingreso.text()).toBe(200);
+    const creado = await api.post(`/api/clientes/${clienteId}/contactos`, { data: { ...datos, recibeCorreo: true, recibeWhatsapp: false } });
+    expect(creado.status(), await creado.text()).toBe(201);
+    const id = ((await creado.json()) as { contactos: { id: string; nombre: string }[] }).contactos.find((c) => c.nombre === datos.nombre)!.id;
+    if (acceso) expect((await api.post(`/api/clientes/${clienteId}/contactos/${id}/portal`, { data: { activo: true } })).status()).toBe(200);
+    return id;
+  } finally {
+    await api.dispose();
+  }
+}
+
+/** Entra al portal como lo haría el contacto: su correo, el código que le llega y «Entrar». `url`: a dónde llega. */
+export async function entrarAlPortal(page: Page, correo: string, url = `${PORTAL}/`) {
+  const anterior = ultimoCodigo(correo);
+  await page.goto(url);
+  await page.getByLabel("Correo").fill(correo);
+  await page.getByRole("button", { name: "Enviar código" }).click();
+  await expect(page.getByRole("heading", { name: "Revise su correo" })).toBeVisible();
+  await page.getByLabel("Código").fill(await codigoDelPortal(correo, anterior));
+  await page.getByRole("button", { name: "Entrar" }).click();
 }

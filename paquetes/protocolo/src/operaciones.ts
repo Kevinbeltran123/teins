@@ -530,12 +530,18 @@ export const DetalleInforme = z
   })
   .meta({ id: "DetalleInforme" });
 
-// Portal del cliente (corte 5, ADR-0009 parte 4)
+// Portal del cliente, por contacto (ADR-0053; antes, ADR-0009 parte 4)
 
-/** Identificador del acceso: aleatorio, no adivinable, viaja en el QR. Nunca la clave. */
-export const IDENTIFICADOR_ACCESO = /^[a-hjkmnp-z2-9]{20}$/;
+/** El código que llega al correo: 6 dígitos (ADR-0053). */
+export const CODIGO_DEL_PORTAL = /^\d{6}$/;
 
-export const SesionPortal = z.object({ cliente: z.string() }).meta({ id: "SesionPortal" });
+/** El correo como lo escriba la persona: se recorta y va en minúsculas, como se guarda el del acceso. */
+const CorreoDelPortal = z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), z.email().max(320));
+
+/** Quién entró y qué ve: lo que recibe como contacto (ADR-0053). */
+export const SesionPortal = z
+  .object({ cliente: z.string(), contacto: z.string(), ve: z.object({ informes: z.boolean(), cotizaciones: z.boolean() }) })
+  .meta({ id: "SesionPortal" });
 
 export const InformesDelCliente = z
   .object({
@@ -612,8 +618,6 @@ export const SaludDeDispositivo = z
   })
   .meta({ id: "SaludDeDispositivo" });
 
-/** Credenciales nuevas de un acceso de cliente: se muestran una sola vez. */
-export const CredencialesDeAcceso = z.object({ identificador: z.string(), clave: z.string(), url: z.url() }).meta({ id: "CredencialesDeAcceso" });
 
 // Programación (iteración 7): clientes, sitios y visitas, por oficina.
 
@@ -663,6 +667,8 @@ export const Contacto = z
     whatsappAutorizado: z.object({ por: Persona, en: Fecha }).nullable(),
     /** El último correo rebotó: sigue marcado hasta que oficina cambie la dirección. */
     correoRebotado: z.object({ en: Fecha, motivo: z.string() }).nullable(),
+    /** Acceso al portal (ADR-0053): ve en el portal lo que recibe. */
+    accesoPortal: z.object({ activo: z.boolean(), ultimoIngreso: Fecha.nullable() }),
   })
   .meta({ id: "Contacto" });
 
@@ -1205,11 +1211,20 @@ export const operaciones = {
     respuesta: UrlDeArchivo,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado", "estado_invalido"],
   },
-  ingresarAlPortal: {
+  pedirCodigoDelPortal: {
+    metodo: "POST",
+    ruta: "/api/portal/codigo",
+    resumen: "Envía un código de 6 dígitos al correo, si tiene acceso; responde lo mismo si no lo tiene (ADR-0053, QA-7)",
+    cuerpo: z.object({ correo: CorreoDelPortal }),
+    estadoExito: 202,
+    respuesta: z.object({}),
+    errores: ["demasiadas_solicitudes", "entrada_invalida"],
+  },
+  ingresarConCodigo: {
     metodo: "POST",
     ruta: "/api/portal/ingresar",
-    resumen: "Ingreso del cliente con el identificador del QR y su clave; límite de intentos (QA-7)",
-    cuerpo: z.object({ identificador: z.string().trim().toLowerCase().regex(IDENTIFICADOR_ACCESO), clave: z.string().max(64) }),
+    resumen: "Ingreso con el código del correo, desde el navegador que lo pidió; un solo uso y límite de intentos (ADR-0053, QA-7)",
+    cuerpo: z.object({ correo: CorreoDelPortal, codigo: z.string().regex(CODIGO_DEL_PORTAL) }),
     estadoExito: 200,
     respuesta: SesionPortal,
     errores: ["no_autenticado", "demasiadas_solicitudes", "entrada_invalida"],
@@ -1217,7 +1232,7 @@ export const operaciones = {
   sesionDelPortal: {
     metodo: "GET",
     ruta: "/api/portal/sesion",
-    resumen: "Cliente de la sesión del portal",
+    resumen: "Quién entró al portal y qué ve",
     estadoExito: 200,
     respuesta: SesionPortal,
     errores: ["no_autenticado"],
@@ -1233,10 +1248,10 @@ export const operaciones = {
   informesDelPortal: {
     metodo: "GET",
     ruta: "/api/portal/informes",
-    resumen: "Informes vigentes del cliente de la sesión",
+    resumen: "Informes vigentes del cliente de la sesión, si el contacto recibe informes",
     estadoExito: 200,
     respuesta: InformesDelCliente,
-    errores: ["no_autenticado"],
+    errores: ["no_autenticado", "sin_permiso"],
   },
   pdfDelPortal: {
     metodo: "GET",
@@ -1245,7 +1260,7 @@ export const operaciones = {
     parametros: z.object({ id: Uuid }),
     estadoExito: 200,
     respuesta: UrlDeArchivo,
-    errores: ["no_autenticado", "no_encontrado"],
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
   },
   cotizacionesDelPortal: {
     metodo: "GET",
@@ -1335,26 +1350,6 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: z.object({ dispositivos: z.array(SaludDeDispositivo) }),
     errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido"],
-  },
-  listarAccesosDeClientes: {
-    metodo: "GET",
-    ruta: "/api/administracion/accesos",
-    resumen: "Clientes de la organización y su acceso al portal",
-    estadoExito: 200,
-    respuesta: z.object({
-      clientes: z.array(z.object({ id: Uuid, nombre: z.string(), acceso: z.object({ creadoEn: Fecha, regeneradoEn: Fecha.nullable() }).nullable() })),
-    }),
-    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido"],
-  },
-  crearAccesoDeCliente: {
-    metodo: "POST",
-    ruta: "/api/administracion/accesos/{clienteId}",
-    resumen: "Crea o regenera el acceso de un cliente; regenerar invalida el QR, la clave y las sesiones anteriores",
-    parametros: z.object({ clienteId: Uuid }),
-    cuerpo: z.object({ regenerar: z.boolean().default(false) }),
-    estadoExito: 200,
-    respuesta: CredencialesDeAcceso,
-    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "no_encontrado", "conflicto"],
   },
   retirarVersion: {
     metodo: "POST",
@@ -1662,6 +1657,16 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: DetalleCliente,
     errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  cambiarAccesoAlPortal: {
+    metodo: "POST",
+    ruta: "/api/clientes/{id}/contactos/{contactoId}/portal",
+    resumen: "Da o quita al contacto el acceso al portal (ADR-0053); darlo le envía una invitación, salvo al deshacer un retiro",
+    parametros: z.object({ id: Uuid, contactoId: Uuid }),
+    cuerpo: z.object({ activo: z.boolean(), invitar: z.boolean().default(true) }),
+    estadoExito: 200,
+    respuesta: DetalleCliente,
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado", "entrada_invalida", "estado_invalido", "conflicto"],
   },
   agregarSitio: {
     metodo: "POST",

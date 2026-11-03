@@ -6,7 +6,6 @@ import { errorComun, textoDelServidor } from "./mensajes";
 export const consultasDeAdministracion = {
   usuarios: () => queryOptions({ queryKey: ["administracion", "usuarios"], queryFn: () => cliente.llamar("listarUsuarios") }),
   dispositivos: () => queryOptions({ queryKey: ["administracion", "dispositivos"], queryFn: () => cliente.llamar("listarDispositivos") }),
-  accesos: () => queryOptions({ queryKey: ["administracion", "accesos"], queryFn: () => cliente.llamar("listarAccesosDeClientes") }),
 };
 
 /**

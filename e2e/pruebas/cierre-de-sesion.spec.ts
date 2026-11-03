@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { nuevaVisitaConCliente, nuevoAcceso, nuevoUsuario } from "../consola";
-import { CAMPO } from "../destino";
-import { iniciarSesion } from "./ayudas";
+import { nuevaVisitaConCliente, nuevoUsuario } from "../consola";
+import { CAMPO, REMOTO } from "../destino";
+import { entrarAlPortal, iniciarSesion, nuevoContacto } from "./ayudas";
 
 test("campo: cerrar sesión sin señal cierra la sesión del servidor en cuanto vuelve la señal", async ({ page, context }) => {
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
@@ -20,13 +20,14 @@ test("campo: cerrar sesión sin señal cierra la sesión del servidor en cuanto 
   await expect.poll(sesionEnServidor).toBe(401);
 });
 
-test("portal: si salir no llega al servidor, lo dice y los informes no quedan abiertos en silencio", async ({ page }) => {
+test("portal: si salir no llega al servidor, lo dice y los documentos no quedan abiertos en silencio", async ({ page }) => {
+  test.skip(REMOTO, "El código llega a un correo real en el entorno de pruebas.");
+  const oficina = nuevoUsuario("oficina", "oficina.e2e");
   const { cliente, clienteId } = nuevaVisitaConCliente(nuevoUsuario("tecnico", "tecnico.e2e"));
-  const acceso = nuevoAcceso(clienteId);
-  await page.goto(acceso.url);
-  await page.getByLabel("Clave").fill(acceso.clave);
-  await page.getByRole("button", { name: "Ver mis informes" }).click();
-  const titulo = page.getByRole("heading", { name: `Informes de ${cliente}` });
+  const correo = `salir.${clienteId.slice(0, 8)}@cliente.example`;
+  await nuevoContacto(oficina, clienteId, { nombre: "Contacto E2E", correo, recibeInformes: true, recibeCotizaciones: false });
+  await entrarAlPortal(page, correo);
+  const titulo = page.getByRole("heading", { level: 1, name: cliente });
   await expect(titulo).toBeVisible();
 
   await page.route("**/api/portal/salir", (ruta) => ruta.abort());
@@ -36,7 +37,7 @@ test("portal: si salir no llega al servidor, lo dice y los informes no quedan ab
 
   await page.unroute("**/api/portal/salir");
   await page.getByRole("button", { name: "Salir" }).click();
-  await expect(page.getByRole("button", { name: "Ver mis informes" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enviar código" })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "Ver mis informes" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enviar código" })).toBeVisible();
 });

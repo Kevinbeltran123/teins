@@ -7,6 +7,7 @@ export { nombreDelPdfDeInforme, plantillaInforme, piePagina, ESTILOS_INFORME, ty
 export {
   asunto,
   diaCorto,
+  enlaceAlPortal,
   htmlDeCorreo,
   plantillaDeWhatsapp,
   asuntoBase,
@@ -23,3 +24,4 @@ export {
 export { escapar } from "./escapar";
 export { LOGO_TEINS } from "./logo";
 export { ARCHIVO_FUENTE, hojaDeLaVista, RUTA_DOCUMENTOS, type Documento, type Salida } from "./salida";
+export { correoDeCodigo, correoDeInvitacion, type CorreoDelPortal } from "./portal";

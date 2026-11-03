@@ -326,7 +326,7 @@ function Correo({ p, mensaje, contacto, portal, edicion }: { p: Plantillas; mens
   // El asunto no se ve dentro del cuerpo: el marco usa siempre el de TEINS para no volver a dibujarse al cambiarlo.
   const conTexto = edicion ? { ...mensaje, personal: { asunto: base.asunto, texto: dibujado.texto } } : mensaje;
   // Lo que llegó de afuera se vuelve a dibujar aunque el texto sea el mismo que había al abrir.
-  const html = p.htmlDeCorreo(conTexto, { nombre: contacto.nombre, portal: mensaje.documento === "cotizacion" ? undefined : portal, sinAdjunto: false }).replace("</body>", `<!--${dibujado.vez}--></body>`);
+  const html = p.htmlDeCorreo(conTexto, { nombre: contacto.nombre, portal: portal && contacto.accesoPortal.activo ? p.enlaceAlPortal(portal, mensaje) : undefined, sinAdjunto: false }).replace("</body>", `<!--${dibujado.vez}--></body>`);
   return (
     <>
       <div className="correo-meta">

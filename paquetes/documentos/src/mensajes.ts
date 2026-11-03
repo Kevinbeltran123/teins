@@ -23,9 +23,11 @@ export interface MensajeDeInforme {
   numero: number;
   nombreArchivo: string;
   personal?: TextoPropio | undefined;
+  /** El informe, para el botón que lleva a él en el portal (ADR-0053). Los envíos anteriores no lo llevan. */
+  documentoId?: string | undefined;
 }
 
-/** Una cotización publicada (ADR-0029): sin enlace al portal, que solo muestra informes. */
+/** Una cotización publicada (ADR-0029). */
 export interface MensajeDeCotizacion {
   documento: "cotizacion";
   organizacion: string;
@@ -37,6 +39,8 @@ export interface MensajeDeCotizacion {
   numero: number;
   nombreArchivo: string;
   personal?: TextoPropio | undefined;
+  /** La cotización, para el botón que lleva a ella en el portal (ADR-0053). */
+  documentoId?: string | undefined;
 }
 
 export type MensajeDeEnvio = MensajeDeInforme | MensajeDeCotizacion;
@@ -90,8 +94,18 @@ const parrafosPropios = (texto: string) =>
 
 const tema = (m: MensajeDeEnvio) => (m.documento === "cotizacion" ? "las cotizaciones" : "los informes técnicos");
 
+/** Debajo del botón del portal: cómo se entra, sin clave (ADR-0053). */
+const COMO_ENTRAR = "Para entrar, escriba su correo y le enviaremos un código.";
+
+/** La dirección del documento en el portal: sin secretos, el portal pide entrar y llega ahí (ADR-0053). */
+export function enlaceAlPortal(portal: string, m: Pick<MensajeDeEnvio, "documento" | "documentoId">): string {
+  const base = portal.replace(/\/$/, "");
+  return m.documentoId ? `${base}/${m.documento === "cotizacion" ? "cotizaciones" : "informes"}/${m.documentoId}` : base;
+}
+
 export interface OpcionesDeCorreo {
   nombre: string;
+  /** El documento en el portal, solo si el contacto tiene acceso (ADR-0053): sin él, el correo no lleva el botón. */
   portal: string | undefined;
   /** El PDF no cabe en el correo: se dice y se remite al portal. */
   sinAdjunto: boolean;
@@ -104,7 +118,7 @@ export function textoDeCorreo(m: MensajeDeEnvio, o: OpcionesDeCorreo): string {
     ...(m.personal
       ? [...parrafosPropios(m.personal.texto), ...(o.sinAdjunto ? [pdfNoCabe(m)] : [])]
       : [presentacion(m, o.sinAdjunto, (t) => t, (t) => t), ...(m.numero > 1 ? [`Es la versión ${m.numero}: reemplaza a las anteriores.`] : [])]),
-    ...(o.portal ? [`Portal de ${m.organizacion}: ${o.portal}`, "En el portal están todos sus informes. Si no tiene acceso, respóndanos este correo."] : []),
+    ...(o.portal ? [`Ver en el portal de ${m.organizacion}: ${o.portal}`, COMO_ENTRAR] : []),
     "",
     `${m.organizacion}. Recibe este correo porque es contacto de ${m.cliente} para ${tema(m)}. Para dejar de recibirlos, respóndanos este correo.`,
   ].join("\n\n");
@@ -130,7 +144,7 @@ ${parrafo(`Hola, ${escapar(primerNombre(o.nombre))}:`)}
 ${
   o.portal
     ? `<p style="margin:0 0 16px"><a href="${escapar(o.portal)}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#002B81;color:#FFFFFF;font-weight:700;text-decoration:none">Ver en el portal de ${e.organizacion}</a></p>
-<p style="margin:0 0 16px;font-size:14px;color:#525152">En el portal están todos sus informes. Si no tiene acceso, respóndanos este correo.</p>`
+<p style="margin:0 0 16px;font-size:14px;color:#525152">${COMO_ENTRAR}</p>`
     : ""
 }
 </td></tr>

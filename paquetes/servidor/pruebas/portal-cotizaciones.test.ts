@@ -6,9 +6,9 @@ import type { LineaCantidad, VersionFormato } from "@teins/dominio";
 import { enClienteDelPortal, enOrganizacion } from "../src/plataforma/base-de-datos";
 import { clientesYSitios } from "../src/modulos/clientes";
 import { crearFormatos } from "../src/modulos/formatos";
-import { crearAccesosDeClientes } from "../src/modulos/portal";
 import { crearVisitas } from "../src/modulos/visitas";
 import { cabecerasSync, ORIGEN, servidorDePrueba } from "./ayudas";
+import { conPortal } from "./portal-ayudas";
 
 /*
   Cotizaciones en el portal (ADR-0053): el cliente ve y descarga la versión vigente de cada una, con la misma barrera
@@ -16,9 +16,8 @@ import { cabecerasSync, ORIGEN, servidorDePrueba } from "./ayudas";
 */
 const s = await servidorDePrueba();
 const { app } = s;
-const accesos = crearAccesosDeClientes(s.conexionApp.bd);
+const p = conPortal(s);
 const contexto = { autorId: "administrador", correlacion: "prueba-portal-cotizaciones" };
-const PORTAL = "http://localhost:5175";
 
 /** Formato ficticio (R5) con una tabla de materiales. */
 const conMateriales: VersionFormato = {
@@ -90,11 +89,12 @@ async function clienteConCotizacion(org: Org & { admin: { cookie: string } }, no
   };
 }
 
-const ingresar = async (organizacionId: string, clienteId: string, ip: string) => {
-  const { identificador, clave } = await accesos.crear(organizacionId, clienteId, contexto);
-  const r = await app.inject({ method: "POST", url: "/api/portal/ingresar", remoteAddress: ip, headers: { origin: PORTAL }, payload: { identificador, clave } });
-  expect(r.statusCode, r.body).toBe(200);
-  return String(r.headers["set-cookie"]).split(";")[0]!;
+/** Un contacto de compras del cliente, con acceso al portal y que recibe cotizaciones, entra con su código. */
+const ingresar = async (org: Org, clienteId: string, ip: string) => {
+  const correo = `compras.${clienteId.slice(0, 8)}@cliente.example`;
+  const compras = await p.contacto(org, clienteId, { nombre: "Compras", correo, recibeInformes: false, recibeCotizaciones: true });
+  expect((await p.darAcceso(org, clienteId, compras.id)).statusCode).toBe(200);
+  return p.entrarCompleto(correo, ip);
 };
 const portal = (cookie: string, url: string) => app.inject({ method: "GET", url, headers: { cookie } });
 
@@ -107,7 +107,7 @@ const c = await clienteConCotizacion(orgC, "Cliente C");
 describe("cotizaciones en el portal (ADR-0053)", () => {
   it("el cliente ve la versión vigente de su cotización y descarga su PDF; la descarga queda registrada", async () => {
     await a.publicarOtra();
-    const cookie = await ingresar(orgA.organizacionId, a.clienteId, "10.5.0.1");
+    const cookie = await ingresar(orgA, a.clienteId, "10.5.0.1");
     const lista = await portal(cookie, "/api/portal/cotizaciones");
     expect(lista.statusCode, lista.body).toBe(200);
     expect(lista.json().cotizaciones).toEqual([expect.objectContaining({ id: a.cotizacionId, numero: a.numero, version: 2, sitio: "Sede de Cliente A", programadaPara: "2026-10-28" })]);
@@ -126,7 +126,7 @@ describe("cotizaciones en el portal (ADR-0053)", () => {
   });
 
   it("cero accesos cruzados (QA-4): ni por la API, ni directo en la base con el rol del portal", async () => {
-    const cookie = await ingresar(orgA.organizacionId, b.clienteId, "10.5.0.2");
+    const cookie = await ingresar(orgA, b.clienteId, "10.5.0.2");
     expect((await portal(cookie, "/api/portal/cotizaciones")).json().cotizaciones.map((x: { id: string }) => x.id)).toEqual([b.cotizacionId]);
     // La de otro cliente de la misma organización, o de otra organización, no existe para él aunque adivine el id.
     expect((await portal(cookie, `/api/portal/cotizaciones/${a.cotizacionId}/pdf`)).json()).toMatchObject({ codigo: "no_encontrado" });
@@ -146,7 +146,7 @@ describe("cotizaciones en el portal (ADR-0053)", () => {
   });
 
   it("una versión retirada o con el PDF sin generar no se ve: queda la anterior, o ninguna", async () => {
-    const cookie = await ingresar(orgC.organizacionId, c.clienteId, "10.5.0.3");
+    const cookie = await ingresar(orgC, c.clienteId, "10.5.0.3");
     await c.publicarOtra();
     expect((await portal(cookie, "/api/portal/cotizaciones")).json().cotizaciones).toEqual([expect.objectContaining({ id: c.cotizacionId, version: 2 })]);
     expect((await c.retirar(2)).statusCode).toBe(200);

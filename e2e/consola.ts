@@ -74,9 +74,26 @@ export function nuevaOrganizacion(formatos: readonly string[]): string {
   return id;
 }
 
-/** Acceso de cliente al portal: identificador, clave y la URL que lleva el QR. */
-export function nuevoAcceso(clienteId: string): { identificador: string; clave: string; url: string } {
-  const salida = comando("crear-acceso-cliente", ["--organizacion", ORGANIZACION, "--cliente", clienteId]);
-  const valor = (etiqueta: string) => new RegExp(`${etiqueta}: (\\S+)`).exec(salida)?.[1] ?? "";
-  return { identificador: valor("Identificador"), clave: valor("Clave"), url: valor("URL del QR") };
+/**
+ * El código del último correo simulado del portal a esa dirección (ADR-0053), con `pnpm ultimo-correo`. Espera a que
+ * llegue uno distinto de `anterior`: el worker lo envía en segundo plano. Solo en local: allá el correo es real.
+ */
+export async function codigoDelPortal(correo: string, anterior: string | null = null): Promise<string> {
+  for (let i = 0; i < 60; i++) {
+    const codigo = ultimoCodigo(correo);
+    if (codigo && codigo !== anterior) return codigo;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`No llegó el código del portal a ${correo}`);
+}
+
+/** El código del último correo del portal que ya llegó, o null. */
+export function ultimoCodigo(correo: string): string | null {
+  try {
+    const salida = comando("ultimo-correo", ["--para", correo]);
+    const [, a, b] = /portal[^:]*: (\d{3}) (\d{3})/.exec(salida) ?? [];
+    return a && b ? `${a}${b}` : null;
+  } catch {
+    return null;
+  }
 }

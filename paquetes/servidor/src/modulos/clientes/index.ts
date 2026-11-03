@@ -269,10 +269,27 @@ function canalesDe(c: FilaContacto): ("correo" | "whatsapp")[] {
 
 type DetalleCliente = Respuesta<"obtenerCliente">;
 
-/** Lo que el detalle necesita de otros módulos: los nombres de las personas y las visitas por hacer. */
+/**
+ * El acceso al portal de cada contacto (ADR-0053): lo implementa el módulo del portal y la composición lo pasa. Va en
+ * la misma transacción que el cambio del contacto.
+ */
+export interface PortalDeContactos {
+  estados(tx: TxOrganizacion, contactoIds: readonly string[]): Promise<Map<string, { ultimoIngreso: Date | null }>>;
+  activar(
+    tx: TxOrganizacion,
+    datos: { organizacionId: string; organizacionNombre: string; clienteId: string; clienteNombre: string; contactoId: string; correo: string; contactoNombre: string; veInformes: boolean; veCotizaciones: boolean },
+    opciones: { invitar: boolean },
+  ): Promise<void>;
+  actualizar(tx: TxOrganizacion, contactoId: string, datos: { correo: string; contactoNombre: string; veInformes: boolean; veCotizaciones: boolean }): Promise<void>;
+  quitar(tx: TxOrganizacion, contactoIds: readonly string[]): Promise<string[]>;
+  quitarDelCliente(tx: TxOrganizacion, clienteId: string): Promise<string[]>;
+}
+
+/** Lo que el detalle necesita de otros módulos: los nombres de las personas, las visitas por hacer y el portal. */
 interface Dependencias {
-  identidad: Pick<Identidad, "nombres">;
+  identidad: Pick<Identidad, "nombres" | "nombreDeOrganizacion">;
   porHacer: VisitasPorHacer;
+  portal: PortalDeContactos;
 }
 
 const marca = (en: Date | null, por: string | null, nombres: Map<string, string>) => (en ? { en: en.toISOString(), por: { id: por ?? "", nombre: nombreDe(nombres, por) } } : null);
@@ -283,6 +300,7 @@ async function detalleDe(tx: TxOrganizacion, deps: Dependencias, organizacionId:
   const susSitios = await tx.select().from(sitios).where(eq(sitios.clienteId, id)).orderBy(asc(sitios.nombre));
   const filas = await tx.select().from(contactos).where(and(eq(contactos.clienteId, id), vigente)).orderBy(asc(contactos.nombre));
   const visitas = await deps.porHacer(tx, id);
+  const accesos = await deps.portal.estados(tx, filas.map((f) => f.id));
   const personas = [
     ...filas.flatMap((f) => (f.whatsappAutorizadoPor ? [f.whatsappAutorizadoPor] : [])),
     ...[cliente.editadoPor, cliente.archivadoPor, ...susSitios.map((x) => x.archivadoPor)].flatMap((p) => (p ? [p] : [])),
@@ -318,6 +336,7 @@ async function detalleDe(tx: TxOrganizacion, deps: Dependencias, organizacionId:
           ? { por: { id: f.whatsappAutorizadoPor, nombre: nombreDe(nombres, f.whatsappAutorizadoPor) }, en: f.whatsappAutorizadoEn.toISOString() }
           : null,
       correoRebotado: f.correoRebotadoEn ? { en: f.correoRebotadoEn.toISOString(), motivo: f.correoRebotadoMotivo ?? "" } : null,
+      accesoPortal: { activo: accesos.has(f.id), ultimoIngreso: accesos.get(f.id)?.ultimoIngreso?.toISOString() ?? null },
     })),
   };
 }
@@ -377,8 +396,12 @@ export function crearClientes(deps: Dependencias & { bd: BaseDeDatos; alCorregir
   return { registrarRutas: (app) => registrarRutas(app, deps) };
 }
 
-function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorregir }: Dependencias & { bd: BaseDeDatos; alCorregir: AlCorregir }): void {
-  const deps: Dependencias = { identidad, porHacer };
+function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, portal, alCorregir }: Dependencias & { bd: BaseDeDatos; alCorregir: AlCorregir }): void {
+  const deps: Dependencias = { identidad, porHacer, portal };
+
+  /** El acceso al portal se quitó (ADR-0053): queda en la historia del cliente con quién lo hizo. */
+  const accesoQuitado = (actor: Parameters<typeof autoria>[0], correlacion: string, clienteId: string, contactoIds: readonly string[]): EntradaAuditoria[] =>
+    contactoIds.map((contacto) => ({ ...autoria(actor, correlacion), agregadoTipo: "cliente" as const, agregadoId: clienteId, tipoEvento: "acceso_portal_quitado" as const, valorAnterior: { contacto } }));
   registrarOperacion(app, "obtenerCliente", {
     politica: politicas.oficina,
     manejar: async ({ parametros: { id }, actor }) => enOrganizacion(bd, actor.organizacionId, (tx) => detalleDe(tx, deps, actor.organizacionId, id)),
@@ -407,6 +430,11 @@ function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorre
         if (!anterior) throw problema("no_encontrado", "El contacto no existe");
         const valores = valoresDeContacto(cuerpo, actor.usuarioId, anterior);
         await tx.update(contactos).set(valores).where(eq(contactos.id, contactoId));
+        // Su acceso al portal sigue al contacto: sin correo se quita; con otro correo, sus sesiones se cierran (ADR-0053).
+        const quitados = valores.correo ? [] : await portal.quitar(tx, [contactoId]);
+        if (valores.correo) {
+          await portal.actualizar(tx, contactoId, { correo: valores.correo.toLowerCase(), contactoNombre: valores.nombre, veInformes: valores.recibeInformes, veCotizaciones: valores.recibeCotizaciones });
+        }
         await registrar(tx, [
           {
             ...autoria(actor, correlacion),
@@ -416,6 +444,7 @@ function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorre
             valorAnterior: { id: contactoId, ...auditable(anterior) },
             valorNuevo: { id: contactoId, ...auditable(valores) },
           },
+          ...accesoQuitado(actor, correlacion, id, quitados),
         ]);
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
@@ -444,11 +473,50 @@ function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorre
           .where(and(eq(contactos.id, contactoId), eq(contactos.clienteId, id), vigente))
           .returning({ nombre: contactos.nombre });
         if (!quitado) throw problema("no_encontrado", "El contacto no existe");
+        const quitados = await portal.quitar(tx, [contactoId]);
         await registrar(tx, [
           { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "contacto_quitado", valorAnterior: { id: contactoId, nombre: quitado.nombre } },
+          ...accesoQuitado(actor, correlacion, id, quitados),
         ]);
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
+  });
+
+  registrarOperacion(app, "cambiarAccesoAlPortal", {
+    politica: politicas.oficina,
+    manejar: async ({ parametros: { id, contactoId }, cuerpo, actor, correlacion }) => {
+      const organizacionNombre = cuerpo.activo ? await identidad.nombreDeOrganizacion(actor.organizacionId) : "";
+      return enOrganizacion(bd, actor.organizacionId, async (tx) => {
+        const cliente = await leerCliente(tx, id);
+        const [contacto] = await tx.select().from(contactos).where(and(eq(contactos.id, contactoId), eq(contactos.clienteId, id), vigente));
+        if (!contacto) throw problema("no_encontrado", "El contacto no existe");
+        if (cuerpo.activo) {
+          if (cliente.archivadoEn) throw problema("estado_invalido", "El cliente está archivado: recupérelo para darle acceso al portal");
+          if (!contacto.correo) throw problema("entrada_invalida", "Agregue un correo para darle acceso");
+          await portal.activar(
+            tx,
+            {
+              organizacionId: actor.organizacionId,
+              organizacionNombre,
+              clienteId: id,
+              clienteNombre: cliente.nombre,
+              contactoId,
+              correo: contacto.correo.toLowerCase(),
+              contactoNombre: contacto.nombre,
+              veInformes: contacto.recibeInformes,
+              veCotizaciones: contacto.recibeCotizaciones,
+            },
+            { invitar: cuerpo.invitar },
+          );
+          await registrar(tx, [
+            { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "acceso_portal_activado", valorNuevo: { contacto: contactoId, invitado: cuerpo.invitar } },
+          ]);
+        } else {
+          await registrar(tx, accesoQuitado(actor, correlacion, id, await portal.quitar(tx, [contactoId])));
+        }
+        return detalleDe(tx, deps, actor.organizacionId, id);
+      });
+    },
   });
 
   registrarOperacion(app, "listarClientes", {
@@ -524,7 +592,12 @@ function registrarRutas(app: FastifyInstance, { bd, identidad, porHacer, alCorre
         const pendientes = await visitasDeHoy(tx, id);
         if (pendientes.length > 0) throw problema("estado_invalido", `Tiene ${pendientes.length === 1 ? "una visita" : `${pendientes.length} visitas`} por hacer: cancélelas o reprográmelas antes de archivarlo`);
         await tx.update(clientes).set({ archivadoPor: actor.usuarioId, archivadoEn: new Date() }).where(eq(clientes.id, id));
-        await registrar(tx, [{ ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_archivado", valorNuevo: { nombre: cliente.nombre } }]);
+        // Archivado no recibe envíos ni entra al portal (ADR-0035, ADR-0053): al recuperarlo, oficina vuelve a dar los accesos.
+        const quitados = await portal.quitarDelCliente(tx, id);
+        await registrar(tx, [
+          { ...autoria(actor, correlacion), agregadoTipo: "cliente", agregadoId: id, tipoEvento: "cliente_archivado", valorNuevo: { nombre: cliente.nombre } },
+          ...accesoQuitado(actor, correlacion, id, quitados),
+        ]);
         return detalleDe(tx, deps, actor.organizacionId, id);
       }),
   });

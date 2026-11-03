@@ -216,7 +216,8 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
   const personasDe = (v: FilaVersion) => [v.publicadaPor, ...(v.retiradaPor ? [v.retiradaPor] : [])];
 
   /** Lo que dice el correo o el WhatsApp, de la copia congelada: el mismo nombre que el PDF adjunto. */
-  const mensajeDe = (c: ContenidoCotizacion): MensajeDeCotizacion => ({
+  const mensajeDe = (c: ContenidoCotizacion, cotizacionId: string): MensajeDeCotizacion => ({
+    documentoId: cotizacionId,
     documento: "cotizacion",
     organizacion: c.organizacion.nombre,
     cliente: c.visita.cliente,
@@ -413,7 +414,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               organizacionId: actor.organizacionId,
               versionId,
               clienteId: c.clienteId,
-              mensaje: mensajeDe(contenido),
+              mensaje: mensajeDe(contenido, id),
               destinos: cuerpo.destinatarios.map((contactoId) => ({ contactoId })),
               por: actor.usuarioId,
               personal: cuerpo.mensaje,
@@ -457,7 +458,7 @@ export function crearCotizaciones({ bd, almacenamiento, config, levantamientos, 
               organizacionId: actor.organizacionId,
               versionId: version.id,
               clienteId: c.clienteId,
-              mensaje: mensajeDe(version.contenido),
+              mensaje: mensajeDe(version.contenido, id),
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
               personal: cuerpo.mensaje,

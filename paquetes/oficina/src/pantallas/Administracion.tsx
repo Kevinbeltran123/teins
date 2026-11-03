@@ -8,7 +8,6 @@ import {
   Aviso,
   Boton,
   BotonCopiar,
-  Building,
   CampoTexto,
   CeldaTabla,
   Check,
@@ -30,8 +29,6 @@ import {
   MenuAcciones,
   Pestanas,
   Plus,
-  QrCode,
-  RefreshCw,
   ShieldCheck,
   Smartphone,
   Tabla,
@@ -50,13 +47,11 @@ import { sinError } from "../mensajes";
 
 type Sesion = Respuesta<"obtenerSesion">;
 type Usuario = Respuesta<"listarUsuarios">["usuarios"][number];
-type ClienteConAcceso = Respuesta<"listarAccesosDeClientes">["clientes"][number];
-type Seccion = "usuarios" | "dispositivos" | "accesos";
+type Seccion = "usuarios" | "dispositivos";
 
 const SECCIONES: { valor: Seccion; etiqueta: string }[] = [
   { valor: "usuarios", etiqueta: "Usuarios" },
   { valor: "dispositivos", etiqueta: "Teléfonos de campo" },
-  { valor: "accesos", etiqueta: "Accesos de clientes" },
 ];
 
 /** Un pendiente que lleva más de un día sin subir merece una llamada al técnico (ADR-0017). */
@@ -96,7 +91,6 @@ export function Administracion({ sesion }: { sesion: Sesion }) {
       <div role="tabpanel" aria-label={SECCIONES.find((s) => s.valor === seccion)!.etiqueta}>
         {seccion === "usuarios" && <Usuarios propioId={sesion.usuario.id} creando={creando} setCreando={setCreando} busqueda={busqueda} />}
         {seccion === "dispositivos" && <Dispositivos />}
-        {seccion === "accesos" && <Accesos />}
       </div>
     </>
   );
@@ -456,8 +450,8 @@ function Usuarios({ propioId, creando, setCreando, busqueda }: { propioId: strin
         >
           <p>
             {pendiente.u.administrador
-              ? "Deja de ver Administración: no podrá crear usuarios, restablecer contraseñas ni crear accesos de clientes."
-              : "Podrá crear y desactivar usuarios, restablecer contraseñas y crear accesos de clientes. Para usarla, deberá activar el segundo factor."}
+              ? "Deja de ver Administración: no podrá crear usuarios ni restablecer contraseñas."
+              : "Podrá crear y desactivar usuarios y restablecer contraseñas. Para usarla, deberá activar el segundo factor."}
           </p>
         </Confirmacion>
       )}
@@ -692,151 +686,5 @@ function Dispositivos() {
         );
       })}
     </Tabla>
-  );
-}
-
-// Accesos de clientes ----------------------------------------------------------------------------
-
-type Entrega = { cliente: string; identificador: string; clave: string; url: string; qr: string | null; regenerado: boolean };
-
-function Accesos() {
-  const consulta = useQuery(consultasDeAdministracion.accesos());
-  const [credencial, setCredencial] = useState<Entrega | null>(null);
-  const [regenerando, setRegenerando] = useState<ClienteConAcceso | null>(null);
-  const [recientes, setRecientes] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const generar = useAccion((e: { c: ClienteConAcceso; regenerar: boolean }) => cliente.llamar("crearAccesoDeCliente", { parametros: { clienteId: e.c.id }, cuerpo: { regenerar: e.regenerar } }));
-
-  async function entregar(c: ClienteConAcceso, regenerar: boolean) {
-    const r = await generar.mutateAsync({ c, regenerar });
-    setCredencial({ cliente: c.nombre, ...(await credencialConQr(r)), regenerado: regenerar });
-    setRecientes((n) => [c.id, ...n]);
-  }
-
-  async function crear(c: ClienteConAcceso) {
-    setError(null);
-    try {
-      await entregar(c, false);
-    } catch (e) {
-      setError(`No se pudo crear el acceso de ${c.nombre}. ${mensajeDeAdministracion(e)}`);
-    }
-  }
-
-  if (consulta.isPending) return <EsqueletoLista etiqueta="Cargando clientes" />;
-  if (consulta.isError) return <ErrorDeCarga texto="No se pudieron cargar los clientes." reintentar={() => void consulta.refetch()} />;
-  if (consulta.data.clientes.length === 0) {
-    return (
-      <EstadoVacio
-        icono={Building}
-        titulo="Todavía no hay clientes"
-        accion={
-          <Link to="/clientes" className={claseBoton("secundaria", "pequeno")}>
-            Ir a Clientes
-          </Link>
-        }
-      >
-        Cada cliente se crea en Clientes; después aquí se le crea su acceso al portal.
-      </EstadoVacio>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      {error && <Aviso tono="error">{error}</Aviso>}
-      <Tabla etiqueta="Clientes y su acceso al portal" columnas={[{ titulo: "Cliente" }, { titulo: "Acceso al portal" }, { titulo: "Último cambio" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
-        {consulta.data.clientes.map((c) => (
-          <FilaTabla key={c.id} resaltada={recientes.includes(c.id)}>
-            <CeldaTabla principal>{c.nombre}</CeldaTabla>
-            <CeldaTabla>{c.acceso ? <Insignia tono="exito">Activo</Insignia> : <Insignia tono="neutro">Sin acceso</Insignia>}</CeldaTabla>
-            <CeldaTabla>
-              {c.acceso ? (
-                c.acceso.regeneradoEn ? `Regenerado el ${aFechaHora(c.acceso.regeneradoEn)}` : `Creado el ${aFechaHora(c.acceso.creadoEn)}`
-              ) : (
-                <span className="text-texto-secundario">Nunca</span>
-              )}
-            </CeldaTabla>
-            <CeldaTabla derecha>
-              {c.acceso ? (
-                <MenuAcciones etiqueta={`Más acciones para ${c.nombre}`} opciones={[{ texto: "Regenerar acceso", icono: RefreshCw, peligro: true, alElegir: () => setRegenerando(c) }]} />
-              ) : (
-                <Boton
-                  tamano="pequeno"
-                  icono={Plus}
-                  aria-label={`Crear acceso de ${c.nombre}`}
-                  cargando={generar.isPending && generar.variables?.c.id === c.id}
-                  disabled={generar.isPending && generar.variables?.c.id !== c.id}
-                  onClick={() => void crear(c)}
-                >
-                  Crear acceso
-                </Boton>
-              )}
-            </CeldaTabla>
-          </FilaTabla>
-        ))}
-      </Tabla>
-
-      {regenerando && (
-        <Confirmacion
-          titulo={`¿Regenerar el acceso de ${regenerando.nombre}?`}
-          confirmar="Regenerar acceso"
-          nivel="irreversible"
-          mensajeDeError={mensajeDeAdministracion}
-          alCerrar={() => setRegenerando(null)}
-          accion={() => entregar(regenerando, true)}
-        >
-          <p>El QR y la clave actuales dejan de servir y se cierran las sesiones abiertas del cliente. Tendrá que entregarle los nuevos.</p>
-        </Confirmacion>
-      )}
-
-      {credencial && (
-        <EntregaUnaVez
-          titulo={credencial.regenerado ? "Acceso al portal regenerado" : "Acceso al portal creado"}
-          subtitulo={credencial.cliente}
-          icono={QrCode}
-          amplio
-          alCerrar={() => setCredencial(null)}
-        >
-          <div className="grid gap-6 md:grid-cols-[232px_minmax(0,1fr)]">
-            <div className="flex flex-col items-center gap-3 rounded-panel border border-division p-4">
-              {credencial.qr ? (
-                <img src={credencial.qr} alt={`Código QR del acceso de ${credencial.cliente}`} className="qr" />
-              ) : (
-                <Aviso tono="alerta">No se pudo dibujar el QR: hay una versión nueva de TEINS. El código y la clave sí sirven; recargue la página después para descargar el QR.</Aviso>
-              )}
-              <p className="flex flex-col items-center text-center">
-                <span className="text-ayuda text-texto-secundario">Código de acceso (va en el QR)</span>
-                <code className="text-cuerpo font-bold tracking-wide break-all">{credencial.identificador}</code>
-              </p>
-              {credencial.qr && (
-                <a href={credencial.qr} download={`acceso-${credencial.cliente}.svg`} className={claseBoton("secundaria", "pequeno")}>
-                  <Download aria-hidden />
-                  Descargar el QR
-                </a>
-              )}
-            </div>
-            <ol className="flex flex-col gap-5">
-              <li className="flex flex-col gap-1">
-                <span className="text-cuerpo font-bold">1. Entregue el QR</span>
-                <span className="text-cuerpo text-texto-secundario">Impreso junto al informe o por correo al cliente.</span>
-              </li>
-              <li className="flex flex-col gap-2">
-                <span className="text-cuerpo font-bold">2. Dicte la clave por teléfono</span>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-borde-suave bg-panel-hundido py-2 pr-2 pl-4">
-                  <code aria-label="Clave" className="text-titulo font-extrabold tracking-wider">
-                    {credencial.clave}
-                  </code>
-                  <BotonCopiar texto={credencial.clave} etiqueta="Copiar la clave" />
-                </div>
-                <span className="text-cuerpo text-texto-secundario">Por un medio distinto al del QR: así nadie tiene las dos partes.</span>
-              </li>
-              <li className="flex flex-col gap-1">
-                <span className="text-cuerpo font-bold">3. El cliente entra al portal</span>
-                <span className="text-cuerpo text-texto-secundario">Escanea el QR, escribe la clave y ve sus informes publicados.</span>
-              </li>
-            </ol>
-          </div>
-        </EntregaUnaVez>
-      )}
-    </div>
   );
 }
