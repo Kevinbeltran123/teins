@@ -26,11 +26,15 @@ export function useUbicacion(activa: boolean) {
       (error) => setEstado(error.code === error.PERMISSION_DENIED ? "sin_permiso" : mejor.current ? "lista" : "buscando"),
       { enableHighAccuracy: true, maximumAge: 10_000 },
     );
-    return () => navigator.geolocation.clearWatch(seguimiento);
+    // Sin lecturas nuevas (un cuarto sin GPS), la línea debe dejar de decir «lista» cuando la última caduca.
+    const repaso = setInterval(() => redibujar((n) => n + 1), 15_000);
+    return () => {
+      navigator.geolocation.clearWatch(seguimiento);
+      clearInterval(repaso);
+    };
   }, [activa]);
   return {
     estado,
-    mejor: mejor.current,
     /** La mejor posición que todavía vale (hasta 2 minutos), o null. */
     vigente: () => (mejor.current && Date.now() - mejor.current.en <= VENTANA_DE_POSICION_MS ? mejor.current : null),
   };

@@ -42,11 +42,15 @@ export function mejorPosicion(actual: PosicionDeLlegada | null, nueva: PosicionD
 
 export type EstadoDeUbicacion = "buscando" | "lista" | "sin_permiso" | "no_disponible";
 
-/** La línea sobre el botón de la foto: el estado de la ubicación, antes de tomarla. */
-export function textoDeUbicacion(estado: EstadoDeUbicacion, mejor: PosicionDeLlegada | null): string {
+/**
+ * La línea sobre el botón de la foto: el estado de la ubicación, antes de tomarla. `vigente` es la posición que todavía
+ * vale: si caducó, la foto saldría sin coordenadas, así que no se dice «lista».
+ */
+export function textoDeUbicacion(estado: EstadoDeUbicacion, vigente: PosicionDeLlegada | null): string {
   switch (estado) {
     case "lista":
-      return `Ubicación lista (±${Math.round(mejor?.precision ?? 0)} m)`;
+      if (!vigente) return "Buscando ubicación…";
+      return `Ubicación lista (±${Math.round(vigente.precision)} m)`;
     case "sin_permiso":
       return "Sin permiso de ubicación: la foto sale sin coordenadas";
     case "no_disponible":

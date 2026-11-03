@@ -125,7 +125,7 @@ export function Fotos({ id, seccion, campo, ids, error, alGuardar }: { id: strin
 
   return (
     <div className="flex flex-col gap-3">
-      <CampoFotos etiqueta={campo.etiqueta} obligatorio={campo.obligatorio} error={error} fotos={fotos} procesando={procesando} onAgregar={agregar} onQuitar={(h) => void quitar(h)} puestos={campo.tipo === "foto" ? campo.puestos : undefined} estado={sello?.ubicacion ? textoDeUbicacion(ubicacion.estado, ubicacion.mejor) : undefined} />
+      <CampoFotos etiqueta={campo.etiqueta} obligatorio={campo.obligatorio} error={error} fotos={fotos} procesando={procesando} onAgregar={agregar} onQuitar={(h) => void quitar(h)} puestos={campo.tipo === "foto" ? campo.puestos : undefined} estado={sello?.ubicacion ? textoDeUbicacion(ubicacion.estado, ubicacion.vigente()) : undefined} />
       {fallo && <Aviso tono="error">{fallo}</Aviso>}
     </div>
   );

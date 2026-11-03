@@ -53,6 +53,8 @@ describe("la franja de la foto de llegada (ADR-0052)", () => {
   it("el estado de la ubicación se dice en una línea", () => {
     expect(textoDeUbicacion("buscando", null)).toBe("Buscando ubicación…");
     expect(textoDeUbicacion("lista", { lat: 0, lon: 0, precision: 11.6, en: 0 })).toBe("Ubicación lista (±12 m)");
+    // La lectura caducó (más de 2 minutos sin otra): ya no está lista, aunque el GPS no haya dicho nada.
+    expect(textoDeUbicacion("lista", null)).toBe("Buscando ubicación…");
     expect(textoDeUbicacion("sin_permiso", null)).toBe("Sin permiso de ubicación: la foto sale sin coordenadas");
     expect(textoDeUbicacion("no_disponible", null)).toBe("Este teléfono no da la ubicación: la foto sale sin coordenadas");
   });
