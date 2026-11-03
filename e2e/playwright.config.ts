@@ -40,7 +40,9 @@ export default defineConfig({
     { name: "chromium", use: { ...devices["Pixel 7"] }, grepInvert: /@bandeja-compartida/ },
     { name: "webkit", use: { ...devices["iPhone 13"] }, grepInvert: /@bandeja-compartida/, ...(enCI && { workers: 1 }) },
     { name: "chromium-bandeja", use: { ...devices["Pixel 7"] }, grep: /@bandeja-compartida/, dependencies: ["chromium"], workers: 1 },
-    { name: "webkit-bandeja", use: { ...devices["iPhone 13"] }, grep: /@bandeja-compartida/, dependencies: ["webkit"], workers: 1 },
+    // En local los dos navegadores comparten la base: sin esperar a «chromium-bandeja», las dos tomaban la misma fila al
+    // mismo tiempo. En la integración cada navegador va en su trabajo, con su base.
+    { name: "webkit-bandeja", use: { ...devices["iPhone 13"] }, grep: /@bandeja-compartida/, dependencies: ["webkit", ...(enCI ? [] : ["chromium-bandeja"])], workers: 1 },
   ],
   webServer: REMOTO
     ? []

@@ -15,6 +15,8 @@ async function oficina(browser: Browser, usuario: Usuario): Promise<Page> {
 
 async function abrirLevantamientoDe(pagina: Page, tecnico: Usuario, pestana: string) {
   await pagina.getByRole("tab", { name: pestana }).click();
+  // La pestaña cambia dentro de una transición (iteración 27): hasta entonces sigue el panel anterior, con su «Cargar más».
+  await expect(pagina.getByRole("tabpanel", { name: pestana })).toBeVisible();
   await (await filaDeLaBandeja(pagina, tecnico.nombre)).getByRole("link").click();
   // El título es el cliente y el sitio; el técnico va debajo (rediseño de oficina, iteración 23).
   await expect(pagina.getByRole("region", { name: "Revisión" })).toBeVisible();

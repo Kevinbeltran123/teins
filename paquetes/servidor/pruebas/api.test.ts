@@ -93,6 +93,15 @@ describe("contrato y políticas (ADR-0009, ADR-0014)", () => {
     expect(r.json()).toMatchObject({ correlacion: r.headers["x-correlacion"] });
   });
 
+  it("ninguna respuesta de la API queda guardada en el navegador ni en un proxy, ni con datos ni con error", async () => {
+    const { tecnico } = await s.nuevaOrganizacionConUsuarios();
+    const conDatos = await app.inject({ method: "GET", url: "/api/sesion", headers: { cookie: tecnico.cookie } });
+    expect(conDatos.statusCode).toBe(200);
+    expect(conDatos.headers["cache-control"]).toBe("no-store");
+    expect((await app.inject({ method: "GET", url: "/api/sesion" })).headers["cache-control"]).toBe("no-store");
+    expect((await app.inject({ method: "GET", url: "/api/no-existe" })).headers["cache-control"]).toBe("no-store");
+  });
+
   it("cada rol solo accede a lo suyo", async () => {
     const { tecnico, oficina } = await s.nuevaOrganizacionConUsuarios();
     expect((await app.inject({ method: "GET", url: "/api/sesion", headers: { cookie: tecnico.cookie } })).json()).toMatchObject({
