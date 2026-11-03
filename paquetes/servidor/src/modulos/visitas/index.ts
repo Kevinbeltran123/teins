@@ -230,7 +230,8 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       await tx
         .insert(consecutivosDeOrden)
         .values({ organizacionId, ultimo })
-        .onConflictDoUpdate({ target: consecutivosDeOrden.organizacionId, set: { ultimo } });
+        // Con el mayor, nunca menos: si una programación creó la fila entre la lectura y aquí, no se baja.
+        .onConflictDoUpdate({ target: consecutivosDeOrden.organizacionId, set: { ultimo: sql`greatest(${consecutivosDeOrden.ultimo}, excluded.ultimo)` } });
     },
 
     async reasignar(tx, { organizacionId, autorId, correlacion, visitaId, tecnicos, version }) {
