@@ -64,7 +64,8 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 
 | ADR | Decisión | Estado |
 |---|---|---|
-| [0009](0009-identidad-y-acceso.md) | Sesiones revocables, autorización central y seguridad por fila en el portal | Aceptada; la parte 5 la concreta 0022; 0052 reemplaza su fila «sin GPS en fotos» |
+| [0009](0009-identidad-y-acceso.md) | Sesiones revocables, autorización central y seguridad por fila en el portal | Aceptada; la parte 5 la concreta 0022; 0052 reemplaza su fila «sin GPS en fotos»; 0053 reemplaza su parte 4 |
+| [0053](0053-acceso-al-portal-por-contacto.md) | Acceso al portal por contacto, con código por correo, e informes y cotizaciones (reemplaza la parte 4 de 0009) | Aceptada |
 | [0033](0033-reactivar-usuarios-y-cuenta-propia.md) | Reactivar usuarios y administrar la cuenta propia | Aceptada |
 
 ### Visitas
