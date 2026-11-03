@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { coordenadaParaMapa } from "@teins/dominio";
 import type { Config } from "../../config";
 import { problema } from "../../plataforma/errores";
 import { politicas } from "../../plataforma/politicas";
@@ -21,8 +22,6 @@ const POR_MINUTO = 30;
 /** El mapa es un complemento: no se espera más de lo que campo espera por él (3 segundos en total). */
 const ESPERA_MS = 2_500;
 
-/** Tres decimales: unos 110 m en la latitud de Colombia. */
-const redondear = (grados: number) => Math.round(grados * 1000) / 1000;
 
 export interface Mapas {
   registrarRutas(app: FastifyInstance): void;
@@ -55,7 +54,7 @@ export function crearMapas({ config }: { config: Pick<Config, "GEOAPIFY_LLAVE" |
         manejar: async ({ consulta, actor }) => {
           limitar(actor.usuarioId);
           if (!config.GEOAPIFY_LLAVE) throw problema("no_disponible", "Este entorno no tiene mapa: la foto sale sin él.");
-          const centro = { lat: redondear(consulta.lat), lon: redondear(consulta.lon) };
+          const centro = { lat: coordenadaParaMapa(consulta.lat), lon: coordenadaParaMapa(consulta.lon) };
           const url = new URL("/v1/staticmap", config.GEOAPIFY_URL);
           url.search = new URLSearchParams({
             style: ESTILO,

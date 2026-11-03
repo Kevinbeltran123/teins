@@ -1,4 +1,4 @@
-import type { SelloDeFoto } from "@teins/dominio";
+import { coordenadaParaMapa, type SelloDeFoto } from "@teins/dominio";
 import { cliente } from "../sincronizacion/instancia";
 import type { DatosDelSello, PosicionDeLlegada } from "./sello";
 
@@ -28,7 +28,7 @@ export async function prepararSello(entrada: {
   const ubicacion = sello.ubicacion && posicion ? { lat: posicion.lat, lon: posicion.lon, precision: posicion.precision } : undefined;
   const [hora, mapa] = await Promise.all([
     conSenal ? conTope(cliente.llamar("horaDelServidor"), ESPERA_DEL_SELLO_MS) : null,
-    conSenal && sello.mapa && ubicacion ? conTope(cliente.llamar("mapaDeLlegada", { consulta: { lat: ubicacion.lat, lon: ubicacion.lon } }), ESPERA_DEL_SELLO_MS) : null,
+    conSenal && sello.mapa && ubicacion ? conTope(cliente.llamar("mapaDeLlegada", { consulta: { lat: coordenadaParaMapa(ubicacion.lat), lon: coordenadaParaMapa(ubicacion.lon) } }), ESPERA_DEL_SELLO_MS) : null,
   ]);
   return { ahora, horaDeRed: hora ? new Date(hora.ahora) : null, ubicacion, direccion, ciudad, lugar, ...(mapa ? { mapa } : {}) };
 }

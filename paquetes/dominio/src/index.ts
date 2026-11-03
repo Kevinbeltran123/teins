@@ -65,3 +65,4 @@ export { duracionTexto, fechaEnColombia, formatearDia, horaCorta, minutosDeHorar
 export { DOCUMENTO_DE_IDENTIDAD, HORA_HHMM } from "./patrones";
 export type { TipoCampo } from "./formato";
 export { esDatoSimple } from "./formato";
+export { coordenadaParaMapa } from "./ubicacion";
