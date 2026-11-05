@@ -98,7 +98,7 @@ El servidor solo registra el envío cuando llegaron y se verificaron todos sus a
 
 ## 2. Visita
 
-La visita no tiene una columna de estado: su avance se deduce de sus levantamientos e informes, y lo explícito son tres marcas con fecha ([ADR-0037](../adr/0037-visitas-con-horario.md), [ADR-0041](../adr/0041-visitas-atendidas-salen-del-telefono.md)). El cierre ocurre al bajar: antes de armar la bajada de un técnico, el servidor cierra sus visitas atendidas de días anteriores. Así lo atendido sale de los teléfonos sin una tarea programada, y lo de hoy se queda por si hace falta otro levantamiento.
+La visita no tiene una columna de estado: su avance se deduce de sus levantamientos e informes, y lo explícito son tres marcas con fecha ([ADR-0037](../adr/0037-visitas-con-horario.md), [ADR-0041](../adr/0041-visitas-atendidas-salen-del-telefono.md)). El cierre ocurre al bajar: antes de armar la bajada de un técnico, el servidor cierra sus visitas atendidas de días anteriores. Así lo atendido sale de los teléfonos sin una tarea programada, y lo de hoy se queda para ver lo enviado o terminar la visita: cada técnico envía un solo levantamiento por visita ([ADR-0054](../adr/0054-un-levantamiento-por-tecnico-y-visita.md)).
 
 ```mermaid
 stateDiagram-v2

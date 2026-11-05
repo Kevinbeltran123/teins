@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VisitaLocal } from "./datos/modelo";
-import { agendaDeVisitas, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horarioDeVisita, sePuedeIniciar, terminadaEn } from "./visitas";
+import { accionDeVisita, agendaDeVisitas, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horarioDeVisita, sePuedeIniciar, terminadaEn } from "./visitas";
 
 const hoy = "2026-09-24";
 const visita = (id: string, programadaPara: string, cliente = `Cliente ${id}`, horario: Partial<VisitaLocal> = {}): VisitaLocal => ({
@@ -148,5 +148,19 @@ describe("cuándo se puede iniciar una visita (iteración 46)", () => {
   it("cruza el fin de mes y de año", () => {
     expect(cuandoSePodraIniciar("2026-11-01", "2026-10-31")).toBe("Podrás iniciarla mañana");
     expect(cuandoSePodraIniciar("2027-01-01", "2026-12-31")).toBe("Podrás iniciarla mañana");
+  });
+});
+
+describe("accionDeVisita (ADR-0054)", () => {
+  const l = (id: string, estado: "borrador" | "enviado") => ({ id, estado });
+  it("sin nada, se inicia; con un borrador, se continúa", () => {
+    expect(accionDeVisita([])).toEqual({ tipo: "iniciar" });
+    expect(accionDeVisita([l("b", "borrador")])).toEqual({ tipo: "continuar", id: "b" });
+  });
+  it("con uno enviado, ya no se inicia otro: se ve lo enviado", () => {
+    expect(accionDeVisita([l("e", "enviado")])).toEqual({ tipo: "ver", id: "e" });
+  });
+  it("un borrador de antes de la regla se sigue pudiendo continuar y enviar", () => {
+    expect(accionDeVisita([l("e", "enviado"), l("b", "borrador")])).toEqual({ tipo: "continuar", id: "b" });
   });
 });

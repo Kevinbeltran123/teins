@@ -76,6 +76,7 @@ Se despliega por lotes, a mano, desde GitHub: pestaña Actions → «Desplegar»
 2. En «Entorno», `pruebas` o `produccion`. Para producción, escribe `produccion` en la confirmación; desde otra rama que no sea `master` el flujo se niega.
 3. El flujo comprueba que ese commit pasó la integración continua y despliega en el orden de `montar.sh`: `campo` (migra en su pre-deploy), `oficina`, `portal`, `worker` y `respaldos`. Si una construcción falla, se detiene ahí.
 4. Comprueba que `/salud` responde en las tres direcciones.
+5. **Solo en pruebas, si la versión trae un formato de prueba nuevo** (`paquetes/dominio/formatos-de-prueba/`): publícalo con `railway ssh -s campo -- node dist/cli/sembrar.js`. El flujo no publica formatos, y sin este paso los teléfonos siguen con el anterior (2026-11-04: el v10 faltó dos días). `sembrar` no toca lo que ya existe. En producción, los formatos de TEINS se publican con `publicar-formato`.
 
 Lo que necesita, una vez por entorno (en GitHub, Settings → Environments):
 

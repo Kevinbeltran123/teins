@@ -55,10 +55,15 @@ test("un levantamiento capturado sin conexión llega completo a la bandeja de of
   // En la lista, el estado que dio el servidor en la bajada.
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
   await expect(page.getByRole("region", { name: "Enviados" }).getByText("Recibido", { exact: true })).toBeVisible();
-  // Era su única visita: ya no es la siguiente (iteración 40). Queda en «Atendidas hoy», por si hace falta otro formato.
+  // Era su única visita: ya no es la siguiente (iteración 40). Queda en «Atendidas hoy».
   await expect(page.getByRole("region", { name: "Siguiente visita" })).toHaveCount(0);
   await expect(page.getByText("No tienes visitas pendientes")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Atendidas hoy" }).getByText(cliente, { exact: false })).toBeVisible();
+  const atendidas = page.getByRole("region", { name: "Atendidas hoy" });
+  await expect(atendidas.getByText(cliente, { exact: false })).toBeVisible();
+  // Un levantamiento por visita (ADR-0054): ya no se inicia otro; se ve lo enviado.
+  await atendidas.getByRole("button", { name: new RegExp(cliente) }).click();
+  await expect(atendidas.getByRole("button", { name: "Ver lo que enviaste" })).toBeVisible();
+  await expect(atendidas.getByRole("button", { name: "Iniciar levantamiento" })).toHaveCount(0);
 
   // Oficina, en su propio navegador de escritorio.
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });

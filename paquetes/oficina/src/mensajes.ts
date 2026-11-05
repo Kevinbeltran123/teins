@@ -142,3 +142,6 @@ export function mensajeDeError(problema: unknown): string {
 /** El error se arregla recargando: la versión que se tenía abierta ya no es la vigente. */
 export const pideRecargar = (error: unknown) =>
   error instanceof ErrorApi && ["conflicto_de_version", "tomado_por_otro", "no_tomado", "estado_invalido"].includes(error.codigo);
+
+/** El último error de envío de un teléfono, en «Teléfonos de campo»: en palabras si se sabe qué pasó. */
+export const errorDelTelefono = (codigo: string) => (codigo === "estado_invalido" ? "ya envió un levantamiento de esta visita" : codigo);

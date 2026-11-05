@@ -813,6 +813,17 @@ En el entorno de pruebas el correo sale de verdad (Resend): use **un correo suyo
 
 **Anotar:** si algún correo llegó a correo no deseado, y cuánto tardó el código en llegar.
 
+## Fase 49 · Un levantamiento por técnico y visita (iteración 49, ADR-0054)
+
+En el iPhone, con una visita de hoy.
+
+1. Inicie el levantamiento, complételo y envíelo.
+   - Debe: la visita pasa a «Atendidas hoy». Al tocarla, solo ofrece «Ver lo que enviaste» (y «Terminar visita» si está en curso); no hay «Iniciar levantamiento» ni un botón por formato.
+2. Toque «Ver lo que enviaste».
+   - Debe: abre lo enviado, de solo lectura.
+3. Con oficina, tome el levantamiento (queda «En revisión») y vuelva al iPhone.
+   - Debe: la visita sigue sin ofrecer otro levantamiento.
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados de [`historia/00-captura-sin-conexion.md`](historia/00-captura-sin-conexion.md).

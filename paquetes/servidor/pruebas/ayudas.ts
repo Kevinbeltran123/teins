@@ -110,6 +110,13 @@ export async function servidorDePrueba(
     };
   }
 
+  /** Otro técnico de la organización, con su sesión: cada técnico envía un solo levantamiento por visita (ADR-0054). */
+  async function nuevoTecnico(organizacionId: string, nombre = "Otro técnico de prueba") {
+    const usuario = `tecnico.${randomBytes(4).toString("hex")}`;
+    const t = await identidad.crearUsuario({ organizacionId, usuario, nombre, rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    return { id: t.id, cookie: await iniciarSesion(app, usuario, "contrasena-de-prueba") };
+  }
+
   const informes = crearGeneradorPdf({ bd: conexionApp.bd, almacenamiento, config });
   // Los PDF comparten un Chromium por proceso: se cierra al terminar el archivo de pruebas.
   afterAll(() => cerrarNavegador());
@@ -178,7 +185,7 @@ export async function servidorDePrueba(
     throw new Error("Hay PDF sin generar");
   }
 
-  return { app, rutas, config, propietario, conexionApp, conexionPortal, identidad, nuevaOrganizacionConUsuarios, nuevoAdministrador, procesarCola, esperarPdf };
+  return { app, rutas, config, propietario, conexionApp, conexionPortal, identidad, nuevaOrganizacionConUsuarios, nuevoTecnico, nuevoAdministrador, procesarCola, esperarPdf };
 }
 
 /** Llamada a una ruta de Better Auth desde oficina. */

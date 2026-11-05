@@ -35,12 +35,13 @@ test("con dos formatos vigentes, la visita ofrece los dos, el levantamiento sigu
   await page.getByRole("dialog").getByRole("button", { name: "Enviar levantamiento" }).click();
   await expect(page.getByText("Recibido en oficina")).toBeVisible({ timeout: 30_000 });
 
-  // La visita atendida todavía ofrece los formatos: el de UPS se puede hacer en la misma visita.
+  // Un levantamiento por visita (ADR-0054): la atendida ya no ofrece ningún formato, solo ver lo enviado.
   await page.getByRole("button", { name: "Volver a mis visitas" }).click();
   const atendida = page.getByRole("region", { name: "Atendidas hoy" });
   await atendida.getByRole("button", { name: new RegExp(cliente) }).click();
-  await expect(atendida.getByRole("button", { name: "Formato de prueba" })).toBeVisible();
-  await expect(atendida.getByRole("button", { name: "Visita de prueba" })).toBeVisible();
+  await expect(atendida.getByRole("button", { name: "Ver lo que enviaste" })).toBeVisible();
+  await expect(atendida.getByRole("button", { name: "Formato de prueba" })).toHaveCount(0);
+  await expect(atendida.getByRole("button", { name: "Visita de prueba" })).toHaveCount(0);
 
   // Oficina recibe el levantamiento con lo escrito en el formato elegido.
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });

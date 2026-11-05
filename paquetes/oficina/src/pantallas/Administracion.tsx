@@ -43,7 +43,7 @@ import {
 import { cliente, consultas } from "../api";
 import { consultasDeAdministracion, credencialConQr, mensajeDeAdministracion, useAccion } from "../administracion";
 import { aFechaHora, haceCuanto } from "../formato";
-import { sinError } from "../mensajes";
+import { errorDelTelefono, sinError } from "../mensajes";
 
 type Sesion = Respuesta<"obtenerSesion">;
 type Usuario = Respuesta<"listarUsuarios">["usuarios"][number];
@@ -661,7 +661,7 @@ function Dispositivos() {
             <CeldaTabla>
               {d.borradoConfirmadoEn ? "Nada" : s ? (s.pendientes === 0 ? "Nada" : `${s.pendientes}`) : "[N]"}
               {atrasado && <span className="sub alerta-fuerte">{`El más antiguo espera desde ${aFechaHora(s!.pendienteMasAntiguo!)}. Llame al técnico.`}</span>}
-              {!d.borradoConfirmadoEn && s?.ultimoError && <span className="sub">{`Último error: ${s.ultimoError}`}</span>}
+              {!d.borradoConfirmadoEn && s?.ultimoError && <span className="sub">{`Último error: ${errorDelTelefono(s.ultimoError)}`}</span>}
             </CeldaTabla>
             <CeldaTabla>
               {s?.persistente === false ? <span className="alerta-fuerte">No persistente: el sistema puede borrar los datos</span> : s?.persistente ? "Persistente" : "Sin dato"}

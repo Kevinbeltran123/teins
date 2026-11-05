@@ -17,7 +17,7 @@ import { horaDelChat, sinLeerDe, ultimoDeOficina } from "../conversacion";
 import { ponerInsignia } from "../dispositivo/insignia";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
-import { agendaDeVisitas, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, sePuedeIniciar, terminadaEn } from "../visitas";
+import { accionDeVisita, agendaDeVisitas, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, sePuedeIniciar, terminadaEn } from "../visitas";
 import { permisoLocal } from "../sesion/permiso";
 import { VERSION_APP } from "../version";
 import { AvisoDeAlmacenamiento } from "./AvisoDeAlmacenamiento";
@@ -273,7 +273,7 @@ export function Inicio({ usuario, abrir, recien, pedirPapelera = 0, papeleraAbie
               </section>
             )}
 
-            {/* Lo atendido hoy, aparte y al final: por si hace falta otro levantamiento en la misma visita. */}
+            {/* Lo atendido hoy, aparte y al final: para ver lo enviado o terminar la visita (ADR-0054). */}
             {atendidasHoy.length > 0 && (
               <section aria-labelledby="titulo-atendidas" className="flex flex-col gap-2.5">
                 <h2 id="titulo-atendidas" className="pt-2 text-ayuda font-extrabold text-texto-secundario">
@@ -591,15 +591,23 @@ function Acciones({
   contexto: Contexto;
   variante: "principal" | "secundaria";
 }) {
-  const borrador = levantamientos.find((l) => l.estado === "borrador");
+  const accion = accionDeVisita(levantamientos);
   const disponibles = vigentes(contexto.formatos);
 
-  if (borrador) {
+  if (accion.tipo === "continuar") {
     return variante === "principal" ? (
-      <BotonSiguiente onClick={() => contexto.abrir(borrador.id)}>Continuar levantamiento</BotonSiguiente>
+      <BotonSiguiente onClick={() => contexto.abrir(accion.id)}>Continuar levantamiento</BotonSiguiente>
     ) : (
-      <Boton variante={variante} className="w-full" onClick={() => contexto.abrir(borrador.id)}>
+      <Boton variante={variante} className="w-full" onClick={() => contexto.abrir(accion.id)}>
         Continuar levantamiento
+      </Boton>
+    );
+  }
+  // Un levantamiento por visita (ADR-0054): lo enviado se ve; otro no se inicia.
+  if (accion.tipo === "ver") {
+    return (
+      <Boton variante="secundaria" className="w-full" onClick={() => contexto.abrir(accion.id)}>
+        Ver lo que enviaste
       </Boton>
     );
   }

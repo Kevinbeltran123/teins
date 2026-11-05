@@ -40,10 +40,12 @@ async function escenario() {
   /** Un levantamiento con materiales, revisado, con el cable vinculado al catálogo. */
   async function revisado(materiales: LineaCantidad[], vinculos: Record<string, string> = {}) {
     const id = randomUUID();
+    // Cada uno de un técnico propio: cada técnico envía un solo levantamiento por visita (ADR-0054).
+    const tecnico = await s.nuevoTecnico(org.organizacionId);
     const r = await app.inject({
       method: "POST",
       url: "/api/sync/comandos",
-      headers: { cookie: org.tecnico.cookie, ...cabecerasSync },
+      headers: { cookie: tecnico.cookie, ...cabecerasSync },
       payload: {
         tipo: "EnviarLevantamiento",
         llave: llaveDeEnvio(id),

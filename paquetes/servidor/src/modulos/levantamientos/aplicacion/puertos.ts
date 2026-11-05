@@ -54,6 +54,8 @@ export interface RepositorioLevantamientos extends ProyeccionDeCantidades {
   guardarResultado(tx: TxOrganizacion, llave: string, resultado: ResultadoComando): Promise<void>;
   comandoReservado(tx: TxOrganizacion, llave: string): Promise<ComandoReservado | undefined>;
   insertar(tx: TxOrganizacion, levantamiento: LevantamientoRecibido): Promise<void>;
+  /** Si el técnico ya tiene en la visita un levantamiento distinto de `excepto` (ADR-0054). */
+  yaTieneEnLaVisita(tx: TxOrganizacion, datos: { visitaId: string; tecnicoId: string; excepto: string }): Promise<boolean>;
 }
 
 /** Lo que la revisión lee y escribe del agregado. */

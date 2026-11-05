@@ -89,7 +89,7 @@ erDiagram
   INFORME ||--o{ VERSION_PUBLICADA : "publica"
 ```
 
-**Decisión clave:** una visita contiene varios levantamientos, y cada levantamiento tiene exactamente un técnico responsable y un formato. Resuelve varios técnicos por visita (P4) sin edición simultánea, visitas con varios servicios e informes consolidados.
+**Decisión clave:** una visita contiene varios levantamientos, y cada levantamiento tiene exactamente un técnico responsable y un formato. Resuelve varios técnicos por visita (P4) sin edición simultánea, visitas con varios servicios e informes consolidados. Cada técnico envía uno solo por visita ([ADR-0054](../adr/0054-un-levantamiento-por-tecnico-y-visita.md)).
 
 ---
 
@@ -180,6 +180,7 @@ Su avance se **deduce** de sus levantamientos e informes. Lo explícito son tres
 19. **Las fotos no conservan metadatos** de ubicación ni del dispositivo (QA-23). Una foto de un campo con `sello` lleva dibujada una franja con la hora de red, la hora del teléfono y, si el formato lo pide, las coordenadas, la dirección registrada y un mapa (ADR-0052): las coordenadas quedan a la vista en la imagen, nunca en los metadatos.
 20. **El número de orden de servicio nunca se repite ni se reutiliza** y no cambia al reprogramar, reasignar ni cancelar (ADR-0051).
 21. **Las firmas electrónicas del informe** son el nombre, la cédula y la hora oficial de quien capturó (al enviar) y de quien revisó (al marcar revisado); se copian en la versión publicada y nunca salen en registros ni listas (reglas 7 y 18, ADR-0051).
+22. **Un levantamiento por técnico y visita** (ADR-0054): con uno enviado, el teléfono no ofrece otro y el servidor rechaza un segundo con otro id. Un descartado no cuenta.
 
 ---
 

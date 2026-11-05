@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ErrorApi, ErrorDeRed, tipoDeProblema } from "@teins/protocolo";
 import { mensajeDeAdministracion } from "./administracion";
+import { errorDelTelefono } from "./mensajes";
 import { mensajeDeCotizacion } from "./cotizaciones";
 import { errorDeCuenta } from "./cuenta";
 import { mensajeDeInforme } from "./informes";
@@ -91,5 +92,12 @@ describe("todos los traductores dicen igual los errores comunes", () => {
     expect(traducir(new ErrorDeRed(new Error("offline")))).toMatch(/^Sin conexión con el servidor\. No se .+; intente de nuevo al recuperar la conexión\.$/);
     expect(traducir(new Error("inesperado"))).toMatch(/^No se pudo .+\. Intente de nuevo\.$/);
     expect(traducir(noAutenticado)).toBe("Su sesión venció. Inicie sesión de nuevo.");
+  });
+});
+
+describe("errorDelTelefono", () => {
+  it("dice en palabras el rechazo de un segundo levantamiento en la visita (ADR-0054); otro código sale tal cual", () => {
+    expect(errorDelTelefono("estado_invalido")).toBe("ya envió un levantamiento de esta visita");
+    expect(errorDelTelefono("formato_desconocido")).toBe("formato_desconocido");
   });
 });
