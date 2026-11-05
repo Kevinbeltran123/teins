@@ -5,6 +5,7 @@ import type { Avisos } from "./modulos/avisos";
 import type { GeneradorPdfCotizaciones } from "./modulos/cotizaciones";
 import type { Envios } from "./modulos/envios";
 import type { GeneradorPdf } from "./modulos/informes";
+import type { CorreosDelPortal } from "./modulos/portal";
 import type { NombreTrabajo, Trabajos } from "./plataforma/cola";
 
 /** Datos de cada trabajo validados al ejecutarse: la cola guarda JSON y un trabajo viejo puede tener otra forma. */
@@ -15,6 +16,7 @@ const esquemas: { [N in NombreTrabajo]: z.ZodType<Trabajos[N]> } = {
   "avisos.enviar": z.object({ organizacionId: z.uuid(), suscripcionId: z.uuid(), titulo: z.string(), cuerpo: z.string(), etiqueta: z.string(), ruta: z.string().regex(/^\/(?!\/)/).optional() }),
   "envios.enviar": z.object({ organizacionId: z.uuid(), envioId: z.uuid(), pdfRuta: z.string().min(1) }),
   "cotizaciones.generarPdf": z.object({ organizacionId: z.uuid(), versionId: z.uuid() }),
+  "portal.correo": z.object({ organizacionId: z.uuid(), accesoId: z.uuid(), tipo: z.enum(["codigo", "invitacion"]), pedidoId: z.uuid().optional() }),
   // Programada por el crontab: Graphile le pone sus propios datos (`_cron`), que no se usan.
   "mantenimiento.recuperar": z.record(z.string(), z.unknown()),
 };
@@ -35,6 +37,7 @@ export function definirTareas({
   avisos,
   envios,
   cotizaciones,
+  portal,
   mantenimiento,
 }: {
   archivos: Archivos;
@@ -42,6 +45,7 @@ export function definirTareas({
   avisos: Pick<Avisos, "enviar">;
   envios: Pick<Envios, "enviar">;
   cotizaciones: GeneradorPdfCotizaciones;
+  portal: Pick<CorreosDelPortal, "enviar">;
   /** Tarea periódica (ADR-0043). */
   mantenimiento: { recuperar: () => Promise<unknown> };
 }): TaskList {
@@ -51,6 +55,7 @@ export function definirTareas({
     "avisos.enviar": (datos) => avisos.enviar(datos),
     "envios.enviar": (datos, contexto) => envios.enviar(datos, contexto),
     "cotizaciones.generarPdf": (datos, contexto) => cotizaciones.generarPdf(datos, contexto),
+    "portal.correo": (datos, contexto) => portal.enviar(datos, contexto),
     "mantenimiento.recuperar": async () => {
       await mantenimiento.recuperar();
     },

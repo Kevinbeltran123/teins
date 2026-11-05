@@ -60,6 +60,8 @@ export function porQueNoEntro(codigo: string | undefined): string {
       return "Este levantamiento ya lo envió otra persona.";
     case "sin_permiso":
       return "Tu usuario ya no puede enviar este levantamiento.";
+    case "estado_invalido":
+      return "Ya enviaste un levantamiento de esta visita.";
     case "respuestas_invalidas":
     case "entrada_invalida":
       return "Oficina no pudo aceptar algunos datos.";

@@ -5,16 +5,26 @@ import { llaveDeEnvio } from "@teins/protocolo";
 import { enClienteDelPortal, enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
 import { clientesYSitios } from "../src/modulos/clientes";
-import { crearAccesosDeClientes } from "../src/modulos/portal";
+import type { CorreoSaliente } from "../src/modulos/envios";
 import { crearVisitas } from "../src/modulos/visitas";
-import { cabecerasSync, servidorDePrueba } from "./ayudas";
+import { cabecerasSync, ORIGEN, servidorDePrueba } from "./ayudas";
+import { codigoDePrueba, conPortal } from "./portal-ayudas";
 
-const s = await servidorDePrueba();
+/*
+  Acceso al portal por contacto, con código por correo (ADR-0053). Este archivo es el único que procesa los correos
+  del portal: los guarda en `correos` para leer la invitación y el código.
+*/
+const correos: CorreoSaliente[] = [];
+const s = await servidorDePrueba({
+  correosDelPortal: async (c) => {
+    correos.push(c);
+    return { id: randomUUID() };
+  },
+});
 const { app } = s;
+const p = conPortal(s);
 const visitas = crearVisitas(clientesYSitios);
-const accesos = crearAccesosDeClientes(s.conexionApp.bd);
 const contexto = { autorId: "administrador", correlacion: "prueba-portal" };
-const PORTAL = "http://localhost:5175";
 
 type Org = Awaited<ReturnType<typeof s.nuevaOrganizacionConUsuarios>>;
 
@@ -43,75 +53,214 @@ async function clienteConInforme(org: Org, nombre: string) {
   const { id: informeId } = (await oficina("/api/informes", { visitaId })).json();
   await oficina(`/api/informes/${informeId}/borrador`, { version: 1, introduccion: `Informe de ${nombre}`, conclusiones: "", levantamientos: [id], planos: [] });
   expect((await oficina(`/api/informes/${informeId}/publicar`, { version: 2 })).statusCode).toBe(201);
-  await hastaQueNoHayaPdfPendientes(org.organizacionId);
+  await s.esperarPdf({ organizacionId: org.organizacionId });
   return { clienteId, informeId, publicarOtra: () => oficina(`/api/informes/${informeId}/publicar`, { version: 3 }) };
 }
 
-const hastaQueNoHayaPdfPendientes = (organizacionId: string) => s.esperarPdf({ organizacionId });
+/** Los correos del portal que llegaron a una dirección, procesando la cola hasta que haya `cuantos`. */
+async function correosPara(para: string, cuantos: number): Promise<CorreoSaliente[]> {
+  for (let i = 0; i < 60; i++) {
+    await s.procesarCola();
+    const suyos = correos.filter((c) => c.para === para);
+    if (suyos.length >= cuantos) return suyos;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`No llegaron ${cuantos} correos a ${para}`);
+}
 
-const ingresar = (identificador: string, clave: string, ip = "10.1.1.1") =>
-  app.inject({ method: "POST", url: "/api/portal/ingresar", remoteAddress: ip, headers: { origin: PORTAL }, payload: { identificador, clave } });
-const cookieDe = (r: { headers: Record<string, unknown> }) => String(r.headers["set-cookie"]).split(";")[0]!;
-const portal = (cookie: string, url: string) => app.inject({ method: "GET", url, headers: { cookie } });
-
-// Una organización con dos clientes y otra organización con un tercero: todos con informe publicado.
 const orgA = await s.nuevaOrganizacionConUsuarios();
 const [a, b] = [await clienteConInforme(orgA, "Cliente A"), await clienteConInforme(orgA, "Cliente B")];
 const orgC = await s.nuevaOrganizacionConUsuarios();
 const c = await clienteConInforme(orgC, "Cliente C");
 
-describe("portal del cliente (ADR-0009, parte 4)", () => {
-  it("con el identificador del QR y la clave ve su informe vigente y descarga el PDF; queda registrado", async () => {
-    const credenciales = await accesos.crear(orgA.organizacionId, a.clienteId, contexto);
-    expect(credenciales.clave).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+describe("acceso al portal por contacto (ADR-0053)", () => {
+  it("oficina da acceso a un contacto; le llega la invitación; entra con el código una sola vez y ve lo que recibe", async () => {
+    const ana = await p.contacto(orgA, a.clienteId, { nombre: "Ana Rojas", correo: "ana.rojas@cliente-a.example", recibeInformes: true, recibeCotizaciones: false });
+    const detalle = await p.darAcceso(orgA, a.clienteId, ana.id);
+    expect(detalle.statusCode, detalle.body).toBe(200);
+    expect(detalle.json().contactos.find((x: { id: string }) => x.id === ana.id).accesoPortal).toEqual({ activo: true, ultimoIngreso: null });
+    const [invitacion] = await correosPara("ana.rojas@cliente-a.example", 1);
+    expect(invitacion!.asunto).toMatch(/le dio acceso a sus informes$/);
 
-    // La clave se puede escribir en minúsculas y sin guiones.
-    const r = await ingresar(credenciales.identificador, credenciales.clave.toLowerCase().replaceAll("-", ""));
-    expect(r.statusCode, r.body).toBe(200);
-    expect(r.json()).toEqual({ cliente: "Cliente A" });
-    expect(String(r.headers["set-cookie"])).toMatch(/HttpOnly; SameSite=Strict/);
-    const cookie = cookieDe(r);
+    // Pedir el código responde sin decir nada y deja una cookie atada a este navegador por 10 minutos.
+    const pedido = await p.pedir("  Ana.Rojas@Cliente-A.example ", "10.1.0.1");
+    expect(pedido.statusCode).toBe(202);
+    expect(pedido.json()).toEqual({});
+    expect(String(pedido.headers["set-cookie"])).toMatch(/teins-portal-pendiente=[^;]+; Max-Age=600; Path=\/; HttpOnly; SameSite=Strict/);
+    const [, correoDelCodigo] = await correosPara("ana.rojas@cliente-a.example", 2);
+    const codigo = await codigoDePrueba(s, "ana.rojas@cliente-a.example");
+    expect(correoDelCodigo!.asunto).toContain(`${codigo.slice(0, 3)} ${codigo.slice(3)}`);
+    // El código no queda en la base: ni en el pedido ni en la cola.
+    const guardado = JSON.stringify((await s.propietario.pool.query("select * from portal.pedidos")).rows);
+    expect(guardado).not.toContain(codigo);
 
-    const informes = (await portal(cookie, "/api/portal/informes")).json();
-    expect(informes).toMatchObject({ cliente: "Cliente A", informes: [{ id: a.informeId, numero: 1, sitio: "Sede de Cliente A", programadaPara: "2026-09-30" }] });
-    const pdf = await portal(cookie, `/api/portal/informes/${a.informeId}/pdf`);
-    expect(pdf.statusCode).toBe(200);
-    const archivo = await fetch(pdf.json().url);
-    expect(archivo.headers.get("content-disposition")).toMatch(/^attachment; filename="Informe Cliente A - Sede de Cliente A - version 1\.pdf"/);
-    const bytes = Buffer.from(await archivo.arrayBuffer());
-    expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+    const entrada = await p.entrar("ana.rojas@cliente-a.example", codigo, pedido, "10.1.0.1");
+    expect(entrada.statusCode, entrada.body).toBe(200);
+    expect(entrada.json()).toEqual({ cliente: "Cliente A", contacto: "Ana Rojas", ve: { informes: true, cotizaciones: false } });
+    const cookie = p.sesionDe(entrada);
+    expect((await p.leer(cookie, "/api/portal/informes")).json().informes.map((i: { id: string }) => i.id)).toEqual([a.informeId]);
+    expect((await p.leer(cookie, "/api/portal/cotizaciones")).json()).toMatchObject({ codigo: "sin_permiso" });
 
-    const { rows } = await s.propietario.pool.query(
-      "select tipo_evento from auditoria.registros where organizacion_id = $1 and agregado_tipo = 'acceso_cliente' order by secuencia",
-      [orgA.organizacionId],
+    // Un solo uso.
+    expect((await p.entrar("ana.rojas@cliente-a.example", codigo, pedido, "10.1.0.1")).statusCode).toBe(401);
+
+    const despues = (await app.inject({ method: "GET", url: `/api/clientes/${a.clienteId}`, headers: { cookie: orgA.oficina.cookie } })).json();
+    expect(despues.contactos.find((x: { id: string }) => x.id === ana.id).accesoPortal.ultimoIngreso).not.toBeNull();
+    const eventos = await s.propietario.pool.query("select agregado_tipo, agregado_id, tipo_evento from auditoria.registros where organizacion_id = $1 and tipo_evento in ('acceso_portal_activado', 'ingreso_portal') order by hora_servidor", [orgA.organizacionId]);
+    expect(eventos.rows.map((f) => f.tipo_evento)).toEqual(["acceso_portal_activado", "ingreso_portal"]);
+    const ingreso = eventos.rows[1]!;
+    expect(await enOrganizacion(s.conexionApp.bd, orgA.organizacionId, (tx) => verificarCadena(tx, orgA.organizacionId, ingreso.agregado_tipo, ingreso.agregado_id))).toMatchObject({ integra: true });
+  });
+
+  it("sin correo no hay acceso, y un correo tiene un solo acceso en la organización", async () => {
+    const luis = await p.contacto(orgA, a.clienteId, { nombre: "Luis Ortiz", correo: null, recibeInformes: true, recibeCotizaciones: false });
+    expect((await p.darAcceso(orgA, a.clienteId, luis.id)).json()).toMatchObject({ codigo: "entrada_invalida" });
+
+    const enA = await p.contacto(orgA, a.clienteId, { nombre: "Compras A", correo: "compras@grupo.example", recibeInformes: false, recibeCotizaciones: true });
+    const enB = await p.contacto(orgA, b.clienteId, { nombre: "Compras B", correo: "compras@grupo.example", recibeInformes: false, recibeCotizaciones: true });
+    expect((await p.darAcceso(orgA, a.clienteId, enA.id)).statusCode).toBe(200);
+    expect((await p.darAcceso(orgA, b.clienteId, enB.id)).json()).toMatchObject({ codigo: "conflicto" });
+  });
+
+  it("pedir el código responde lo mismo con o sin acceso, y sin acceso no envía nada", async () => {
+    const sinAcceso = await p.pedir("nadie@cliente.example", "10.2.0.1");
+    expect(sinAcceso.statusCode).toBe(202);
+    expect(sinAcceso.json()).toEqual({});
+    expect(String(sinAcceso.headers["set-cookie"])).toContain("teins-portal-pendiente=");
+    await s.procesarCola();
+    expect(correos.filter((x) => x.para === "nadie@cliente.example")).toEqual([]);
+    expect((await p.entrar("nadie@cliente.example", "123456", sinAcceso, "10.2.0.1")).json()).toMatchObject({
+      codigo: "no_autenticado",
+      detail: "El código no es correcto o venció. Pida uno nuevo.",
+    });
+  });
+
+  it("el código vence a los 10 minutos, se agota al quinto error, vale el último pedido y solo en el navegador que lo pidió", async () => {
+    const marta = await p.contacto(orgA, b.clienteId, { nombre: "Marta Gil", correo: "marta@cliente-b.example", recibeInformes: true, recibeCotizaciones: true });
+    await p.darAcceso(orgA, b.clienteId, marta.id);
+    const correo = "marta@cliente-b.example";
+    const mal = "El código no es correcto o venció. Pida uno nuevo.";
+
+    // Vencido.
+    const vencido = await p.pedir(correo, "10.3.0.1");
+    const codigoVencido = await codigoDePrueba(s, correo);
+    await s.propietario.pool.query("update portal.pedidos set expira_en = now() - interval '1 second'");
+    expect((await p.entrar(correo, codigoVencido, vencido, "10.3.0.1")).json()).toMatchObject({ codigo: "no_autenticado", detail: mal });
+
+    // Cinco errores agotan el código: el correcto ya no entra.
+    const agotado = await p.pedir(correo, "10.3.0.2");
+    const codigoAgotado = await codigoDePrueba(s, correo);
+    const otro = codigoAgotado === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 5; i++) expect((await p.entrar(correo, otro, agotado, "10.3.0.2")).statusCode).toBe(401);
+    expect((await p.entrar(correo, codigoAgotado, agotado, "10.3.0.2")).json()).toMatchObject({ codigo: "no_autenticado", detail: mal });
+
+    // Dos pedidos seguidos: solo vale el último.
+    const primero = await p.pedir(correo, "10.3.0.3");
+    const codigoPrimero = await codigoDePrueba(s, correo);
+    const segundo = await p.pedir(correo, "10.3.0.3");
+    const codigoSegundo = await codigoDePrueba(s, correo);
+    expect((await p.entrar(correo, codigoPrimero, primero, "10.3.0.3")).statusCode).toBe(401);
+
+    // El código del último pedido no entra sin la cookie del navegador que lo pidió, ni con la de otro.
+    expect((await p.entrar(correo, codigoSegundo, null, "10.3.0.4")).statusCode).toBe(401);
+    expect((await p.entrar(correo, codigoSegundo, primero, "10.3.0.4")).statusCode).toBe(401);
+    expect((await p.entrar(correo, codigoSegundo, segundo, "10.3.0.3")).statusCode).toBe(200);
+  });
+
+  it("intentos simultáneos con un mismo código no pasan de cinco: cada uno cuenta antes de comparar (QA-7)", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const g = await clienteConInforme(org, "Cliente G");
+    const gina = await p.contacto(org, g.clienteId, { nombre: "Gina", correo: "gina@cliente-g.example", recibeInformes: true, recibeCotizaciones: false });
+    await p.darAcceso(org, g.clienteId, gina.id);
+    const pedido = await p.pedir("gina@cliente-g.example", "10.4.0.1");
+    const codigo = await codigoDePrueba(s, "gina@cliente-g.example");
+    const otro = codigo === "000000" ? "111111" : "000000";
+    await Promise.all(Array.from({ length: 30 }, (_, i) => p.entrar("gina@cliente-g.example", otro, pedido, `10.4.1.${i + 1}`)));
+    expect((await p.entrar("gina@cliente-g.example", codigo, pedido, "10.4.0.1")).statusCode).toBe(401);
+  });
+
+  it("límites (QA-7): cinco pedidos por correo y veinte intentos fallidos por origen", async () => {
+    for (let i = 0; i < 5; i++) expect((await p.pedir("limite@cliente.example", `10.5.0.${i + 1}`)).statusCode).toBe(202);
+    const sexto = await p.pedir("limite@cliente.example", "10.5.0.9");
+    expect(sexto.statusCode).toBe(429);
+    expect(sexto.json().reintentarEnSegundos).toBeGreaterThan(50);
+
+    const ip = "10.5.1.1";
+    const pendiente = await p.pedir("origen@cliente.example", ip);
+    for (let i = 0; i < 20; i++) expect((await p.entrar(`origen${i}@cliente.example`, "123456", pendiente, ip)).statusCode).toBe(401);
+    expect((await p.entrar("origen@cliente.example", "123456", pendiente, ip)).statusCode).toBe(429);
+  });
+
+  it("quitar el acceso, quitar el contacto, cambiarle el correo o archivar el cliente cierran su sesión", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const { clienteId } = await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) =>
+      clientesYSitios.crear(tx, { organizacionId: org.organizacionId, nombre: "Cliente D", sitio: { nombre: "Sede", direccion: "Calle [N]" } }),
     );
-    expect(rows.map((f) => f.tipo_evento)).toEqual(["acceso_cliente_creado", "ingreso_portal", "descarga_portal"]);
-    const [{ agregado_id }] = (await s.propietario.pool.query("select agregado_id from auditoria.registros where tipo_evento = 'ingreso_portal' and organizacion_id = $1", [orgA.organizacionId])).rows;
-    expect(await enOrganizacion(s.conexionApp.bd, orgA.organizacionId, (tx) => verificarCadena(tx, orgA.organizacionId, "acceso_cliente", agregado_id))).toMatchObject({ integra: true });
+    const nuevo = async (nombre: string) => {
+      const x = await p.contacto(org, clienteId, { nombre, correo: `${nombre.toLowerCase()}@cliente-d.example`, recibeInformes: true, recibeCotizaciones: true });
+      expect((await p.darAcceso(org, clienteId, x.id)).statusCode).toBe(200);
+      return { ...x, sesion: await p.entrarCompleto(`${nombre.toLowerCase()}@cliente-d.example`, `10.6.${x.id.charCodeAt(0)}.1`) };
+    };
+    const [uno, dos, tres] = [await nuevo("Uno"), await nuevo("Dos"), await nuevo("Tres")];
+    const oficina = (url: string, payload: object = {}) => app.inject({ method: "POST", url, headers: { cookie: org.oficina.cookie, origin: ORIGEN }, payload });
 
-    // La clave nunca se guarda: solo su hash.
-    const guardado = (await s.propietario.pool.query("select clave_hash from portal.accesos where cliente_id = $1", [a.clienteId])).rows[0].clave_hash as string;
-    expect(guardado).toMatch(/^scrypt\$/);
-    expect(guardado).not.toContain(credenciales.clave.replaceAll("-", ""));
+    const invitacionesAntes = correos.filter((x) => x.para === "uno@cliente-d.example").length;
+    expect((await oficina(`/api/clientes/${clienteId}/contactos/${uno.id}/portal`, { activo: false })).statusCode).toBe(200);
+    expect((await p.leer(uno.sesion, "/api/portal/sesion")).statusCode).toBe(401);
+    // «Deshacer»: vuelve sin otra invitación.
+    expect((await oficina(`/api/clientes/${clienteId}/contactos/${uno.id}/portal`, { activo: true, invitar: false })).statusCode).toBe(200);
+    await s.procesarCola();
+    expect(correos.filter((x) => x.para === "uno@cliente-d.example")).toHaveLength(invitacionesAntes);
+
+    expect((await oficina(`/api/clientes/${clienteId}/contactos/${dos.id}/quitar`)).statusCode).toBe(200);
+    expect((await p.leer(dos.sesion, "/api/portal/sesion")).statusCode).toBe(401);
+
+    const editado = await oficina(`/api/clientes/${clienteId}/contactos/${tres.id}`, { nombre: "Tres", correo: "otra@cliente-d.example", recibeCorreo: true, recibeWhatsapp: false, recibeInformes: true, recibeCotizaciones: true });
+    expect(editado.statusCode, editado.body).toBe(200);
+    expect((await p.leer(tres.sesion, "/api/portal/sesion")).statusCode).toBe(401);
+    // Sigue con acceso, con el correo nuevo.
+    expect(editado.json().contactos.find((x: { id: string }) => x.id === tres.id).accesoPortal.activo).toBe(true);
+    const conElNuevo = await p.entrarCompleto("otra@cliente-d.example", "10.6.9.1");
+
+    expect((await oficina(`/api/clientes/${clienteId}/archivar`)).statusCode).toBe(200);
+    expect((await p.leer(conElNuevo, "/api/portal/sesion")).statusCode).toBe(401);
+    const { rows } = await s.propietario.pool.query("select count(*)::int as n from portal.accesos where cliente_id = $1", [clienteId]);
+    expect(rows[0].n).toBe(0);
+  });
+
+  it("deja de ver lo que deja de recibir: sin «Recibe cotizaciones», el portal no se las muestra", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const e = await clienteConInforme(org, "Cliente E");
+    const eva = await p.contacto(org, e.clienteId, { nombre: "Eva", correo: "eva@cliente-e.example", recibeInformes: true, recibeCotizaciones: true });
+    await p.darAcceso(org, e.clienteId, eva.id);
+    const cookie = await p.entrarCompleto("eva@cliente-e.example", "10.7.0.1");
+    expect((await p.leer(cookie, "/api/portal/cotizaciones")).statusCode).toBe(200);
+    const editado = await app.inject({
+      method: "POST",
+      url: `/api/clientes/${e.clienteId}/contactos/${eva.id}`,
+      headers: { cookie: org.oficina.cookie, origin: ORIGEN },
+      payload: { nombre: "Eva", correo: "eva@cliente-e.example", recibeCorreo: true, recibeWhatsapp: false, recibeInformes: true, recibeCotizaciones: false },
+    });
+    expect(editado.statusCode, editado.body).toBe(200);
+    expect((await p.leer(cookie, "/api/portal/cotizaciones")).json()).toMatchObject({ codigo: "sin_permiso" });
+    expect((await p.leer(cookie, "/api/portal/sesion")).json().ve).toEqual({ informes: true, cotizaciones: false });
   });
 
   it("cero accesos cruzados (QA-4): ni por la API, ni directo en la base con el rol del portal", async () => {
-    const credenciales = await accesos.crear(orgA.organizacionId, b.clienteId, contexto);
-    const cookie = cookieDe(await ingresar(credenciales.identificador, credenciales.clave, "10.1.1.2"));
-    expect((await portal(cookie, "/api/portal/informes")).json().informes.map((i: { id: string }) => i.id)).toEqual([b.informeId]);
-    // El informe de otro cliente de la misma organización, o de otra organización, no existe para él.
-    expect((await portal(cookie, `/api/portal/informes/${a.informeId}/pdf`)).json()).toMatchObject({ codigo: "no_encontrado" });
-    expect((await portal(cookie, `/api/portal/informes/${c.informeId}/pdf`)).json()).toMatchObject({ codigo: "no_encontrado" });
+    const bea = await p.contacto(orgA, b.clienteId, { nombre: "Bea", correo: "bea@cliente-b.example", recibeInformes: true, recibeCotizaciones: false });
+    await p.darAcceso(orgA, b.clienteId, bea.id);
+    const cookie = await p.entrarCompleto("bea@cliente-b.example", "10.8.0.1");
+    expect((await p.leer(cookie, "/api/portal/informes")).json().informes.map((i: { id: string }) => i.id)).toEqual([b.informeId]);
+    expect((await p.leer(cookie, `/api/portal/informes/${a.informeId}/pdf`)).json()).toMatchObject({ codigo: "no_encontrado" });
+    expect((await p.leer(cookie, `/api/portal/informes/${c.informeId}/pdf`)).json()).toMatchObject({ codigo: "no_encontrado" });
 
-    // La barrera no depende del código: con el rol del portal, la base solo devuelve lo del cliente fijado.
     const visibles = await enClienteDelPortal(s.conexionPortal.bd, orgA.organizacionId, b.clienteId, (tx) => tx.execute(sql`select informe_id from informes.versiones`));
     expect(visibles.rows.map((f) => f.informe_id)).toEqual([b.informeId]);
     const sinCliente = await enOrganizacion(s.conexionPortal.bd, orgA.organizacionId, (tx) => tx.execute(sql`select informe_id from informes.versiones`));
     expect(sinCliente.rows).toEqual([]);
-    // De la auditoría, solo las cadenas de los accesos: ni correcciones ni contactos de la organización.
     const auditoria = await enOrganizacion(s.conexionPortal.bd, orgA.organizacionId, (tx) => tx.execute(sql`select distinct agregado_tipo from auditoria.registros`));
     expect(auditoria.rows.map((f) => f.agregado_tipo)).toEqual(["acceso_cliente"]);
-    for (const tabla of ["levantamientos.levantamientos", "identidad.usuarios", "clientes.clientes", "informes.informes", "visitas.visitas"]) {
+    for (const tabla of ["levantamientos.levantamientos", "identidad.usuarios", "clientes.clientes", "clientes.contactos", "informes.informes", "visitas.visitas"]) {
       const error = await s.conexionPortal.pool.query(`select 1 from ${tabla} limit 1`).then(
         () => null,
         (e: Error) => e.message,
@@ -120,181 +269,52 @@ describe("portal del cliente (ADR-0009, parte 4)", () => {
     }
   });
 
-  it("los intentos fallidos bloquean con espera creciente por identificador y por origen (QA-7)", async () => {
-    const credenciales = await accesos.crear(orgC.organizacionId, c.clienteId, contexto);
-    for (let i = 0; i < 5; i++) expect((await ingresar(credenciales.identificador, "AAAA-AAAA-AAAA", "10.2.0.1")).statusCode).toBe(401);
-    // Bloqueado: ni la clave correcta entra mientras dura la espera.
-    const bloqueado = await ingresar(credenciales.identificador, credenciales.clave, "10.2.0.2");
-    expect(bloqueado.statusCode).toBe(429);
-    expect(bloqueado.json().reintentarEnSegundos).toBeGreaterThan(50);
-
-    // Desde un mismo origen, veinte fallos con identificadores cualquiera también bloquean.
-    const ip = "10.3.0.1";
-    for (let i = 0; i < 20; i++) expect((await ingresar("abcdefghjkmnpqrstuvw".slice(0, 19) + "xyz23456789"[i % 11], "AAAA", ip)).statusCode).toBe(401);
-    expect((await ingresar("zzzzzzzzzzzzzzzzzzzz", "AAAA", ip)).statusCode).toBe(429);
-    // Un identificador inexistente responde igual que una clave equivocada.
-    expect((await ingresar("zzzzzzzzzzzzzzzzzzzz", "AAAA", "10.4.0.1")).json()).toMatchObject({ codigo: "no_autenticado", detail: "El identificador o la clave no son correctos" });
-  });
-
-  it("intentos simultáneos no pasan del límite: cada uno cuenta antes de verificar la clave (QA-7)", async () => {
-    const org = await s.nuevaOrganizacionConUsuarios();
-    const g = await clienteConInforme(org, "Cliente G");
-    const { identificador } = await accesos.crear(org.organizacionId, g.clienteId, contexto);
-    const respuestas = await Promise.all(Array.from({ length: 30 }, (_, i) => ingresar(identificador, "AAAA-AAAA-AAAA", `10.8.0.${i + 1}`)));
-    const verificados = respuestas.filter((r) => r.statusCode === 401).length;
-    expect(verificados).toBe(5);
-    expect(respuestas.filter((r) => r.statusCode === 429)).toHaveLength(25);
-  });
-
-  it("un ingreso correcto no cuenta como fallo del origen", async () => {
-    const org = await s.nuevaOrganizacionConUsuarios();
-    const h = await clienteConInforme(org, "Cliente H");
-    const { identificador, clave } = await accesos.crear(org.organizacionId, h.clienteId, contexto);
-    const ip = "10.9.0.1";
-    for (let i = 0; i < 19; i++) expect((await ingresar("x".repeat(19) + "abcdefghjkmnpqrstuvw"[i], "AAAA", ip)).statusCode).toBe(401);
-    // El vigésimo intento es correcto: entra y el origen sigue con 19 fallos.
-    expect((await ingresar(identificador, clave, ip)).statusCode).toBe(200);
-    expect((await ingresar("y".repeat(20), "AAAA", ip)).statusCode).toBe(401);
-    expect((await ingresar("y".repeat(20), "AAAA", ip)).statusCode).toBe(429);
-  });
-
-  it("en la espera máxima, los fallos no se olvidan al terminar el bloqueo: se olvidan una hora después", async () => {
-    const identificador = "q".repeat(20);
-    // Doce fallos: el último bloqueó una hora, que terminó hace un segundo.
-    await s.propietario.pool.query(
-      "insert into portal.intentos (llave, fallos, ultimo_fallo, bloqueado_hasta) values ($1, 12, now() - interval '1 hour 1 second', now() - interval '1 second')",
-      [`acceso:${identificador}`],
-    );
-    expect((await ingresar(identificador, "AAAA", "10.10.0.1")).statusCode).toBe(401);
-    const bloqueado = await ingresar(identificador, "AAAA", "10.10.0.2");
-    expect(bloqueado.statusCode).toBe(429);
-    expect(bloqueado.json().reintentarEnSegundos).toBeGreaterThan(3500);
-  });
-
-  it("los intentos olvidados se borran: la tabla no crece sin límite", async () => {
-    const viejo = `origen:10.11.0.${randomUUID()}`;
-    const reciente = `origen:10.11.1.${randomUUID()}`;
-    await s.propietario.pool.query(
-      `insert into portal.intentos (llave, fallos, ultimo_fallo, bloqueado_hasta) values
-        ($1, 3, now() - interval '2 hours', null),
-        ($2, 3, now() - interval '2 hours', now() - interval '30 minutes')`,
-      [viejo, reciente],
-    );
-    await ingresar("w".repeat(20), "AAAA", "10.11.2.1");
-    const { rows } = await s.propietario.pool.query("select llave from portal.intentos where llave = any($1)", [[viejo, reciente]]);
-    expect(rows.map((r) => r.llave)).toEqual([reciente]);
-  });
-
-  it("regenerar invalida el identificador anterior, la clave y las sesiones abiertas", async () => {
-    const org = await s.nuevaOrganizacionConUsuarios();
-    const d = await clienteConInforme(org, "Cliente D");
-    const anteriores = await accesos.crear(org.organizacionId, d.clienteId, contexto);
-    const cookie = cookieDe(await ingresar(anteriores.identificador, anteriores.clave, "10.5.0.1"));
-    expect((await portal(cookie, "/api/portal/sesion")).json()).toEqual({ cliente: "Cliente D" });
-
-    const nuevas = await accesos.regenerar(org.organizacionId, d.clienteId, contexto);
-    expect((await portal(cookie, "/api/portal/sesion")).statusCode).toBe(401);
-    expect((await ingresar(anteriores.identificador, anteriores.clave, "10.5.0.2")).statusCode).toBe(401);
-    expect((await ingresar(nuevas.identificador, nuevas.clave, "10.5.0.3")).statusCode).toBe(200);
-  });
-
-  it("el portal muestra el nombre vigente del cliente: corregirlo en oficina lo cambia, también en la sesión abierta", async () => {
+  it("el portal muestra el nombre vigente del cliente y del contacto, también en la sesión abierta", async () => {
     const org = await s.nuevaOrganizacionConUsuarios();
     const { clienteId } = await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) =>
       clientesYSitios.crear(tx, { organizacionId: org.organizacionId, nombre: "Clinica Santafe", sitio: { nombre: "Sede", direccion: "Calle [N]" } }),
     );
-    const credenciales = await accesos.crear(org.organizacionId, clienteId, contexto);
-    const cookie = cookieDe(await ingresar(credenciales.identificador, credenciales.clave, "10.8.0.1"));
-    expect((await portal(cookie, "/api/portal/sesion")).json()).toEqual({ cliente: "Clinica Santafe" });
+    const sara = await p.contacto(org, clienteId, { nombre: "Sara", correo: "sara@santafe.example", recibeInformes: true, recibeCotizaciones: false });
+    await p.darAcceso(org, clienteId, sara.id);
+    const cookie = await p.entrarCompleto("sara@santafe.example", "10.9.0.1");
+    expect((await p.leer(cookie, "/api/portal/sesion")).json()).toMatchObject({ cliente: "Clinica Santafe", contacto: "Sara" });
 
-    const corregido = await app.inject({ method: "POST", url: `/api/clientes/${clienteId}`, headers: { cookie: org.oficina.cookie }, payload: { nombre: "Clínica Santa Fe" } });
-    expect(corregido.statusCode, corregido.body).toBe(200);
-    expect((await portal(cookie, "/api/portal/sesion")).json()).toEqual({ cliente: "Clínica Santa Fe" });
-    expect((await portal(cookie, "/api/portal/informes")).json()).toMatchObject({ cliente: "Clínica Santa Fe" });
-    expect((await ingresar(credenciales.identificador, credenciales.clave, "10.8.0.2")).json()).toEqual({ cliente: "Clínica Santa Fe" });
-
-    // Una copia que quedó vieja antes de este arreglo se pone al día al regenerar el acceso.
-    await s.propietario.pool.query("update portal.accesos set cliente_nombre = 'Clinica Santafe' where cliente_id = $1", [clienteId]);
-    const nuevas = await accesos.regenerar(org.organizacionId, clienteId, contexto);
-    expect((await ingresar(nuevas.identificador, nuevas.clave, "10.8.0.3")).json()).toEqual({ cliente: "Clínica Santa Fe" });
+    const oficina = (url: string, payload: object) => app.inject({ method: "POST", url, headers: { cookie: org.oficina.cookie, origin: ORIGEN }, payload });
+    expect((await oficina(`/api/clientes/${clienteId}`, { nombre: "Clínica Santa Fe" })).statusCode).toBe(200);
+    expect((await oficina(`/api/clientes/${clienteId}/contactos/${sara.id}`, { nombre: "Sara Díaz", correo: "sara@santafe.example", recibeCorreo: true, recibeWhatsapp: false, recibeInformes: true, recibeCotizaciones: false })).statusCode).toBe(200);
+    expect((await p.leer(cookie, "/api/portal/sesion")).json()).toMatchObject({ cliente: "Clínica Santa Fe", contacto: "Sara Díaz" });
   });
 
-  it("un ingreso con la clave anterior que termina después de regenerar no deja una sesión viva", async () => {
-    const org = await s.nuevaOrganizacionConUsuarios();
-    const e = await clienteConInforme(org, "Cliente E");
-    const anteriores = await accesos.crear(org.organizacionId, e.clienteId, contexto);
-    // El ingreso ya leyó el acceso y está verificando la clave cuando llega la regeneración.
-    const enCurso = ingresar(anteriores.identificador, anteriores.clave, "10.6.0.1");
-    await new Promise((r) => setTimeout(r, 0));
-    await accesos.regenerar(org.organizacionId, e.clienteId, contexto);
-    const ingreso = await enCurso;
-    if (ingreso.statusCode === 200) expect((await portal(cookieDe(ingreso), "/api/portal/sesion")).statusCode).toBe(401);
-  });
-
-  it("cada uso renueva la cookie: la sesión vence 30 minutos después del último uso, no del ingreso", async () => {
-    const org = await s.nuevaOrganizacionConUsuarios();
-    const f = await clienteConInforme(org, "Cliente F");
-    const { identificador, clave } = await accesos.crear(org.organizacionId, f.clienteId, contexto);
-    const cookie = cookieDe(await ingresar(identificador, clave, "10.7.0.1"));
-    const r = await portal(cookie, "/api/portal/sesion");
-    expect(String(r.headers["set-cookie"])).toMatch(/Max-Age=1800; Path=\/; HttpOnly/);
-  });
-
-  it("muestra la versión vigente con PDF listo; salir cierra la sesión; la cookie de oficina no sirve aquí", async () => {
-    const org = await s.nuevaOrganizacionConUsuarios();
-    const e = await clienteConInforme(org, "Cliente E");
-    const credenciales = await accesos.crear(org.organizacionId, e.clienteId, contexto);
-    const cookie = cookieDe(await ingresar(credenciales.identificador, credenciales.clave, "10.6.0.1"));
-
-    expect((await e.publicarOtra()).statusCode).toBe(201);
-    // Mientras el PDF de la versión 2 se genera, el cliente sigue viendo la 1 (ADR-0013).
-    expect((await portal(cookie, "/api/portal/informes")).json().informes[0].numero).toBe(1);
-    await hastaQueNoHayaPdfPendientes(org.organizacionId);
-    expect((await portal(cookie, "/api/portal/informes")).json().informes[0].numero).toBe(2);
-
-    expect((await portal(org.oficina.cookie, "/api/portal/informes")).statusCode).toBe(401);
-    const salida = await app.inject({ method: "POST", url: "/api/portal/salir", headers: { cookie, origin: PORTAL } });
+  it("cada uso renueva la cookie: la sesión vence 30 minutos después del último uso; salir la cierra; la de oficina no sirve", async () => {
+    const fito = await p.contacto(orgC, c.clienteId, { nombre: "Fito", correo: "fito@cliente-c.example", recibeInformes: true, recibeCotizaciones: false });
+    await p.darAcceso(orgC, c.clienteId, fito.id);
+    const cookie = await p.entrarCompleto("fito@cliente-c.example", "10.10.0.1");
+    expect(String((await p.leer(cookie, "/api/portal/sesion")).headers["set-cookie"])).toMatch(/Max-Age=1800; Path=\/; HttpOnly/);
+    expect((await p.leer(orgC.oficina.cookie, "/api/portal/informes")).statusCode).toBe(401);
+    const salida = await app.inject({ method: "POST", url: "/api/portal/salir", headers: { cookie, origin: p.ORIGEN_PORTAL } });
     expect(String(salida.headers["set-cookie"])).toContain("Max-Age=0");
-    expect((await portal(cookie, "/api/portal/informes")).statusCode).toBe(401);
+    expect((await p.leer(cookie, "/api/portal/informes")).statusCode).toBe(401);
   });
 
-  it("una versión retirada deja de verse en el portal, se conserva para oficina y queda registrada (iteración 6)", async () => {
+  it("una versión retirada deja de verse en el portal; mientras el PDF de la nueva se genera, se ve la anterior", async () => {
     const org = await s.nuevaOrganizacionConUsuarios();
     const admin = await s.nuevoAdministrador(org.organizacionId);
     const f = await clienteConInforme(org, "Cliente F");
+    const flor = await p.contacto(org, f.clienteId, { nombre: "Flor", correo: "flor@cliente-f.example", recibeInformes: true, recibeCotizaciones: false });
+    await p.darAcceso(org, f.clienteId, flor.id);
+    const cookie = await p.entrarCompleto("flor@cliente-f.example", "10.11.0.1");
+
     expect((await f.publicarOtra()).statusCode).toBe(201);
-    await hastaQueNoHayaPdfPendientes(org.organizacionId);
-    const credenciales = await accesos.crear(org.organizacionId, f.clienteId, contexto);
-    const cookie = cookieDe(await ingresar(credenciales.identificador, credenciales.clave, "10.7.0.1"));
-    expect((await portal(cookie, "/api/portal/informes")).json().informes[0].numero).toBe(2);
+    expect((await p.leer(cookie, "/api/portal/informes")).json().informes[0].numero).toBe(1);
+    await s.esperarPdf({ organizacionId: org.organizacionId });
+    expect((await p.leer(cookie, "/api/portal/informes")).json().informes[0].numero).toBe(2);
 
-    const retirar = (quien: string, numero: number) =>
-      app.inject({ method: "POST", url: `/api/informes/${f.informeId}/versiones/${numero}/retirar`, headers: { cookie: quien, origin: PORTAL }, payload: { motivo: "Datos del equipo equivocados" } });
-    expect((await retirar(org.oficina.cookie, 2)).json().codigo).toBe("sin_permiso");
-    const retirada = await retirar(admin.cookie, 2);
-    expect(retirada.statusCode, retirada.body).toBe(200);
-    expect(retirada.json()).toMatchObject({ numero: 2, retirada: { por: { id: admin.id }, motivo: "Datos del equipo equivocados" } });
-    expect((await retirar(admin.cookie, 2)).json().codigo).toBe("estado_invalido");
-
-    // El cliente vuelve a ver la versión anterior; si se retiran todas, el informe desaparece del portal.
-    expect((await portal(cookie, "/api/portal/informes")).json().informes[0].numero).toBe(1);
-    expect((await retirar(admin.cookie, 1)).statusCode).toBe(200);
-    expect((await portal(cookie, "/api/portal/informes")).json().informes).toEqual([]);
-    expect((await portal(cookie, `/api/portal/informes/${f.informeId}/pdf`)).json().codigo).toBe("no_encontrado");
-
-    const detalle = (await app.inject({ method: "GET", url: `/api/informes/${f.informeId}`, headers: { cookie: org.oficina.cookie } })).json();
-    expect(detalle.versiones.map((v: { retirada: unknown }) => v.retirada !== null)).toEqual([true, true]);
-    // En la lista de oficina no pasa por borrador: se ve que se retiró.
-    const lista = (await app.inject({ method: "GET", url: "/api/informes", headers: { cookie: org.oficina.cookie } })).json();
-    expect(lista.elementos.find((i: { id: string }) => i.id === f.informeId)).toMatchObject({ vigente: null, todasRetiradas: true });
-    const { rows } = await s.propietario.pool.query("select motivo from auditoria.registros where tipo_evento = 'version_retirada' and agregado_id = $1", [f.informeId]);
-    expect(rows).toHaveLength(2);
-
-    // Retirar no abre la copia congelada: la aplicación sigue sin poder escribirla.
-    const error = await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) => tx.execute(sql`update informes.versiones set contenido = '{}'::jsonb`)).then(
-      () => null,
-      (e: Error) => String((e as { cause?: Error }).cause?.message ?? e.message),
-    );
-    expect(error).toMatch(/permission denied/);
+    const retirar = (numero: number) =>
+      app.inject({ method: "POST", url: `/api/informes/${f.informeId}/versiones/${numero}/retirar`, headers: { cookie: admin.cookie, origin: ORIGEN }, payload: { motivo: "Datos del equipo equivocados" } });
+    expect((await retirar(2)).statusCode).toBe(200);
+    expect((await p.leer(cookie, "/api/portal/informes")).json().informes[0].numero).toBe(1);
+    expect((await retirar(1)).statusCode).toBe(200);
+    expect((await p.leer(cookie, "/api/portal/informes")).json().informes).toEqual([]);
+    expect((await p.leer(cookie, `/api/portal/informes/${f.informeId}/pdf`)).json().codigo).toBe("no_encontrado");
   });
 });

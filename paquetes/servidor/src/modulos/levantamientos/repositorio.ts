@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { bloques, esCantidades, type EstadoRevision } from "@teins/dominio";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import type { DatosDeProyeccion, RepositorioLevantamientos, RepositorioRevision } from "./aplicacion/puertos";
@@ -81,6 +81,14 @@ export const repositorioDrizzle: RepositorioLevantamientos = {
   },
   async insertar(tx, l) {
     await tx.insert(levantamientos).values({ ...l, estado: "enviado" });
+  },
+  async yaTieneEnLaVisita(tx, { visitaId, tecnicoId, excepto }) {
+    const [fila] = await tx
+      .select({ id: levantamientos.id })
+      .from(levantamientos)
+      .where(and(eq(levantamientos.visitaId, visitaId), eq(levantamientos.tecnicoId, tecnicoId), ne(levantamientos.id, excepto)))
+      .limit(1);
+    return fila !== undefined;
   },
   proyectarCantidades,
 };

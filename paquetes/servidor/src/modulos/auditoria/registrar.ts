@@ -60,8 +60,8 @@ export type TipoEvento =
   | "cotizacion_creada"
   | "cotizacion_publicada"
   | "cotizacion_enviada"
-  | "acceso_cliente_creado"
-  | "acceso_cliente_regenerado"
+  | "acceso_portal_activado"
+  | "acceso_portal_quitado"
   | "ingreso_portal"
   | "descarga_portal";
 export type TipoAgregado = "levantamiento" | "organizacion" | "visita" | "usuario" | "informe" | "acceso_cliente" | "cliente" | "item_catalogo" | "cotizacion";

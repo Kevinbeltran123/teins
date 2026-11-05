@@ -219,6 +219,32 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
     expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/archivar`)).json()).toMatchObject({ codigo: "estado_invalido" });
   });
 
+  it("un técnico envía un solo levantamiento por visita; otro técnico de la misma visita sí envía el suyo (ADR-0054)", async () => {
+    const crear = async (nombre: string) => {
+      const usuario = `t.${randomUUID().slice(0, 8)}`;
+      const u = await s.identidad.crearUsuario({ organizacionId: org.organizacionId, usuario, nombre, rol: "tecnico", contrasena: "contrasena-de-prueba" });
+      return { id: u.id, cookie: await iniciarSesion(app, usuario, "contrasena-de-prueba") };
+    };
+    const [ana, beto] = [await crear("Ana Única"), await crear("Beto Único")];
+    const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+    const visita = await programar(await clienteConSitio(), [ana.id, beto.id], hoy);
+    const enviar = (cookie: string, id = randomUUID()) =>
+      app.inject({
+        method: "POST",
+        url: "/api/sync/comandos",
+        headers: { cookie, ...cabecerasSync },
+        payload: { tipo: "EnviarLevantamiento", llave: llaveDeEnvio(id), levantamiento: { id, visitaId: visita.id, formato: "prueba-ups", versionFormato: 1, respuestas: {}, creadoEn: new Date().toISOString(), enviadoEn: new Date().toISOString() } },
+      });
+    const primero = randomUUID();
+    expect((await enviar(ana.cookie, primero)).statusCode).toBe(200);
+    // El reintento del mismo envío no es un segundo levantamiento: responde igual (regla 4).
+    expect((await enviar(ana.cookie, primero)).statusCode).toBe(200);
+    const segundo = await enviar(ana.cookie);
+    expect(segundo.statusCode).toBe(409);
+    expect(segundo.json()).toMatchObject({ codigo: "estado_invalido", detail: "Ya enviaste un levantamiento de esta visita" });
+    expect((await enviar(beto.cookie)).statusCode).toBe(200);
+  });
+
   it("un sitio archivado no se programa; no se archiva el único sitio activo ni uno con visitas por hacer", async () => {
     const cliente = await clienteConSitio();
     const principal = cliente.sitios[0]!.id;

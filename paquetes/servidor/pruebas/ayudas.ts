@@ -53,13 +53,14 @@ import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { cerrarNavegador } from "../src/plataforma/pdf";
 import { crearArchivos } from "../src/modulos/archivos";
 import { crearAvisos, type EnviadorDeAvisos } from "../src/modulos/avisos";
-import { crearEnvios, type Proveedores } from "../src/modulos/envios";
+import { crearEnvios, type ProveedorDeCorreo, type Proveedores } from "../src/modulos/envios";
 import { crearFormatos } from "../src/modulos/formatos";
 import { crearIdentidad } from "../src/modulos/identidad";
 import { soltarRevisionesDe } from "../src/modulos/levantamientos";
 import { crearGeneradorPdf } from "../src/modulos/informes";
 import { crearGeneradorPdfDeCotizaciones } from "../src/modulos/cotizaciones";
 import { recuperarTrabajosAMedias } from "../src/modulos/mantenimiento";
+import { accesosDelPortal, crearCorreosDelPortal } from "../src/modulos/portal";
 import { definirTareas } from "../src/tareas";
 import { codigoTotp } from "./totp";
 
@@ -72,9 +73,12 @@ export const cabecerasSync = { [CABECERA_VERSION]: String(VERSION_PROTOCOLO) };
 
 /**
  * Servidor completo sobre la base y el almacenamiento reales de la prueba. Con `enviadorDeAvisos`, este
- * archivo también procesa los avisos push; sin él, no los toma de la cola compartida (son de otro archivo).
+ * archivo también procesa los avisos push; sin él, no los toma de la cola compartida (son de otro archivo). Lo mismo
+ * con `correosDelPortal` (ADR-0053): solo el archivo que lo trae envía los correos del portal.
  */
-export async function servidorDePrueba(opciones: { config?: Partial<Record<string, string>>; enviadorDeAvisos?: EnviadorDeAvisos; proveedoresDeEnvio?: Proveedores } = {}) {
+export async function servidorDePrueba(
+  opciones: { config?: Partial<Record<string, string>>; enviadorDeAvisos?: EnviadorDeAvisos; proveedoresDeEnvio?: Proveedores; correosDelPortal?: ProveedorDeCorreo } = {},
+) {
   const config = configDePrueba({ INICIOS_DE_SESION_POR_MINUTO: "1000", ...opciones.config });
   const { app: conexionApp, propietario } = conexionesDePrueba();
   const almacenamiento = almacenamientoS3(config);
@@ -106,23 +110,32 @@ export async function servidorDePrueba(opciones: { config?: Partial<Record<strin
     };
   }
 
+  /** Otro técnico de la organización, con su sesión: cada técnico envía un solo levantamiento por visita (ADR-0054). */
+  async function nuevoTecnico(organizacionId: string, nombre = "Otro técnico de prueba") {
+    const usuario = `tecnico.${randomBytes(4).toString("hex")}`;
+    const t = await identidad.crearUsuario({ organizacionId, usuario, nombre, rol: "tecnico", contrasena: "contrasena-de-prueba" });
+    return { id: t.id, cookie: await iniciarSesion(app, usuario, "contrasena-de-prueba") };
+  }
+
   const informes = crearGeneradorPdf({ bd: conexionApp.bd, almacenamiento, config });
   // Los PDF comparten un Chromium por proceso: se cierra al terminar el archivo de pruebas.
   afterAll(() => cerrarNavegador());
   const avisos = crearAvisos({ bd: conexionApp.bd, config, enviador: opciones.enviadorDeAvisos });
   // Envíos al cliente (ADR-0028): con los proveedores que traiga la prueba.
-  const envios = crearEnvios({ bd: conexionApp.bd, almacenamiento, config, proveedores: opciones.proveedoresDeEnvio ?? {} });
+  const envios = crearEnvios({ bd: conexionApp.bd, almacenamiento, config, proveedores: opciones.proveedoresDeEnvio ?? {}, accesoAlPortal: accesosDelPortal.tieneAcceso });
   const tareas = definirTareas({
     archivos,
     informes,
     avisos,
     envios,
     cotizaciones: crearGeneradorPdfDeCotizaciones({ bd: conexionApp.bd, almacenamiento, config }),
+    portal: crearCorreosDelPortal({ bd: conexionApp.bd, config, proveedores: { correo: opciones.correosDelPortal } }),
     mantenimiento: { recuperar: () => recuperarTrabajosAMedias(conexionApp.bd) },
   });
   // La cola es compartida entre archivos: solo el que trae sus proveedores procesa los envíos, con los suyos.
   if (!opciones.proveedoresDeEnvio) delete tareas["envios.enviar"];
   if (!opciones.enviadorDeAvisos) delete tareas["avisos.enviar"];
+  if (!opciones.correosDelPortal) delete tareas["portal.correo"];
   /**
    * Ejecuta los trabajos pendientes, como lo haría el worker. Los archivos de pruebas corren en paralelo
    * y comparten la cola: una pasada puede terminar mientras otro archivo aún procesa un trabajo, así que
@@ -172,7 +185,7 @@ export async function servidorDePrueba(opciones: { config?: Partial<Record<strin
     throw new Error("Hay PDF sin generar");
   }
 
-  return { app, rutas, config, propietario, conexionApp, conexionPortal, identidad, nuevaOrganizacionConUsuarios, nuevoAdministrador, procesarCola, esperarPdf };
+  return { app, rutas, config, propietario, conexionApp, conexionPortal, identidad, nuevaOrganizacionConUsuarios, nuevoTecnico, nuevoAdministrador, procesarCola, esperarPdf };
 }
 
 /** Llamada a una ruta de Better Auth desde oficina. */

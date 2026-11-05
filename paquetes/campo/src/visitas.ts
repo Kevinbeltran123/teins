@@ -86,7 +86,7 @@ const GRUPO = { conBorrador: 0, hoy: 1, atrasada: 2, futura: 3 } as const;
  *   2. Las de hoy. 3. Las atrasadas: siguen asignadas y oficina las espera, pero no tapan las de hoy. 4. Las futuras.
  *   Dentro de cada grupo, por fecha; el mismo día por hora de inicio con las de todo el día al final
  *   (`compararPorHorario`) y después por cliente, para que el orden no dependa del servidor.
- * - `atendidasHoy`: las atendidas de hoy, aparte y al final, por si hace falta otro levantamiento (otro formato). Las
+ * - `atendidasHoy`: las atendidas de hoy, aparte y al final, con lo que se envió (ADR-0054: no se inicia otro). Las
  *   de días anteriores no se muestran: su levantamiento sigue en «Enviados».
  */
 export function agendaDeVisitas(
@@ -108,4 +108,15 @@ export function agendaDeVisitas(
   const pendientes = visitas.filter((v) => !atendida(v)).sort((a, b) => grupo(a) - grupo(b) || porCliente(a, b));
   const atendidasHoy = visitas.filter((v) => atendida(v) && deHoy(v)).sort(porCliente);
   return { pendientes, atendidasHoy };
+}
+
+/**
+ * Qué ofrece la visita según los levantamientos del técnico en ella (ADR-0054): un borrador se continúa; uno enviado
+ * se ve, y ya no se inicia otro; sin ninguno, se inicia. Los descartados no cuentan: nunca llegaron a oficina.
+ */
+export function accionDeVisita(levantamientos: readonly { id: string; estado: string }[]): { tipo: "iniciar" } | { tipo: "continuar" | "ver"; id: string } {
+  const borrador = levantamientos.find((l) => l.estado === "borrador");
+  if (borrador) return { tipo: "continuar", id: borrador.id };
+  const enviado = levantamientos.find((l) => l.estado !== "borrador");
+  return enviado ? { tipo: "ver", id: enviado.id } : { tipo: "iniciar" };
 }

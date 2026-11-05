@@ -59,6 +59,10 @@ export async function recibirEnvio(
       if (!formato) throw problema("formato_desconocido", `${datos.formato} versión ${datos.versionFormato}`);
       // Basta con que exista: una visita reasignada después de empezar no invalida el levantamiento (regla 17).
       if (datos.visitaId && !(await deps.visitas.existe(tx, datos.visitaId))) throw problema("entrada_invalida", "La visita del levantamiento no existe");
+      // Un levantamiento por técnico y visita (ADR-0054): el teléfono ya no ofrece otro; esto cubre una app anterior.
+      if (datos.visitaId && (await deps.repositorio.yaTieneEnLaVisita(tx, { visitaId: datos.visitaId, tecnicoId: actor.usuarioId, excepto: datos.id }))) {
+        throw problema("estado_invalido", "Ya enviaste un levantamiento de esta visita");
+      }
 
       // El mismo validador que corrió en el dispositivo (ADR-0010): no puede haber diferencias.
       const borrador: Levantamiento = {

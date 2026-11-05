@@ -104,12 +104,12 @@ describe("archivos sin uso (ADR-0007, ADR-0048)", () => {
     const plano = await subir(oficina.cookie, Buffer.from(`%PDF-1.7 ${randomUUID()} plano ficticio`), "application/pdf");
     await s.procesarCola();
 
-    const enviar = async (fotos: string[]) => {
+    const enviar = async (fotos: string[], cookie = tecnico.cookie) => {
       const id = randomUUID();
       const r = await app.inject({
         method: "POST",
         url: "/api/sync/comandos",
-        headers: { cookie: tecnico.cookie, ...cabecerasSync },
+        headers: { cookie, ...cabecerasSync },
         payload: {
           tipo: "EnviarLevantamiento",
           llave: llaveDeEnvio(id),
@@ -127,7 +127,8 @@ describe("archivos sin uso (ADR-0007, ADR-0048)", () => {
       expect(r.statusCode, r.body).toBe(200);
       return id;
     };
-    await enviar([usada]);
+    // De un segundo técnico: cada uno envía un solo levantamiento por visita (ADR-0054).
+    await enviar([usada], (await s.nuevoTecnico(organizacionId)).cookie);
     const revisado = await enviar([publicada]);
     expect((await post(oficina.cookie, `/api/levantamientos/${revisado}/tomar`, { version: 1 })).statusCode).toBe(200);
     expect((await post(oficina.cookie, `/api/levantamientos/${revisado}/marcar-revisado`, { version: 2 })).statusCode).toBe(200);

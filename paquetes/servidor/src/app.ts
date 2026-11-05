@@ -18,7 +18,7 @@ import { clientesYSitios, crearClientes } from "./modulos/clientes";
 import { crearSincronizacion } from "./modulos/sincronizacion";
 import { crearVisitas } from "./modulos/visitas";
 import { crearInformes } from "./modulos/informes";
-import { crearAccesosDeClientes, crearPortal, renombrarClienteDelPortal } from "./modulos/portal";
+import { accesosDelPortal, crearPortal, renombrarClienteDelPortal } from "./modulos/portal";
 import { crearCatalogo } from "./modulos/catalogo";
 import { crearSimbolos } from "./modulos/simbolos";
 import { crearAvisos } from "./modulos/avisos";
@@ -181,6 +181,8 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   crearClientes({
     bd,
     identidad,
+    // El acceso al portal va con el contacto (ADR-0053).
+    portal: accesosDelPortal,
     porHacer: (tx, clienteId) => visitas.porHacer(tx, clienteId, fechaEnColombia(), levantamientos.conteosPorVisita),
     // Una corrección llega a los teléfonos que tienen sus visitas, y el nombre del cliente, también al portal.
     alCorregir: {
@@ -200,7 +202,6 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   // La hora de red y el mapa de la foto de llegada (ADR-0052).
   crearMapas({ config }).registrarRutas(app);
   visitas.registrarRutas(app, { bd, identidad, conteos: levantamientos.conteosPorVisita });
-  crearAccesosDeClientes(bd).registrarRutas(app, config);
   if (bdPortal) crearPortal({ bdPortal, almacenamiento, config }).registrarRutas(app);
 
   const superficies: Superficie[] = [

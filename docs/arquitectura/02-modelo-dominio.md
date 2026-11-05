@@ -32,7 +32,7 @@ Los diagramas de estados vigentes (levantamiento, visita, envíos al cliente y v
 | **Comentario** | Nota de oficina dirigida al técnico; abre una conversación que el técnico responde desde el teléfono (ADR-0040) | No modifica datos; se cierra al marcar revisado |
 | **Informe** | Composición de oficina a partir de levantamientos revisados, con planos y textos propios | No es el PDF |
 | **Versión publicada** | Copia congelada de un informe, con su PDF, entregada al cliente | Nunca se edita |
-| **Acceso de cliente** | Credencial (QR y clave) con la que un cliente consulta sus informes | No es un usuario interno |
+| **Acceso al portal** | Lo que permite a un contacto del cliente entrar al portal con su correo y un código, y ver lo que recibe (ADR-0053) | No es un usuario interno; es del contacto, no de la empresa |
 | **Plano** | Documento técnico elaborado en oficina con sus propias herramientas | No se dibuja en el sistema |
 
 **Distinción fundamental:** levantamiento ≠ informe. El levantamiento guarda hechos de campo; el informe es una composición editorial de oficina.
@@ -51,7 +51,7 @@ Los diagramas de estados vigentes (levantamiento, visita, envíos al cliente y v
 | Cotizaciones | Cotización desde las cantidades revisadas, lista de precios con historia, versiones y PDF (ADR-0029) | Soporte | Capas simples |
 | Envíos | Envío de informes y cotizaciones a los contactos del cliente por correo y WhatsApp, con su estado (ADR-0028, ADR-0034) | Soporte | Capas simples |
 | Símbolos | Biblioteca de símbolos del croquis que publica la organización (ADR-0027) | Soporte | Capas simples |
-| Portal del cliente | Acceso de cliente, consulta, registro de descargas | Soporte | Capas simples, seguridad reforzada |
+| Portal del cliente | Acceso al portal de cada contacto, pedido de código, consulta, registro de descargas | Soporte | Capas simples, seguridad reforzada |
 | Identidad y acceso | Usuarios, roles, dispositivos, revocación | Genérico | Adaptador sobre solución existente |
 | Trazabilidad | Registro de cambios | Genérico transversal | Desde el día uno |
 | Archivos | Fotos, bocetos, planos | Genérico | Adaptador sobre almacenamiento de objetos |
@@ -89,7 +89,7 @@ erDiagram
   INFORME ||--o{ VERSION_PUBLICADA : "publica"
 ```
 
-**Decisión clave:** una visita contiene varios levantamientos, y cada levantamiento tiene exactamente un técnico responsable y un formato. Resuelve varios técnicos por visita (P4) sin edición simultánea, visitas con varios servicios e informes consolidados.
+**Decisión clave:** una visita contiene varios levantamientos, y cada levantamiento tiene exactamente un técnico responsable y un formato. Resuelve varios técnicos por visita (P4) sin edición simultánea, visitas con varios servicios e informes consolidados. Cada técnico envía uno solo por visita ([ADR-0054](../adr/0054-un-levantamiento-por-tecnico-y-visita.md)).
 
 ---
 
@@ -107,7 +107,7 @@ erDiagram
 | **Cliente** | Datos del cliente y sus sitios | Oficina | Lo necesario, baja |
 | **Informe** | Levantamientos incluidos, planos, textos, orden y qué sale de cada uno (ADR-0039) | Oficina | No |
 | **Versión publicada** | Copia congelada de datos, planos y PDF | Nadie; solo puede retirarse | No |
-| **Acceso de cliente** | Credencial, QR, estado, registro de descargas | Administrador | No |
+| **Acceso al portal** | Contacto, correo, qué ve (informes, cotizaciones), último ingreso, pedido de código vigente, registro de ingresos y descargas | Cualquier persona de oficina | No |
 | **Usuario** | Nombre, identificación, roles, estado | Administrador | Solo el propio |
 | **Dispositivo** | Usuario, última sincronización, orden de borrado | Sistema, administrador | Sí |
 
@@ -170,7 +170,7 @@ Su avance se **deduce** de sus levantamientos e informes. Lo explícito son tres
 9. Un informe solo incluye levantamientos de la misma visita en estado Revisado.
 10. Publicar crea una versión inmutable con número consecutivo; el cliente ve la vigente.
 11. Una versión publicada nunca se borra; puede retirarse con registro.
-12. Un acceso de cliente solo muestra versiones vigentes de su cliente.
+12. Un acceso al portal solo muestra versiones vigentes de su cliente, y solo de lo que el contacto recibe (informes, cotizaciones) (ADR-0053).
 13. Un usuario desactivado no autentica; sus dispositivos se marcan para borrado local; su autoría se conserva.
 14. Nada del negocio se borra físicamente en el servidor: se cancela (visitas, envíos), se archiva (clientes, sitios) o se retira (versiones, comentarios). En borrador, los borrados del técnico viajan como **marcas de borrado** (I-3).
 15. Cada dato pertenece a una organización; ninguna relación cruza organizaciones.
@@ -180,6 +180,7 @@ Su avance se **deduce** de sus levantamientos e informes. Lo explícito son tres
 19. **Las fotos no conservan metadatos** de ubicación ni del dispositivo (QA-23). Una foto de un campo con `sello` lleva dibujada una franja con la hora de red, la hora del teléfono y, si el formato lo pide, las coordenadas, la dirección registrada y un mapa (ADR-0052): las coordenadas quedan a la vista en la imagen, nunca en los metadatos.
 20. **El número de orden de servicio nunca se repite ni se reutiliza** y no cambia al reprogramar, reasignar ni cancelar (ADR-0051).
 21. **Las firmas electrónicas del informe** son el nombre, la cédula y la hora oficial de quien capturó (al enviar) y de quien revisó (al marcar revisado); se copian en la versión publicada y nunca salen en registros ni listas (reglas 7 y 18, ADR-0051).
+22. **Un levantamiento por técnico y visita** (ADR-0054): con uno enviado, el teléfono no ofrece otro y el servidor rechaza un segundo con otro id. Un descartado no cuenta.
 
 ---
 
@@ -214,7 +215,7 @@ El resto, por agregado:
 | Cotización | `cotizacion_creada`, `cotizacion_enviada`, `envio_cancelado`, `envio_reanudado` |
 | Ítem de catálogo | `item_catalogo_creado`, `item_catalogo_actualizado`, `precio_cambiado` |
 | Usuario | `usuario_creado`, `usuario_reactivado`, `contrasena_restablecida`, `contrasena_cambiada`, `administrador_cambiado`, `segundo_factor_activado`, `segundo_factor_quitado`, `llave_de_acceso_creada`, `llave_de_acceso_quitada`, `borrado_local_confirmado` |
-| Acceso de cliente | `acceso_cliente_creado`, `ingreso_portal`, `descarga_portal` |
+| Acceso al portal | En el cliente: `acceso_portal_activado`, `acceso_portal_quitado`; en el acceso: `ingreso_portal`, `descarga_portal` (antes de ADR-0053, `acceso_cliente_creado` y `acceso_cliente_regenerado`) |
 | Organización | `inicio_de_sesion`, `catalogo_importado` |
 
 Cerrar una visita atendida (ADR-0041) no deja evento: es una marca que pone el sistema al bajar.

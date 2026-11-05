@@ -4,7 +4,7 @@ import { ErrorApi } from "@teins/protocolo";
 import { Aviso, Boton, LoaderCircle, useConexion } from "@teins/ui";
 import { consultas } from "./api";
 import { Ingreso } from "./pantallas/Ingreso";
-import { Informes } from "./pantallas/Informes";
+import { Documentos } from "./pantallas/Documentos";
 import { habiaSesion, marcarSesionAbierta } from "./sesion";
 
 export function App() {
@@ -15,7 +15,7 @@ export function App() {
   }, [sesion.data]);
 
   // Dentro de cada pantalla, bajo su marca: explica por qué no carga lo que falta.
-  const sinConexion = !enLinea && <Aviso tono="alerta">Sin conexión. Conéctese a internet para ver y descargar sus informes.</Aviso>;
+  const sinConexion = !enLinea && <Aviso tono="alerta">Sin conexión. Conéctese a internet para ver y descargar sus documentos.</Aviso>;
 
   if (sesion.isPending) {
     return (
@@ -41,5 +41,5 @@ export function App() {
       </main>
     );
   }
-  return <Informes cliente={sesion.data.cliente} aviso={sinConexion} />;
+  return <Documentos sesion={sesion.data} aviso={sinConexion} />;
 }

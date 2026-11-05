@@ -1,5 +1,5 @@
 export { Aviso } from "./Aviso";
-export { FilaDeAjuste, FilaDeTema, GrupoDeAjustes } from "./Ajustes";
+export { FilaDeAjuste, FilaDeTema, GrupoDeAjustes, SelectorDeTema } from "./Ajustes";
 export { Boceto, ElementoDeBoceto, HojasDeBoceto } from "./Boceto";
 export { Firma } from "./Firma";
 export type { ElementoDibujable, HojaDibujable } from "./Boceto";

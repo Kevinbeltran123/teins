@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNotNull, isNull, lt, notInArray, or } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { asunto, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp, type TextoPropio } from "@teins/documentos";
+import { asunto, enlaceAlPortal, htmlDeCorreo, textoDeCorreo, variablesDeWhatsapp, type TextoPropio } from "@teins/documentos";
 import type { Respuesta } from "@teins/protocolo";
 import type { Config } from "../../config";
 import { claveDeObjeto, leerTodo, type Almacenamiento } from "../../plataforma/almacenamiento";
@@ -17,7 +17,7 @@ import { eventoDeResend, eventosDeWhatsapp, firmaMetaValida, firmaSvixValida, ty
 import { NoAceptado, RechazoDefinitivo, type Proveedores } from "./proveedores";
 
 export type { MensajeDeCotizacion, MensajeDeEnvio, MensajeDeInforme } from "./esquema";
-export { proveedoresSegunConfig, proveedoresSimulados, RechazoDefinitivo, type Proveedores, type ProveedorDeCorreo, type ProveedorDeWhatsapp } from "./proveedores";
+export { proveedoresSegunConfig, proveedoresSimulados, RechazoDefinitivo, type CorreoSaliente, type Proveedores, type ProveedorDeCorreo, type ProveedorDeWhatsapp } from "./proveedores";
 
 type EnvioDeVersion = Respuesta<"obtenerInforme">["versiones"][number]["envios"][number];
 
@@ -273,13 +273,35 @@ export interface Envios {
 }
 
 /** Interfaz pública del módulo de envíos al cliente (ADR-0028). */
-export function crearEnvios({ bd, almacenamiento, config, proveedores = {} }: { bd: BaseDeDatos; almacenamiento: Almacenamiento; config: Config; proveedores?: Proveedores }): Envios {
+/** Si el contacto tiene acceso al portal (ADR-0053): lo responde el módulo del portal; la composición lo pasa. */
+export type AccesoAlPortal = (tx: TxOrganizacion, contactoId: string) => Promise<boolean>;
+
+export function crearEnvios({
+  bd,
+  almacenamiento,
+  config,
+  proveedores = {},
+  accesoAlPortal,
+}: {
+  bd: BaseDeDatos;
+  almacenamiento: Almacenamiento;
+  config: Config;
+  proveedores?: Proveedores;
+  accesoAlPortal?: AccesoAlPortal | undefined;
+}): Envios {
+  /** El botón del correo lleva al documento en el portal, solo si este contacto puede entrar (ADR-0053). */
+  async function enlaceDe(fila: FilaEnvio): Promise<string | undefined> {
+    if (!config.PORTAL_URL || !accesoAlPortal) return undefined;
+    const puede = await enOrganizacion(bd, fila.organizacionId, (tx) => accesoAlPortal(tx, fila.contactoId));
+    return puede ? enlaceAlPortal(config.PORTAL_URL, fila.mensaje) : undefined;
+  }
+
   async function salir(fila: FilaEnvio, pdf: Buffer): Promise<{ id: string }> {
     const m = fila.mensaje;
     if (fila.canal === "correo") {
       if (!proveedores.correo) throw new RechazoDefinitivo("El envío por correo no está configurado en este entorno");
       const sinAdjunto = pdf.length > BYTES_MAXIMOS_ADJUNTO;
-      const opciones = { nombre: fila.contactoNombre, portal: m.documento === "cotizacion" ? undefined : config.PORTAL_URL, sinAdjunto };
+      const opciones = { nombre: fila.contactoNombre, portal: await enlaceDe(fila), sinAdjunto };
       return proveedores.correo({
         idempotencia: fila.id,
         de: config.CORREO_REMITENTE,

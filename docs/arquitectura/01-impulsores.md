@@ -42,7 +42,7 @@ Fuentes: resumen de la reunión con el dueño de TEINS, respuestas a las pregunt
 | F5 | Estados: borrador → enviado → revisión → revisado → publicado | Define quién edita en cada momento |
 | F6 | Trazabilidad de cambios | Historial diseñado desde el inicio |
 | F7 | Informe PDF con fotos y planos | Generación pesada; debe ser reproducible |
-| F8 | Portal del cliente con QR y clave, por cliente, disponible indefinidamente | Superficie expuesta a internet; aislamiento entre clientes |
+| F8 | Portal del cliente por contacto, con código por correo, con informes y cotizaciones, disponible indefinidamente (desde el 2026-11-03, ADR-0053; antes, QR y clave por cliente) | Superficie expuesta a internet; aislamiento entre clientes |
 | F9 | Cantidades con texto libre y catálogo, exportables a Excel; precios a futuro | Normalización posterior y crecimiento hacia presupuestos |
 | F10 | Cinco funciones: técnico, oficina, supervisor, administrador, cliente | Autorización por rol y por cliente |
 
@@ -64,10 +64,10 @@ Fuentes: resumen de la reunión con el dueño de TEINS, respuestas a las pregunt
 
 | ID | Escenario | Medida de éxito | I | D |
 |---|---|---|---|---|
-| QA-4 | Un cliente autenticado intenta ver informes de otro cliente | Cero accesos cruzados, comprobado con pruebas automáticas; el QR nunca reemplaza la clave | A | M |
+| QA-4 | Un cliente autenticado intenta ver informes de otro cliente | Cero accesos cruzados, comprobado con pruebas automáticas, en informes y cotizaciones (ADR-0053) | A | M |
 | QA-5 | Se revoca a un empleado que se retira | Pierde acceso al servidor de inmediato; su dispositivo borra los datos de TEINS al reconectar | A | M |
 | QA-6 | Un dispositivo personal con datos queda en manos equivocadas | Datos locales no legibles fuera de la app; reautenticación tras un periodo sin conexión | M | M |
-| QA-7 | Intentos de adivinar claves del portal | Bloqueo o retraso tras intentos fallidos; claves con hash adecuado | A | B |
+| QA-7 | Intentos de adivinar códigos del portal | Bloqueo o retraso tras intentos fallidos; códigos de un solo uso, guardados como HMAC (ADR-0053) | A | B |
 | QA-23 | Se captura una foto con el celular | Ninguna foto almacenada ni publicada conserva metadatos de ubicación o dispositivo | A | B |
 
 ### Trazabilidad y durabilidad

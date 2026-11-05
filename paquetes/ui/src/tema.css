@@ -289,3 +289,17 @@ dialog.capa-hoja[open]::backdrop { animation: velo-entra var(--t-duracion-estand
 @keyframes giro {
   to { transform: rotate(360deg); }
 }
+
+/*
+  Pestañas subrayadas (`Pestanas`): de oficina y del portal (ADR-0053). Las de oficina van en su barra de lista, que pone
+  la línea de abajo; las del portal, «amplias», más grandes para el teléfono y con su propia línea.
+*/
+.subrayado { display: flex; gap: 18px; overflow-x: auto; }
+.subrayado button { background: none; border: 0; padding: 10px 0; margin-bottom: -1px; font-size: 13px; color: var(--t-texto-secundario); display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; position: relative; border-bottom: 2px solid transparent; }
+.subrayado button[aria-selected="true"] { color: var(--t-texto); font-weight: 500; }
+/* El subrayado es un elemento con nombre de transición: al cambiar de pestaña se desliza a la nueva */
+.subrayado .indicador { position: absolute; left: 0; right: 0; bottom: -2px; height: 2px; border-radius: 2px; background: var(--t-texto); }
+.subrayado .num { font-size: 12px; color: var(--t-texto-terciario); font-weight: 400; }
+.subrayado.amplio { gap: 22px; border-bottom: 1px solid var(--t-division); }
+.subrayado.amplio button { font-size: 15px; min-height: 44px; padding: 0; }
+.subrayado.amplio .num { font-size: 13px; }

@@ -59,12 +59,14 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0050](0050-seleccion-horario-tablas-y-sello-en-los-formatos.md) | Selección, horario, tablas de medidas y sello en los formatos (amplía 0006) | Aceptada |
 | [0051](0051-encabezado-y-firmas-del-informe.md) | El encabezado y las firmas del informe salen de la visita y de las cuentas | Aceptada |
 | [0052](0052-hora-ubicacion-y-mapa-en-la-foto-de-llegada.md) | Hora, ubicación y mapa en la foto de llegada (reemplaza en parte 0009) | Aceptada |
+| [0054](0054-un-levantamiento-por-tecnico-y-visita.md) | Un levantamiento por técnico y visita: el teléfono no ofrece otro y el servidor lo rechaza | Aceptada |
 
 ### Identidad y acceso
 
 | ADR | Decisión | Estado |
 |---|---|---|
-| [0009](0009-identidad-y-acceso.md) | Sesiones revocables, autorización central y seguridad por fila en el portal | Aceptada; la parte 5 la concreta 0022; 0052 reemplaza su fila «sin GPS en fotos» |
+| [0009](0009-identidad-y-acceso.md) | Sesiones revocables, autorización central y seguridad por fila en el portal | Aceptada; la parte 5 la concreta 0022; 0052 reemplaza su fila «sin GPS en fotos»; 0053 reemplaza su parte 4 |
+| [0053](0053-acceso-al-portal-por-contacto.md) | Acceso al portal por contacto, con código por correo, e informes y cotizaciones (reemplaza la parte 4 de 0009) | Aceptada |
 | [0033](0033-reactivar-usuarios-y-cuenta-propia.md) | Reactivar usuarios y administrar la cuenta propia | Aceptada |
 
 ### Visitas

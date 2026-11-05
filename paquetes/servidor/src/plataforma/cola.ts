@@ -8,6 +8,8 @@ export interface Trabajos {
   "avisos.enviar": { organizacionId: string; suscripcionId: string; titulo: string; cuerpo: string; etiqueta: string; ruta?: string | undefined };
   "envios.enviar": { organizacionId: string; envioId: string; pdfRuta: string };
   "cotizaciones.generarPdf": { organizacionId: string; versionId: string };
+  /** Correos del portal (ADR-0053): el código de un pedido o la invitación al dar acceso. Nunca llevan el código. */
+  "portal.correo": { organizacionId: string; accesoId: string; tipo: "codigo" | "invitacion"; pedidoId?: string | undefined };
   /** Tarea periódica (ADR-0043): sin datos; la programa el worker cada hora. */
   "mantenimiento.recuperar": Record<string, unknown>;
 }

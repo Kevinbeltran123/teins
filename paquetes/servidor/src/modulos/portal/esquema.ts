@@ -1,32 +1,60 @@
 import { sql } from "drizzle-orm";
-import { index, integer, pgPolicy, pgSchema, text, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgPolicy, pgSchema, text, unique, uuid } from "drizzle-orm/pg-core";
 import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId, rolPortal } from "../../plataforma/esquema-comun";
 
 export const esquemaPortal = pgSchema("portal");
 
 /**
- * Acceso de cliente (ADR-0009, parte 4): uno por cliente. El identificador viaja en el QR; la clave
- * solo se guarda como hash. Regenerar cambia ambos. Lo crea y regenera la aplicación (rol teins_app);
- * el portal solo lo lee para el ingreso, sin conocer todavía la organización.
+ * Acceso al portal de un contacto del cliente (ADR-0053). Lo dan y lo quitan oficina (rol teins_app, desde el módulo
+ * de clientes); el portal lo lee para el ingreso, sin conocer todavía la organización, y anota el último ingreso.
+ * Las copias del correo, los nombres y lo que ve se mantienen al día con el contacto: el portal no lee clientes.
  */
-export const accesosDeClientes = esquemaPortal.table(
+export const accesosDeContactos = esquemaPortal.table(
   "accesos",
   {
     id: uuid("id").primaryKey(),
     organizacionId: organizacionId(),
     clienteId: uuid("cliente_id").notNull(),
-    /** Copia del nombre del cliente: el portal no puede leer la tabla de clientes. Se corrige con el cliente. */
+    contactoId: uuid("contacto_id").notNull(),
+    /** En minúsculas, como se escribe al pedir el código. */
+    correo: text("correo").notNull(),
+    contactoNombre: text("contacto_nombre").notNull(),
     clienteNombre: text("cliente_nombre").notNull(),
-    identificador: text("identificador").notNull().unique(),
-    claveHash: text("clave_hash").notNull(),
+    /** Para el asunto del correo y la marca del portal. */
+    organizacionNombre: text("organizacion_nombre").notNull(),
+    veInformes: boolean("ve_informes").notNull(),
+    veCotizaciones: boolean("ve_cotizaciones").notNull(),
     creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
-    regeneradoEn: marcaDeTiempo("regenerado_en"),
+    ultimoIngreso: marcaDeTiempo("ultimo_ingreso"),
   },
   (t) => [
-    unique("accesos_uno_por_cliente").on(t.organizacionId, t.clienteId),
+    unique("accesos_uno_por_contacto").on(t.organizacionId, t.contactoId),
+    unique("accesos_un_correo").on(t.organizacionId, t.correo),
+    index("accesos_cliente_idx").on(t.organizacionId, t.clienteId),
     aislamientoPorOrganizacion("accesos"),
     pgPolicy("accesos_portal_lectura", { as: "permissive", to: rolPortal, for: "select", using: sql`true` }),
+    pgPolicy("accesos_portal_ingreso", { as: "permissive", to: rolPortal, for: "update", using: sql`true`, withCheck: sql`true` }),
   ],
+).enableRLS();
+
+/**
+ * Pedido de código (ADR-0053): uno vigente por acceso; pedir otro lo reemplaza. El código se deriva del id del pedido
+ * con un secreto del servidor (claves.ts): aquí no queda. La huella es la de la cookie del navegador que lo pidió.
+ */
+export const pedidosDeCodigo = esquemaPortal.table(
+  "pedidos",
+  {
+    accesoId: uuid("acceso_id")
+      .primaryKey()
+      .references(() => accesosDeContactos.id, { onDelete: "cascade" }),
+    organizacionId: organizacionId(),
+    pedidoId: uuid("pedido_id").notNull(),
+    navegadorHuella: text("navegador_huella").notNull(),
+    expiraEn: marcaDeTiempo("expira_en").notNull(),
+    intentos: integer("intentos").notNull().default(0),
+    creadoEn: marcaDeTiempo("creado_en").notNull().defaultNow(),
+  },
+  () => [aislamientoPorOrganizacion("pedidos"), pgPolicy("pedidos_portal", { as: "permissive", to: rolPortal, for: "all", using: sql`true`, withCheck: sql`true` })],
 ).enableRLS();
 
 /** Sesión corta del portal. Se guarda la huella del token, nunca el token (va en la cookie). */
@@ -36,7 +64,7 @@ export const sesionesDelPortal = esquemaPortal.table(
     tokenHuella: text("token_huella").primaryKey(),
     accesoId: uuid("acceso_id")
       .notNull()
-      .references(() => accesosDeClientes.id),
+      .references(() => accesosDeContactos.id, { onDelete: "cascade" }),
     organizacionId: organizacionId(),
     clienteId: uuid("cliente_id").notNull(),
     creadaEn: marcaDeTiempo("creada_en").notNull().defaultNow(),
@@ -49,7 +77,7 @@ export const sesionesDelPortal = esquemaPortal.table(
   ],
 ).enableRLS();
 
-/** Límite de intentos (QA-7), por identificador y por origen. Solo lo usa el portal. */
+/** Límite de intentos (QA-7), por correo y por origen. Solo lo usa el portal. */
 export const intentos = esquemaPortal.table("intentos", {
   llave: text("llave").primaryKey(),
   fallos: integer("fallos").notNull(),

@@ -15,4 +15,5 @@ export const clienteDeConsultas = new QueryClient({
 export const consultas = {
   sesion: () => queryOptions({ queryKey: ["sesion"], queryFn: () => cliente.llamar("sesionDelPortal"), staleTime: 60_000 }),
   informes: () => queryOptions({ queryKey: ["informes"], queryFn: () => cliente.llamar("informesDelPortal") }),
+  cotizaciones: () => queryOptions({ queryKey: ["cotizaciones"], queryFn: () => cliente.llamar("cotizacionesDelPortal") }),
 };

@@ -141,6 +141,8 @@ describe("envío del informe al cliente (ADR-0028)", () => {
   it("los envíos esperan el PDF y salen con el adjunto por correo y WhatsApp", async () => {
     const { oficina, clienteId, informeId } = await informeListoParaPublicar();
     const [ana] = await crearContacto(oficina.cookie, clienteId, ANA);
+    // Con acceso al portal, el botón del correo lleva a este informe (ADR-0053).
+    expect((await post(oficina.cookie, `/api/clientes/${clienteId}/contactos/${ana!.id}/portal`, { activo: true })).statusCode).toBe(200);
     const publicada = await post(oficina.cookie, `/api/informes/${informeId}/publicar`, { version: 2, destinatarios: [ana!.id] });
     expect(publicada.statusCode, publicada.body).toBe(201);
     expect((await enviosDe(oficina.cookie, informeId)).map((e) => [e.canal, e.estado])).toEqual(
@@ -159,7 +161,8 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     expect(alCorreo).toMatchObject({ para: "ana@cliente.example", asunto: "Informe de la visita del 3 oct 2026 · Sede Norte", adjunto: { nombre: "Informe Clínica ficticia - Sede Norte - versión 1.pdf" } });
     expect(alCorreo.adjunto!.contenido.subarray(0, 5).toString()).toBe("%PDF-");
     expect(alCorreo.texto).toContain("Hola, Ana:");
-    expect(alCorreo.html).toContain("https://portal.example.com");
+    expect(alCorreo.html).toContain(`href="https://portal.example.com/informes/${informeId}"`);
+    expect(alCorreo.texto).toContain(`https://portal.example.com/informes/${informeId}`);
 
     const alWhatsapp = whatsapps.find((m) => m.referencia.endsWith(envios.find((e) => e.canal === "whatsapp")!.id))!;
     expect(alWhatsapp).toMatchObject({ para: "+573005550117", plantilla: "informe_publicado", idioma: "es", variables: ["Ana", "3 oct 2026", "Sede Norte", "1"] });
@@ -232,8 +235,9 @@ describe("envío del informe al cliente (ADR-0028)", () => {
     expect(alCorreo.asunto).toBe("Informe de su UPS");
     expect(alCorreo.texto).toContain("Hola, Ana:\n\nLe dejamos el informe de la visita.");
     expect(alCorreo.html).toContain("Cualquier duda &lt;nos escribe&gt;.");
-    // El portal y el pie los sigue poniendo la plantilla.
-    expect(alCorreo.html).toContain("https://portal.example.com");
+    // Sin acceso al portal, el correo no lleva el botón: lo trae el PDF adjunto (ADR-0053). El pie lo sigue poniendo la plantilla.
+    expect(alCorreo.html).not.toContain("https://portal.example.com");
+    expect(alCorreo.html).toContain("Recibe este correo porque es contacto de");
     const alWhatsapp = whatsapps.find((m) => m.para === "+573005550118")!;
     expect(alWhatsapp.plantilla).toBe("informe_publicado");
 
@@ -590,13 +594,16 @@ describe("eventos de los proveedores (ADR-0028, parte 4)", () => {
 describe("mensajes y firmas", () => {
   const mensaje = { organizacion: "TEINS", cliente: "Clínica <ficticia>", sitio: "Sede Norte", motivo: "UPS", programadaPara: "2026-10-03", numero: 2, nombreArchivo: "x.pdf" };
 
-  it("la cotización tiene su asunto y su texto, sin el portal (ADR-0029)", () => {
+  it("la cotización tiene su asunto y su texto, y el botón al portal si el contacto tiene acceso (ADR-0029, ADR-0053)", () => {
     const cotizacion = { documento: "cotizacion" as const, organizacion: "TEINS", cliente: "Clínica <ficticia>", sitio: "Sede Norte", cotizacion: "COT-2026-0007", numero: 2, nombreArchivo: "x.pdf" };
     expect(asunto(cotizacion)).toBe("Cotización COT-2026-0007 · Sede Norte (versión 2)");
     const texto = textoDeCorreo(cotizacion, { nombre: "Marta Gil", portal: undefined, sinAdjunto: false });
     expect(texto).toContain("Le enviamos la cotización COT-2026-0007 para Sede Norte. Va adjunta en PDF.");
     expect(texto).toContain("para las cotizaciones");
     expect(htmlDeCorreo(cotizacion, { nombre: "Marta Gil", portal: undefined, sinAdjunto: false })).toContain("Clínica &lt;ficticia&gt;");
+    const conAcceso = htmlDeCorreo(cotizacion, { nombre: "Marta Gil", portal: "https://portal.example.com/cotizaciones/0192f0e0-0000-7000-8000-000000000001", sinAdjunto: false });
+    expect(conAcceso).toContain('href="https://portal.example.com/cotizaciones/0192f0e0-0000-7000-8000-000000000001"');
+    expect(conAcceso).toContain("Para entrar, escriba su correo y le enviaremos un código.");
     expect(variablesDeWhatsapp(cotizacion, "Marta Gil")).toEqual(["Marta", "COT-2026-0007", "Sede Norte", "2"]);
   });
 

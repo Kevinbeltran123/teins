@@ -77,6 +77,11 @@ const Esquema = z.object({
   DIAS_PERMISO_LOCAL: z.coerce.number().int().min(1).max(30).default(7),
   /** Intentos de inicio de sesión por minuto y dirección (QA-7). */
   INICIOS_DE_SESION_POR_MINUTO: z.coerce.number().int().min(1).max(10_000).default(5),
+  /**
+   * Intentos del portal desde un mismo origen antes de esperar (QA-7, ADR-0053): pedidos de código e ingresos fallidos,
+   * cada uno con su cuenta. El extremo a extremo lo sube: todas sus pruebas salen de la misma dirección.
+   */
+  PORTAL_INTENTOS_POR_ORIGEN: z.coerce.number().int().min(1).max(10_000).default(20),
 
   /**
    * Avisos push (ADR-0023). Claves VAPID generadas con `generar-claves-avisos`; sin ellas, los avisos están

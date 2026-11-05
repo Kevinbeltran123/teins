@@ -37,7 +37,7 @@ src/
     informes/        Informe por visita, versiones publicadas inmutables y su PDF (ADR-0013, 0024, 0039).
     cotizaciones/    Cotizaciones desde las cantidades revisadas (ADR-0029, 0034).
     envios/          Informe y cotización al cliente por correo y WhatsApp (ADR-0028, 0034, 0036).
-    portal/          Accesos de cliente y rutas del portal, con la conexión de `teins_portal` (ADR-0009).
+    portal/          Acceso al portal de cada contacto, ingreso con código y rutas del portal, con la conexión de `teins_portal` (ADR-0009, ADR-0053).
     avisos/          Avisos push (ADR-0023, ADR-0040).
     mantenimiento/   La tarea periódica: recupera trabajos a medias, poda y borra archivos sin uso (ADR-0043, ADR-0044, ADR-0048).
 migraciones/    SQL generado por drizzle-kit más migraciones propias (permisos, cola). La última es 0039 (archivos sin uso, ADR-0048).
@@ -58,7 +58,7 @@ Reglas de la estructura:
 | Rol | Uso | Permisos |
 |---|---|---|
 | Dueño (`DATABASE_URL_PROPIETARIO`) | Migraciones, cola de trabajos y compactar el registro de cambios. Solo la reciben el worker, `migrar`, `sembrar` y `crear-organizacion` (la exigen con `urlDelPropietario`); el rol web arranca sin ella | Dueño de los esquemas |
-| `teins_portal` (`DATABASE_URL_PORTAL`) | Rutas del portal del cliente | Solo versiones publicadas con PDF listo del cliente de la sesión, sus accesos, sesiones e intentos, y registrar en auditoría |
+| `teins_portal` (`DATABASE_URL_PORTAL`) | Rutas del portal del cliente | Solo versiones publicadas (informes y cotizaciones) con PDF listo del cliente de la sesión; leer los accesos y anotar el último ingreso; sus pedidos de código, sesiones e intentos; encolar el correo del código con `cola.encolar_correo_del_portal`; y registrar en auditoría |
 | `teins_app` (`DATABASE_URL`) | Solicitudes y trabajos de negocio | Mínimos por tabla; sujeto a seguridad por fila; solo inserta y lee en auditoría, formatos y el registro de cambios; no borra en ninguna tabla de negocio |
 
 `teins_app` lo crea la infraestructura con `infra/roles.sql` (en local lo hace Docker Compose).
@@ -80,7 +80,7 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 
 ## Comandos de administración
 
-`pnpm --filter @teins/servidor <comando>`; en un entorno desplegado, `node dist/cli/<comando>.js` (la imagen incluye todo `src/cli/`, `scripts/compilar.mjs`). Usuarios, accesos de clientes y retiro de versiones también se hacen en oficina, en "Administración"; clientes, sitios y visitas, en "Clientes" y "Visitas". Los comandos quedan para la primera persona administradora, la publicación de formatos y símbolos y la operación por consola.
+`pnpm --filter @teins/servidor <comando>`; en un entorno desplegado, `node dist/cli/<comando>.js` (la imagen incluye todo `src/cli/`, `scripts/compilar.mjs`). Usuarios y retiro de versiones también se hacen en oficina, en "Administración"; clientes, sitios, visitas y el acceso al portal de cada contacto, en "Clientes" y "Visitas". Los comandos quedan para la primera persona administradora, la publicación de formatos y símbolos y la operación por consola.
 
 | Comando | Qué hace |
 |---|---|
@@ -95,7 +95,7 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 | `fijar-consecutivo-de-ordenes` | `--organizacion <uuid> --ultimo <n>`: la siguiente visita sigue desde el número de TEINS (ADR-0051). Nunca baja ni repite un número |
 | `publicar-formato` | Publica una versión de formato desde un JSON; llega a los teléfonos en la siguiente bajada |
 | `publicar-simbolos` | Publica la biblioteca de símbolos desde un JSON (ADR-0027): crea o cambia cada símbolo y retira los que ya no están. La de prueba es `@teins/dominio/formatos-de-prueba/simbolos-prueba.json`, que `sembrar` publica |
-| `crear-acceso-cliente`, `regenerar-acceso-cliente` | Acceso de un cliente al portal: muestra una sola vez identificador, clave y QR (`--qr archivo.svg` lo guarda); regenerar invalida el anterior y sus sesiones |
+| `ultimo-correo --para <correo>` | El último correo simulado que salió a esa dirección (asunto y texto): la prueba de extremo a extremo lee de aquí el código del portal (ADR-0053). Se niega en producción o con el correo real |
 | `generar-claves-avisos` | Imprime un par de claves VAPID para `AVISOS_VAPID_PUBLICA` y `AVISOS_VAPID_PRIVADA` (ADR-0023). La privada es un secreto: va a las variables del entorno, nunca al repositorio. Sin claves, los avisos quedan apagados |
 | `verificar-integridad` | Verifica todas las cadenas de la auditoría de una base; recibe la conexión del dueño en `DATABASE_URL`. Lo usa el simulacro de restauración (`docs/proceso/produccion.md`) |
 
@@ -182,9 +182,9 @@ La tarea periódica `mantenimiento.recuperar` corre cada hora en el minuto 17 (`
 
 También borra, con la conexión del dueño, la fila y el objeto de las fotos, bocetos y firmas sin actividad en 120 días que ningún levantamiento usa (`limpiarArchivosSinUso`, 500 por organización y pasada). Lo usado queda marcado en `archivos.en_uso_comprobado_en` y no se vuelve a mirar. Los planos y los PDF generados nunca entran. La limpieza bloquea las filas con `for update skip locked` y `archivos.estados` las lee con `for share`, así que un envío en curso nunca pierde un archivo.
 
-### Portal (ADR-0009)
+### Portal (ADR-0053)
 
-Accesos de cliente con scrypt, límite de intentos y sesiones cortas, siempre con la conexión de `teins_portal`.
+Un acceso por contacto, con correo; lo dan y lo quitan las rutas de clientes (`cambiarAccesoAlPortal`) por el puerto `PortalDeContactos`, que `app.ts` conecta con `accesosDelPortal`. Lo que cambia en el contacto (correo, nombre, qué recibe) cambia el acceso en la misma transacción; quitarlo borra sus sesiones y su pedido. El código (6 dígitos, 10 minutos, 5 intentos, un solo uso, atado a la cookie del navegador que lo pidió) se deriva con HMAC del id del pedido y un secreto por HKDF de `AUTH_SECRETO` (`portal/claves.ts`): no se guarda en la base ni pasa por la cola; el worker lo calcula al enviar el correo (`crearCorreosDelPortal`, trabajo `portal.correo`). Límite de pedidos por correo y de intentos por origen, y sesiones de 30 minutos desde el último uso, siempre con la conexión de `teins_portal`. El botón «Ver en el portal» de los correos de documentos sale solo si el contacto tiene acceso (`accesoAlPortal` en `crearEnvios`).
 
 ## Pruebas
 

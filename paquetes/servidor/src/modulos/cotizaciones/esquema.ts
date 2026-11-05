@@ -1,7 +1,8 @@
-import { bigint, index, integer, jsonb, pgSchema, primaryKey, text, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { bigint, index, integer, jsonb, pgPolicy, pgSchema, primaryKey, text, unique, uuid } from "drizzle-orm/pg-core";
 import type { ContenidoCotizacion } from "@teins/documentos";
 import type { CondicionesCotizacion, Impuestos, LineaDeCotizacion } from "@teins/dominio";
-import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId } from "../../plataforma/esquema-comun";
+import { aislamientoPorOrganizacion, marcaDeTiempo, organizacionId, rolPortal } from "../../plataforma/esquema-comun";
 
 export const esquemaCotizaciones = pgSchema("cotizaciones");
 
@@ -52,6 +53,8 @@ export const versionesCotizacion = esquemaCotizaciones.table(
     cotizacionId: uuid("cotizacion_id")
       .notNull()
       .references(() => cotizaciones.id),
+    /** Cliente de la cotización al publicar: la barrera del portal filtra por él (ADR-0053, QA-4). */
+    clienteId: uuid("cliente_id"),
     numero: integer("numero").notNull(),
     contenido: jsonb("contenido").$type<ContenidoCotizacion>().notNull(),
     total: bigint("total", { mode: "number" }).notNull(),
@@ -65,5 +68,19 @@ export const versionesCotizacion = esquemaCotizaciones.table(
     retiradaPor: text("retirada_por"),
     motivoRetiro: text("motivo_retiro"),
   },
-  (t) => [unique("versiones_numero_por_cotizacion").on(t.cotizacionId, t.numero), aislamientoPorOrganizacion("versiones")],
+  (t) => [
+    unique("versiones_numero_por_cotizacion").on(t.cotizacionId, t.numero),
+    aislamientoPorOrganizacion("versiones"),
+    // Como los informes (ADR-0009, parte 3; ADR-0053): aunque el código del portal falle, la base solo le devuelve lo
+    // publicado, con PDF listo y sin retirar, de la organización y el cliente de la sesión.
+    pgPolicy("versiones_cotizacion_portal_cliente", {
+      as: "permissive",
+      to: rolPortal,
+      for: "select",
+      using: sql`organizacion_id = nullif(current_setting('app.organizacion', true), '')::uuid
+        and cliente_id = nullif(current_setting('app.cliente', true), '')::uuid
+        and pdf_estado = 'listo'
+        and retirada_en is null`,
+    }),
+  ],
 ).enableRLS();

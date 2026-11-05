@@ -1,44 +1,31 @@
-import { createHash, randomInt, scrypt, timingSafeEqual, randomBytes } from "node:crypto";
-import { promisify } from "node:util";
+import { createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
+import type { Config } from "../../config";
 
-const derivar = promisify(scrypt) as (clave: string, sal: Buffer, largo: number, opciones: { N: number; r: number; p: number; maxmem: number }) => Promise<Buffer>;
+/**
+ * Secreto de los códigos del portal (ADR-0053): derivado de `AUTH_SECRETO` con HKDF y una etiqueta propia, así no hay
+ * otra variable que poner en cada entorno y no se reutiliza la misma llave para dos cosas.
+ */
+export const secretoDeCodigos = (config: Pick<Config, "AUTH_SECRETO">): Buffer => Buffer.from(hkdfSync("sha256", config.AUTH_SECRETO, "", "teins-portal-codigos-v1", 32));
 
-/** Sin letras ni números que se confunden al leerlos en voz alta o escribirlos (0/O, 1/l/I). */
-const MINUSCULAS = "abcdefghjkmnpqrstuvwxyz23456789";
-const MAYUSCULAS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const aleatorio = (alfabeto: string, largo: number) => Array.from({ length: largo }, () => alfabeto[randomInt(alfabeto.length)]).join("");
-
-/** 20 caracteres de 31 posibles, unos 99 bits: no se puede adivinar ni recorrer. */
-export const nuevoIdentificador = () => aleatorio(MINUSCULAS, 20);
-
-/** 12 caracteres (unos 59 bits), en grupos de cuatro para dictarla: ABCD-EFGH-JKMN. */
-export function nuevaClave(): string {
-  const c = aleatorio(MAYUSCULAS, 12);
-  return `${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8)}`;
+/**
+ * El código de un pedido: 6 dígitos del HMAC del id del pedido con el secreto. La base solo guarda el id (aleatorio),
+ * así que sin el secreto un respaldo no permite calcularlo; y el worker que envía el correo llega al mismo código sin
+ * que pase por la cola. El sesgo de reducir 32 bits a 10⁶ es de una parte en 4294: no da ventaja para adivinarlo.
+ */
+export function derivarCodigo(secreto: Buffer, pedidoId: string): string {
+  const n = createHmac("sha256", secreto).update(`codigo:${pedidoId}`).digest().readUInt32BE(0);
+  return String(n % 1_000_000).padStart(6, "0");
 }
 
-/** El cliente puede escribirla con minúsculas, espacios o sin guiones. */
-export const normalizarClave = (clave: string) => clave.toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-const PARAMETROS = { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
-
-/** Hash resistente a fuerza bruta (QA-7): scrypt con sal propia, parámetros guardados con el hash. */
-export async function hashDeClave(clave: string): Promise<string> {
-  const sal = randomBytes(16);
-  const hash = await derivar(normalizarClave(clave), sal, 32, PARAMETROS);
-  return `scrypt$${PARAMETROS.N}$${PARAMETROS.r}$${PARAMETROS.p}$${sal.toString("base64")}$${hash.toString("base64")}`;
+/** Compara en tiempo constante: lo que se escribió no revela cuántos dígitos acertó. */
+export function mismoCodigo(secreto: Buffer, pedidoId: string, escrito: string): boolean {
+  const esperado = Buffer.from(derivarCodigo(secreto, pedidoId));
+  const recibido = Buffer.from(escrito.padEnd(6).slice(0, 6));
+  return timingSafeEqual(esperado, recibido);
 }
 
-export async function verificarClave(clave: string, guardado: string): Promise<boolean> {
-  const [algoritmo, n, r, p, sal, hash] = guardado.split("$");
-  if (algoritmo !== "scrypt" || !sal || !hash) return false;
-  const esperado = Buffer.from(hash, "base64");
-  const calculado = await derivar(normalizarClave(clave), Buffer.from(sal, "base64"), esperado.length, { N: Number(n), r: Number(r), p: Number(p), maxmem: PARAMETROS.maxmem });
-  return timingSafeEqual(calculado, esperado);
-}
-
-/** Con un identificador desconocido se verifica igual contra este hash: la respuesta tarda lo mismo. */
-export const HASH_DE_RELLENO = "scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+/** Compara dos huellas hexadecimales en tiempo constante. */
+export const mismaHuella = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 export const nuevoToken = () => randomBytes(32).toString("base64url");
 export const huellaDeToken = (token: string) => createHash("sha256").update(token).digest("hex");

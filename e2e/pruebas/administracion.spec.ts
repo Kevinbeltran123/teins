@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { nuevaVisitaConCliente, nuevoAdministrador } from "../consola";
-import { CAMPO, OFICINA, PORTAL } from "../destino";
+import { CAMPO, OFICINA } from "../destino";
 import { codigoTotp } from "../totp";
 import { dejarPasar, iniciarSesion, volverALaPestana } from "./ayudas";
 
@@ -36,7 +36,7 @@ test("los códigos de respaldo siguen a la vista hasta decir que se guardaron, a
   await escritorio.close();
 });
 
-test("administrar exige segundo factor; con él se crea un técnico y el acceso de un cliente, y se ve su teléfono (iteración 6)", async ({ browser }) => {
+test("administrar exige segundo factor; con él se crea un técnico y se ve su teléfono (iteración 6)", async ({ browser }) => {
   const admin = nuevoAdministrador();
   // Oficina se usa en un monitor de escritorio (docs/diseno/pendientes.md).
   const escritorio = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: "es-CO" });
@@ -119,30 +119,5 @@ test("administrar exige segundo factor; con él se crea un técnico y el acceso 
   await telefono.close();
   await page.getByRole("tab", { name: "Teléfonos de campo" }).click();
   await expect(page.getByRole("row").filter({ hasText: tecnico.nombre })).toContainText("En uso");
-
-  // Acceso del cliente al portal, con QR y clave, que sirve de una vez.
-  await page.getByRole("tab", { name: "Accesos de clientes" }).click();
-  await page.getByRole("row").filter({ hasText: cliente }).getByRole("button", { name: `Crear acceso de ${cliente}` }).click();
-  await expect(page.getByRole("img", { name: `Código QR del acceso de ${cliente}` })).toBeVisible();
-  const acceso = page.getByRole("dialog", { name: "Acceso al portal creado" });
-  const claveCliente = (await acceso.locator("li:has-text('Dicte la clave') code").textContent())!;
-  const identificador = (await acceso.locator("p:has-text('va en el QR') code").textContent())!;
-  const celular = await browser.newContext({ locale: "es-CO", viewport: { width: 390, height: 844 } });
-  const c = await celular.newPage();
-  await c.goto(`${PORTAL}/?acceso=${identificador}`);
-  await c.getByLabel("Clave").fill(claveCliente);
-  await c.getByRole("button", { name: "Ver mis informes" }).click();
-  await expect(c.getByRole("heading", { name: `Informes de ${cliente}` })).toBeVisible();
-
-  // Regenerar cierra la sesión abierta del cliente, y el portal le dice por qué.
-  await acceso.getByRole("button", { name: "Ya la entregué" }).click();
-  await page.getByRole("row").filter({ hasText: cliente }).getByRole("button", { name: `Más acciones para ${cliente}` }).click();
-  await page.getByRole("menuitem", { name: "Regenerar acceso" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Regenerar acceso" }).click();
-  await expect(page.getByRole("img", { name: `Código QR del acceso de ${cliente}` })).toBeVisible();
-  await c.reload();
-  await expect(c.getByText("Su sesión se cerró", { exact: false })).toBeVisible();
-  await expect(c.getByLabel("Clave")).toBeVisible();
-  await celular.close();
   await escritorio.close();
 });

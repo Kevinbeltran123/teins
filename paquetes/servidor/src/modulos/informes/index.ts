@@ -118,7 +118,8 @@ const comoVersion = (v: FilaVersion, nombres: Map<string, string>, envios: Respu
 });
 
 /** Lo que dice el correo o el WhatsApp, de la copia congelada de la versión (ADR-0028). */
-const mensajeDe = (c: ContenidoVersion): MensajeDeInforme => ({
+const mensajeDe = (c: ContenidoVersion, informeId: string): MensajeDeInforme => ({
+  documentoId: informeId,
   organizacion: c.organizacion.nombre,
   cliente: c.visita.cliente,
   sitio: c.visita.sitio,
@@ -462,7 +463,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               organizacionId: actor.organizacionId,
               versionId,
               clienteId,
-              mensaje: mensajeDe(contenido),
+              mensaje: mensajeDe(contenido, id),
               destinos: cuerpo.destinatarios.map((contactoId) => ({ contactoId })),
               por: actor.usuarioId,
               personal: cuerpo.mensaje,
@@ -527,7 +528,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               organizacionId: actor.organizacionId,
               versionId: fila.id,
               clienteId: fila.clienteId,
-              mensaje: mensajeDe(fila.contenido),
+              mensaje: mensajeDe(fila.contenido, id),
               destinos: cuerpo.destinos,
               por: actor.usuarioId,
               personal: cuerpo.mensaje,

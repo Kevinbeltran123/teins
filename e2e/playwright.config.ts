@@ -11,9 +11,9 @@ const CLAVE_PUBLICA_AVISOS = "BOXZWm72IS92BJJBRVsOr18iQm923oFhf1AEZDwBe6t-q8GJIS
  * Inicios de sesión: Better Auth cuenta todos los de una IP (aquí, 127.0.0.1) y solo vuelve a cero tras 60 s sin
  * ninguno; el contador vive en la base y sobrevive al reinicio del servidor. Una ronda hace unos 220: con 1000, la
  * cuarta o quinta ronda seguida se quedaba un minuto sin poder entrar (la ráfaga de la iteración 47). 10 000 es el
- * máximo que acepta config.ts.
+ * máximo que acepta config.ts. El portal (ADR-0053) cuenta igual, por origen, los pedidos de código y los ingresos.
  */
-const servidor = { cwd: "../paquetes/servidor", env: { INICIOS_DE_SESION_POR_MINUTO: "10000", AVISOS_VAPID_PUBLICA: CLAVE_PUBLICA_AVISOS } };
+const servidor = { cwd: "../paquetes/servidor", env: { INICIOS_DE_SESION_POR_MINUTO: "10000", PORTAL_INTENTOS_POR_ORIGEN: "10000", AVISOS_VAPID_PUBLICA: CLAVE_PUBLICA_AVISOS } };
 
 /**
  * Extremo a extremo (ADR-0018, nivel 5): Chromium y WebKit sobre el sistema completo.

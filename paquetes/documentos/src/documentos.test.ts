@@ -137,6 +137,18 @@ describe("qué sale en el informe (ADR-0039)", () => {
     expect(html).toContain("Cuarto técnico");
   });
 
+  it("en el PDF, una sección cuyo único dato quedó oculto (un croquis, por omisión) no deja su título vacío", () => {
+    const conObservaciones: VersionFormato = {
+      ...formato,
+      secciones: [...formato.secciones, { clave: "observaciones", titulo: "Observaciones adicionales", campos: [{ clave: "hoja", etiqueta: "Observaciones", tipo: "boceto" }] }],
+    };
+    const conCroquis = { ...informe.levantamientos[0]!, formato: conObservaciones, respuestas: { ...informe.levantamientos[0]!.respuestas, observaciones: { hoja: { boceto: "d".repeat(64) } } } };
+    const version = aplicarSeleccion(conCroquis, SELECCION_VACIA);
+    const html = plantillaInforme({ ...informe, levantamientos: [version] }, { salida: PDF, fotos: new Map() });
+    expect(html).not.toContain("Observaciones adicionales");
+    expect(html).toContain("Cuarto técnico");
+  });
+
   it("en la vista de oficina, lo oculto es una franja con «Mostrar» y lo que sale tiene «Ocultar», con su clave", () => {
     const html = plantillaInforme(borrador, { salida: VISTA, fotos: new Map(), seleccion: SELECCION_VACIA });
     expect(html).toContain(`data-mostrar="${id}|llegada" data-omision="1"`);

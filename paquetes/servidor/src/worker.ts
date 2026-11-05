@@ -6,6 +6,7 @@ import { crearAvisos, enviadorSegunConfig } from "./modulos/avisos";
 import { crearGeneradorPdfDeCotizaciones } from "./modulos/cotizaciones";
 import { crearEnvios, proveedoresSegunConfig } from "./modulos/envios";
 import { crearGeneradorPdf } from "./modulos/informes";
+import { accesosDelPortal, crearCorreosDelPortal } from "./modulos/portal";
 import { limpiarArchivosSinUso, podarVencido, recuperarTrabajosAMedias } from "./modulos/mantenimiento";
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
@@ -26,7 +27,10 @@ const almacenamiento = almacenamientoS3(config);
 const archivos = crearArchivos({ bd: negocio.bd, almacenamiento, config });
 const informes = crearGeneradorPdf({ bd: negocio.bd, almacenamiento, config });
 const avisos = crearAvisos({ bd: negocio.bd, config, enviador: enviadorSegunConfig(config) });
-const envios = crearEnvios({ bd: negocio.bd, almacenamiento, config, proveedores: proveedoresSegunConfig(config) });
+const proveedores = proveedoresSegunConfig(config);
+const envios = crearEnvios({ bd: negocio.bd, almacenamiento, config, proveedores, accesoAlPortal: accesosDelPortal.tieneAcceso });
+// Los correos del portal (ADR-0053) salen por el mismo proveedor de correo.
+const portal = crearCorreosDelPortal({ bd: negocio.bd, config, proveedores });
 const cotizaciones = crearGeneradorPdfDeCotizaciones({ bd: negocio.bd, almacenamiento, config });
 
 const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
@@ -43,7 +47,7 @@ const mantener = async (bds: { negocio: typeof negocio.bd; propietario: typeof c
 
 const corredor = await run({
   pgPool: cola.pool,
-  taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones, mantenimiento: { recuperar: () => mantener({ negocio: negocio.bd, propietario: cola.bd }) } }),
+  taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones, portal, mantenimiento: { recuperar: () => mantener({ negocio: negocio.bd, propietario: cola.bd }) } }),
   concurrency: 4,
   parsedCronItems: periodicas(),
   noHandleSignals: true,

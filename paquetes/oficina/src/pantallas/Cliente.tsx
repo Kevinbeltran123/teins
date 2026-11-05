@@ -21,6 +21,7 @@ import {
   MapPin,
   Smartphone,
   EstadoVacio,
+  FileText,
   FilaTabla,
   History,
   Insignia,
@@ -56,12 +57,31 @@ const migas = (
 
 const dia = (iso: string) => new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" }).format(new Date(iso));
 
+/** Debajo del interruptor del portal (ADR-0053): si puede tenerlo y si ya entró. */
+function lineaDelPortal(c: Contacto): string {
+  if (!c.accesoPortal.activo) return c.correo ? "Sin acceso" : "Agregue un correo para darle acceso";
+  return c.accesoPortal.ultimoIngreso ? `Último ingreso: ${dia(c.accesoPortal.ultimoIngreso)}` : "Aún no entra";
+}
+
+/** Qué verá en el portal: lo mismo que recibe. */
+function queVeraEnElPortal(c: Contacto, cliente: string): string {
+  if (c.recibeInformes && c.recibeCotizaciones) return `Verá los informes y las cotizaciones de ${cliente}`;
+  if (c.recibeInformes) return `Verá los informes de ${cliente}`;
+  if (c.recibeCotizaciones) return `Verá las cotizaciones de ${cliente}`;
+  return "Todavía no recibe informes ni cotizaciones: no verá nada hasta que los reciba";
+}
+
 export function DetalleCliente({ id }: { id: string }) {
   const consulta = useQuery(consultasDeProgramacion.cliente(id));
   const notificar = useNotificar();
   useAnotarReciente(consulta.data ? { tipo: "cliente", id, titulo: consulta.data.nombre } : null);
   const [editando, setEditando] = useState<Contacto | "nuevo" | null>(null);
   const [quitando, setQuitando] = useState<Contacto | null>(null);
+  // Dar acceso al portal envía una invitación: se confirma. Quitarlo se hace al instante, con «Deshacer» (ADR-0053).
+  const [dandoAcceso, setDandoAcceso] = useState<Contacto | null>(null);
+  const cambiarAcceso = useAccionDeProgramacion(({ contactoId, activo, invitar = true }: { contactoId: string; activo: boolean; invitar?: boolean }) =>
+    cliente.llamar("cambiarAccesoAlPortal", { parametros: { id, contactoId }, cuerpo: { activo, invitar } }),
+  );
   const [agregandoSitio, setAgregandoSitio] = useState(false);
   // Correcciones del cliente y sus sitios (ADR-0035).
   const [editandoCliente, setEditandoCliente] = useState(false);
@@ -174,13 +194,14 @@ export function DetalleCliente({ id }: { id: string }) {
           <div className="cab-sec">
             <h2 id="titulo-contactos">Contactos</h2>
           </div>
-          <p className="ayuda">Cada contacto recibe lo que tiene marcado, informes o cotizaciones, con el PDF adjunto, por sus canales.</p>
+          <p className="ayuda">Cada contacto recibe lo que tiene marcado, informes o cotizaciones, con el PDF adjunto, por sus canales. Con acceso al portal, además los ve y los descarga allí, con su correo y un código.</p>
+          {cambiarAcceso.isError && <Aviso tono="error">{mensajeDeProgramacion(cambiarAcceso.error)}</Aviso>}
           {detalle.contactos.length === 0 ? (
             <EstadoVacio icono={Users} titulo="Nadie de este cliente recibe los informes">
               Con "Nuevo contacto" registra a quien los recibe por correo o WhatsApp. Mientras tanto, cada informe solo queda en el portal.
             </EstadoVacio>
           ) : (
-            <Tabla etiqueta={`Contactos de ${detalle.nombre}`} columnas={[{ titulo: "Contacto" }, { titulo: "Cómo le llega" }, { titulo: "Recibe" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
+            <Tabla etiqueta={`Contactos de ${detalle.nombre}`} columnas={[{ titulo: "Contacto" }, { titulo: "Cómo le llega" }, { titulo: "Recibe" }, { titulo: "Portal" }, { titulo: "Acciones", oculto: true, derecha: true }]}>
               {contactos.map((c) => (
                 <FilaTabla key={c.id} resaltada={esNuevo(c.id) || recientes.includes(c.id)} clave={c.id}>
                   <CeldaTabla>
@@ -214,6 +235,34 @@ export function DetalleCliente({ id }: { id: string }) {
                     ) : (
                       <span className="sec">Nada</span>
                     )}
+                  </CeldaTabla>
+                  <CeldaTabla>
+                    <span className="flex flex-col items-start gap-0.5">
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={c.accesoPortal.activo}
+                        aria-label={`Acceso al portal de ${c.nombre}`}
+                        className="interruptor disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={(!c.correo && !c.accesoPortal.activo) || Boolean(detalle.archivado) || cambiarAcceso.isPending}
+                        onClick={() => {
+                          if (!c.accesoPortal.activo) return setDandoAcceso(c);
+                          cambiarAcceso.mutate(
+                            { contactoId: c.id, activo: false },
+                            {
+                              onSuccess: () =>
+                                notificar({
+                                  texto: `Acceso al portal quitado: ${c.nombre}`,
+                                  accion: { texto: "Deshacer", alHacer: () => cambiarAcceso.mutate({ contactoId: c.id, activo: true, invitar: false }) },
+                                }),
+                            },
+                          );
+                        }}
+                      >
+                        <i />
+                      </button>
+                      <span className="sub">{lineaDelPortal(c)}</span>
+                    </span>
                   </CeldaTabla>
                   <CeldaTabla derecha>
                     <div className="fila-flex" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
@@ -353,6 +402,21 @@ export function DetalleCliente({ id }: { id: string }) {
         >
           <p>Deja de recibir los informes y se borran su correo y su celular. Los envíos que ya recibió siguen en el historial de cada informe.</p>
         </Confirmacion>
+      )}
+      {dandoAcceso && (
+        <Confirmacion
+          nivel="consecuencia"
+          titulo={`¿Dar acceso al portal a ${dandoAcceso.nombre}?`}
+          confirmar="Dar acceso"
+          consecuencias={[
+            { icono: Mail, texto: `Le enviaremos una invitación a ${dandoAcceso.correo ?? ""}`, detalle: "Entra con su correo y un código que le llega cada vez. Nada que entregarle a mano." },
+            { icono: FileText, texto: queVeraEnElPortal(dandoAcceso, detalle.nombre), detalle: "Lo mismo que recibe: si deja de recibirlos, deja de verlos en el portal." },
+          ]}
+          mensajeDeError={mensajeDeProgramacion}
+          alCerrar={() => setDandoAcceso(null)}
+          alTerminar={() => notificar({ texto: `Acceso al portal dado: ${dandoAcceso.nombre}` })}
+          accion={() => cambiarAcceso.mutateAsync({ contactoId: dandoAcceso.id, activo: true })}
+        />
       )}
       {agregandoSitio && (
         <AgregarSitio

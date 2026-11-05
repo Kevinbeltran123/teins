@@ -38,11 +38,12 @@ const { visitaId } = await enOrganizacion(s.conexionApp.bd, org.organizacionId, 
 });
 
 const linea = (id: string, descripcion: string, cantidad: string, unidad = "m"): LineaCantidad => ({ id, descripcion, cantidad, unidad });
-const enviar = (materiales: unknown, id = randomUUID()) =>
+// Cada envío de un técnico propio: cada técnico envía un solo levantamiento por visita (ADR-0054).
+const enviar = async (materiales: unknown, id = randomUUID()) =>
   app.inject({
     method: "POST",
     url: "/api/sync/comandos",
-    headers: { cookie: org.tecnico.cookie, ...cabecerasSync },
+    headers: { cookie: (await s.nuevoTecnico(org.organizacionId)).cookie, ...cabecerasSync },
     payload: {
       tipo: "EnviarLevantamiento",
       llave: llaveDeEnvio(id),
@@ -136,7 +137,7 @@ describe("cantidades con catálogo en el servidor (iteración 11)", () => {
     const r = await app.inject({
       method: "POST",
       url: "/api/sync/comandos",
-      headers: { cookie: org.tecnico.cookie, ...cabecerasSync },
+      headers: { cookie: (await s.nuevoTecnico(org.organizacionId)).cookie, ...cabecerasSync },
       payload: {
         tipo: "EnviarLevantamiento",
         llave: llaveDeEnvio(id),

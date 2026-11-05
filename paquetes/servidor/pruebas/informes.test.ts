@@ -43,12 +43,12 @@ async function visitaConRevisado() {
   });
   const foto = await subir(org.tecnico.cookie, jpegDePrueba().datos, "image/jpeg");
   await s.procesarCola();
-  const enviar = async (fotos: string[]) => {
+  const enviar = async (fotos: string[], cookie = org.tecnico.cookie) => {
     const id = randomUUID();
     const r = await app.inject({
       method: "POST",
       url: "/api/sync/comandos",
-      headers: { cookie: org.tecnico.cookie, ...cabecerasSync },
+      headers: { cookie, ...cabecerasSync },
       payload: {
         tipo: "EnviarLevantamiento",
         llave: llaveDeEnvio(id),
@@ -67,7 +67,8 @@ async function visitaConRevisado() {
     return id;
   };
   const revisado = await enviar([foto]);
-  const enviado = await enviar([]);
+  // El otro, de un segundo técnico: cada uno envía un solo levantamiento por visita (ADR-0054).
+  const enviado = await enviar([], (await s.nuevoTecnico(org.organizacionId)).cookie);
   expect((await post(org.oficina.cookie, `/api/levantamientos/${revisado}/tomar`, { version: 1 })).statusCode).toBe(200);
   expect((await post(org.oficina.cookie, `/api/levantamientos/${revisado}/marcar-revisado`, { version: 2 })).statusCode).toBe(200);
   const { id: informeId } = (await post(org.oficina.cookie, "/api/informes", { visitaId })).json();
