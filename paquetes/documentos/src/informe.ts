@@ -248,7 +248,10 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
               return propio(campo, `<section class="constancia"><h4>Constancia de visita</h4><p>${escapar(valor.declaracion)}</p><p class="tenue">Firmado en el sitio el ${fechaHora.format(new Date(valor.firmadoEn))}, en el teléfono del técnico. La firma está al final del capítulo.</p></section>`);
             })
             .join("");
-          return `<section class="seccion${seleccion ? " vista-ocultable" : ""}">${seleccion ? botonOcultar(claveBloque, bloqueOcultoPorOmision(bloque)) : ""}<h3>${escapar(titulo)}</h3>${datos ? `<table class="datos">${datos}</table>` : ""}${medidas}${cantidades}${galerias}${croquis}${constancias}</section>`;
+          const contenido = `${datos ? `<table class="datos">${datos}</table>` : ""}${medidas}${cantidades}${galerias}${croquis}${constancias}`;
+          // En el PDF, una sección sin nada que mostrar (su único dato quedó oculto, como un croquis) no deja su título solo.
+          if (!seleccion && !contenido) return "";
+          return `<section class="seccion${seleccion ? " vista-ocultable" : ""}">${seleccion ? botonOcultar(claveBloque, bloqueOcultoPorOmision(bloque)) : ""}<h3>${escapar(titulo)}</h3>${contenido}</section>`;
         })
         .join("");
       // La fila de firmas (ADR-0051): quien asistió firma al enviar, quienes acompañaron dibujan la suya (cada campo de
@@ -334,6 +337,8 @@ body { margin: 0; font-family: "Geist", sans-serif; font-size: 10.5pt; line-heig
 h1, h2, h3, h4 { margin: 0; line-height: 1.2; }
 h2 { font-size: 17pt; font-weight: 600; color: ${MARCA.superficie}; margin-bottom: 6pt; }
 h3 { font-size: 12.5pt; font-weight: 600; margin: 14pt 0 6pt; }
+/* Un título nunca queda solo al pie de una página, separado de lo que titula. */
+h3, h4 { break-after: avoid; }
 h4 { font-size: 10.5pt; font-weight: 600; margin: 10pt 0 6pt; }
 p { margin: 0 0 8pt; }
 .portada { background: ${MARCA.superficie}; color: #FFFFFF; border-radius: 8px; padding: 26pt; min-height: 200mm; display: flex; flex-direction: column; gap: 14pt; break-after: page; }
