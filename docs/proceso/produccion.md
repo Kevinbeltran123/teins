@@ -68,19 +68,21 @@ Hace, en orden y sin repetir lo que ya existe:
 
 La conexión del rol dueño de la base (`DATABASE_URL_PROPIETARIO`, que migra y puede saltarse la seguridad por fila) solo la tienen `campo` (migra y corre los comandos) y `worker`; `oficina` y `portal` atienden solicitudes sin ella.
 
-## Desplegar una versión (ADR-0049)
+## Desplegar una versión (ADR-0049, ADR-0056)
 
 Se despliega por lotes, a mano, desde GitHub: pestaña Actions → «Desplegar» → «Run workflow».
 
-1. En «Use workflow from», la rama: `corte-0` para pruebas, `master` para producción. Se despliega el último commit de esa rama. A pruebas, antes de fusionar el pull request: el commit de `git merge -s ours` que sincroniza `corte-0` después no pasa por la integración, y el flujo lo rechaza (después de fusionar, despliega a pruebas desde `master`).
-2. En «Entorno», `pruebas` o `produccion`. Para producción, escribe `produccion` en la confirmación; desde otra rama que no sea `master` el flujo se niega.
+1. En «Use workflow from»:
+   - **Para pruebas (la preproducción):** cualquier rama con la integración en verde, incluso la de un pull request sin fusionar, para probarla antes. Se despliega el último commit de esa rama.
+   - **Para producción:** solo una versión, la etiqueta `vX.Y.Z`. Para crearla, Actions → «Publicar versión», con `master` y el número nuevo: con algún `feat` desde la anterior sube el segundo número; solo con `fix`, el tercero. El flujo crea la etiqueta y la versión de GitHub, con sus notas, el SBOM (`sbom.cdx.json`) y los avisos de terceros (`AVISOS-DE-TERCEROS.txt`).
+2. En «Entorno», `pruebas` o `produccion`. Para producción, escribe `produccion` en la confirmación; desde una rama, sin etiqueta, el flujo se niega.
 3. El flujo comprueba que ese commit pasó la integración continua y despliega en el orden de `montar.sh`: `campo` (migra en su pre-deploy), `oficina`, `portal`, `worker` y `respaldos`. Si una construcción falla, se detiene ahí.
 4. Comprueba que `/salud` responde en las tres direcciones.
 5. **Solo en pruebas, si la versión trae un formato de prueba nuevo** (`paquetes/dominio/formatos-de-prueba/`): publícalo con `railway ssh -s campo -- node dist/cli/sembrar.js`. El flujo no publica formatos, y sin este paso los teléfonos siguen con el anterior (2026-11-04: el v10 faltó dos días). `sembrar` no toca lo que ya existe. En producción, los formatos de TEINS se publican con `publicar-formato`.
 
 Lo que necesita, una vez por entorno (en GitHub, Settings → Environments):
 
-- Entornos `pruebas` y `produccion`. En `produccion`, «Deployment branches» limitado a `master`.
+- Entornos `pruebas` y `produccion`. En `produccion`, «Deployment branches and tags» limitado a las etiquetas `v*`.
 - En cada uno, el secreto `RAILWAY_TOKEN`: un token de proyecto de Railway de ese proyecto y su entorno `production` (en Railway, Project Settings → Tokens). Nunca en el repositorio. No sirve el token de la cuenta (Account Settings → Tokens): con él, Railway responde «Invalid RAILWAY_TOKEN». Se guarda copiado, con `pbpaste | gh secret set RAILWAY_TOKEN --env <entorno>`; sin terminal interactiva (por ejemplo, con `!` en Claude Code), `gh secret set` a secas guarda un secreto vacío sin avisar.
 - En cada uno, las variables `CAMPO_URL`, `OFICINA_URL` y `PORTAL_URL` (sin `/` al final), con las que el flujo comprueba `/salud`. No son secretas.
 

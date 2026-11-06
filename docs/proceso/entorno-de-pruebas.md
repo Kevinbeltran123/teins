@@ -54,7 +54,7 @@ Credenciales de `tecnico.prueba` y `oficina.prueba`: en `privado/entorno-de-prue
 
 ## Operación
 
-Para desplegar, el flujo «Desplegar» de GitHub Actions con la rama `corte-0` y el entorno `pruebas`: comprueba que el commit pasó la integración continua y despliega los cinco servicios en orden (`produccion.md`, "Desplegar una versión"; ADR-0049). Un despliegue por lote de mejoras, no por cambio. Desde el computador queda como respaldo.
+Para desplegar, el flujo «Desplegar» de GitHub Actions con la rama (la de un pull request o `master`) y el entorno `pruebas`: comprueba que el commit pasó la integración continua y despliega los cinco servicios en orden (`produccion.md`, "Desplegar una versión"; ADR-0049, ADR-0056). Un despliegue por lote de mejoras, no por cambio. Desde el computador queda como respaldo.
 
 Desde la raíz del repositorio, con la CLI enlazada (`railway link` → `teins-pruebas`) y la llave SSH registrada (`railway ssh keys`):
 

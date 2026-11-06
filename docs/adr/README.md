@@ -37,7 +37,8 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0017](0017-observabilidad.md) | Registros, errores con privacidad y salud de dispositivos | Aceptada |
 | [0018](0018-pruebas-y-reglas-de-arquitectura.md) | Pruebas guiadas por riesgo y reglas ejecutables | Aceptada |
 | [0021](0021-produccion-provisional-transferible.md) | Producción provisional en un proyecto transferible, sin datos reales hasta que pase a TEINS | Aceptada |
-| [0049](0049-despliegue-manual-por-lotes-desde-github.md) | Despliegue manual por lotes desde GitHub Actions, en el orden de `montar.sh` (reemplaza en parte 0016) | Aceptada |
+| [0049](0049-despliegue-manual-por-lotes-desde-github.md) | Despliegue manual por lotes desde GitHub Actions, en el orden de `montar.sh` (reemplaza en parte 0016) | Aceptada; 0056 reemplaza su regla de qué rama va a cada entorno |
+| [0056](0056-ramas-cortas-versiones-y-entornos.md) | Ramas cortas, versiones etiquetadas y producción solo desde una versión (reemplaza en parte 0049) | Aceptada |
 
 ### Datos y sincronización
 

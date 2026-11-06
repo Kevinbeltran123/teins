@@ -1,0 +1,26 @@
+# El título del pull request es el mensaje del commit en master (fusión squash) y la línea que aparece en
+# las notas de la versión (ADR-0056). Va aparte de la integración: corre también al editar el título, sin
+# repetir las pruebas.
+name: Título
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  titulo:
+    name: Título del pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Sigue Conventional Commits
+        # Por variable de entorno, nunca interpolado en el script: el título lo escribe quien abre el pull request.
+        env:
+          TITULO: ${{ github.event.pull_request.title }}
+        run: |
+          if ! printf '%s' "$TITULO" | grep -Eq '^(feat|fix|docs|chore|refactor|perf|test|build|ci|revert)(\([a-z0-9-]+\))?!?: .+'; then
+            echo "::error::El título debe ser «tipo(alcance): descripción», por ejemplo «fix(campo): …». Tipos: feat, fix, docs, chore, refactor, perf, test, build, ci, revert."
+            exit 1
+          fi

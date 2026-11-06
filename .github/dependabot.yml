@@ -1,0 +1,25 @@
+# Actualización de dependencias (ADR-0056). Mensual y agrupada: cada pull request corre la integración
+# completa (unos 130 minutos de Actions), y el plan incluye 3000 al mes. Las alertas de seguridad abren su
+# propio pull request en cuanto se publican, sin esperar al mes.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      dependencias:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directories: ["/", "/.github/actions/*"]
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      acciones:
+        patterns: ["*"]
