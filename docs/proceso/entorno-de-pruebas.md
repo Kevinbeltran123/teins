@@ -101,6 +101,25 @@ No corra a la vez la suite local y la del entorno: comparten `e2e/test-results`,
 
 Si más adelante se conecta el repositorio de GitHub (`railway service source connect --repo Kevinbeltran123/teins --branch <rama> --service <servicio>`), cada subida a esa rama despliega sola.
 
+## Ensayo de carga (iteración 51)
+
+La temporada alta (QA-14) se ensaya contra este entorno en la organización «Ensayo de carga» (`00000000-0000-4000-8000-000000000051`), con 20 técnicos y 5 personas de oficina ficticios (`ensayo.tecnico.01`… y `ensayo.oficina.01`…, creados el 2026-11-06). Nunca se mezcla con los datos de demostración. Qué hace y qué metas tiene: `paquetes/servidor/README.md`, "Ensayo de carga".
+
+```sh
+# Una vez por entorno (lo que existe no se toca; con --restablecer, cambia la contraseña de sus usuarios)
+railway ssh -s campo -- env TEINS_CONTRASENA=... node dist/cli/preparar-ensayo.js
+# Cada corrida, desde paquetes/servidor, con la CLI enlazada a teins-pruebas
+E2E_CAMPO_URL=https://campo-production-2642.up.railway.app \
+E2E_OFICINA_URL=https://oficina-production-d24f.up.railway.app \
+TEINS_CONTRASENA=... pnpm ensayo-de-carga --json ~/ensayo-$(date +%F).json
+# Memoria y CPU en la ventana que imprime el ensayo
+railway metrics -s worker --memory --cpu --since <inicio> --until <fin>
+```
+
+La primera corrida desde un computador inicia las 25 sesiones con el límite de 5 por minuto (unos 5 minutos); durante 30 días las siguientes las reusan y tardan entre 1 y 1,5 minutos. Cada corrida sube unos 110 MB de fotos ficticias (centavos al mes de almacenamiento) y cancela sus visitas de hoy de la corrida anterior. `dejar-limpio.sql` también borra a estos usuarios: después, `preparar-ensayo` los vuelve a crear.
+
+Línea de base del 2026-11-06 (servidor de la iteración 49), escenario por defecto: cero errores y cero levantamientos perdidos; los diez que recuperan la señal, recibidos en 19 a 32 s (lo limita la subida de fotos por la conexión de quien corre el ensayo); cada PDF, en 6 a 12 s; dentro del servidor, las consultas de oficina en 29 ms y las subidas de campo en menos de 100 ms (p95). Memoria máxima: worker 813 MB (136 MB sin trabajo; Chromium se cierra al minuto y el resto lo devuelve en una o dos horas, como en los picos de días anteriores), campo 392 MB y oficina 250 MB, de 8 GB por servicio; CPU máxima, 1,3 vCPU en campo.
+
 ## Prueba en iPhone y verificación manual
 
 El paso a paso completo, de la instalación en iPhone al portal y producción, está en [`verificacion-manual.md`](verificacion-manual.md). Las contraseñas de `tecnico.prueba` y `oficina.prueba` están en `privado/entorno-de-pruebas.txt` (computador de Kevin). `tecnico.revocable` se borró en la limpieza del 2026-10-02: la verificación manual dice cómo crear otro.

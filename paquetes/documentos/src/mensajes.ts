@@ -69,21 +69,25 @@ export function asunto(m: MensajeDeEnvio): string {
   return m.personal ? unaLinea(m.personal.asunto) : asuntoBase(m);
 }
 
+/**
+ * El aviso de que el PDF no cabe en el correo: va aunque el texto sea propio, porque cambia lo que el cliente debe hacer.
+ * El informe remite al portal solo si el contacto puede entrar (ADR-0053); si no, y en la cotización, que respondan.
+ */
+const pdfNoCabe = (m: MensajeDeEnvio, conPortal: boolean) =>
+  m.documento === "informe" && conPortal ? "El PDF pesa demasiado para el correo: descárguelo del portal." : "El PDF pesa demasiado para el correo: respóndanos y se lo hacemos llegar.";
+
 /** Qué se envía, en texto y en HTML (ADR-0028; la cotización, ADR-0029). */
-function presentacion(m: MensajeDeEnvio, sinAdjunto: boolean, fuerte: (t: string) => string, texto: (t: string) => string): string {
+function presentacion(m: MensajeDeEnvio, sinAdjunto: boolean, conPortal: boolean, fuerte: (t: string) => string, texto: (t: string) => string): string {
   if (m.documento === "cotizacion") {
-    return `Le enviamos la cotización ${fuerte(texto(m.cotizacion))} para ${fuerte(texto(m.sitio))}. ${sinAdjunto ? "El PDF pesa demasiado para el correo: respóndanos y se lo hacemos llegar." : "Va adjunta en PDF."}`;
+    return `Le enviamos la cotización ${fuerte(texto(m.cotizacion))} para ${fuerte(texto(m.sitio))}. ${sinAdjunto ? pdfNoCabe(m, conPortal) : "Va adjunta en PDF."}`;
   }
-  return `Le enviamos el informe de la visita del ${fuerte(diaLargo(m.programadaPara))} a ${fuerte(texto(m.sitio))} (${texto(m.motivo)}). ${sinAdjunto ? "El PDF pesa demasiado para el correo: descárguelo del portal." : "Va adjunto en PDF."}`;
+  return `Le enviamos el informe de la visita del ${fuerte(diaLargo(m.programadaPara))} a ${fuerte(texto(m.sitio))} (${texto(m.motivo)}). ${sinAdjunto ? pdfNoCabe(m, conPortal) : "Va adjunto en PDF."}`;
 }
 
 /** El texto que pone TEINS entre el saludo y el pie: lo que oficina puede reescribir (iteración 30). */
 export function textoBase(m: MensajeDeEnvio): string {
-  return [presentacion(m, false, (t) => t, (t) => t), ...(m.numero > 1 ? [`Es la versión ${m.numero}: reemplaza a las anteriores.`] : [])].join("\n\n");
+  return [presentacion(m, false, false, (t) => t, (t) => t), ...(m.numero > 1 ? [`Es la versión ${m.numero}: reemplaza a las anteriores.`] : [])].join("\n\n");
 }
-
-/** El aviso de que el PDF no cabe en el correo: va aunque el texto sea propio, porque cambia lo que el cliente debe hacer. */
-const pdfNoCabe = (m: MensajeDeEnvio) => (m.documento === "cotizacion" ? "El PDF pesa demasiado para el correo: respóndanos y se lo hacemos llegar." : "El PDF pesa demasiado para el correo: descárguelo del portal.");
 
 /** Los párrafos del texto propio: separados por una línea en blanco; un salto simple queda como salto. */
 const parrafosPropios = (texto: string) =>
@@ -107,7 +111,7 @@ export interface OpcionesDeCorreo {
   nombre: string;
   /** El documento en el portal, solo si el contacto tiene acceso (ADR-0053): sin él, el correo no lleva el botón. */
   portal: string | undefined;
-  /** El PDF no cabe en el correo: se dice y se remite al portal. */
+  /** El PDF no cabe en el correo: se dice y se remite al portal si puede entrar, o a responder el correo. */
   sinAdjunto: boolean;
 }
 
@@ -116,8 +120,8 @@ export function textoDeCorreo(m: MensajeDeEnvio, o: OpcionesDeCorreo): string {
   return [
     `Hola, ${primerNombre(o.nombre)}:`,
     ...(m.personal
-      ? [...parrafosPropios(m.personal.texto), ...(o.sinAdjunto ? [pdfNoCabe(m)] : [])]
-      : [presentacion(m, o.sinAdjunto, (t) => t, (t) => t), ...(m.numero > 1 ? [`Es la versión ${m.numero}: reemplaza a las anteriores.`] : [])]),
+      ? [...parrafosPropios(m.personal.texto), ...(o.sinAdjunto ? [pdfNoCabe(m, Boolean(o.portal))] : [])]
+      : [presentacion(m, o.sinAdjunto, Boolean(o.portal), (t) => t, (t) => t), ...(m.numero > 1 ? [`Es la versión ${m.numero}: reemplaza a las anteriores.`] : [])]),
     ...(o.portal ? [`Ver en el portal de ${m.organizacion}: ${o.portal}`, COMO_ENTRAR] : []),
     "",
     `${m.organizacion}. Recibe este correo porque es contacto de ${m.cliente} para ${tema(m)}. Para dejar de recibirlos, respóndanos este correo.`,
@@ -138,8 +142,8 @@ export function htmlDeCorreo(m: MensajeDeEnvio, o: OpcionesDeCorreo): string {
 ${parrafo(`Hola, ${escapar(primerNombre(o.nombre))}:`)}
 <div data-editable="texto">${
     m.personal
-      ? [...parrafosPropios(m.personal.texto).map((p) => parrafo(escapar(p).replace(/\n/g, "<br>"))), ...(o.sinAdjunto ? [parrafo(pdfNoCabe(m))] : [])].join("")
-      : `${parrafo(presentacion(m, o.sinAdjunto, (t) => `<strong>${t}</strong>`, escapar))}${m.numero > 1 ? parrafo(`Es la <strong>versión ${m.numero}</strong>: reemplaza a las anteriores.`) : ""}`
+      ? [...parrafosPropios(m.personal.texto).map((p) => parrafo(escapar(p).replace(/\n/g, "<br>"))), ...(o.sinAdjunto ? [parrafo(pdfNoCabe(m, Boolean(o.portal)))] : [])].join("")
+      : `${parrafo(presentacion(m, o.sinAdjunto, Boolean(o.portal), (t) => `<strong>${t}</strong>`, escapar))}${m.numero > 1 ? parrafo(`Es la <strong>versión ${m.numero}</strong>: reemplaza a las anteriores.`) : ""}`
   }</div>
 ${
   o.portal

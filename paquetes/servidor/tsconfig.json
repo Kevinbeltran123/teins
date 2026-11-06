@@ -4,5 +4,5 @@
     "lib": ["ES2024"],
     "types": ["node"]
   },
-  "include": ["src", "pruebas", "drizzle.config.ts", "vitest.config.ts"]
+  "include": ["src", "pruebas", "ensayo", "drizzle.config.ts", "vitest.config.ts"]
 }

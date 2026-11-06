@@ -8,8 +8,10 @@ import { ponerInsignia } from "../dispositivo/insignia";
 
 /** Operaciones del motor sobre la base local. */
 export interface AlmacenSincronizacion {
-  /** Fotos pendientes de los levantamientos de este técnico: nunca se suben con la sesión de otro. */
-  archivosPorSubir(tecnicoId: string): Promise<ArchivoLocal[]>;
+  /** Huellas de las fotos pendientes de los levantamientos de este técnico, sin leer sus bytes: nunca se suben con la sesión de otro. */
+  huellasPorSubir(tecnicoId: string): Promise<string[]>;
+  /** Abre una para subirla, de a una porque no caben todas en memoria (ADR-0022); undefined si ya no está pendiente. */
+  archivoPorSubir(huella: string): Promise<ArchivoLocal | undefined>;
   marcarSubida(huella: string): Promise<void>;
   registrarErrorDeSubida(huella: string, mensaje: string): Promise<void>;
   marcarPorSubir(huellas: readonly string[]): Promise<void>;
@@ -162,14 +164,16 @@ export function almacenDexie(db: BaseCampo): AlmacenSincronizacion {
         return salen.length;
       });
     },
-    async archivosPorSubir(tecnicoId) {
+    async huellasPorSubir(tecnicoId) {
       const propios = await db.levantamientos.where("tecnicoId").equals(tecnicoId).toArray();
       // Las fotos suben por adelantado; los bocetos, solo del levantamiento ya enviado (ADR-0019, parte 3).
       const huellas = new Set(propios.flatMap((l) => (l.estado === "borrador" ? referencias(l).fotos : referencias(l).archivos)));
-      const pendientes = (await db.archivos.where("subida").equals("pendiente").primaryKeys()).filter((h) => huellas.has(h));
-      // Se abren al subir: al servidor llegan los bytes originales, con la huella que los nombra.
-      const archivos = (await db.archivos.bulkGet(pendientes)).filter((a) => a !== undefined);
-      return Promise.all(archivos.map((a) => abrirArchivo(db, a)));
+      return (await db.archivos.where("subida").equals("pendiente").primaryKeys()).filter((h) => huellas.has(h));
+    },
+    async archivoPorSubir(huella) {
+      const archivo = await db.archivos.get(huella);
+      // Se abre al subir: al servidor llegan los bytes originales, con la huella que los nombra.
+      return archivo?.subida === "pendiente" ? abrirArchivo(db, archivo) : undefined;
     },
     async marcarSubida(huella) {
       await db.archivos.update(huella, { subida: "subida", ultimoErrorDeSubida: undefined });

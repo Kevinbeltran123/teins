@@ -25,9 +25,10 @@ const ESPERA_MAXIMA_TEMPORIZADOR = 10 * 60_000;
 /**
  * Sincroniza y deja programado el próximo intento exacto: la espera exponencial y la que pide
  * el servidor se respetan al milisegundo, no al ritmo del ciclo de respaldo. `bajar` trae los
- * cambios del servidor ya, sin esperar el intervalo de la bajada.
+ * cambios del servidor ya, sin esperar el intervalo de la bajada. `programada` la marca como del
+ * temporizador o del ciclo: sin señal, esas esperan su turno (iteración 51).
  */
-export function sincronizarEnSegundoPlano(opciones: { bajar?: boolean } = {}): void {
+export function sincronizarEnSegundoPlano(opciones: { bajar?: boolean; programada?: boolean } = {}): void {
   motor
     .sincronizar(opciones)
     .then(() => motor.proximoIntento())
@@ -35,7 +36,7 @@ export function sincronizarEnSegundoPlano(opciones: { bajar?: boolean } = {}): v
       window.clearTimeout(despertador);
       if (proximo === null) return;
       const espera = Math.min(ESPERA_MAXIMA_TEMPORIZADOR, Math.max(0, proximo - Date.now()) + 50);
-      despertador = window.setTimeout(() => sincronizarEnSegundoPlano(), espera);
+      despertador = window.setTimeout(() => sincronizarEnSegundoPlano({ programada: true }), espera);
     })
     .catch((error: unknown) => console.error("La sincronización falló", error));
 }
@@ -44,6 +45,7 @@ export function sincronizarEnSegundoPlano(opciones: { bajar?: boolean } = {}): v
  * Sin sincronización en segundo plano en Safari (ADR-0002): se sincroniza al abrir, al recuperar
  * señal, al volver a la app y cada 30 segundos mientras está abierta. Abrir, recuperar señal y volver
  * traen la bajada de inmediato; el ciclo de 30 segundos solo envía lo pendiente y baja cada 5 minutos.
+ * Sin señal, el ciclo no repite nada antes de que toque volver a buscarla.
  */
 export function programarSincronizacion(): () => void {
   const conBajada = () => sincronizarEnSegundoPlano({ bajar: true });
@@ -53,7 +55,7 @@ export function programarSincronizacion(): () => void {
   window.addEventListener("online", conBajada);
   document.addEventListener("visibilitychange", alVolverVisible);
   // Respaldo: si un temporizador se pierde (pestaña suspendida), el ciclo lo recupera.
-  const intervalo = window.setInterval(() => sincronizarEnSegundoPlano(), 30_000);
+  const intervalo = window.setInterval(() => sincronizarEnSegundoPlano({ programada: true }), 30_000);
   conBajada();
   return () => {
     window.removeEventListener("online", conBajada);

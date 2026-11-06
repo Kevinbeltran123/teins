@@ -82,7 +82,8 @@ describe("cifrado local (iteración 12, ADR-0022)", () => {
     const [abierta] = await repo.obtenerArchivos([f.id]);
     expect(new TextDecoder().decode(abierta!.datos)).toBe("foto SECRETO");
     expect(createHash("sha256").update(new Uint8Array(abierta!.datos)).digest("hex")).toBe(f.id);
-    expect((await almacen.archivosPorSubir("t1")).map((a) => new TextDecoder().decode(a.datos))).toEqual(["foto SECRETO"]);
+    const pendientes = await almacen.huellasPorSubir("t1");
+    expect(await Promise.all(pendientes.map(async (h) => new TextDecoder().decode((await almacen.archivoPorSubir(h))!.datos)))).toEqual(["foto SECRETO"]);
     const [envio] = await almacen.enviosListos(Number.MAX_SAFE_INTEGER, "t1");
     expect(envio?.comando.levantamiento.respuestas).toEqual({ s: { t: "Tablero SECRETO", fotos: [f.id] } });
     expect(await visitaDe(db, "t1", visita.id)).toEqual({ ...visita, tecnicoId: "t1" });
