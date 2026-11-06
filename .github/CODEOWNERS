@@ -1,0 +1,4 @@
+# Quién revisa cada parte (ADR-0056). Hoy, una persona. Al pasar el repositorio al equipo de TEINS, se
+# reemplaza el usuario por su equipo de GitHub (por ejemplo, @organizacion/desarrollo) y, si se quiere,
+# se agregan líneas por carpeta: la última que coincide manda.
+* @Kevinbeltran123

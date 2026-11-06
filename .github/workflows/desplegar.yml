@@ -1,6 +1,7 @@
-# Despliegue manual por lotes (ADR-0049): se lanza a mano desde la pestaña Actions, eligiendo la rama
-# en «Use workflow from» y el entorno. Despliega el último commit de esa rama, y solo si ese commit pasó
-# la integración continua. El orden es el de infra/railway/montar.sh: campo primero (migra la base en su
+# Despliegue manual por lotes (ADR-0049, ADR-0056): se lanza a mano desde la pestaña Actions, eligiendo en
+# «Use workflow from» la rama o la etiqueta, y el entorno. Pruebas (la preproducción) acepta cualquier rama;
+# producción, solo una versión publicada (etiqueta vX.Y.Z). Despliega ese commit, y solo si pasó la
+# integración continua. El orden es el de infra/railway/montar.sh: campo primero (migra la base en su
 # pre-deploy), después oficina, portal, worker y respaldos.
 name: Desplegar
 
@@ -35,12 +36,12 @@ jobs:
     environment: ${{ inputs.entorno }}
     steps:
       # En un repositorio privado con GitHub Pro no hay revisores obligatorios: la aprobación es esta.
-      - name: Producción solo desde master y confirmada
-        if: inputs.entorno == 'produccion' && (github.ref != 'refs/heads/master' || inputs.confirmar != 'produccion')
+      - name: Producción solo desde una versión y confirmada
+        if: inputs.entorno == 'produccion' && (!startsWith(github.ref, 'refs/tags/v') || inputs.confirmar != 'produccion')
         run: |
-          echo "::error::Producción se despliega solo desde master y escribiendo «produccion» en la confirmación."
+          echo "::error::Producción se despliega solo desde una versión (etiqueta vX.Y.Z en «Use workflow from») y escribiendo «produccion» en la confirmación."
           exit 1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: El commit pasó la integración continua
         env:
           GH_TOKEN: ${{ github.token }}

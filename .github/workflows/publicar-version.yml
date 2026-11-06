@@ -1,0 +1,70 @@
+# Publica una versión (ADR-0056): se lanza a mano desde la pestaña Actions, con master en «Use workflow from».
+# Crea la etiqueta vX.Y.Z sobre el último commit de master, si pasó la integración continua, y la versión de
+# GitHub con sus notas (los títulos de los pull requests desde la anterior), el SBOM y los avisos de terceros.
+# Producción se despliega solo desde una de estas etiquetas.
+name: Publicar versión
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión nueva, X.Y.Z sin la v (con «feat» sube Y; solo con «fix», Z)"
+        type: string
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publicar-version
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    name: Publicar v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Solo desde master
+        if: github.ref != 'refs/heads/master'
+        run: |
+          echo "::error::Una versión se publica solo desde master."
+          exit 1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: La versión es X.Y.Z y mayor que la última
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::«$VERSION» no es X.Y.Z."
+            exit 1
+          fi
+          ultima=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+          if [ -n "$ultima" ] && [ "$(printf '%s\n%s\n' "${ultima#v}" "$VERSION" | sort -V | tail -n 1)" != "$VERSION" -o "${ultima#v}" = "$VERSION" ]; then
+            echo "::error::La versión debe ser mayor que la última ($ultima)."
+            exit 1
+          fi
+      - name: El commit pasó la integración continua
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          exitosas=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow integracion.yml --commit "$GITHUB_SHA" --status success --json databaseId --jq length)
+          if [ "$exitosas" -eq 0 ]; then
+            echo "::error::El commit $GITHUB_SHA no tiene una corrida exitosa de la integración continua."
+            exit 1
+          fi
+      - uses: ./.github/actions/preparar
+      - name: SBOM y avisos de terceros
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node scripts/inventario-de-terceros.mjs inventario "$VERSION"
+      - name: Etiqueta y versión en GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "v$VERSION" inventario/sbom.cdx.json inventario/AVISOS-DE-TERCEROS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes

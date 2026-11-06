@@ -49,6 +49,10 @@ docs/producto/analisis-inicial.md
 docs/producto/preguntas-pendientes.md
 docs/diseno/pendientes.md
 docs/diseno/referencias.md
-.claude/context-audit/
+.claude/
 .impeccable/
 .mcp.json
+.codegraph/
+
+# Inventario de terceros de una versión (scripts/inventario-de-terceros.mjs): se publica con la versión
+inventario/

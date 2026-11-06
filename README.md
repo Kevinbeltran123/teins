@@ -6,7 +6,7 @@ Sistema para capturar levantamientos técnicos en campo (con o sin conexión), r
 
 ## Estado
 
-El recorrido completo funciona en el entorno de pruebas (Railway). Producción es provisional y no tiene datos reales hasta transferirla a TEINS (ADR-0021). Qué está desplegado dónde, lo que falta probar y el próximo paso están en un solo lugar: `docs/proceso/plan-de-entrega.md` (local).
+El recorrido completo funciona en el entorno de pruebas (Railway), que hace de preproducción. Producción es provisional y no tiene datos reales hasta transferirla a TEINS (ADR-0021). Cada versión publicada, con sus notas, su lista de componentes (SBOM) y los avisos de licencias de terceros, está en la pestaña **Releases**. Producción se despliega solo desde una de ellas (ADR-0056).
 
 ## Qué hace
 
@@ -17,24 +17,22 @@ El recorrido completo funciona en el entorno de pruebas (Railway). Producción e
 | Portal del cliente | Cada contacto entra con su correo y un código, y ve y descarga lo que recibe: informes y cotizaciones vigentes; nunca ve lo de otro cliente | ADR-0053, QA-4 |
 | Servidor y worker | API con permisos por ruta, auditoría encadenada, PDF en segundo plano, envíos, avisos, recuperación de trabajos a medias y poda | ADR-0010, 0012, 0013, 0043, 0044 |
 
-Lo que hace falta para el piloto con TEINS (precios, plantilla del informe, datos tributarios, numeración, símbolos y la cuenta de WhatsApp) está en el plan de entrega.
-
 ## Mapa del repositorio
 
 | Ruta | Contenido |
 |---|---|
 | [`AGENTS.md`](AGENTS.md) | Instrucciones para agentes de programación (`CLAUDE.md` lo importa) |
 | [`DESIGN.md`](DESIGN.md) | Dirección visual, paleta, tipografía, movimiento |
-| [`docs/producto/`](docs/producto/) | Contexto del cliente, análisis inicial de la reunión y preguntas pendientes |
+| [`docs/producto/`](docs/producto/) | Contexto del cliente: qué problema resuelve el sistema |
 | [`docs/README.md`](docs/README.md) | Mapa de la documentación: qué hay en cada documento y qué actualizar cuando algo cambia |
 | [`docs/arquitectura/`](docs/arquitectura/) | Impulsores, modelo de dominio y cómo funciona hoy (diagramas) |
 | [`docs/adr/`](docs/adr/) | Registro de decisiones de arquitectura |
-| `docs/diseno/` (local) | Referencias visuales y pantallas pendientes |
-| [`docs/proceso/`](docs/proceso/) | Plan de entrega (estado y próximo paso), historia de cada iteración, forma de trabajo, entornos y verificación manual |
+| [`docs/proceso/`](docs/proceso/) | Producción y su operación, el entorno de pruebas y la verificación manual |
 | [`paquetes/`](paquetes/) | Monorepo: dominio, protocolo, servidor, campo, oficina, portal, documentos, ui (cada uno con su README) |
 | [`e2e/`](e2e/) | Pruebas de extremo a extremo (Chromium y WebKit) |
-| `prototipos/` (local) | Prototipos navegables aprobados antes de construir cada cambio de interfaz |
 | [`infra/`](infra/) | Railway, respaldos y limpieza de entornos |
+| [`scripts/`](scripts/) | Verificaciones de la integración (licencias, presupuesto de campo) e inventario de terceros de cada versión |
+| [`SECURITY.md`](SECURITY.md) | Cómo reportar una vulnerabilidad |
 
 ## Stack
 
@@ -42,4 +40,4 @@ TypeScript de extremo a extremo · PWA con React y Vite · Fastify · PostgreSQL
 
 ## Propiedad
 
-Software de Kevin Beltran. Todos los derechos reservados. El uso por parte de TEINS se rige por el acuerdo entre las partes.
+Software propietario de Kevin Hernando Beltrán Martínez. Todos los derechos reservados ([`LICENSE`](LICENSE)). El uso por parte de TEINS se rige por el acuerdo entre las partes.

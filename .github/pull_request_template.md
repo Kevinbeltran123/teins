@@ -1,3 +1,5 @@
+<!-- El título sigue Conventional Commits, «tipo(alcance): descripción»: es el commit en master y la línea de las notas de la versión (ADR-0056). -->
+
 ## Qué cambia
 
 <!-- Una o dos frases. -->
