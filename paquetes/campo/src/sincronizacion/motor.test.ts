@@ -9,7 +9,7 @@ import { estadoDe, estadosDe, visitaDe, visitasDe } from "../datos/lecturas";
 import { terminarVisita } from "../datos/terminacion";
 import { pendientesDe, responder } from "../datos/conversacion";
 import { almacenDexie } from "./almacen";
-import { crearMotor, espera, ESPERA_MAXIMA_MS, INTERVALO_BAJADA_MS } from "./motor";
+import { crearMotor, espera, ESPERA_MAXIMA_MS, ESPERA_MAXIMA_SIN_RED_MS, INTERVALO_BAJADA_MS } from "./motor";
 import { servidorFalso, type Falla } from "./pruebas/servidor-falso";
 
 // Formato ficticio (R5).
@@ -132,6 +132,83 @@ describe("motor de sincronización", () => {
     const segunda = (await db.envios.toArray())[0]!;
     expect(segunda.intentos).toBe(2);
     expect(segunda.proximoIntentoEn - reloj.ahora()).toBe(espera(2, () => 1));
+  });
+
+  describe("sin señal (iteración 51)", () => {
+    it("con fotos por subir, el próximo intento espera la señal en vez de repetirse sin pausa", async () => {
+      const { db, reloj } = await dispositivo(1, 3);
+      const s = servidorFalso();
+      s.cortarSenal();
+      const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora });
+
+      expect(await motor.sincronizar({ programada: true })).toBe("sin_conexion");
+      // Antes, el envío seguía atrasado y el temporizador volvía a intentar a los 50 ms, sin fin.
+      expect(await motor.proximoIntento()).toBeGreaterThan(reloj.ahora());
+      // El temporizador y el ciclo de respaldo no repiten nada antes de tiempo: ni abren fotos ni piden nada.
+      const llamadas = s.llamadas.length;
+      expect(await motor.sincronizar({ programada: true })).toBe("sin_conexion");
+      expect(s.llamadas).toHaveLength(llamadas);
+      // Lo que pide el técnico (enviar, una foto nueva) sí intenta de inmediato.
+      await motor.sincronizar();
+      expect(s.llamadas).toHaveLength(llamadas + 1);
+    });
+
+    it("la espera sin señal crece hasta el ritmo del ciclo de respaldo y no más", async () => {
+      const { db, reloj } = await dispositivo(1, 1);
+      const s = servidorFalso();
+      s.cortarSenal();
+      const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+      const esperas: number[] = [];
+      for (let i = 0; i < 8; i++) {
+        await motor.sincronizar({ programada: true });
+        const proximo = (await motor.proximoIntento())!;
+        esperas.push(proximo - reloj.ahora());
+        reloj.avanzar(proximo - reloj.ahora());
+      }
+      expect(esperas[0]).toBe(espera(1, () => 1, ESPERA_MAXIMA_SIN_RED_MS));
+      expect(Math.max(...esperas)).toBe(ESPERA_MAXIMA_SIN_RED_MS);
+    });
+
+    it("una pasada sin señal abre una sola foto: las demás ni se descifran (ADR-0022)", async () => {
+      const { db, reloj } = await dispositivo(1, 5);
+      const s = servidorFalso();
+      s.cortarSenal();
+      const almacen = almacenDexie(db);
+      const abiertas: string[] = [];
+      const espia: typeof almacen = { ...almacen, archivoPorSubir: (huella) => (abiertas.push(huella), almacen.archivoPorSubir(huella)) };
+      const motor = crearMotor({ versionApp: 2, almacen: espia, transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora });
+
+      expect(await motor.sincronizar()).toBe("sin_conexion");
+      expect(abiertas).toHaveLength(1);
+    });
+
+    it("al volver la señal, el envío sale de inmediato y sin la espera acumulada sin señal", async () => {
+      const { db, reloj } = await dispositivo(1, 2);
+      const s = servidorFalso({ verificacionesPendientes: 1 });
+      const motor = crearMotor({ versionApp: 2, almacen: almacenDexie(db), transporte: s.transporte, usuarioActual: async () => "t1", reloj: reloj.ahora, aleatorio: () => 1 });
+      // Las fotos alcanzan a subir y la señal se va justo al enviar.
+      s.programar("enviarComando", "red_antes");
+      expect(await motor.sincronizar()).toBe("sin_conexion");
+      // Quince minutos sin señal, con el temporizador y el ciclo de respaldo intentando.
+      s.cortarSenal();
+      const fin = reloj.ahora() + 15 * 60_000;
+      while (reloj.ahora() < fin) {
+        await motor.sincronizar({ programada: true });
+        reloj.avanzar((await motor.proximoIntento())! - reloj.ahora());
+      }
+      // Sin respuesta del servidor no hay intento que contar.
+      expect((await db.envios.toArray())[0]).toMatchObject({ estado: "pendiente", intentos: 0, ultimoError: { codigo: "sin_conexion" } });
+
+      // Vuelve la señal: el evento «online» pide sincronizar ya y el envío llega al servidor en ese momento.
+      s.devolverSenal();
+      await motor.sincronizar({ bajar: true });
+      expect((await db.envios.toArray())[0]).toMatchObject({ ultimoError: { codigo: "archivos_en_verificacion" } });
+      // La verificación espera lo que pide el servidor, no lo acumulado sin señal (antes, hasta 5 minutos más).
+      expect((await motor.proximoIntento())! - reloj.ahora()).toBe(5000);
+      reloj.avanzar(5000);
+      await motor.sincronizar({ programada: true });
+      expect(await estados(db)).toEqual(["recibido"]);
+    });
   });
 
   it("vuelve a subir los archivos que el servidor no encuentra y reintenta en la misma sincronización", async () => {
@@ -573,15 +650,16 @@ describe("terminar visita (ADR-0037)", () => {
     expect(await motor.proximoIntento()).toBeNull();
   });
 
-  it("sin red queda pendiente con su espera y sale al volver la señal, con la misma llave", async () => {
+  it("sin red queda pendiente, espera la señal y sale al volver, con la misma llave", async () => {
     const { db, s, reloj, motor, llave } = await terminadaSinSenal();
     s.programar("terminarVisita", "red_antes");
     expect(await motor.sincronizar()).toBe("sin_conexion");
-    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toMatchObject({ llave, intentos: 1 });
-    // No reintenta antes de tiempo, y avisa cuándo despertar.
+    // Sin respuesta del servidor no hay intento que contar (iteración 51).
+    expect((await visitaDe(db, "t1", idVisita))?.terminacionPendiente).toMatchObject({ llave, intentos: 0 });
+    // El temporizador no reintenta antes de tiempo, y avisa cuándo despertar.
     const proximo = await motor.proximoIntento();
     expect(proximo).toBeGreaterThan(reloj.ahora());
-    await motor.sincronizar();
+    await motor.sincronizar({ programada: true });
     expect(s.terminadas.size).toBe(0);
     reloj.avanzar(proximo! - reloj.ahora());
     expect(await motor.sincronizar()).toBe("completa");
@@ -710,12 +788,13 @@ describe("conversaciones (ADR-0040)", () => {
     expect(s.llamadas.filter((l) => l === "responderComentario")).toHaveLength(1);
   });
 
-  it("sin señal queda en el teléfono con su espera y sale al volver, con la misma llave y en orden", async () => {
+  it("sin señal queda en el teléfono, espera la señal y sale al volver, con la misma llave y en orden", async () => {
     const { db, s, reloj, motor, llave } = await respondidaSinSenal();
     const segunda = await responder(db, "t1", { levantamientoId: idLev, comentarioId: idComentario, texto: "La placa estaba tapada" }, new Date(reloj.ahora() + 1000));
     s.programar("responderComentario", "red_antes");
     expect(await motor.sincronizar()).toBe("sin_conexion");
-    expect(await pendientesDe(db, "t1", idLev)).toMatchObject([{ llave, intentos: 1 }, { llave: segunda.llave, intentos: 0 }]);
+    // Sin respuesta del servidor no hay intento que contar (iteración 51).
+    expect(await pendientesDe(db, "t1", idLev)).toMatchObject([{ llave, intentos: 0 }, { llave: segunda.llave, intentos: 0 }]);
     const proximo = await motor.proximoIntento();
     expect(proximo).toBeGreaterThan(reloj.ahora());
     reloj.avanzar(proximo! - reloj.ahora());

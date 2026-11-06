@@ -93,9 +93,9 @@ describe("repositorio de levantamientos en Dexie", () => {
     expect((await db.archivos.get(segundo))?.tipo).toBe("application/vnd.teins.boceto+json");
 
     // Borrador: no sube. Enviado: sube (ADR-0019, parte 3).
-    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).not.toContain(segundo);
+    expect(await almacen.huellasPorSubir("t1")).not.toContain(segundo);
     expect((await repo.enviar(id, conCroquis, despues)).ok).toBe(true);
-    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).toContain(segundo);
+    expect(await almacen.huellasPorSubir("t1")).toContain(segundo);
   });
 
   it("guarda la firma con quién, cuándo y qué leyó; volver a firmar reemplaza los trazos, que suben al enviar (iteración 16)", async () => {
@@ -119,9 +119,9 @@ describe("repositorio de levantamientos en Dexie", () => {
     expect(segunda.cargo).toBe("Jefe de mantenimiento");
     expect(await db.archivos.get(primera.firma)).toBeUndefined();
 
-    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).not.toContain(segunda.firma);
+    expect(await almacen.huellasPorSubir("t1")).not.toContain(segunda.firma);
     expect((await repo.enviar(id, conFirma, despues)).ok).toBe(true);
-    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).toContain(segunda.firma);
+    expect(await almacen.huellasPorSubir("t1")).toContain(segunda.firma);
   });
 
   it("guarda el catálogo que llega en la bajada, sin sellar, y un ítem desactivado lo reemplaza (iteración 17)", async () => {
@@ -214,11 +214,11 @@ describe("repositorio de levantamientos en Dexie", () => {
     const almacen = almacenDexie(db);
     await repo.crear(crearLevantamiento(formato, "l1", ahora), "t1");
     await repo.agregarFoto("l1", "s", "fotos", archivo(h("a")), despues);
-    expect((await almacen.archivosPorSubir("t1")).map((a) => a.id)).toEqual([h("a")]);
+    expect(await almacen.huellasPorSubir("t1")).toEqual([h("a")]);
 
     await repo.quitarFoto("l1", "s", "fotos", h("a"), despues);
     await almacen.marcarSubida(h("a"));
-    expect(await almacen.archivosPorSubir("t1")).toEqual([]);
+    expect(await almacen.huellasPorSubir("t1")).toEqual([]);
     expect(await db.archivos.get(h("a"))).toBeUndefined();
   });
 

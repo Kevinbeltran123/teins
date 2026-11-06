@@ -32,7 +32,7 @@ Mapa de lo que hay en `docs/` y en la raíz (lo marcado «local» está en `.git
 | `diseno/referencias.md` (local) | Qué se tomó de cada referencia | Se adopta una referencia nueva |
 | `proceso/forma-de-trabajo.md` (local) | Cómo se construye: cortes verticales, contrato primero | Cambia la forma de trabajar |
 | `proceso/herramientas-de-agentes.md` (local) | Qué skills, plugins y MCP usar, y cuándo | Se agrega o se quita una herramienta |
-| [`proceso/entorno-de-pruebas.md`](proceso/entorno-de-pruebas.md) | El entorno de pruebas en Railway y cómo desplegar en él | Cambia un servicio, una variable o el despliegue |
+| [`proceso/entorno-de-pruebas.md`](proceso/entorno-de-pruebas.md) | El entorno de pruebas en Railway, cómo desplegar en él y el ensayo de carga con su línea de base | Cambia un servicio, una variable o el despliegue, o el ensayo da cifras nuevas |
 | [`proceso/produccion.md`](proceso/produccion.md) | Montaje, respaldos, simulacro y cómo encender o apagar producción | Cambia la infraestructura o su estado |
 | [`proceso/verificacion-manual.md`](proceso/verificacion-manual.md) | El recorrido a mano en un teléfono real | Una iteración agrega algo que solo se comprueba a mano |
 | [`../AGENTS.md`](../AGENTS.md) | Reglas, convenciones y comandos para quien programa | Cambia una regla, la estructura o un comando |

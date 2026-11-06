@@ -57,7 +57,7 @@ Reglas de la estructura:
 
 | Rol | Uso | Permisos |
 |---|---|---|
-| Dueño (`DATABASE_URL_PROPIETARIO`) | Migraciones, cola de trabajos y compactar el registro de cambios. Solo la reciben el worker, `migrar`, `sembrar` y `crear-organizacion` (la exigen con `urlDelPropietario`); el rol web arranca sin ella | Dueño de los esquemas |
+| Dueño (`DATABASE_URL_PROPIETARIO`) | Migraciones, cola de trabajos y compactar el registro de cambios. Solo la reciben el worker, `migrar`, `sembrar`, `crear-organizacion` y `preparar-ensayo` (la exigen con `urlDelPropietario`); el rol web arranca sin ella | Dueño de los esquemas |
 | `teins_portal` (`DATABASE_URL_PORTAL`) | Rutas del portal del cliente | Solo versiones publicadas (informes y cotizaciones) con PDF listo del cliente de la sesión; leer los accesos y anotar el último ingreso; sus pedidos de código, sesiones e intentos; encolar el correo del código con `cola.encolar_correo_del_portal`; y registrar en auditoría |
 | `teins_app` (`DATABASE_URL`) | Solicitudes y trabajos de negocio | Mínimos por tabla; sujeto a seguridad por fila; solo inserta y lee en auditoría, formatos y el registro de cambios; no borra en ninguna tabla de negocio |
 
@@ -98,6 +98,7 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 | `ultimo-correo --para <correo>` | El último correo simulado que salió a esa dirección (asunto y texto): la prueba de extremo a extremo lee de aquí el código del portal (ADR-0053). Se niega en producción o con el correo real |
 | `generar-claves-avisos` | Imprime un par de claves VAPID para `AVISOS_VAPID_PUBLICA` y `AVISOS_VAPID_PRIVADA` (ADR-0023). La privada es un secreto: va a las variables del entorno, nunca al repositorio. Sin claves, los avisos quedan apagados |
 | `verificar-integridad` | Verifica todas las cadenas de la auditoría de una base; recibe la conexión del dueño en `DATABASE_URL`. Lo usa el simulacro de restauración (`docs/proceso/produccion.md`) |
+| `preparar-ensayo` | La organización del ensayo de carga (`src/ensayo.ts`) con el formato de prueba y sus usuarios ficticios: `--tecnicos` (20) y `--oficina` (5), con la contraseña de `TEINS_CONTRASENA`. No toca lo que existe, así las sesiones guardadas del ensayo siguen sirviendo; con `--restablecer`, les pone esa contraseña. Solo en desarrollo o con `ENTORNO_DE_PRUEBAS=true` |
 
 ## Decisiones vigentes por módulo
 
@@ -190,7 +191,26 @@ Un acceso por contacto, con correo; lo dan y lo quitan las rutas de clientes (`c
 
 ## Pruebas
 
-`pnpm --filter @teins/servidor test` levanta PostgreSQL 18 y S3Mock con Testcontainers (`pruebas/preparar.ts`). Requiere Docker; con Colima se detecta solo. Una prueba por área en `pruebas/` (por ejemplo `bajada.test.ts`, `revision.test.ts`, `envios.test.ts`, `mantenimiento.test.ts`).
+`pnpm --filter @teins/servidor test` levanta PostgreSQL 18 y S3Mock con Testcontainers (`pruebas/preparar.ts`). Requiere Docker; con Colima se detecta solo. Una prueba por área en `pruebas/` (por ejemplo `bajada.test.ts`, `revision.test.ts`, `envios.test.ts`, `mantenimiento.test.ts`). `temporada-alta.test.ts` (QA-14) corre el escenario de temporada alta a la vez, con más personas que conexiones tiene el pool de prueba (5): una operación que pide una segunda conexión con su transacción abierta hace que todas se traben y fallen a los 10 s, y ahí se ve.
+
+### Ensayo de carga (QA-14, iteración 51)
+
+Lo que la prueba no mide (cuánto tarda cada cosa con servidores reales, la memoria del worker con Chromium) lo mide el ensayo, `ensayo/ensayo-de-carga.ts`. No corre en la integración continua: se corre a mano, en local o contra el entorno de pruebas, antes de una versión o después de cambiar la infraestructura. Habla con el servidor por el contrato de `protocolo`, como las apps: técnicos con señal que suben sus fotos de a una y envían, técnicos sin señal que la recuperan todos a la vez, y oficina que toma de la bandeja compartida, revisa, corrige y publica (cada informe, un PDF). Compara con las metas: cero errores del servidor y cero levantamientos perdidos, los que recuperan la señal recibidos en menos de 5 minutos, cada PDF en menos de 3 y las consultas de oficina en menos de 1 s.
+
+```sh
+TEINS_CONTRASENA=... pnpm --filter @teins/servidor preparar-ensayo     # una vez por entorno
+TEINS_CONTRASENA=... pnpm --filter @teins/servidor ensayo-de-carga     # 10 con señal, 10 sin señal, 5 de oficina, 10 fotos
+TEINS_CONTRASENA=... pnpm --filter @teins/servidor ensayo-de-carga --con-senal 2 --sin-senal 2 --oficina 1 --fotos 3   # prueba rápida
+```
+
+En local va al servidor del puerto 3000 (con `dev:web` y `dev:worker` corriendo). Contra el entorno de pruebas, con `E2E_CAMPO_URL` y `E2E_OFICINA_URL` (`docs/proceso/entorno-de-pruebas.md`, "Ensayo de carga"). Para que repetirlo cueste poco:
+
+- Corre en su propia organización: nunca se mezcla con los datos de demostración, y cada corrida cancela sus visitas de hoy de la corrida anterior antes de programar las suyas.
+- Guarda las sesiones fuera del repositorio (`$TMPDIR/teins-ensayo`): solo la primera corrida las inicia, con el límite de 5 por minuto por dirección (QA-7, unos 5 minutos). Después, el escenario completo tarda cerca de 30 s en local y de 1 a 1,5 minutos contra el entorno de pruebas.
+- Genera una sola foto con Chromium (1600 px, calidad 0,8, como la cámara de campo, unos 550 KB) y saca las demás de ella con otra huella. El escenario por defecto sube unos 110 MB.
+- Contra Railway, los tiempos que ve el ensayo incluyen el internet de quien lo corre: los veinte técnicos suben por una sola conexión. Por eso lee el tiempo dentro del servidor de los registros (`railway logs`, con la CLI enlazada a ese entorno) y evalúa con él la meta de oficina. La memoria y la CPU de cada servicio, con `railway metrics -s worker --memory --since <hora>`.
+
+Con `--json <archivo>` deja el resultado para compararlo con el de otra corrida (fuera del repositorio, por ejemplo `~/ensayo-$(date +%F).json`). Sale con 1 si una meta no se cumple.
 
 ## Despliegue (ADR-0016)
 

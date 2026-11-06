@@ -23,6 +23,8 @@
     "marcar-administrador": "tsx --env-file=.env src/cli/marcar-administrador.ts",
     "verificar-integridad": "tsx src/cli/verificar-integridad.ts",
     "crear-organizacion": "tsx --env-file=.env src/cli/crear-organizacion.ts",
+    "preparar-ensayo": "tsx --env-file=.env src/cli/preparar-ensayo.ts",
+    "ensayo-de-carga": "tsx ensayo/ensayo-de-carga.ts",
     "generar-claves-avisos": "tsx src/cli/generar-claves-avisos.ts",
     "compilar": "node scripts/compilar.mjs"
   },

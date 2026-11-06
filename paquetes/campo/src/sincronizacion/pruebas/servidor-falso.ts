@@ -56,9 +56,12 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
   const revisados = new Set<string>();
   /** Archivos que el almacenamiento rechaza siempre. */
   const rechazadas = new Set<string>();
+  /** Sin señal: toda llamada falla al instante, como en Safari sin red. */
+  let sinSenal = false;
 
   function aplicarFalla<T>(op: Operacion, ejecutar: () => T): T {
     llamadas.push(op);
+    if (sinSenal) throw new ErrorDeRed(new TypeError("Load failed"));
     const falla = fallas.get(op)?.shift();
     if (falla === "red_antes") throw new ErrorDeRed(new TypeError("Failed to fetch"));
     if (revocados.size > 0 && op !== "subir" && op !== "consultarOrdenes") throw error("no_autenticado", 401);
@@ -170,6 +173,12 @@ export function servidorFalso(opciones: { verificacionesPendientes?: number } = 
     transporte,
     programar(op: Operacion, ...lista: Falla[]) {
       fallas.set(op, [...(fallas.get(op) ?? []), ...lista]);
+    },
+    cortarSenal() {
+      sinSenal = true;
+    },
+    devolverSenal() {
+      sinSenal = false;
     },
     /** Olvida un archivo, como si el almacenamiento lo hubiera perdido. */
     perderArchivo(huella: string) {

@@ -192,6 +192,18 @@ describe("el correo que escribe oficina (iteración 30)", () => {
     const propio = { ...m, personal: { asunto: "Asunto", texto: "Va adjunta." } };
     expect(htmlDeCorreo(propio, { ...opciones, sinAdjunto: true })).toContain("El PDF pesa demasiado para el correo");
   });
+
+  it("si el PDF del informe no cabe, remite al portal solo a quien puede entrar; a los demás, que respondan (iteración 51)", () => {
+    const informe = { documento: "informe" as const, organizacion: "TEINS", cliente: "Hotel Plaza Real", sitio: "Torre A", motivo: "Mantenimiento", programadaPara: "2026-09-30", numero: 1, nombreArchivo: "Informe.pdf", documentoId: "0192f0e0-0000-7000-8000-000000000001" };
+    const conPortal = { ...opciones, sinAdjunto: true, portal: "https://portal.example/informes/0192f0e0-0000-7000-8000-000000000001" };
+    const sinPortal = { ...opciones, sinAdjunto: true };
+    expect(textoDeCorreo(informe, conPortal)).toContain("El PDF pesa demasiado para el correo: descárguelo del portal.");
+    // Sin acceso al portal (ADR-0053) el correo no lleva el botón: mandarlo allá lo dejaría sin el informe.
+    for (const mensaje of [informe, { ...informe, personal: { asunto: "Asunto", texto: "Le envío el informe." } }]) {
+      expect(textoDeCorreo(mensaje, sinPortal)).toContain("El PDF pesa demasiado para el correo: respóndanos y se lo hacemos llegar.");
+      expect(htmlDeCorreo(mensaje, sinPortal)).not.toContain("descárguelo del portal");
+    }
+  });
 });
 
 describe("el informe con la estructura del formato (iteración 47, ADR-0050 y ADR-0051)", () => {

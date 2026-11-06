@@ -6,6 +6,11 @@ import { ErrorDeSubida, type Transporte } from "./transporte";
 
 export const ESPERA_BASE_MS = 2_000;
 export const ESPERA_MAXIMA_MS = 5 * 60_000;
+/**
+ * Sin señal no hay servidor al que darle respiro: la espera crece igual, pero solo hasta el ritmo del ciclo de respaldo,
+ * para que el envío salga apenas vuelva la señal (iteración 51).
+ */
+export const ESPERA_MAXIMA_SIN_RED_MS = 30_000;
 /** Pasadas por sincronización: cubre "faltan archivos → súbelos → reintenta" sin bucles infinitos. */
 const PASADAS_MAXIMAS = 3;
 /** Sin un motivo para bajar ya (abrir la app, recuperar señal, un envío recibido), se baja cada 5 minutos. */
@@ -25,8 +30,8 @@ const esperaAlCambioDeContrasena = (error: ErrorApi) => error.codigo === "cambio
  * Espera exponencial con variación aleatoria (ADR-0003, regla 6): muchos dispositivos que
  * recuperan señal a la vez no golpean al servidor en el mismo instante.
  */
-export function espera(intentos: number, aleatorio: () => number): number {
-  const tope = Math.min(ESPERA_MAXIMA_MS, ESPERA_BASE_MS * 2 ** Math.min(intentos, 20));
+export function espera(intentos: number, aleatorio: () => number, maxima = ESPERA_MAXIMA_MS): number {
+  const tope = Math.min(maxima, ESPERA_BASE_MS * 2 ** Math.min(intentos, 20));
   return Math.round(tope * (0.5 + aleatorio() * 0.5));
 }
 
@@ -35,10 +40,11 @@ export type ResultadoSincronizacion = "completa" | "sin_conexion";
 export interface Motor {
   /**
    * Sube fotos pendientes, procesa el outbox y baja cambios. Nunca corre dos veces a la vez.
-   * `bajar` pide la bajada ya, sin esperar el intervalo.
+   * `bajar` pide la bajada ya, sin esperar el intervalo. `programada`: la pide el temporizador o el ciclo de respaldo, y
+   * sin señal espera su turno sin abrir nada; lo que pide el técnico, abrir la app o recuperar señal intenta de inmediato.
    */
-  sincronizar(opciones?: { bajar?: boolean }): Promise<ResultadoSincronizacion>;
-  /** Momento del próximo intento pendiente, para despertar justo a tiempo. */
+  sincronizar(opciones?: { bajar?: boolean; programada?: boolean }): Promise<ResultadoSincronizacion>;
+  /** Momento del próximo intento pendiente, para despertar justo a tiempo; sin señal, no antes de volver a buscarla. */
   proximoIntento(): Promise<number | null>;
 }
 
@@ -58,14 +64,24 @@ interface Dependencias {
 class SinConexion extends Error {}
 
 export function crearMotor({ almacen, transporte: base, usuarioActual, versionApp, reloj = Date.now, aleatorio = Math.random, bloquear }: Dependencias): Motor {
+  /**
+   * Sin señal, la espera es del teléfono y no de cada envío (iteración 51): sin respuesta del servidor no hay intento que
+   * contar, así que nada acumula espera y, al volver la señal, todo sale de inmediato. Vive en memoria: al abrir la app
+   * de nuevo se intenta enseguida.
+   */
+  let fallasDeRed = 0;
+  let buscarSenalEn = 0;
+
   // Cualquier respuesta del servidor, incluso un error del contrato, prueba que hay conexión.
   const conRed = <A extends unknown[], R>(llamada: (...a: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
       try {
         const r = await llamada(...args);
+        fallasDeRed = buscarSenalEn = 0;
         await almacen.registrarRed(true);
         return r;
       } catch (error) {
+        if (!(error instanceof ErrorDeRed)) fallasDeRed = buscarSenalEn = 0;
         await almacen.registrarRed(!(error instanceof ErrorDeRed));
         throw error;
       }
@@ -88,7 +104,10 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
   let huboRecibidos = false;
 
   async function subirArchivos(tecnicoId: string) {
-    for (const archivo of await almacen.archivosPorSubir(tecnicoId)) {
+    // De a uno (ADR-0022): sin señal falla el primero y los demás ni se abren.
+    for (const huella of await almacen.huellasPorSubir(tecnicoId)) {
+      const archivo = await almacen.archivoPorSubir(huella);
+      if (!archivo) continue;
       try {
         // Fotos (JPEG) o bocetos: cada archivo sube con el tipo con que se guardó (iteración 10).
         const tipo = archivo.tipo === TIPO_ARCHIVO_BOCETO ? TIPO_ARCHIVO_BOCETO : "image/jpeg";
@@ -131,8 +150,9 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
       return false;
     } catch (error) {
       if (error instanceof ErrorDeRed) {
-        // Puede que el servidor sí lo haya recibido: el reintento es seguro por la llave de idempotencia.
-        await reintentarDespues(envio, "sin_conexion", error.message);
+        // Puede que el servidor sí lo haya recibido: el reintento es seguro por la llave de idempotencia. No suma intento
+        // ni espera propia: espera la señal con el resto del teléfono.
+        await almacen.actualizarEnvio(envio.levantamientoId, { estado: "pendiente", ultimoError: { codigo: "sin_conexion", mensaje: error.message } });
         throw new SinConexion();
       }
       if (!(error instanceof ErrorApi)) throw error;
@@ -187,10 +207,8 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
         // La visita terminada baja en la misma sincronización.
         huboRecibidos = true;
       } catch (error) {
-        if (error instanceof ErrorDeRed) {
-          await despues();
-          throw new SinConexion();
-        }
+        // Sin señal espera con el resto del teléfono, sin sumar intento.
+        if (error instanceof ErrorDeRed) throw new SinConexion();
         if (!(error instanceof ErrorApi)) throw error;
         if (error.codigo === "no_autenticado") {
           // Se envía al volver a iniciar sesión.
@@ -224,10 +242,8 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
         // La conversación con su mensaje baja en la misma sincronización.
         huboRecibidos = true;
       } catch (error) {
-        if (error instanceof ErrorDeRed) {
-          await despues();
-          throw new SinConexion();
-        }
+        // Sin señal espera con el resto del teléfono, sin sumar intento; las siguientes del chat esperan detrás.
+        if (error instanceof ErrorDeRed) throw new SinConexion();
         if (!(error instanceof ErrorApi)) throw error;
         if (error.codigo === "no_autenticado") {
           sesionRechazada = true;
@@ -308,7 +324,9 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
     }
   }
 
-  async function unaVez(bajadaPedida: boolean): Promise<ResultadoSincronizacion> {
+  async function unaVez(bajadaPedida: boolean, programada: boolean): Promise<ResultadoSincronizacion> {
+    // Sin señal, el temporizador y el ciclo de respaldo esperan su turno sin abrir nada (iteración 51).
+    if (programada && reloj() < buscarSenalEn) return "sin_conexion";
     await almacen.recuperarInterrumpidos();
     // Lo que esperaba una app nueva sale apenas corre una versión distinta de la que el servidor rechazó.
     await almacen.reanudarTrasActualizar(versionApp);
@@ -343,7 +361,11 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
       }
       return "completa";
     } catch (error) {
-      if (error instanceof SinConexion) return "sin_conexion";
+      if (error instanceof SinConexion) {
+        fallasDeRed++;
+        buscarSenalEn = reloj() + espera(fallasDeRed, aleatorio, ESPERA_MAXIMA_SIN_RED_MS);
+        return "sin_conexion";
+      }
       throw error;
     }
   }
@@ -352,14 +374,17 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
   let enCurso: Promise<ResultadoSincronizacion> | null = null;
   let repetir = false;
   let bajadaPedida = false;
+  /** La pidió alguien que no es el temporizador ni el ciclo de respaldo: no espera la señal. */
+  let pedidaYa = false;
 
   async function correr(): Promise<ResultadoSincronizacion> {
     let resultado: ResultadoSincronizacion;
     do {
       repetir = false;
       const pedida = bajadaPedida;
-      bajadaPedida = false;
-      const r = bloquear ? await bloquear(() => unaVez(pedida)) : await unaVez(pedida);
+      const programada = !pedidaYa;
+      bajadaPedida = pedidaYa = false;
+      const r = bloquear ? await bloquear(() => unaVez(pedida, programada)) : await unaVez(pedida, programada);
       resultado = r === "ocupado" ? "completa" : r;
     } while (repetir && resultado === "completa");
     return resultado;
@@ -368,10 +393,13 @@ export function crearMotor({ almacen, transporte: base, usuarioActual, versionAp
   return {
     async proximoIntento() {
       const tecnicoId = await usuarioActual();
-      return tecnicoId ? almacen.proximoIntento(tecnicoId) : null;
+      const proximo = tecnicoId ? await almacen.proximoIntento(tecnicoId) : null;
+      // Sin señal, nada se intenta antes de volver a buscarla.
+      return proximo === null ? null : Math.max(proximo, buscarSenalEn);
     },
-    sincronizar({ bajar = false } = {}) {
+    sincronizar({ bajar = false, programada = false } = {}) {
       if (bajar) bajadaPedida = true;
+      if (!programada) pedidaYa = true;
       if (enCurso) {
         repetir = true;
         return enCurso;

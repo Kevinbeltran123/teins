@@ -227,6 +227,8 @@ sequenceDiagram
 
 El motor también envía las terminaciones de visita y las respuestas del chat ([ADR-0040](../adr/0040-conversaciones-entre-oficina-y-campo.md)) antes de bajar, con la misma espera. Una sola sincronización corre a la vez, también entre pestañas.
 
+**Sin señal** (iteración 51), la espera es del teléfono y no de cada envío (`paquetes/campo/src/sincronizacion/motor.ts`: `fallasDeRed`, `buscarSenalEn`). Crece con azar como la de los envíos ([ADR-0003](../adr/0003-estrategia-de-sincronizacion.md), regla 6), pero solo hasta 30 s, y vuelve a cero con la primera respuesta del servidor. La respetan el temporizador y el ciclo de respaldo, que mientras tanto no abren nada (`programada`); lo que pide el técnico, abrir la app o recuperar señal intenta de inmediato. Una falla sin red no suma intento ni alarga la espera de nada: al volver la señal todo sale enseguida, y las esperas que pide el servidor (la verificación de las fotos) empiezan de cero. Las fotos pendientes se abren de a una al subirlas.
+
 Los avisos no esperan la siguiente bajada: en cada aviso el service worker (`paquetes/campo/public/avisos-sw.js`) le pide consultar a **todas** las ventanas abiertas, esté o no a la vista esa conversación, y la pantalla baja de inmediato (`escucharAvisos`). Lo que oficina escribió y el técnico no ha leído sube a «Necesita atención» (`paquetes/campo/src/conversacion.ts:sinLeerDe`) y tocarlo abre el chat; al leerlo, el levantamiento vuelve a «Enviados». El número de conversaciones sin leer va también en el ícono de la app (`paquetes/campo/src/dispositivo/insignia.ts`); con la app cerrada no sube solo, porque el servidor no sabe qué leyó el técnico en su teléfono.
 
 | Paso | Dónde en el código | ADR |

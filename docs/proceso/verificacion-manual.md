@@ -824,6 +824,19 @@ En el iPhone, con una visita de hoy.
 3. Con oficina, tome el levantamiento (queda «En revisión») y vuelva al iPhone.
    - Debe: la visita sigue sin ofrecer otro levantamiento.
 
+## Fase 51 · Sin señal, sin gastar la batería (iteración 51)
+
+En el iPhone, con una visita de hoy y la batería por encima del 50 %.
+
+1. Active el modo avión. Inicie el levantamiento, tome 10 fotos y envíelo. Deje la app abierta en el inicio durante 10 minutos, con la pantalla encendida.
+   - Debe: el envío dice «Sin conexión: se enviará al recuperar señal»; el teléfono no se calienta y la batería baja como con cualquier app abierta (antes, la app reintentaba sin pausa y abría todas las fotos en cada intento).
+2. Mientras tanto, abra otra visita y tome una foto.
+   - Debe: la cámara y el paso responden como siempre, sin pausas.
+3. Quite el modo avión.
+   - Debe: las fotos suben y el envío queda «Recibido» en pocos segundos, no minutos.
+4. Repita con señal intermitente: con las fotos ya subidas, active el modo avión justo al tocar «Enviar», espere 10 minutos y quítelo.
+   - Debe: el envío sale en segundos al volver la señal (antes podía esperar hasta 5 minutos).
+
 ## Al terminar
 
 - Resultados del iPhone (fase 1, paso 7): en la tabla de resultados de [`historia/00-captura-sin-conexion.md`](historia/00-captura-sin-conexion.md).

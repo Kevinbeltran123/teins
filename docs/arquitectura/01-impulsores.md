@@ -155,7 +155,7 @@ Fuentes: resumen de la reunión con el dueño de TEINS, respuestas a las pregunt
 
 ## 6. Supuestos por validar
 
-1. Los técnicos son menos de diez.
+1. Los técnicos son menos de diez. El ensayo de carga de la iteración 51 probó veinte a la vez, diez de ellos recuperando la señal juntos, sin errores (QA-14).
 2. Un levantamiento tiene decenas de fotos, no cientos.
 3. Oficina corrige sin devolver el levantamiento al técnico (se deriva de P18).
 4. Los tipos de servicio iniciales difieren sobre todo en campos, no en estructura.
