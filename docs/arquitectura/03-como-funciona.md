@@ -280,7 +280,7 @@ Retirar deja la versión y su PDF, pero sus envíos en cola ya no salen. Un PDF 
 
 ## 6. Entrar al portal con un código
 
-Cada contacto con «Acceso al portal» entra con su correo y un código de 6 dígitos que le llega ([ADR-0053](../adr/0053-acceso-al-portal-por-contacto.md)). El código no se guarda: se deriva del pedido con un secreto del servidor (`paquetes/servidor/src/modulos/portal/claves.ts`), así que el worker que envía el correo llega al mismo sin que pase por la cola. Ve lo que recibe; quitar el acceso, quitar el contacto, cambiarle el correo o archivar el cliente cierran sus sesiones (`accesosDelPortal` en `paquetes/servidor/src/modulos/portal/index.ts`, llamado por `paquetes/servidor/src/modulos/clientes/index.ts`).
+Cada contacto con «Acceso al portal» entra con su correo y un código de 6 dígitos que le llega ([ADR-0053](../adr/0053-acceso-al-portal-por-contacto.md)). El código no se guarda: se deriva del pedido con un secreto del servidor (`paquetes/servidor/src/modulos/portal/claves.ts`), así que el worker que envía el correo llega al mismo sin que pase por la cola. Ve lo que recibe; quitar el acceso, quitar el contacto, cambiarle el correo o archivar el cliente cierran sus sesiones (`accesosDelPortal` en `paquetes/servidor/src/modulos/portal/index.ts`, llamado por `paquetes/servidor/src/modulos/clientes/index.ts`). Un acceso sin ingresos en 12 meses (o sin estrenar en ese plazo) lo quita solo la tarea periódica, igual que si lo quitara oficina, y queda registrado con autor `sistema` ([ADR-0055](../adr/0055-accesos-al-portal-sin-uso.md), `quitarAccesosSinUsoDelPortal`).
 
 ```mermaid
 sequenceDiagram

@@ -39,8 +39,8 @@ src/
     envios/          Informe y cotización al cliente por correo y WhatsApp (ADR-0028, 0034, 0036).
     portal/          Acceso al portal de cada contacto, ingreso con código y rutas del portal, con la conexión de `teins_portal` (ADR-0009, ADR-0053).
     avisos/          Avisos push (ADR-0023, ADR-0040).
-    mantenimiento/   La tarea periódica: recupera trabajos a medias, poda y borra archivos sin uso (ADR-0043, ADR-0044, ADR-0048).
-migraciones/    SQL generado por drizzle-kit más migraciones propias (permisos, cola). La última es 0039 (archivos sin uso, ADR-0048).
+    mantenimiento/   La tarea periódica: recupera trabajos a medias, poda, borra archivos sin uso y quita accesos al portal sin uso (ADR-0043, ADR-0044, ADR-0048, ADR-0055).
+migraciones/    SQL generado por drizzle-kit más migraciones propias (permisos, cola). La última es 0042 (portal por contacto, ADR-0053).
 infra/          SQL que ejecuta la infraestructura, no las migraciones (roles de la base).
 scripts/        compilar.mjs (la imagen) y vaciar-almacenamiento.mjs (entorno de pruebas).
 pruebas/        Integración con PostgreSQL y S3Mock reales en contenedores.
@@ -176,11 +176,13 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 
 Suscripciones por persona y navegador; un trabajo por suscripción, encolado en la transacción del hecho, enviado con VAPID en el worker. El texto no lleva datos del cliente, salvo los avisos `mensaje_de_oficina` y `respuesta_del_tecnico`, que llevan el cliente y el texto (excepción del ADR-0040). `avisos.enviar` acepta solo rutas relativas.
 
-### Mantenimiento (ADR-0043, ADR-0044, ADR-0048)
+### Mantenimiento (ADR-0043, ADR-0044, ADR-0048, ADR-0055)
 
 La tarea periódica `mantenimiento.recuperar` corre cada hora en el minuto 17 (`periodicas` en `tareas.ts`): vuelve a encolar lo que lleva más de 12 horas a medias (archivos, PDF de informes y cotizaciones), borra sesiones vencidas hace más de un día (oficina, campo y portal) y compacta el registro de cambios con la conexión del dueño.
 
 También borra, con la conexión del dueño, la fila y el objeto de las fotos, bocetos y firmas sin actividad en 120 días que ningún levantamiento usa (`limpiarArchivosSinUso`, 500 por organización y pasada). Lo usado queda marcado en `archivos.en_uso_comprobado_en` y no se vuelve a mirar. Los planos y los PDF generados nunca entran. La limpieza bloquea las filas con `for update skip locked` y `archivos.estados` las lee con `for share`, así que un envío en curso nunca pierde un archivo.
+
+Por último, quita los accesos al portal sin ingresos en 12 meses; si nunca entró, cuenta desde que se le dio (`quitarAccesosSinUso`, ADR-0055). Es lo mismo que cuando oficina lo quita: borra la fila con sus sesiones y su pedido, y registra `acceso_portal_quitado` en la historia del cliente con autor `sistema` y motivo `sin_uso`. Oficina lo devuelve con el interruptor de siempre.
 
 ### Portal (ADR-0053)
 
