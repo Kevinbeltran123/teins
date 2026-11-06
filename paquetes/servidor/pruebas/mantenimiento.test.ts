@@ -4,11 +4,13 @@ import { llaveDeEnvio } from "@teins/protocolo";
 import { claveDeObjeto, almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { registrarCambios } from "../src/modulos/cambios";
+import { verificarCadena } from "../src/modulos/auditoria";
 import { clientesYSitios } from "../src/modulos/clientes";
-import { limpiarArchivosSinUso, podarVencido } from "../src/modulos/mantenimiento";
+import { limpiarArchivosSinUso, podarVencido, quitarAccesosSinUso } from "../src/modulos/mantenimiento";
 import { crearVisitas } from "../src/modulos/visitas";
 import { periodicas } from "../src/tareas";
 import { cabecerasSync, jpegDePrueba, ORIGEN, servidorDePrueba } from "./ayudas";
+import { conPortal } from "./portal-ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
@@ -156,5 +158,53 @@ describe("archivos sin uso (ADR-0007, ADR-0048)", () => {
     // Otra pasada no encuentra nada que borrar.
     expect(await limpiar()).toBe(0);
     expect(await filas()).toEqual([reciente, usada, publicada, plano].sort());
+  }, 60_000);
+});
+
+describe("accesos al portal sin uso (ADR-0055)", () => {
+  it("quita los que llevan 12 meses sin entrar, o sin estrenar, con sus sesiones; deja los demás y lo audita", async () => {
+    const p = conPortal(s);
+    const org = await s.nuevaOrganizacionConUsuarios();
+    const { clienteId } = await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) =>
+      clientesYSitios.crear(tx, { organizacionId: org.organizacionId, nombre: "Cliente con portal", sitio: { nombre: "Sede", direccion: "Calle [N]" } }),
+    );
+    const sufijo = randomUUID().slice(0, 8);
+    const conAcceso = async (nombre: string) => {
+      const contacto = await p.contacto(org, clienteId, { nombre, correo: `${nombre.toLowerCase()}.${sufijo}@cliente.example`, recibeInformes: true, recibeCotizaciones: false });
+      expect((await p.darAcceso(org, clienteId, contacto.id)).statusCode).toBe(200);
+      return contacto.id;
+    };
+    const [viejo, sinEstrenar, reciente, nuevo] = [await conAcceso("Viejo"), await conAcceso("Estreno"), await conAcceso("Reciente"), await conAcceso("Nuevo")];
+    await p.entrarCompleto(`viejo.${sufijo}@cliente.example`, "203.0.113.71");
+    await p.entrarCompleto(`reciente.${sufijo}@cliente.example`, "203.0.113.72");
+
+    const fijar = (contactoId: string, columna: "creado_en" | "ultimo_ingreso", meses: number) =>
+      s.propietario.pool.query(`update portal.accesos set ${columna} = now() - make_interval(months => $2) where contacto_id = $1`, [contactoId, meses]);
+    await fijar(viejo, "creado_en", 20);
+    await fijar(viejo, "ultimo_ingreso", 13);
+    await fijar(sinEstrenar, "creado_en", 13);
+    await fijar(reciente, "creado_en", 20);
+    await fijar(reciente, "ultimo_ingreso", 11);
+    await fijar(nuevo, "creado_en", 11);
+
+    expect(await quitarAccesosSinUso(s.conexionApp.bd)).toBeGreaterThanOrEqual(2);
+
+    const quedan = await s.propietario.pool.query("select contacto_id from portal.accesos where cliente_id = $1", [clienteId]);
+    expect(quedan.rows.map((f) => f.contacto_id).sort()).toEqual([reciente, nuevo].sort());
+    // La sesión del viejo se fue con su acceso; queda solo la del reciente.
+    const { rows: [{ total }] } = await s.propietario.pool.query("select count(*)::int as total from portal.sesiones where cliente_id = $1", [clienteId]);
+    expect(total).toBe(1);
+
+    const eventos = await s.propietario.pool.query(
+      "select valor_anterior, autor_id, motivo from auditoria.registros where agregado_id = $1 and tipo_evento = 'acceso_portal_quitado' order by secuencia",
+      [clienteId],
+    );
+    expect(eventos.rows.map((f) => f.valor_anterior.contacto).sort()).toEqual([viejo, sinEstrenar].sort());
+    expect(eventos.rows.every((f) => f.autor_id === "sistema" && f.motivo === "sin_uso")).toBe(true);
+    expect(await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) => verificarCadena(tx, org.organizacionId, "cliente", clienteId))).toMatchObject({ integra: true });
+
+    // Otra pasada no quita nada más de este cliente.
+    await quitarAccesosSinUso(s.conexionApp.bd);
+    expect((await s.propietario.pool.query("select count(*)::int as total from portal.accesos where cliente_id = $1", [clienteId])).rows[0].total).toBe(2);
   }, 60_000);
 });

@@ -241,7 +241,7 @@ describe("el informe con la estructura del formato (iteración 47, ADR-0050 y AD
       nit: "900.123.456-7",
       ciudad: "Ibagué",
       solicitante: { nombre: "Laura Gómez", telefono: "+573105550142" },
-      ordenDeServicio: "0774",
+      ordenDeServicio: "0042",
       referencia: "TKT-4821",
     },
     levantamientos: [
@@ -267,7 +267,7 @@ describe("el informe con la estructura del formato (iteración 47, ADR-0050 y AD
   it("el encabezado va en rejilla con lo de la visita, y lo que falta va como marcador", () => {
     const html = pdf(conTodo);
     expect(html).toContain('class="encabezado"');
-    for (const dato of ["900.123.456-7", "0774", "Ibagué", "Laura Gómez", "+57 310 555 0142", "TKT-4821"]) expect(html).toContain(dato);
+    for (const dato of ["900.123.456-7", "0042", "Ibagué", "Laura Gómez", "+57 310 555 0142", "TKT-4821"]) expect(html).toContain(dato);
     for (const rotulo of ["Cliente", "NIT", "Orden de servicio", "Dirección", "Ciudad", "Sede", "Solicitante", "Teléfono", "Fecha", "Referencia del cliente"]) expect(html).toContain(`>${rotulo}<`);
     const vacio = pdf({ ...conTodo, visita: informe.visita });
     for (const marcador of ["[NIT]", "[Ciudad]", "[Solicitante]", "[N.º de orden]"]) expect(vacio).toContain(marcador);
