@@ -10,25 +10,25 @@
     "test": "vitest run --configLoader runner"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.103.2",
-    "@tanstack/react-router": "^1.170.39",
+    "@tanstack/react-query": "^5.105.3",
+    "@tanstack/react-router": "^1.170.46",
     "@teins/documentos": "workspace:*",
     "@teins/dominio": "workspace:*",
     "@teins/protocolo": "workspace:*",
     "@teins/ui": "workspace:*",
     "qrcode": "^1.5.4",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@fontsource-variable/geist": "^5.3.0",
-    "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^26.6.2",
+    "@tailwindcss/vite": "^4.3.4",
+    "@types/node": "^26.6.6",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "tailwindcss": "^4.3.3",
+    "@vitejs/plugin-react": "^6.2.1",
+    "tailwindcss": "^4.3.4",
     "vite": "^8.3.3"
   }
 }
