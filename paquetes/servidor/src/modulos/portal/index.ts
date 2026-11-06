@@ -399,6 +399,31 @@ export async function podarSesionesDelPortal(tx: TxOrganizacion, antesDe: Date):
   return (await tx.delete(sesionesDelPortal).where(lt(sesionesDelPortal.expiraEn, antesDe)).returning({ accesoId: sesionesDelPortal.accesoId })).length;
 }
 
+/**
+ * Quita los accesos sin ingresos desde antes de `antesDe` (ADR-0055); si nunca entró, cuenta desde que se le dio. Igual
+ * que cuando oficina lo quita: se borra con sus sesiones y su pedido, y queda en la historia del cliente.
+ */
+export async function quitarAccesosSinUsoDelPortal(tx: TxOrganizacion, antesDe: Date, correlacion: string): Promise<number> {
+  const quitados = await tx
+    .delete(accesosDeContactos)
+    .where(lt(sql`coalesce(${accesosDeContactos.ultimoIngreso}, ${accesosDeContactos.creadoEn})`, antesDe))
+    .returning({ organizacionId: accesosDeContactos.organizacionId, clienteId: accesosDeContactos.clienteId, contactoId: accesosDeContactos.contactoId });
+  await registrar(
+    tx,
+    quitados.map((q) => ({
+      organizacionId: q.organizacionId,
+      agregadoTipo: "cliente" as const,
+      agregadoId: q.clienteId,
+      tipoEvento: "acceso_portal_quitado" as const,
+      autorId: "sistema",
+      correlacion,
+      valorAnterior: { contacto: q.contactoId },
+      motivo: "sin_uso",
+    })),
+  );
+  return quitados.length;
+}
+
 export interface CorreosDelPortal {
   /** Manejador del trabajo `portal.correo` (worker). Un pedido reemplazado, vencido o usado ya no envía nada. */
   enviar(datos: Trabajos["portal.correo"], contexto: { ultimoIntento: boolean }): Promise<void>;

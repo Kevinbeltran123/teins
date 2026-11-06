@@ -7,7 +7,7 @@ import { crearGeneradorPdfDeCotizaciones } from "./modulos/cotizaciones";
 import { crearEnvios, proveedoresSegunConfig } from "./modulos/envios";
 import { crearGeneradorPdf } from "./modulos/informes";
 import { accesosDelPortal, crearCorreosDelPortal } from "./modulos/portal";
-import { limpiarArchivosSinUso, podarVencido, recuperarTrabajosAMedias } from "./modulos/mantenimiento";
+import { limpiarArchivosSinUso, podarVencido, quitarAccesosSinUso, recuperarTrabajosAMedias } from "./modulos/mantenimiento";
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
 import { cerrarNavegador } from "./plataforma/pdf";
@@ -38,10 +38,11 @@ const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
   registro[metodo]({ ...alcance, ...meta }, mensaje);
 });
 
-/** La tarea periódica (ADR-0043, ADR-0044, ADR-0048): recupera lo que quedó a medias, poda lo vencido y borra los archivos sin uso. */
+/** La tarea periódica (ADR-0043, ADR-0044, ADR-0048, ADR-0055): recupera lo que quedó a medias, poda lo vencido, quita los accesos al portal sin uso y borra los archivos sin uso (este último, al final: depende de S3). */
 const mantener = async (bds: { negocio: typeof negocio.bd; propietario: typeof cola.bd }) => {
   await recuperarTrabajosAMedias(bds.negocio);
   await podarVencido(bds);
+  await quitarAccesosSinUso(bds.negocio);
   await limpiarArchivosSinUso({ ...bds, almacenamiento });
 };
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Almacenamiento } from "../../plataforma/almacenamiento";
 import type { BaseDeDatos } from "../../plataforma/base-de-datos";
 import { enOrganizacion } from "../../plataforma/base-de-datos";
@@ -7,7 +8,7 @@ import { recuperarCotizacionesAtascados } from "../cotizaciones";
 import { idsDeOrganizaciones, podarSesionesVencidas } from "../identidad";
 import { recuperarInformesAtascados } from "../informes";
 import { archivosEnUso } from "../levantamientos";
-import { podarSesionesDelPortal } from "../portal";
+import { podarSesionesDelPortal, quitarAccesosSinUsoDelPortal } from "../portal";
 
 /**
  * Más que la ventana de reintentos de un trabajo (10 intentos de Graphile, unas 10 horas): antes, volver a encolar
@@ -65,4 +66,19 @@ export async function limpiarArchivosSinUso(
     borrados += await borrarArchivosSinUso(propietario, almacenamiento, organizacionId, { antesDe, enUso: (tx, huellas) => archivosEnUso(tx, organizacionId, huellas) });
   }
   return borrados;
+}
+
+/**
+ * Un acceso al portal sin ingresos en 12 meses se quita solo (ADR-0055): cubre al cliente que solo entra a descargar el
+ * informe de su visita anual. Oficina lo devuelve con el mismo interruptor con que lo dio.
+ */
+export const ACCESO_SIN_USO_DESPUES_DE_MS = 365 * 24 * 60 * 60 * 1000;
+
+/** Accesos al portal sin uso de la tarea periódica (ADR-0055), en cada organización. Devuelve cuántos quitó. */
+export async function quitarAccesosSinUso(bd: BaseDeDatos, ahora = new Date()): Promise<number> {
+  const antesDe = new Date(ahora.getTime() - ACCESO_SIN_USO_DESPUES_DE_MS);
+  const correlacion = `mantenimiento:${randomUUID()}`;
+  let quitados = 0;
+  for (const organizacionId of await idsDeOrganizaciones(bd)) quitados += await enOrganizacion(bd, organizacionId, (tx) => quitarAccesosSinUsoDelPortal(tx, antesDe, correlacion));
+  return quitados;
 }
