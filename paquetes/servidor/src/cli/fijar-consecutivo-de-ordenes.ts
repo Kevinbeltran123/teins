@@ -7,7 +7,7 @@ import { crearVisitas } from "../modulos/visitas";
 /**
  * Fija el último número de orden de servicio de una organización, para que la siguiente visita siga desde el de TEINS
  * (ADR-0051). Nunca baja ni repite un número: si ya va más arriba, se niega.
- *   pnpm fijar-consecutivo-de-ordenes --organizacion <uuid> --ultimo 773   # la siguiente visita será la 0774
+ *   pnpm fijar-consecutivo-de-ordenes --organizacion <uuid> --ultimo 41   # la siguiente visita será la 0042
  */
 const { values } = parseArgs({ options: { organizacion: { type: "string" }, ultimo: { type: "string" } } });
 const ultimo = Number(values.ultimo);
