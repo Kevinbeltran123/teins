@@ -59,7 +59,11 @@ export default defineRailway((ctx) => {
   // portal atienden solicitudes y no la reciben.
   const propietario = { DATABASE_URL_PROPIETARIO: ref("Postgres", "DATABASE_URL") };
   // Railway prueba la salud en PORT.
-  const web = { healthcheck: "/salud", healthcheckTimeout: 120, replicas: { [REGION]: 1 }, deploy: { restartPolicyMaxRetries: 5 } };
+  // En pruebas, las tres superficies se duermen tras 10 minutos sin tráfico y despiertan con la primera solicitud: casi
+  // nadie las usa y la memoria se cobra por minuto. Pueden dormir porque el pool cierra sus conexiones a los 30 s. El
+  // worker y Postgres no duermen: la cola se revisa cada pocos segundos. Producción nunca duerme.
+  const duerme = { sleepApplication: !produccion };
+  const web = { healthcheck: "/salud", healthcheckTimeout: 120, replicas: { [REGION]: 1 }, deploy: { restartPolicyMaxRetries: 5, ...duerme } };
 
   const campo = service("campo", {
     ...web,
@@ -67,7 +71,7 @@ export default defineRailway((ctx) => {
     preDeploy: "node dist/cli/migrar.js",
     // El SDK aplica este campo (railway config pull lo genera) pero todavía no lo tipa.
     // @ts-expect-error preDeployTimeoutSeconds falta en DeployConfig
-    deploy: { preDeployTimeoutSeconds: 300, restartPolicyMaxRetries: 5 },
+    deploy: { preDeployTimeoutSeconds: 300, restartPolicyMaxRetries: 5, ...duerme },
     env: {
       ...comun,
       ...propietario,
