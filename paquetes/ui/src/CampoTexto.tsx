@@ -127,7 +127,7 @@ export function CampoTexto({ etiqueta, valorInicial, onCambio, obligatorio, erro
               onClick={() => setVisible((v) => !v)}
               aria-label={visible ? "Ocultar lo escrito" : "Mostrar lo escrito"}
               aria-pressed={visible}
-              className="absolute top-1/2 right-1.5 grid size-[34px] -translate-y-1/2 place-items-center rounded-lg text-texto-terciario hover:bg-panel-hundido hover:text-texto focus-visible:outline-2 focus-visible:outline-foco [&_svg]:size-[18px]"
+              className="absolute top-1/2 right-1.5 grid size-[34px] -translate-y-1/2 place-items-center before:absolute before:-inset-[5px] before:content-[''] rounded-lg text-texto-terciario hover:bg-panel-hundido hover:text-texto focus-visible:outline-2 focus-visible:outline-foco [&_svg]:size-[18px]"
             >
               {visible ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
             </button>

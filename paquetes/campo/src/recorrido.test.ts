@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { claveDeRepeticion, type VersionFormato } from "@teins/dominio";
 import type { LevantamientoLocal } from "./datos/modelo";
-import { pasosDe, resumenDeRecorrido } from "./recorrido";
+import { enFrase, pasosDe, resumenDeRecorrido } from "./recorrido";
 
 // Formato ficticio (R5).
 const formato: VersionFormato = {
@@ -61,5 +61,13 @@ describe("resumenDeRecorrido", () => {
     const { hechos, siguiente } = resumenDeRecorrido(formato, l);
     expect(hechos.every(Boolean)).toBe(true);
     expect(siguiente).toBeUndefined();
+  });
+});
+
+describe("enFrase", () => {
+  it("baja solo la primera letra, y no la de una sigla", () => {
+    expect(enFrase("Identificación del equipo")).toBe("identificación del equipo");
+    expect(enFrase("UPS y baterías")).toBe("UPS y baterías");
+    expect(enFrase("Informe de baterías UPS")).toBe("informe de baterías UPS");
   });
 });

@@ -93,12 +93,14 @@ export function EditorMateriales({
                   <span className="text-ayuda text-texto-secundario">{`${l.catalogo.codigo || "Catálogo"} · ${l.unidad}`}</span>
                 </>
               ) : (
-                <input
+                // Crece con lo escrito: una descripción larga («Soporte en L galvanizado de 40 cm») no se corta.
+                <textarea
                   aria-label={`Descripción de la línea ${i + 1}`}
                   value={l.descripcion}
                   placeholder="Qué material"
-                  onChange={(e) => cambiar(i, { descripcion: e.target.value })}
-                  className="w-full rounded-control border-b-2 border-borde-suave bg-transparent py-1 text-cuerpo font-bold outline-none placeholder:font-normal placeholder:text-texto-secundario focus:border-foco"
+                  rows={1}
+                  onChange={(e) => cambiar(i, { descripcion: e.target.value.replace(/\n/g, " ") })}
+                  className="w-full resize-none rounded-control border-b-2 border-borde-suave bg-transparent py-1 text-cuerpo font-bold outline-none [field-sizing:content] placeholder:font-normal placeholder:text-texto-secundario focus:border-foco"
                 />
               )}
             </div>
@@ -127,7 +129,7 @@ export function EditorMateriales({
               className="w-full rounded-control bg-panel-hundido px-3 py-2.5 text-ayuda outline-none placeholder:text-texto-secundario focus:outline-2 focus:outline-foco"
             />
           ) : (
-            <button type="button" onClick={() => setConNota((n) => new Set(n).add(l.id))} className="self-start text-ayuda font-bold text-texto-secundario underline underline-offset-3">
+            <button type="button" onClick={() => setConNota((n) => new Set(n).add(l.id))} className="inline-flex min-h-11 items-center self-start text-ayuda font-bold text-texto-secundario underline underline-offset-3">
               Agregar nota
             </button>
           )}
@@ -148,7 +150,7 @@ export function EditorMateriales({
           Buscar en el catálogo
         </BotonAgregar>
       )}
-      <button type="button" onClick={libre} className="self-center py-2 text-ayuda font-bold text-texto-secundario underline underline-offset-3 focus-visible:outline-3 focus-visible:outline-foco">
+      <button type="button" onClick={libre} className="inline-flex min-h-11 items-center self-center text-ayuda font-bold text-texto-secundario underline underline-offset-3 focus-visible:outline-3 focus-visible:outline-foco">
         {buscar ? "No está en el catálogo: agregar línea libre" : "Agregar línea libre"}
       </button>
       {error && <MensajeError id={`${id}-error`}>{error}</MensajeError>}

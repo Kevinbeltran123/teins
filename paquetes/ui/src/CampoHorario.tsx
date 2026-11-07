@@ -44,6 +44,10 @@ export function CampoHorario({ etiqueta, valorInicial, onCambio, total, sugerenc
 
   const duracion = desde !== "" && hasta !== "" ? total(desde, hasta) : null;
   const alDiaSiguiente = desde !== "" && hasta !== "" && hasta < desde;
+  // En iPhone la rueda de a. m./p. m. se queda fácil en la equivocada (12:34 a. m. en vez de p. m.): más de 12 horas casi
+  // siempre es eso, no un turno real. Se avisa sin bloquear.
+  const minutos = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+  const largo = duracion !== null && (minutos(hasta) - minutos(desde) + 24 * 60) % (24 * 60) > 12 * 60;
 
   const hora = (clave: "desde" | "hasta", rotulo: string, valor: string, bloqueada: boolean) => (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -68,7 +72,9 @@ export function CampoHorario({ etiqueta, valorInicial, onCambio, total, sugerenc
         disabled={deshabilitado || bloqueada}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
-        className={`${claseControl} tabular-nums ${error ? claseConError : ""}`}
+        // En iOS un `type="time"` no se encoge por debajo de su contenido: sin `min-w-0` y `appearance-none`, la salida se
+        // sale del borde y toda la página queda con desplazamiento lateral.
+        className={`${claseControl} min-w-0 appearance-none text-left tabular-nums ${error ? claseConError : ""}`}
         onChange={(e) => cambiar(clave === "desde" ? e.target.value : desde, clave === "hasta" ? e.target.value : hasta)}
       />
     </div>
@@ -79,7 +85,7 @@ export function CampoHorario({ etiqueta, valorInicial, onCambio, total, sugerenc
       <legend className="mb-1.5">
         <EtiquetaCampo obligatorio={obligatorio}>{etiqueta}</EtiquetaCampo>
       </legend>
-      <div className="flex gap-3">
+      <div className="flex gap-3 max-[359px]:flex-col">
         {hora("desde", "Llegada", desde, false)}
         {hora("hasta", "Salida", hasta, desde === "")}
       </div>
@@ -95,6 +101,7 @@ export function CampoHorario({ etiqueta, valorInicial, onCambio, total, sugerenc
           {alDiaSiguiente && <span className="text-ayuda text-texto-secundario"> · la salida es al día siguiente</span>}
         </p>
       )}
+      {largo && <p className="text-ayuda text-alerta-texto">Más de 12 horas: revisa si la llegada y la salida tienen bien el a. m. y el p. m.</p>}
       {error && <MensajeError id={`${id}-error`}>{error}</MensajeError>}
     </fieldset>
   );

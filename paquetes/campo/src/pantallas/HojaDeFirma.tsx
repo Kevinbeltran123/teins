@@ -107,7 +107,7 @@ export default function HojaDeFirma({
           <h2 className="text-[23px] leading-tight font-semibold tracking-tight">{`Confirme la visita de ${recibe.tecnico}`}</h2>
         </div>
         <p className="text-[15px] leading-relaxed text-texto-secundario">{declaracion}</p>
-        <div className="grid grid-cols-[1.4fr_1fr] gap-2">
+        <div className="grid grid-cols-[1.4fr_1fr] items-end max-[359px]:grid-cols-1 gap-2">
           <CampoTexto etiqueta="Su nombre" autoComplete="name" valorInicial="" onCambio={setNombre} error={errores.nombre} />
           <CampoTexto etiqueta="Cargo (opcional)" autoComplete="organization-title" valorInicial="" onCambio={setCargo} />
         </div>

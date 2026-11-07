@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { epocas, registro } from "./esquema";
 
@@ -35,6 +35,20 @@ export async function registrarCambios(tx: TxOrganizacion, cambios: readonly Cam
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`cambios:${organizacionId}`}, 0))`);
   }
   await tx.insert(registro).values(cambios.map((c) => ({ ...c, usuarioId: c.usuarioId ?? null })));
+}
+
+/**
+ * De estos ids, los que no tienen ninguna fila en el registro: un teléfono que baja desde cero nunca los recibiría. Pasa
+ * si una limpieza borró sus filas (antes de ADR-0038 se borraba todo el registro); publicar de nuevo los repara.
+ */
+export async function sinRegistro(tx: TxOrganizacion, entidad: Entidad, ids: readonly string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const con = await tx
+    .selectDistinct({ entidadId: registro.entidadId })
+    .from(registro)
+    .where(and(eq(registro.entidad, entidad), inArray(registro.entidadId, [...ids])));
+  const registrados = new Set(con.map((f) => f.entidadId));
+  return ids.filter((id) => !registrados.has(id));
 }
 
 /** Cambios para un usuario (los suyos y los de toda la organización) después de un punto de control. */

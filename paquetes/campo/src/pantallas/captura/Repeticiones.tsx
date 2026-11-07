@@ -1,4 +1,5 @@
 import { useContext, useState, type ReactNode } from "react";
+import { enFrase } from "../../recorrido";
 import { claveDeRepeticion, LIMITES, type CodigoErrorValidacion, type DefinicionSeccion, type Valor, type VersionFormato } from "@teins/dominio";
 import { Aviso, BarraDePaso, Boton, BotonAgregar, BotonSiguiente, Check, EncabezadoDePaso, FilaDeRepeticion, ListaDeRepeticiones, MenuAcciones, useLoNuevo, CampoTexto, Pencil, Plus, Trash, useNotificar, useSinRepetir } from "@teins/ui";
 import { repositorio } from "../../datos/instancia";
@@ -55,7 +56,7 @@ export function Repeticiones({
   return (
     <section id={anclaDeSeccion(seccion.clave)} aria-label={seccion.titulo} className="flex flex-col gap-3">
       {error && <Aviso tono="error">{mensajeDeValidacion[error]}</Aviso>}
-      {lista.length === 0 && <p className="text-cuerpo text-texto-secundario">{`Agrega uno por cada ${etiqueta.toLowerCase()} que revises. Si no aplica, sigue.`}</p>}
+      {lista.length === 0 && <p className="text-cuerpo text-texto-secundario">{`Agrega uno por cada ${enFrase(etiqueta)} que revises. Si no aplica, sigue.`}</p>}
       {lista.length > 0 && (
         <>
           <p className="-mt-5 text-ayuda text-texto-secundario">{`${lista.filter((r) => (faltanEn.get(claveDeRepeticion(seccion.clave, r.id)) ?? 0) === 0).length} de ${lista.length} completos`}</p>
@@ -68,7 +69,7 @@ export function Repeticiones({
         </>
       )}
       <BotonAgregar icono={Plus} disabled={lista.length >= maximo} onClick={() => void agregar()}>
-        {`Agregar ${etiqueta.toLowerCase()}`}
+        {`Agregar ${enFrase(etiqueta)}`}
       </BotonAgregar>
       {lista.length >= maximo && <p className="text-ayuda text-texto-secundario">{`Este formato permite hasta ${maximo}.`}</p>}
     </section>
@@ -144,11 +145,11 @@ export function Repeticion({
   }
   return (
     <>
-      <EncabezadoDePaso transicion={cabecera} contexto={`${seccion.titulo} · ${posicion.indice + 1} de ${posicion.total}`} avance={avance} volver={volver} etiquetaVolver={`Volver a ${seccion.titulo.toLowerCase()}`} />
+      <EncabezadoDePaso transicion={cabecera} contexto={`${seccion.titulo} · ${posicion.indice + 1} de ${posicion.total}`} avance={avance} volver={volver} etiquetaVolver={`Volver a ${enFrase(seccion.titulo)}`} />
       <main className="mx-auto flex max-w-xl flex-col gap-8 px-4 pt-3 pb-40">
         {renombrando ? (
           <CampoTexto
-            etiqueta={`Nombre del ${etiqueta.toLowerCase()}`}
+            etiqueta={`Nombre del ${enFrase(etiqueta)}`}
             valorInicial={repeticion.nombre}
             error={errorDeNombre ? mensajeDeValidacion.nombre_de_repeticion_invalido : undefined}
             onCambio={(texto) => {
@@ -163,7 +164,7 @@ export function Repeticion({
               etiqueta={`Opciones de ${repeticion.nombre}`}
               opciones={[
                 { texto: "Cambiar nombre", icono: Pencil, alElegir: () => setRenombrando(true) },
-                { texto: `Quitar ${etiqueta.toLowerCase()}`, icono: Trash, peligro: true, alElegir: () => void quitar() },
+                { texto: `Quitar ${enFrase(etiqueta)}`, icono: Trash, peligro: true, alElegir: () => void quitar() },
               ]}
             />
           </div>
@@ -186,7 +187,7 @@ export function Repeticion({
           </div>
         ) : (
           <BotonSiguiente icono={Check} onClick={volver}>
-            {posicion.total === 1 ? `Listo, ver ${seccion.titulo.toLowerCase()}` : `Listo, ver los ${posicion.total}`}
+            {posicion.total === 1 ? `Listo, ver ${enFrase(seccion.titulo)}` : `Listo, ver los ${posicion.total}`}
           </BotonSiguiente>
         )}
       </BarraDePaso>

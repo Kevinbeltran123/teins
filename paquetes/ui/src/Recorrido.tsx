@@ -8,14 +8,12 @@ import { ArrowRight, Camera, Check, ChevronLeft, ChevronRight, Circle, CircleAle
 
 export type EstadoDePaso = "hecho" | "actual" | "pendiente" | "falta";
 
-/** Arriba de cada paso: volver, dónde se está y cuánto va. El contador abre el recorrido completo. */
+/** Arriba de cada paso: volver y dónde se está, con la barra de cuánto va. */
 export function EncabezadoDePaso({
   contexto,
   avance,
   volver,
   etiquetaVolver,
-  contador,
-  alContador,
   transicion,
 }: {
   contexto: string;
@@ -23,8 +21,6 @@ export function EncabezadoDePaso({
   avance: number;
   volver: () => void;
   etiquetaVolver: string;
-  contador?: string | undefined;
-  alContador?: (() => void) | undefined;
   /**
    * Nombre de transición (iteración 27): el mismo que la tarjeta de la visita en el inicio, para que la tarjeta se
    * convierta en esta cabecera. Entre pasos, la cabecera se queda y solo crece la barra de avance.
@@ -41,16 +37,6 @@ export function EncabezadoDePaso({
             <div className="h-full rounded-full bg-superficie transition-[width] duration-500 ease-t motion-reduce:transition-none" style={{ width: `${Math.round(avance * 100)}%`, viewTransitionName: "progreso" }} />
           </div>
         </div>
-        {contador && alContador && (
-          <button
-            type="button"
-            onClick={alContador}
-            aria-label={`Ver el recorrido (${contador})`}
-            className="inline-flex h-11 shrink-0 items-center rounded-full bg-panel-hundido px-4 text-ayuda font-extrabold tabular-nums active:scale-95 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foco"
-          >
-            {contador}
-          </button>
-        )}
       </div>
     </header>
   );

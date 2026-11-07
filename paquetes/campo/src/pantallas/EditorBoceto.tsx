@@ -578,7 +578,8 @@ export default function EditorBoceto({
       data-tema="claro"
       className={`fixed inset-0 z-50 flex flex-col bg-fondo pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] select-none [-webkit-touch-callout:none] ${saliendo ? "animate-hoja-baja" : entrar ? "motion-safe:animate-hoja-sube" : ""}`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-1 px-2 py-1.5 max-[383px]:gap-0.5 max-[383px]:px-1.5 max-[383px]:[&_button]:size-10">
+      {/* Por debajo de 384 px los ocho botones no caben en una fila sin bajar de 44 px: las herramientas pasan abajo. */}
+      <div className="flex shrink-0 items-center justify-between gap-1 px-2 py-1.5 max-[383px]:flex-wrap max-[383px]:gap-y-1.5">
         <Pastilla>
           <BotonHerramienta icono={ChevronLeft} etiqueta="Volver a la captura" onClick={salir} />
         </Pastilla>
@@ -587,7 +588,7 @@ export default function EditorBoceto({
           <span aria-hidden className="h-6 w-px bg-division" />
           <BotonHerramienta icono={Redo2} etiqueta="Rehacer" disabled={historial.rehacer.length === 0} onClick={rehacerUno} />
         </Pastilla>
-        <Pastilla role="toolbar" aria-label="Herramientas">
+        <Pastilla role="toolbar" aria-label="Herramientas" className="max-[383px]:order-last max-[383px]:w-full max-[383px]:justify-around">
           {HERRAMIENTAS.map((h) => (
             <BotonHerramienta key={h.valor} icono={h.icono} etiqueta={h.etiqueta} elegida={herramienta === h.valor} onClick={() => elegir(h.valor)} />
           ))}

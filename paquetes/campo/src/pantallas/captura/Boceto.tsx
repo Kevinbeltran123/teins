@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import { enFrase } from "../../recorrido";
 import { useLiveQuery } from "dexie-react-hooks";
 import { describirValor, esBoceto, hojasDe, LIENZO, type DefinicionCampo, type Valor } from "@teins/dominio";
 import { Boton, EtiquetaCampo, HojasDeBoceto, MensajeError, Pencil } from "@teins/ui";
@@ -70,7 +71,7 @@ export function CampoBoceto({ id, seccion, campo, actual, error, alGuardar }: { 
     <div className="flex flex-col gap-2">
       <EtiquetaCampo obligatorio={campo.obligatorio}>{campo.etiqueta}</EtiquetaCampo>
       {hayDibujo ? (
-        <HojasDeBoceto hojas={hojas} cuadricula={LIENZO.cuadricula} etiqueta={`Boceto de ${campo.etiqueta.toLowerCase()}`} alAbrir={setEditando} />
+        <HojasDeBoceto hojas={hojas} cuadricula={LIENZO.cuadricula} etiqueta={`Boceto de ${enFrase(campo.etiqueta)}`} alAbrir={setEditando} />
       ) : (
         <p className="text-ayuda text-texto-secundario">Todavía no hay boceto.</p>
       )}
@@ -104,7 +105,7 @@ export function BocetoLeido({ etiqueta, valor }: { etiqueta: string; valor: Valo
     <div className="flex flex-col gap-2">
       <span className="text-cuerpo font-bold">{etiqueta}</span>
       {documento ? (
-        <HojasDeBoceto hojas={hojasDe(documento)} cuadricula={LIENZO.cuadricula} etiqueta={`Boceto de ${etiqueta.toLowerCase()}`} />
+        <HojasDeBoceto hojas={hojasDe(documento)} cuadricula={LIENZO.cuadricula} etiqueta={`Boceto de ${enFrase(etiqueta)}`} />
       ) : (
         <p className="text-ayuda text-texto-secundario">{describirValor({ clave: "", etiqueta, tipo: "boceto" }, valor)}</p>
       )}

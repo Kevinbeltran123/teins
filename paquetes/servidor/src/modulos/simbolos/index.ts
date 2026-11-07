@@ -2,7 +2,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { validarBiblioteca, type DefinicionSimbolo } from "@teins/dominio";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
-import { registrarCambios } from "../cambios";
+import { registrarCambios, sinRegistro } from "../cambios";
 import { simbolos } from "./esquema";
 
 /** Lo que baja a los teléfonos (ADR-0027): la definición, su orden y si sigue en la biblioteca. */
@@ -72,7 +72,9 @@ export function crearSimbolos(): Simbolos {
           .set({ activo: false, actualizadoEn: sql`now()` })
           .where(inArray(simbolos.id, retirar));
       }
-      await registrarCambios(tx, [...tocados, ...retirar].map((entidadId) => ({ organizacionId, entidad: "simbolo" as const, entidadId, operacion: "cambio" as const })));
+      // Los que no cambiaron también viajan si perdieron su fila en el registro: sin ella, un teléfono nuevo no los recibe.
+      const sinFila = await sinRegistro(tx, "simbolo", nuevos.map((s) => s.id).filter((id) => !tocados.includes(id)));
+      await registrarCambios(tx, [...tocados, ...retirar, ...sinFila].map((entidadId) => ({ organizacionId, entidad: "simbolo" as const, entidadId, operacion: "cambio" as const })));
       return { nuevos: tocados.length - cambiados, cambiados, retirados: retirar.length };
     },
 

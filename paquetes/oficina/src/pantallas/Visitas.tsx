@@ -45,7 +45,7 @@ import { cliente } from "../api";
 import { csvDetalle, csvResumen, descargar } from "../csv";
 import { aFechaHora, enLista } from "../formato";
 import { sinError } from "../mensajes";
-import { cambiosAlReasignar, consultasDeProgramacion, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
+import { cambiosAlReasignar, consultasDeProgramacion, faltaEnElEncabezado, hoyLocal, mensajeDeProgramacion, useAccionDeProgramacion, type Vista } from "../programacion";
 import { enCurso, hora12, horarioTexto, ordenDelDia, type Horario } from "../horario";
 import { useIrConPedido, usePedido } from "../pedido";
 import { unoDe, useBusquedaRecordada, usePreferencia } from "../preferencias";
@@ -429,8 +429,14 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
   );
 
   const lista = clientes.data?.clientes ?? [];
-  const sitios = lista.find((c) => c.id === clienteId)?.sitios ?? [];
+  const elegido = lista.find((c) => c.id === clienteId);
+  const sitios = elegido?.sitios ?? [];
   const nombres = (tecnicos.data?.tecnicos ?? []).filter((t) => elegidos.includes(t.id)).map((t) => t.nombre);
+  // Los contactos ya los lee «Solicitante» con la misma consulta: no es otra llamada.
+  const detalle = useQuery({ ...consultasDeProgramacion.cliente(clienteId), enabled: clienteId !== "" });
+  const sitio = sitios.find((x) => x.id === sitioId);
+  const solicitante = detalle.data?.contactos.find((c) => c.id === solicitanteId);
+  const falta = elegido && sitio ? faltaEnElEncabezado({ nit: elegido.nit, ciudad: sitio.ciudad, solicitante: solicitante ? { celular: solicitante.celular } : null }) : [];
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -505,6 +511,10 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
             />
           </div>
           <DatosDelPedido clienteId={clienteId} solicitanteId={solicitanteId} referencia={referencia} alCambiar={(c) => (c.solicitanteId !== undefined && setSolicitanteId(c.solicitanteId), c.referencia !== undefined && setReferencia(c.referencia))} />
+          {falta.length > 0 && (
+            // Sin enlace: salir del diálogo perdería lo escrito. Se programa igual y se completa después en Clientes.
+            <Aviso tono="info">{`El informe saldrá sin ${enLista(falta)}. Se puede programar igual; complételo en Clientes antes de publicar el informe.`}</Aviso>
+          )}
           <div className="opciones-pastilla">
             <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
           </div>
