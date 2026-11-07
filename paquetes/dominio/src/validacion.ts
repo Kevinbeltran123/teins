@@ -5,6 +5,7 @@ import { LIMITES } from "./limites";
 import { bloques, ID_REPETICION, leerClave, type Repeticiones } from "./repeticiones";
 import { lineasValidas } from "./cantidades";
 import { DECIMAL_CANONICO, DOCUMENTO_DE_IDENTIDAD, HORA_HHMM } from "./patrones";
+import { campoVisible, seccionVisible } from "./visibilidad";
 
 export { DECIMAL_CANONICO, LIMITES };
 
@@ -79,7 +80,8 @@ export function validarRespuestas(formato: VersionFormato, respuestas: Respuesta
     listas.set(clave, lista);
   }
   for (const seccion of formato.secciones) {
-    if (!seccion.repetible || rechazadas.has(seccion.clave)) continue;
+    // Una sección oculta no exige repeticiones (ADR-0058).
+    if (!seccion.repetible || rechazadas.has(seccion.clave) || !seccionVisible(seccion, respuestas)) continue;
     const cantidad = listas.get(seccion.clave)?.length ?? 0;
     if (cantidad < (seccion.repetible.min ?? 0)) errores.push({ seccion: seccion.clave, codigo: "repeticiones_insuficientes" });
     if (cantidad > (seccion.repetible.max ?? LIMITES.repeticiones)) errores.push({ seccion: seccion.clave, codigo: "repeticiones_excedidas" });
@@ -103,7 +105,10 @@ export function validarRespuestas(formato: VersionFormato, respuestas: Respuesta
     for (const clave of Object.keys(deBloque)) {
       if (!camposConocidos.has(clave)) errores.push({ seccion: bloque.clave, campo: clave, codigo: "campo_desconocido" });
     }
+    // Lo oculto no se exige ni se revisa: lo escrito antes de ocultarse se conserva y no sale (ADR-0058).
+    if (!seccionVisible(bloque.seccion, respuestas)) continue;
     for (const campo of bloque.seccion.campos) {
+      if (!campoVisible(campo, bloque.clave, respuestas)) continue;
       const codigo = validarCampo(campo, deBloque[campo.clave]);
       if (codigo) errores.push({ seccion: bloque.clave, campo: campo.clave, codigo });
     }

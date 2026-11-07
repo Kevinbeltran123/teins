@@ -252,6 +252,13 @@ describe("selección, horario, tablas y sello (ADR-0050)", () => {
     expect(seccion.campos.find((c) => c.clave === "p")).toMatchObject({ opciones: ["CCTV", "UPS"], otro: true });
   });
 
+  it("conserva las condiciones de campos y secciones (ADR-0058): sin el esquema, se perderían al publicar", () => {
+    const condicion = { seccion: "s", campo: "p", en: ["UPS"] };
+    const leido = VersionFormato.parse({ ...formato, secciones: [{ ...formato.secciones[0]!, visibleSi: condicion, campos: formato.secciones[0]!.campos.map((c) => (c.clave === "h" ? { ...c, visibleSi: { campo: "p", en: ["CCTV"] } } : c)) }] });
+    expect(leido.secciones[0]!.visibleSi).toEqual(condicion);
+    expect(leido.secciones[0]!.campos.find((c) => c.clave === "h")).toMatchObject({ visibleSi: { campo: "p", en: ["CCTV"] } });
+  });
+
   it("rechaza una tabla sin columnas, una selección sin opciones y un documento desconocido", () => {
     const con = (cambio: object) => VersionFormato.safeParse({ ...formato, secciones: [{ ...formato.secciones[0]!, ...cambio }] }).success;
     expect(con({ tablas: [{ columnas: [], filas: [] }] })).toBe(false);

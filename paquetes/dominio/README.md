@@ -22,6 +22,11 @@ TypeScript puro: reglas del levantamiento, máquina de estados, meta-esquema de 
 
 Un formato que usa un tipo de campo declara `appMinima`. Las constantes: `VERSION_APP_REPETIBLES` 4, `VERSION_APP_BOCETOS` 5, `VERSION_APP_CANTIDADES` 6, `VERSION_APP_FIRMA` 7, `VERSION_APP_CATALOGO` 8 (desde esa app la bajada trae el catálogo), `VERSION_APP_FORMAS` 9, `VERSION_APP_SIMBOLOS` 10 y, desde la iteración 47 (ADR-0050 y ADR-0052), `VERSION_APP_OPCIONES`, `VERSION_APP_HORARIO`, `VERSION_APP_TABLAS`, `VERSION_APP_SELLO` y `VERSION_APP_DOCUMENTO_DE_FIRMA`, todas 16.
 
+### Campos condicionales (`visibilidad.ts`, ADR-0058)
+
+- `visibleSi: { seccion?, campo, en }` en un campo o una sección: aparece si esa selección (`opcion`/`opciones`) tiene alguna de las opciones de `en`. Sin `seccion`, la misma (en una repetible, la misma repetición).
+- `seccionVisible` y `campoVisible` evalúan; `validarRespuestas` no exige ni revisa lo oculto. `validarDefinicionFormato` exige que la condición apunte a una selección **anterior** (sin ciclos), con sus opciones, y `appMinima` ≥ `VERSION_APP_VISIBILIDAD` (17).
+
 ### Selección, horario, tablas de medidas y sello (`formato.ts`, ADR-0050)
 
 - Tipos `opcion` (un `string`), `opciones` (`{ elegidas, otro? }`: un objeto, para no confundirse con una lista de fotos) y `horario` (`{ desde, hasta? }`, `HH:MM`; una salida menor es del día siguiente). Son datos simples. `otro` admite «Otro» escrito. Códigos de error nuevos: `opcion_invalida` y `horario_invalido`.

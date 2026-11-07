@@ -74,7 +74,9 @@ export const Repeticiones = z
 const ValoresComunes = z.array(z.string().min(1).max(40)).min(1).max(8).readonly();
 /** Las opciones de una selección (ADR-0050): de 2 a 20, cada una de 1 a 60 caracteres. */
 const Opciones = z.array(z.string().min(1).max(LIMITES.opcion)).min(2).max(20).readonly();
-const CampoBase = { clave: ClaveEsquema, etiqueta: z.string().min(1).max(200), obligatorio: z.boolean().optional() };
+/** Condición para que un campo o una sección aparezca (ADR-0058). Las reglas de fondo las aplica `validarDefinicionFormato`. */
+const CondicionVisible = z.object({ seccion: ClaveEsquema.optional(), campo: ClaveEsquema, en: z.array(z.string().min(1).max(LIMITES.opcion)).min(1).max(20).readonly() });
+const CampoBase = { clave: ClaveEsquema, etiqueta: z.string().min(1).max(200), obligatorio: z.boolean().optional(), visibleSi: CondicionVisible.optional() };
 export const DefinicionCampo = z.discriminatedUnion("tipo", [
   z.object({ ...CampoBase, tipo: z.literal("texto"), largo: z.boolean().optional(), valoresComunes: ValoresComunes.optional() }),
   z.object({ ...CampoBase, tipo: z.literal("medida"), unidades: z.array(z.string().min(1).max(20)).min(1).readonly(), valoresComunes: ValoresComunes.optional() }),
@@ -107,6 +109,7 @@ export const VersionFormato = z
           titulo: z.string().min(1).max(200),
           /** Solo para la empresa (ADR-0039): no sale en el informe salvo que oficina la muestre. Una app anterior la ignora. */
           soloEmpresa: z.boolean().optional(),
+          visibleSi: CondicionVisible.optional(),
           repetible: z
             .object({
               etiqueta: z.string().min(1).max(60),

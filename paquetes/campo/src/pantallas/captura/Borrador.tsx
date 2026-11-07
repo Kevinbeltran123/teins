@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState, type ReactNode, type RefObject
 import { enFrase, pasosDe, type Paso } from "../../recorrido";
 import { cifrasDelBorrador, claveDeError, progreso, resumenDePaso } from "../../resumen";
 import { useLiveQuery } from "dexie-react-hooks";
-import { bloques, claveDeRepeticion, horaCorta, type DefinicionSeccion, type TablaDeMedidas, esFirma, leerClave, fotosReferenciadas, nombreDeDato, rutaLegible, sinRespuestasHuerfanas, type CodigoErrorValidacion, type DefinicionCampo, type ErrorValidacion, type Valor, type VersionFormato } from "@teins/dominio";
+import { bloques, campoVisible, claveDeRepeticion, horaCorta, type DefinicionSeccion, type TablaDeMedidas, esFirma, leerClave, fotosReferenciadas, nombreDeDato, rutaLegible, sinRespuestasHuerfanas, type CodigoErrorValidacion, type DefinicionCampo, type ErrorValidacion, type Valor, type VersionFormato } from "@teins/dominio";
 import { Aviso, BarraDePaso, Boton, BotonSiguiente, CifrasDeRepaso, EncabezadoDePaso, FilaDeRepaso, FranjaSincronizacion, ListaRecorrido, PasoDelRecorrido, Repaso, conTransicion, type EstadoDePaso, CircleAlert, Confirmacion, Dialogo, ListaFaltantes, type DatoFaltante, Send, Smartphone, TriangleAlert, Trash } from "@teins/ui";
 import { db, repositorio } from "../../datos/instancia";
 import { cuantosPorSubir, momentosDeArchivos } from "../../datos/lecturasDeCaptura";
@@ -76,7 +76,8 @@ export function Borrador({
   soltar: () => void;
   alDescartar: () => void;
 }) {
-  const pasos = pasosDe(formato);
+  // Sin lo oculto por las condiciones del formato (ADR-0058): cambia con lo que responde el técnico.
+  const pasos = pasosDe(formato, actual.respuestas);
   const cabecera = useContext(CabeceraDeLaVisita);
   const enLinea = useServidorAlcanzable();
   const porSubir = useLiveQuery(() => cuantosPorSubir(db), []);
@@ -392,7 +393,7 @@ export function Borrador({
         volver={alPaso}
         abrirSiguiente={() => ir({ tipo: "repeticion", seccion: seccion.clave, repeticion: lista[lista.indexOf(r) + 1]!.id })}
       >
-        {campos(seccion.campos, claveDeRepeticion(seccion.clave, r.id), seccion)}
+        {campos(seccion.campos.filter((c) => campoVisible(c, claveDeRepeticion(seccion.clave, r.id), actual.respuestas)), claveDeRepeticion(seccion.clave, r.id), seccion)}
       </Repeticion>
     ) : (
       // Se quitó (o no existe): de vuelta a la lista de su sección.
