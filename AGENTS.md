@@ -42,6 +42,7 @@ Una tarea no está cerrada hasta que la documentación dice lo mismo que el cód
 - `docs/arquitectura/03-como-funciona.md` si cambió un estado, una transición o un flujo.
 - `README.md`: solo si cambia lo que el sistema hace en grande (tabla "Qué hace").
 - `README.md` de cada paquete tocado: qué contiene y cómo se usa.
+- `docs/manual/` si cambió lo que ve o hace un técnico, oficina o el cliente: un botón, un texto o un paso.
 - Sección "Comandos" de este archivo si cambió cómo se corre o se verifica.
 - Si una decisión cambia un ADR aceptado: ADR nuevo, nunca editar el anterior.
 
@@ -120,6 +121,7 @@ Entorno local (detalle en `paquetes/servidor/README.md`):
 - Versiones y despliegue (ADR-0049, ADR-0056): flujo «Publicar versión» desde `master` (etiqueta `vX.Y.Z` con sus notas, SBOM y avisos de terceros; `node scripts/inventario-de-terceros.mjs <carpeta> <version>` los genera en local) y flujo «Desplegar», por lotes: a `pruebas` (la preproducción) cualquier rama con la integración en verde, a `produccion` solo una etiqueta `v*` (`docs/proceso/produccion.md`, "Desplegar una versión").
 - Railway (detalle en `docs/proceso/produccion.md`): `railway config plan` / `apply` sobre `.railway/railway.ts`; `infra/railway/montar.sh <proyecto>` monta un entorno desde cero; `infra/railway/verificar-exposicion.sh` comprueba que solo las tres superficies se alcanzan desde internet; `railway run --service respaldos infra/respaldos/simulacro.sh` hace el simulacro de restauración (los respaldos van cifrados con `RESPALDOS_CLAVE`); `pnpm --filter @teins/servidor verificar-integridad` verifica las cadenas de una base.
 - Ensayo de carga (QA-14, iteración 51): `pnpm --filter @teins/servidor preparar-ensayo` una vez por entorno y `pnpm --filter @teins/servidor ensayo-de-carga`, en local o contra el entorno de pruebas (`paquetes/servidor/README.md`, "Ensayo de carga"). Se corre a mano antes de una versión o tras cambiar la infraestructura; no va en la integración continua.
+- Capturas de los manuales: `pnpm --filter @teins/e2e capturas` (requiere `docker compose up`) recorre campo, oficina y el portal con datos inventados y guarda las imágenes en `docs/manual/capturas`; con `CAPTURAS_FORMATOS=reales`, usa los formatos de `datos-reales/formatos` y las guarda en `privado/manual-capturas` (fuera de git). No corre en la integración continua.
 - Videos técnicos (`docs/videos/README.md`): `node docs/videos/generar.mjs <carpeta>`; con `--solo-guion` solo escribe el guion. Necesita `ffmpeg` y `say` (macOS).
 - `pnpm dev:campo` (5173), `pnpm --filter @teins/oficina dev` (5174) y `pnpm --filter @teins/portal dev` (5175); reenvían `/api` al servidor.
 

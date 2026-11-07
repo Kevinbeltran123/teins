@@ -101,7 +101,10 @@ jobs:
         working-directory: paquetes/servidor
         run: sed "s|^AUTH_SECRETO=$|AUTH_SECRETO=$(openssl rand -base64 32)|" .env.example > .env
       # Chromium siempre: el worker imprime los PDF con él, también en el trabajo de WebKit.
+      # Tarda menos de 2 minutos. Con un espejo de Ubuntu lento llegó a gastar los 60 del trabajo sin probar nada
+      # (2026-11-06): con este límite falla pronto y se relanza solo ese trabajo.
       - name: Navegadores
+        timeout-minutes: 10
         run: pnpm --filter @teins/e2e exec playwright install --with-deps chromium ${{ matrix.navegador }}
       # «<navegador>-bandeja» depende de «<navegador>»: corre todas las pruebas en paralelo y al final, sola, la de la bandeja compartida.
       - name: Pruebas

@@ -35,6 +35,8 @@ Mapa de lo que hay en `docs/` y en la raíz (lo marcado «local» está en `.git
 | [`proceso/entorno-de-pruebas.md`](proceso/entorno-de-pruebas.md) | El entorno de pruebas en Railway, cómo desplegar en él y el ensayo de carga con su línea de base | Cambia un servicio, una variable o el despliegue, o el ensayo da cifras nuevas |
 | [`proceso/produccion.md`](proceso/produccion.md) | Montaje, respaldos, simulacro y cómo encender o apagar producción | Cambia la infraestructura o su estado |
 | [`proceso/verificacion-manual.md`](proceso/verificacion-manual.md) | El recorrido a mano en un teléfono real | Una iteración agrega algo que solo se comprueba a mano |
+| [`entrega/`](entrega/README.md) | Alcance de la versión 1, lo que falta de TEINS y el piloto con sus criterios de aceptación | Cambia el alcance, llega una respuesta de TEINS o avanza el piloto |
+| [`manual/`](manual/) | Manuales para técnicos y oficina, en lenguaje no técnico, con capturas en `manual/capturas` | Cambia lo que ve o hace un usuario: un botón, un texto o un paso. Las capturas se regeneran con `pnpm --filter @teins/e2e capturas` |
 | [`../AGENTS.md`](../AGENTS.md) | Reglas, convenciones y comandos para quien programa | Cambia una regla, la estructura o un comando |
 | [`../README.md`](../README.md) | Qué es y qué hace el sistema, en grande | Cambia lo que el sistema hace en grande |
 | `paquetes/*/README.md` | Qué contiene cada paquete y cómo se usa | Cambia el paquete |
@@ -47,7 +49,7 @@ Esta es la lista completa; `AGENTS.md` ("Al cerrar un corte") y el plan de entre
 2. `proceso/plan-de-entrega.md`: su fila del mapa, "Estado actual" y "Próximo paso". El próximo paso anterior pasa al archivo de historia, bajo "Al cerrarla".
 3. `arquitectura/03-como-funciona.md` si cambió un estado, una transición o un flujo.
 4. El README de cada paquete tocado y, si cambió un comando, "Comandos" de `AGENTS.md`.
-5. `../README.md` solo si cambió lo que el sistema hace en grande; `proceso/verificacion-manual.md` si hay algo que solo se comprueba a mano.
+5. `../README.md` solo si cambió lo que el sistema hace en grande; `proceso/verificacion-manual.md` si hay algo que solo se comprueba a mano. `manual/` si cambió lo que ve o hace un usuario.
 6. Un ADR nuevo si una decisión cambia otra ya aceptada.
 
 ## Estilo
