@@ -25,7 +25,10 @@ export const visitas = esquemaVisitas.table(
     organizacionId: organizacionId(),
     clienteId: uuid("cliente_id").notNull(),
     sitioId: uuid("sitio_id").notNull(),
+    /** El nombre del servicio, copiado del formato al programar (ADR-0057); en las anteriores, el motivo que se escribió. */
     motivo: text("motivo").notNull(),
+    /** El servicio: la clave del formato que se llena en esta visita (ADR-0057). Null en las anteriores: el teléfono ofrece todos. */
+    formato: text("formato"),
     programadaPara: date("programada_para").notNull(),
     /**
      * Horario (ADR-0037): sin inicio, la visita ocupa todo el día; con inicio y fin, ese rango; con inicio y sin fin,

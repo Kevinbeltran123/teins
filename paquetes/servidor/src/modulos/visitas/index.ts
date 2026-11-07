@@ -9,6 +9,7 @@ import { autoria, registrar } from "../auditoria";
 import { avisar as avisarPush } from "../avisos";
 import { registrarCambios, type Cambio } from "../cambios";
 import type { ClientesYSitios } from "../clientes";
+import type { Formatos } from "../formatos";
 import { nombreDe, type Identidad } from "../identidad";
 import { consecutivosDeOrden, visitas } from "./esquema";
 import { fechaEnColombia, numeroDeOrden, ZONA_COLOMBIA } from "@teins/dominio";
@@ -27,6 +28,8 @@ export interface VisitaAsignada {
   cliente: { nombre: string; nit: string | null };
   sitio: { nombre: string; direccion: string; ciudad: string | null };
   motivo: string;
+  /** El servicio (ADR-0057): la clave del formato; null en las anteriores. */
+  formato: string | null;
   programadaPara: string;
   /** Número de orden de servicio y referencia del cliente (ADR-0051); las visitas anteriores no tienen número. */
   ordenDeServicio: number | null;
@@ -54,6 +57,8 @@ export interface NuevaVisita extends Contexto {
   clienteId: string;
   sitioId: string;
   motivo: string;
+  /** El servicio (ADR-0057); `motivo` lleva su nombre. Sin él, el teléfono ofrece todos los formatos. */
+  formato?: string | null | undefined;
   /** AAAA-MM-DD */
   programadaPara: string;
   tecnicos: readonly string[];
@@ -94,10 +99,13 @@ export interface Visitas {
    * rechaza si otra persona cambió la visita desde que se abrió (QA-25).
    */
   reasignar(tx: TxOrganizacion, datos: Contexto & { visitaId: string; tecnicos: readonly string[]; version?: number }): Promise<void>;
-  /** Sin `solicitanteContactoId` o `referenciaCliente` se conservan; con null se quitan. El número de orden no cambia. */
+  /**
+   * Sin `solicitanteContactoId`, `referenciaCliente`, `motivo` o `formato` se conservan; con null se quitan los dos primeros.
+   * El número de orden no cambia.
+   */
   reprogramar(
     tx: TxOrganizacion,
-    datos: Contexto & { visitaId: string; version: number; programadaPara: string; motivo: string; horaInicio?: string | null; horaFin?: string | null; solicitanteContactoId?: string | null; referenciaCliente?: string | null },
+    datos: Contexto & { visitaId: string; version: number; programadaPara: string; motivo?: string; formato?: string; horaInicio?: string | null; horaFin?: string | null; solicitanteContactoId?: string | null; referenciaCliente?: string | null },
   ): Promise<void>;
   /** Cancela: sale de los teléfonos; lo empezado se conserva y se puede enviar (regla 17). */
   cancelar(tx: TxOrganizacion, datos: Contexto & { visitaId: string; version: number; motivo: string }): Promise<void>;
@@ -187,7 +195,7 @@ const validarFecha = (programadaPara: string) => {
 };
 
 /** Interfaz pública del módulo de visitas (soporte, capas simples). */
-export function crearVisitas(clientes: ClientesYSitios): Visitas {
+export function crearVisitas(clientes: ClientesYSitios, formatos?: Pick<Formatos, "vigentes">): Visitas {
   const avisar = (organizacionId: string, visitaId: string, tecnicos: Iterable<string>, operacion: Cambio["operacion"]): Cambio[] =>
     [...tecnicos].map((usuarioId) => ({ organizacionId, usuarioId, entidad: "visita", entidadId: visitaId, operacion }));
 
@@ -209,7 +217,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
   }
 
   const publica: Visitas = {
-    async crear(tx, { organizacionId, autorId, correlacion, clienteId, sitioId, motivo, programadaPara, tecnicos, horaInicio = null, horaFin = null, solicitanteContactoId = null, referenciaCliente = null }) {
+    async crear(tx, { organizacionId, autorId, correlacion, clienteId, sitioId, motivo, formato = null, programadaPara, tecnicos, horaInicio = null, horaFin = null, solicitanteContactoId = null, referenciaCliente = null }) {
       validarFecha(programadaPara);
       if (!motivo.trim()) throw problema("entrada_invalida", "La visita necesita un motivo");
       const referencia = referenciaCliente?.trim() || null;
@@ -229,9 +237,9 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         .values({ organizacionId, ultimo: 1 })
         .onConflictDoUpdate({ target: consecutivosDeOrden.organizacionId, set: { ultimo: sql`${consecutivosDeOrden.ultimo} + 1` } })
         .returning({ ultimo: consecutivosDeOrden.ultimo });
-      await tx.insert(visitas).values({ id, organizacionId, clienteId, sitioId, motivo: motivo.trim(), programadaPara, horaInicio, horaFin, tecnicos: unicos, solicitanteContactoId, ordenDeServicio, referenciaCliente: referencia });
+      await tx.insert(visitas).values({ id, organizacionId, clienteId, sitioId, motivo: motivo.trim(), formato, programadaPara, horaInicio, horaFin, tecnicos: unicos, solicitanteContactoId, ordenDeServicio, referenciaCliente: referencia });
       await registrar(tx, [
-        { organizacionId, agregadoTipo: "visita", agregadoId: id, tipoEvento: "visita_creada", autorId, correlacion, valorNuevo: { clienteId, sitioId, programadaPara, horaInicio, horaFin, tecnicos: unicos, ordenDeServicio, solicitanteContactoId, referenciaCliente: referencia } },
+        { organizacionId, agregadoTipo: "visita", agregadoId: id, tipoEvento: "visita_creada", autorId, correlacion, valorNuevo: { clienteId, sitioId, formato, programadaPara, horaInicio, horaFin, tecnicos: unicos, ordenDeServicio, solicitanteContactoId, referenciaCliente: referencia } },
       ]);
       await avisarPush(tx, { tipo: "visita_asignada", organizacionId, tecnicos: unicos, visitaId: id, programadaPara, horaInicio });
       await registrarCambios(tx, avisar(organizacionId, id, unicos, "cambio"));
@@ -281,7 +289,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       await registrarCambios(tx, [...avisar(organizacionId, visitaId, salen, "fuera_de_alcance"), ...avisar(organizacionId, visitaId, entran, "cambio")]);
     },
 
-    async reprogramar(tx, { organizacionId, autorId, correlacion, visitaId, version, programadaPara, motivo, horaInicio = null, horaFin = null, solicitanteContactoId, referenciaCliente }) {
+    async reprogramar(tx, { organizacionId, autorId, correlacion, visitaId, version, programadaPara, motivo: motivoNuevo, formato: formatoNuevo, horaInicio = null, horaFin = null, solicitanteContactoId, referenciaCliente }) {
       validarFecha(programadaPara);
       // A lo archivado no se le reprograma, como no se le programa (ADR-0035): volvería a estar por hacer. El cliente se
       // toma antes que la visita, como al programar: quien archiva al mismo tiempo espera o se ve (iteración 42).
@@ -295,12 +303,14 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
       const solicitante = solicitanteContactoId === undefined ? actual.solicitanteContactoId : solicitanteContactoId;
       if (solicitante !== actual.solicitanteContactoId) await exigirSolicitante(tx, actual.clienteId, solicitante);
       const referencia = referenciaCliente === undefined ? actual.referenciaCliente : referenciaCliente?.trim() || null;
+      const motivo = motivoNuevo?.trim() || actual.motivo;
+      const formato = formatoNuevo ?? actual.formato;
       // Otro día u otra hora: lo que ya se había terminado vuelve a estar por hacer.
       const cambiaHorario = actual.programadaPara !== programadaPara || aHoraCorta(actual.horaInicio) !== horaInicio || aHoraCorta(actual.horaFin) !== horaFin;
       await tx
         .update(visitas)
         // Otro día u otra hora también reabre una visita cerrada (ADR-0041).
-        .set({ programadaPara, horaInicio, horaFin, motivo: motivo.trim(), solicitanteContactoId: solicitante, referenciaCliente: referencia, ...(cambiaHorario ? { terminadaEn: null, terminadaPor: null, cerradaEn: null } : {}), version: sql`${visitas.version} + 1` })
+        .set({ programadaPara, horaInicio, horaFin, motivo, formato, solicitanteContactoId: solicitante, referenciaCliente: referencia, ...(cambiaHorario ? { terminadaEn: null, terminadaPor: null, cerradaEn: null } : {}), version: sql`${visitas.version} + 1` })
         .where(eq(visitas.id, visitaId));
       await registrar(tx, [
         {
@@ -310,11 +320,11 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
           tipoEvento: "visita_reprogramada",
           autorId,
           correlacion,
-          valorAnterior: { programadaPara: actual.programadaPara, horaInicio: aHoraCorta(actual.horaInicio), horaFin: aHoraCorta(actual.horaFin), motivo: actual.motivo, solicitanteContactoId: actual.solicitanteContactoId, referenciaCliente: actual.referenciaCliente },
-          valorNuevo: { programadaPara, horaInicio, horaFin, motivo: motivo.trim(), solicitanteContactoId: solicitante, referenciaCliente: referencia },
+          valorAnterior: { programadaPara: actual.programadaPara, horaInicio: aHoraCorta(actual.horaInicio), horaFin: aHoraCorta(actual.horaFin), motivo: actual.motivo, formato: actual.formato, solicitanteContactoId: actual.solicitanteContactoId, referenciaCliente: actual.referenciaCliente },
+          valorNuevo: { programadaPara, horaInicio, horaFin, motivo, formato, solicitanteContactoId: solicitante, referenciaCliente: referencia },
         },
       ]);
-      // Los teléfonos de sus técnicos reciben la visita con la fecha y el motivo nuevos.
+      // Los teléfonos de sus técnicos reciben la visita con la fecha y el servicio nuevos.
       await avisarPush(tx, { tipo: "visita_reprogramada", organizacionId, tecnicos: actual.tecnicos, visitaId, antes: actual.programadaPara, despues: programadaPara, horaAntes: aHoraCorta(actual.horaInicio), horaDespues: horaInicio });
       await registrarCambios(tx, avisar(organizacionId, visitaId, actual.tecnicos, "cambio"));
     },
@@ -440,6 +450,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
               cliente: { id: f.clienteId, nombre: sitio.cliente },
               sitio: { id: sitio.id, nombre: sitio.nombre, direccion: sitio.direccion },
               motivo: f.motivo,
+              formato: f.formato,
               programadaPara: f.programadaPara,
               ordenDeServicio: f.ordenDeServicio,
               referencia: f.referenciaCliente,
@@ -499,6 +510,18 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
           }),
       });
 
+      /** El servicio elegido (ADR-0057): uno de los formatos de la organización, con el nombre que queda como motivo. */
+      async function servicio(tx: TxOrganizacion, clave: string) {
+        const encontrado = (await (formatos?.vigentes(tx) ?? Promise.resolve([]))).find((f) => f.clave === clave);
+        if (!encontrado) throw problema("entrada_invalida", "Ese servicio no existe en la organización: elija uno de la lista");
+        return { formato: encontrado.clave, motivo: encontrado.nombre };
+      }
+
+      registrarOperacion(app, "serviciosParaProgramar", {
+        politica: politicas.oficina,
+        manejar: async ({ actor }) => enOrganizacion(bd, actor.organizacionId, async (tx) => ({ servicios: await (formatos?.vigentes(tx) ?? Promise.resolve([])) })),
+      });
+
       registrarOperacion(app, "programarVisita", {
         politica: politicas.oficina,
         manejar: async ({ cuerpo, actor, correlacion }) => {
@@ -508,8 +531,8 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
             // al revés, programar y reprogramar ese día a la vez se esperan uno al otro y Postgres aborta a uno.
             await tomarDia(tx, actor.organizacionId, cuerpo.programadaPara);
             // Primero se valida el pedido (fecha, sitio); el cruce se mira después, sin contarse a sí misma.
-            const { solicitanteId, referencia, ...visita } = cuerpo;
-            const id = await publica.crear(tx, { ...autoria(actor, correlacion), ...visita, solicitanteContactoId: solicitanteId, referenciaCliente: referencia, tecnicos });
+            const { solicitanteId, referencia, formato, ...visita } = cuerpo;
+            const id = await publica.crear(tx, { ...autoria(actor, correlacion), ...visita, ...(await servicio(tx, formato)), solicitanteContactoId: solicitanteId, referenciaCliente: referencia, tecnicos });
             await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, tecnicos, id);
             return una(actor.organizacionId, tx, id);
           });
@@ -539,8 +562,18 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
           return enOrganizacion(bd, actor.organizacionId, async (tx) => {
             const [actual] = await tx.select().from(visitas).where(eq(visitas.id, id));
             if (actual) await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, actual.tecnicos.filter((t) => activos.has(t)), id);
-            const { solicitanteId, referencia, ...cambio } = cuerpo;
-            await publica.reprogramar(tx, { ...autoria(actor, correlacion), visitaId: id, ...cambio, ...(solicitanteId !== undefined ? { solicitanteContactoId: solicitanteId } : {}), ...(referencia !== undefined ? { referenciaCliente: referencia } : {}) });
+            const { solicitanteId, referencia, formato, ...cambio } = cuerpo;
+            const nuevo = formato !== undefined && formato !== actual?.formato ? await servicio(tx, formato) : undefined;
+            await publica.reprogramar(tx, { ...autoria(actor, correlacion), visitaId: id, ...cambio, ...(nuevo ?? {}), ...(solicitanteId !== undefined ? { solicitanteContactoId: solicitanteId } : {}), ...(referencia !== undefined ? { referenciaCliente: referencia } : {}) });
+            // Otro servicio solo mientras no se haya recibido nada (ADR-0057): lo recibido ya se llenó con el anterior. Se
+            // cuenta después de reprogramar, con la visita ya tomada: un envío que llegue en medio espera o se ve aquí, y el
+            // error deshace todo.
+            if (nuevo) {
+              const avance = (await conteos(tx, [id])).get(id);
+              if (avance && avance.enviados + avance.enRevision + avance.revisados > 0) {
+                throw problema("estado_invalido", "Ya se recibió un levantamiento con el servicio anterior: para otro servicio, programe otra visita");
+              }
+            }
             return una(actor.organizacionId, tx, id);
           });
         },
@@ -609,6 +642,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         id: visitas.id,
         sitioId: visitas.sitioId,
         motivo: visitas.motivo,
+        formato: visitas.formato,
         programadaPara: visitas.programadaPara,
         horaInicio: visitas.horaInicio,
         horaFin: visitas.horaFin,
@@ -630,6 +664,7 @@ export function crearVisitas(clientes: ClientesYSitios): Visitas {
         cliente: { nombre: sitio.cliente, nit: sitio.clienteNit },
         sitio: { nombre: sitio.nombre, direccion: sitio.direccion, ciudad: sitio.ciudad },
         motivo: f.motivo,
+        formato: f.formato,
         programadaPara: f.programadaPara,
         ordenDeServicio: f.ordenDeServicio,
         referencia: f.referenciaCliente,

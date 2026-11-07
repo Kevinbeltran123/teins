@@ -59,7 +59,7 @@ export function contenidoDe(aviso: Aviso): Contenido {
         ? { titulo: "Visita reprogramada", cuerpo: `La del ${dia(aviso.antes)} pasó al ${dia(aviso.despues)}${aLas(aviso.horaDespues)}.`, etiqueta: `visita:${aviso.visitaId}` }
         : (aviso.horaAntes ?? null) !== (aviso.horaDespues ?? null)
           ? { titulo: "Visita reprogramada", cuerpo: `La del ${dia(aviso.despues)} ${aviso.horaDespues ? `ahora es a las ${hora12(aviso.horaDespues)}` : "ahora es todo el día"}.`, etiqueta: `visita:${aviso.visitaId}` }
-          : { titulo: "Visita cambiada", cuerpo: `Oficina cambió el motivo de la visita del ${dia(aviso.despues)}.`, etiqueta: `visita:${aviso.visitaId}` };
+          : { titulo: "Visita cambiada", cuerpo: `Oficina cambió los datos de la visita del ${dia(aviso.despues)}.`, etiqueta: `visita:${aviso.visitaId}` };
     case "visita_cancelada":
       return { titulo: "Visita cancelada", cuerpo: `Oficina canceló la visita del ${dia(aviso.programadaPara)}.`, etiqueta: `visita:${aviso.visitaId}` };
     case "visita_retirada":

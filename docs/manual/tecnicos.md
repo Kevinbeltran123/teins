@@ -140,9 +140,9 @@ Si no tienes nada, verás «Sin visitas asignadas» o «No tienes visitas pendie
 - **Cliente:** el nombre de [Cliente].
 - **Sitio y dirección:** [Sitio] · [Dirección].
 - **A quién buscar:** «Pregunta por [Nombre] ([Cargo])», con su celular. Toca el número para llamar.
-- **Motivo** de la visita.
+- **Servicio** de la visita: el formato que vas a llenar.
 - **Avance**, si ya empezaste: por ejemplo «3 de 6 pasos · sigue materiales».
-- **Los botones:** bajo «Iniciar levantamiento», un botón por cada formato que puedes usar (por ejemplo, el de servicio de UPS y el de visita técnica). Si ya empezaste, dice «Continuar levantamiento»; si ya enviaste, «Ver lo que enviaste».
+- **Los botones:** «Iniciar levantamiento» empieza el formato del servicio de la visita. Si la visita se programó antes de elegir servicios, ves un botón por cada formato. Si ya empezaste, dice «Continuar levantamiento»; si ya enviaste, «Ver lo que enviaste».
 
 ![Tarjeta de la siguiente visita, con un botón por formato](capturas/tecnicos-05-tarjeta-de-visita.png)
 

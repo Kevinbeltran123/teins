@@ -125,7 +125,7 @@ Al programar, `visitas.crear` asigna el siguiente número de orden de servicio c
 
 En el teléfono, una visita se inicia desde su día: la de un día futuro no ofrece «Iniciar levantamiento» y dice «Podrás iniciarla mañana» (o el día con su nombre); el día programado se inicia a cualquier hora, las atrasadas se siguen iniciando y un borrador empezado siempre se continúa. La regla corre en el teléfono con su fecha local (`paquetes/campo/src/visitas.ts:sePuedeIniciar`); el servidor no rechaza nada, así un inicio hecho sin señal nunca se pierde. Si oficina necesita adelantar una visita, la reprograma.
 
-Reasignar no cambia las marcas: en una visita cerrada corrige quién la hizo ([ADR-0042](../adr/0042-reprogramar-reabre-una-visita-cerrada.md)). Cambiar solo el motivo tampoco reabre. Programar, reprogramar y reasignar rechazan con `tecnico_ocupado` si el horario se cruza con otra visita del técnico.
+Reasignar no cambia las marcas: en una visita cerrada corrige quién la hizo ([ADR-0042](../adr/0042-reprogramar-reabre-una-visita-cerrada.md)). Cambiar solo el servicio tampoco reabre; el servicio no cambia si ya se recibió un levantamiento ([ADR-0057](../adr/0057-la-visita-lleva-su-servicio.md)). Una visita con servicio ofrece en el teléfono solo ese formato; las anteriores, sin servicio, ofrecen todos. Programar, reprogramar y reasignar rechazan con `tecnico_ocupado` si el horario se cruza con otra visita del técnico.
 
 En el teléfono, la visita sale con un cambio `fuera_de_alcance` y un motivo: `reasignada`, `cancelada` o `atendida`. Si el técnico tiene trabajo en ella, se queda marcada (`fueraDeAlcance`) para terminarlo; con `atendida`, se quita solo si no queda borrador ni envío por llegar.
 

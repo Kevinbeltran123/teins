@@ -78,6 +78,7 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0037](0037-visitas-con-horario.md) | Visitas con horario: todo el día, de una hora a otra o hasta que el técnico la termine | Aceptada |
 | [0041](0041-visitas-atendidas-salen-del-telefono.md) | Las visitas atendidas salen del teléfono al día siguiente (amplía 0003) | Aceptada; ampliada por 0042 |
 | [0042](0042-reprogramar-reabre-una-visita-cerrada.md) | Reprogramar reabre una visita cerrada (amplía 0041) | Aceptada |
+| [0057](0057-la-visita-lleva-su-servicio.md) | La visita lleva su servicio: oficina elige el formato al programar (reemplaza el motivo libre) | Aceptada |
 
 ### Captura en campo
 

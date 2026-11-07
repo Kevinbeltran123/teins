@@ -120,3 +120,11 @@ export function accionDeVisita(levantamientos: readonly { id: string; estado: st
   const enviado = levantamientos.find((l) => l.estado !== "borrador");
   return enviado ? { tipo: "ver", id: enviado.id } : { tipo: "iniciar" };
 }
+
+/**
+ * Con qué formatos se puede iniciar la visita (ADR-0057): solo el de su servicio; si no está en el teléfono, ninguno, para
+ * no llenar otro. Una visita sin servicio (programada antes) ofrece todos los vigentes, como antes.
+ */
+export function formatosParaIniciar<F extends { formato: string }>(visita: { formato?: string | null | undefined }, disponibles: readonly F[]): F[] {
+  return visita.formato ? disponibles.filter((f) => f.formato === visita.formato) : [...disponibles];
+}

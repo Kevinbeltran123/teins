@@ -164,6 +164,8 @@ export const VisitaAsignada = z
     cliente: z.object({ nombre: z.string(), nit: z.string().nullable().optional() }),
     sitio: z.object({ nombre: z.string(), direccion: z.string(), ciudad: z.string().nullable().optional() }),
     motivo: z.string(),
+    /** El servicio (ADR-0057): la clave del formato que se llena. Sin él, el teléfono ofrece todos; una app anterior lo ignora. */
+    formato: z.string().nullable().optional(),
     programadaPara: z.iso.date(),
     /** Número de orden de servicio y referencia del cliente (ADR-0051); las visitas anteriores no tienen número. */
     ordenDeServicio: z.int().positive().nullable().optional(),
@@ -716,7 +718,10 @@ export const VisitaProgramada = z
     version: z.int().positive(),
     cliente: z.object({ id: Uuid, nombre: z.string() }),
     sitio: z.object({ id: Uuid, nombre: z.string(), direccion: z.string() }),
+    /** El nombre del servicio (ADR-0057); en las visitas anteriores, el motivo que se escribió. */
     motivo: z.string(),
+    /** La clave del formato de la visita (ADR-0057); null en las anteriores. */
+    formato: z.string().nullable().default(null),
     programadaPara: z.iso.date(),
     /** Número de orden de servicio (ADR-0051): se asigna al programar y no cambia; las anteriores no tienen. */
     ordenDeServicio: z.int().positive().nullable().default(null),
@@ -1716,10 +1721,19 @@ export const operaciones = {
     metodo: "POST",
     ruta: "/api/visitas",
     resumen: "Programa una visita; llega a los teléfonos de sus técnicos en la siguiente bajada",
-    cuerpo: z.object({ clienteId: Uuid, sitioId: Uuid, motivo: Texto(120), programadaPara: z.iso.date(), ...Horario, ...DatosDePedido, tecnicos: z.array(z.string()).min(1).max(20) }).superRefine(horarioValido),
+    /** `formato`: el servicio, uno de los formatos de la organización (ADR-0057); su nombre queda como motivo. */
+    cuerpo: z.object({ clienteId: Uuid, sitioId: Uuid, formato: Texto(80), programadaPara: z.iso.date(), ...Horario, ...DatosDePedido, tecnicos: z.array(z.string()).min(1).max(20) }).superRefine(horarioValido),
     estadoExito: 201,
     respuesta: VisitaProgramada,
     errores: ["no_autenticado", "sin_permiso", "entrada_invalida", "tecnico_ocupado"],
+  },
+  serviciosParaProgramar: {
+    metodo: "GET",
+    ruta: "/api/visitas/servicios",
+    resumen: "Los servicios que se pueden programar: cada formato de la organización con su nombre (ADR-0057)",
+    estadoExito: 200,
+    respuesta: z.object({ servicios: z.array(z.object({ clave: z.string(), nombre: z.string() })) }),
+    errores: ["no_autenticado", "sin_permiso"],
   },
   ocupacionDeTecnicos: {
     metodo: "GET",
@@ -1753,9 +1767,10 @@ export const operaciones = {
   reprogramarVisita: {
     metodo: "POST",
     ruta: "/api/visitas/{id}/reprogramar",
-    resumen: "Cambia la fecha, el horario y el motivo; los teléfonos lo reciben en la siguiente bajada",
+    resumen: "Cambia la fecha, el horario y el servicio; los teléfonos lo reciben en la siguiente bajada. El servicio no cambia si ya se recibió un levantamiento (ADR-0057)",
     parametros: z.object({ id: Uuid }),
-    cuerpo: z.object({ version: z.int().positive(), programadaPara: z.iso.date(), ...Horario, ...DatosDePedido, motivo: Texto(120) }).superRefine(horarioValido),
+    /** Sin `formato`, el servicio se conserva (las visitas anteriores conservan su motivo). */
+    cuerpo: z.object({ version: z.int().positive(), programadaPara: z.iso.date(), ...Horario, ...DatosDePedido, formato: Texto(80).optional() }).superRefine(horarioValido),
     estadoExito: 200,
     respuesta: VisitaProgramada,
     errores: [...erroresDeVisita],

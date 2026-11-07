@@ -1,0 +1,1 @@
+ALTER TABLE "visitas"."visitas" ADD COLUMN "formato" text;

@@ -124,6 +124,8 @@ describe("visitas asignadas", () => {
         cliente: { nombre: "Cliente ficticio", nit: null },
         sitio: { nombre: "Sede de prueba", direccion: "Calle [N] # [N]-[N]", ciudad: null },
         motivo: "Mantenimiento",
+        // Sin servicio (ADR-0057): el teléfono ofrece todos los formatos.
+        formato: null,
         programadaPara: "2026-09-30",
         ordenDeServicio: expect.any(Number),
         referencia: null,
