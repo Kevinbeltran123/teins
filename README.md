@@ -25,6 +25,8 @@ El recorrido completo funciona en el entorno de pruebas (Railway), que hace de p
 | [`DESIGN.md`](DESIGN.md) | Dirección visual, paleta, tipografía, movimiento |
 | [`docs/producto/`](docs/producto/) | Contexto del cliente: qué problema resuelve el sistema |
 | [`docs/README.md`](docs/README.md) | Mapa de la documentación: qué hay en cada documento y qué actualizar cuando algo cambia |
+| [`docs/entrega/`](docs/entrega/README.md) | Alcance de la versión 1, pendientes de TEINS y el piloto |
+| [`docs/manual/`](docs/manual/) | Manuales para técnicos y oficina |
 | [`docs/arquitectura/`](docs/arquitectura/) | Impulsores, modelo de dominio y cómo funciona hoy (diagramas) |
 | [`docs/adr/`](docs/adr/) | Registro de decisiones de arquitectura |
 | [`docs/proceso/`](docs/proceso/) | Producción y su operación, el entorno de pruebas y la verificación manual |

@@ -42,6 +42,7 @@ Una tarea no está cerrada hasta que la documentación dice lo mismo que el cód
 - `docs/arquitectura/03-como-funciona.md` si cambió un estado, una transición o un flujo.
 - `README.md`: solo si cambia lo que el sistema hace en grande (tabla "Qué hace").
 - `README.md` de cada paquete tocado: qué contiene y cómo se usa.
+- `docs/manual/` si cambió lo que ve o hace un técnico, oficina o el cliente: un botón, un texto o un paso.
 - Sección "Comandos" de este archivo si cambió cómo se corre o se verifica.
 - Si una decisión cambia un ADR aceptado: ADR nuevo, nunca editar el anterior.
 

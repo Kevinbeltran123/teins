@@ -165,6 +165,27 @@ Si algo falla, termina con error. Cada simulacro se anota en la tabla de abajo.
 | 2026-09-29 | Pruebas (Railway) | 0,0 h | 1 s | 177 íntegras (302 eslabones), 0 rotas | 27 referenciados, 0 faltantes | Correcto, primera copia cifrada (revisión 4d): la copia vieja pasó a `cifrado/` y en la raíz del destino no quedó nada en claro |
 | 2026-09-29 | Producción (Railway) | 0,1 h | 0 s | 2 íntegras (3 eslabones), 0 rotas | 0 referenciados, 0 faltantes | Correcto, primera copia cifrada de producción, después de actualizarla con las iteraciones 9 a 23 y la revisión de seguridad: los volcados en claro pasaron a `cifrado/` |
 
+## Encender producción para el piloto
+
+El día que empieza el piloto ([`../entrega/piloto.md`](../entrega/piloto.md)), en este orden. Antes, las condiciones de «Antes de empezar» del piloto deben estar cumplidas: sin la autorización de TEINS no se carga información real en este proyecto (ADR-0021). Toma unos 30 minutos.
+
+1. **Versión.** Si todavía no existe la `v0.9.0` (o la que vaya al piloto), Actions → «Publicar versión», con `master`.
+2. **Encender.** Pasos 1 y 2 del inicio de este documento: `railway config apply` y el «Redeploy» de Postgres.
+3. **Desplegar.** Actions → «Desplegar», con la etiqueta `v0.9.0` en «Use workflow from», `produccion` y la confirmación. `campo` aplica las migraciones pendientes antes de arrancar.
+4. **Exposición.** `infra/railway/verificar-exposicion.sh`.
+5. **Formatos reales.** Producción no se siembra, y los archivos de `datos-reales/formatos/` no van en la imagen. Se pasan por la entrada del comando, con el proyecto enlazado:
+
+   ```sh
+   for f in servicio-ups visita-tecnica; do
+     railway ssh -s campo -- sh -c 'cat > /tmp/formato.json && node dist/cli/publicar-formato.js --organizacion 00000000-0000-4000-8000-000000000001 --archivo /tmp/formato.json; rm -f /tmp/formato.json' < "datos-reales/formatos/$f.v1.json"
+   done
+   ```
+
+   No se corre `fijar-consecutivo-de-ordenes`: la numeración empieza en `0001` (Kevin, 2026-11-06).
+6. **Simulacro.** Sección «Simulacro», con su fila en la tabla.
+7. **Usuarios.** La persona administradora crea en oficina, en «Administración», los usuarios de los participantes, con contraseña temporal.
+8. **Prueba de humo.** Un levantamiento de práctica de punta a punta: la app instalada, sin señal, el envío, la revisión, el informe y el portal. Después se descarta.
+
 ## Transferir a TEINS
 
 Cuando TEINS tenga su espacio de trabajo en Railway (plan Hobby o Pro):
