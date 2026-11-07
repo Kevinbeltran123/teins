@@ -94,6 +94,17 @@ export interface DefinicionSeccion {
   campos: readonly DefinicionCampo[];
 }
 
+/**
+ * Cómo sale el formato en el informe, como su papel (ADR-0059): filas de 1 a 4 secciones lado a lado, cada una en su caja.
+ * Lo que no está en `filas` (y las fotos, los croquis y la constancia) va en «Anexos». Sin este bloque, la forma de siempre.
+ */
+export interface DisposicionInforme {
+  /** El título del papel ("Informe técnico de revisión e instalación de UPS"); sin él, el nombre del formato. */
+  titulo?: string | undefined;
+  hoja?: "carta" | "oficio" | undefined;
+  filas: readonly { secciones: readonly string[] }[];
+}
+
 export interface VersionFormato {
   formato: string;
   version: number;
@@ -105,4 +116,6 @@ export interface VersionFormato {
    */
   appMinima?: number | undefined;
   secciones: readonly DefinicionSeccion[];
+  /** Cómo sale en el informe (ADR-0059); sin él, la forma de siempre. */
+  informe?: DisposicionInforme | undefined;
 }

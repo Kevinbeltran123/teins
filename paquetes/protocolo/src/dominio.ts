@@ -102,6 +102,14 @@ export const VersionFormato = z
     version: z.int().positive(),
     nombre: z.string().min(1).max(120).optional(),
     appMinima: z.int().positive().optional(),
+    /** Cómo sale en el informe, como su papel (ADR-0059). Las reglas de fondo las aplica `validarDefinicionFormato`. */
+    informe: z
+      .object({
+        titulo: z.string().min(1).max(160).optional(),
+        hoja: z.enum(["carta", "oficio"]).optional(),
+        filas: z.array(z.object({ secciones: z.array(ClaveEsquema).min(1).max(4).readonly() })).min(1).max(40).readonly(),
+      })
+      .optional(),
     secciones: z
       .array(
         z.object({
