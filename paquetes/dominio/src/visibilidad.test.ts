@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { VersionFormato } from "./formato";
 import { validarDefinicionFormato } from "./meta-esquema";
+import { aplicarSeleccion, SELECCION_VACIA, type CapituloSeleccionable } from "./seleccion";
 import { validarRespuestas } from "./validacion";
 import { campoVisible, seccionVisible, VERSION_APP_VISIBILIDAD } from "./visibilidad";
 
@@ -62,7 +63,32 @@ describe("visibilidad (ADR-0058)", () => {
     const alReves: VersionFormato = { ...formato, secciones: [{ ...formato.secciones[0]!, campos: [formato.secciones[0]!.campos[2]!, ...formato.secciones[0]!.campos.slice(0, 2)] }, formato.secciones[1]!] };
     expect(validarDefinicionFormato(alReves)).toContain("La condición de servicio.materiales apunta a un campo que no existe antes: servicio.se_emplearon");
     // Solo selecciones.
-    const sobreTexto = con({ seccion: "servicio", campo: "materiales", en: ["Sí"] });
+    const sinCondicion = { ...formato.secciones[0]!, campos: formato.secciones[0]!.campos.map((c) => ({ ...c, visibleSi: undefined })) };
+    const sobreTexto = { ...formato, secciones: [sinCondicion, { ...formato.secciones[1]!, visibleSi: { seccion: "servicio", campo: "materiales", en: ["Sí"] } }] } as VersionFormato;
     expect(validarDefinicionFormato(sobreTexto)).toContain("La condición de causas apunta a servicio.materiales, que no es una selección");
+  });
+
+  it("sin cadenas: una condición no puede depender de algo que también es condicional", () => {
+    const cadena: VersionFormato = {
+      ...formato,
+      secciones: [...formato.secciones, { clave: "mas", titulo: "Más", campos: [{ clave: "x", etiqueta: "X", tipo: "texto", visibleSi: { seccion: "causas", campo: "causa", en: ["a"] } }] }],
+    };
+    // «causa» es texto, pero lo que importa aquí es que su sección es condicional.
+    expect(validarDefinicionFormato(cadena)).toContain("La condición de mas.x depende de causas.causa, que también es condicional");
+  });
+
+  it("en una sección repetible, nombrar la propia sección lee la misma repetición", () => {
+    const campo = { clave: "nota", etiqueta: "Nota", tipo: "texto" as const, visibleSi: { seccion: "tableros", campo: "tipo", en: ["Sí"] } };
+    expect(campoVisible(campo, "tableros~abc", { "tableros~abc": { tipo: "Sí" } })).toBe(true);
+  });
+
+  it("al publicar, las condiciones se aplican con todas las respuestas aunque oficina oculte la sección que manda", () => {
+    const l: CapituloSeleccionable = { id: "L1", formato, respuestas: { servicio: { tipo: { elegidas: ["Correctivo"] }, se_emplearon: "No" }, causas: { causa: "Ventilador" } } };
+    // Oficina oculta «Servicio»: sus respuestas no van, pero «Causas» sigue saliendo porque era correctivo.
+    const publicado = aplicarSeleccion(l, { ocultos: ["L1|servicio"], mostrados: [] });
+    expect(publicado.respuestas).toEqual({ causas: { causa: "Ventilador" } });
+    expect(publicado.ocultos).toEqual(["servicio"]);
+    // Sin ocultar nada, lo condicional que no aplica queda en `ocultos`, y `ocultos` va aunque esté vacío.
+    expect(aplicarSeleccion({ ...l, respuestas: { servicio: { tipo: { elegidas: ["Preventivo"] } } } }, SELECCION_VACIA).ocultos).toEqual(["servicio|materiales", "causas"]);
   });
 });

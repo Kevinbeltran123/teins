@@ -46,11 +46,13 @@ Lo que lo hace difícil:
 - **Forma:** `visibleSi: { seccion?: string, campo: string, en: string[] }` en un campo o en una sección. Es visible si el valor de ese campo es una de las opciones de `en`; en `opciones`, si alguna elegida está en `en`. Sin `seccion`, el campo es de la misma sección y, en una sección repetible, de la misma repetición.
 - **Al publicar** (`validarDefinicionFormato`) se exige que:
   - el campo referido exista, sea `opcion` u `opciones`, y **esté antes** en el formato (eso impide los ciclos);
+  - el campo referido **no sea condicional**, ni esté en otra sección condicional: sin cadenas, un valor viejo de algo que se ocultó no deja visible lo que depende de él;
   - la sección referida no sea repetible, salvo que la referencia sea a la propia sección;
   - `en` no esté vacío y solo tenga opciones del campo;
   - la condición de una sección nombre otra sección;
   - el formato tenga `appMinima` 17 o mayor.
-- **Lo oculto** no se valida al enviar (no es obligatorio ni se revisa), no se muestra en campo, su paso sale del recorrido y no sale en el informe ni en la revisión. Lo que el técnico escribió antes de que se ocultara se conserva en el levantamiento: si vuelve a cambiar la selección, reaparece.
+- **Lo oculto** no se valida al enviar (no es obligatorio ni se revisa), no se muestra en campo, su paso sale del recorrido y no sale en el informe ni en la revisión.
+- **Al publicar el informe**, `aplicarSeleccion` evalúa las condiciones con todas las respuestas y anota lo oculto en `ocultos`, junto con lo que ocultó oficina (ADR-0039). Con condiciones, `ocultos` va siempre, aunque esté vacío. La plantilla no las vuelve a evaluar en una versión publicada: ahí faltan las respuestas de lo que oficina ocultó. Lo que el técnico escribió antes de que se ocultara se conserva en el levantamiento: si vuelve a cambiar la selección, reaparece.
 - **Campo 17:** primera versión que evalúa condiciones (`VERSION_APP_VISIBILIDAD`). La bajada no le entrega a una app anterior un formato que las use (ADR-0015, punto 4).
 
 ## Por qué gana a cada alternativa
