@@ -11,7 +11,7 @@ import { registrarCambios, type Cambio } from "../cambios";
 import type { ClientesYSitios } from "../clientes";
 import { nombreDe, type Identidad } from "../identidad";
 import { consecutivosDeOrden, visitas } from "./esquema";
-import { fechaEnColombia, ZONA_COLOMBIA } from "@teins/dominio";
+import { fechaEnColombia, numeroDeOrden, ZONA_COLOMBIA } from "@teins/dominio";
 
 /** Quien pidió la visita (ADR-0051): el técnico pregunta por esta persona al llegar. */
 export interface Solicitante {
@@ -150,6 +150,24 @@ function minutoDelDia(momento: Date, fecha: string): number | null {
   const [h, m] = momento.toLocaleTimeString("en-GB", { timeZone: ZONA_COLOMBIA, hour: "2-digit", minute: "2-digit", hour12: false }).split(":");
   return Number(h) * 60 + Number(m);
 }
+
+/**
+ * La visita como la pide el encabezado del informe (ADR-0051), solo con lo que hay: lo que falta no se escribe y el
+ * informe lo dice con un marcador. El número de orden va ya escrito, para que una versión publicada no cambie si cambia
+ * cómo se escribe. La usan el informe y la revisión, que muestra el capítulo como saldrá.
+ */
+export const visitaDelInforme = (v: VisitaAsignada) => ({
+  cliente: v.cliente.nombre,
+  sitio: v.sitio.nombre,
+  direccion: v.sitio.direccion,
+  motivo: v.motivo,
+  programadaPara: v.programadaPara,
+  ...(v.cliente.nit ? { nit: v.cliente.nit } : {}),
+  ...(v.sitio.ciudad ? { ciudad: v.sitio.ciudad } : {}),
+  ...(v.solicitante ? { solicitante: { nombre: v.solicitante.nombre, ...(v.solicitante.celular ? { telefono: v.solicitante.celular } : {}) } } : {}),
+  ...(v.ordenDeServicio ? { ordenDeServicio: numeroDeOrden(v.ordenDeServicio) } : {}),
+  ...(v.referencia ? { referencia: v.referencia } : {}),
+});
 
 /**
  * Lo que ocupa una visita ese día, en minutos [desde, hasta) (ADR-0037): todo el día sin hora de inicio; su rango

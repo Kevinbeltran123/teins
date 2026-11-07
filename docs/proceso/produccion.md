@@ -182,6 +182,12 @@ El día que empieza el piloto ([`../entrega/piloto.md`](../entrega/piloto.md)), 
    ```
 
    No se corre `fijar-consecutivo-de-ordenes`: la numeración empieza en `0001` (Kevin, 2026-11-06).
+
+   Después, la biblioteca de símbolos del croquis (37, en el repositorio). Va por la entrada del comando para que sirva con cualquier versión de la imagen:
+
+   ```sh
+   railway ssh -s campo -- sh -c 'cat > /tmp/simbolos.json && node dist/cli/publicar-simbolos.js --organizacion 00000000-0000-4000-8000-000000000001 --archivo /tmp/simbolos.json' < paquetes/dominio/biblioteca/simbolos-teins.json
+   ```
 6. **Simulacro.** Sección «Simulacro», con su fila en la tabla.
 7. **Usuarios.** La persona administradora crea en oficina, en «Administración», los usuarios de los participantes, con contraseña temporal.
 8. **Prueba de humo.** Un levantamiento de práctica de punta a punta: la app instalada, sin señal, el envío, la revisión, el informe y el portal. Después se descarta.

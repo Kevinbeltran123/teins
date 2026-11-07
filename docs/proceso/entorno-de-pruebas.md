@@ -102,6 +102,10 @@ No corra a la vez la suite local y la del entorno: comparten `e2e/test-results`,
 
 Si más adelante se conecta el repositorio de GitHub (`railway service source connect --repo Kevinbeltran123/teins --branch <rama> --service <servicio>`), cada subida a esa rama despliega sola.
 
+## Organización TEINS en pruebas (2026-11-06)
+
+Para probar como en producción sin romper el extremo a extremo, el entorno tiene una segunda organización, «TEINS» (`00000000-0000-4000-8000-0000000000f1`). Tiene los formatos reales (`servicio-ups` y `visita-tecnica`, de `datos-reales/formatos/`) y la biblioteca de símbolos de TEINS (`paquetes/dominio/biblioteca/simbolos-teins.json`). Sus usuarios son `tecnico.teins` y `oficina.teins` (administra). Las contraseñas están en `privado/entorno-pruebas-teins.txt`. Tiene un cliente ficticio con una visita. Las pruebas usan la organización `…0001`, que conserva un solo formato vigente: con dos, la tarjeta de la visita muestra un botón por formato y el extremo a extremo no encuentra «Iniciar levantamiento». Para volver a publicar un formato o la biblioteca aquí, los mismos comandos de «Encender producción para el piloto» en `produccion.md`, con este identificador de organización.
+
 ## Ensayo de carga (iteración 51)
 
 La temporada alta (QA-14) se ensaya contra este entorno en la organización «Ensayo de carga» (`00000000-0000-4000-8000-000000000051`), con 20 técnicos y 5 personas de oficina ficticios (`ensayo.tecnico.01`… y `ensayo.oficina.01`…, creados el 2026-11-06). Nunca se mezcla con los datos de demostración. Qué hace y qué metas tiene: `paquetes/servidor/README.md`, "Ensayo de carga".

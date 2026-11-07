@@ -346,6 +346,23 @@ export const VinculoDeLinea = z
   })
   .meta({ id: "VinculoDeLinea" });
 
+/**
+ * La visita de un informe. Los datos del encabezado (ADR-0051) son opcionales: solo el detalle los llena, y lo que falta
+ * sale como marcador en el informe. El número de orden va ya escrito, como queda en la versión.
+ */
+const VisitaDelInforme = z.object({
+  cliente: z.string(),
+  sitio: z.string(),
+  direccion: z.string(),
+  motivo: z.string(),
+  programadaPara: z.iso.date(),
+  nit: z.string().optional(),
+  ciudad: z.string().optional(),
+  solicitante: z.object({ nombre: z.string(), telefono: z.string().optional() }).optional(),
+  ordenDeServicio: z.string().optional(),
+  referencia: z.string().optional(),
+});
+
 export const DetalleLevantamiento = ResumenLevantamiento.extend({
   respuestas: Respuestas,
   repeticiones: Repeticiones.default({}),
@@ -354,9 +371,8 @@ export const DetalleLevantamiento = ResumenLevantamiento.extend({
   formatoDefinicion: VersionFormato,
   creadoEnDispositivo: Fecha,
   enviadoEnDispositivo: Fecha,
-  visita: z
-    .object({ id: Uuid, cliente: z.string(), sitio: z.string(), direccion: z.string(), motivo: z.string(), programadaPara: z.iso.date() })
-    .nullable(),
+  /** Con el encabezado del informe (ADR-0051): la revisión muestra el capítulo como saldrá. */
+  visita: VisitaDelInforme.extend({ id: Uuid }).nullable(),
   comentarios: z.array(Comentario),
   /** Hasta cuándo leyó quien consulta las conversaciones (ADR-0040): lo posterior va bajo la línea «Nuevo». */
   leidoHasta: Fecha.nullable().default(null),
@@ -454,23 +470,6 @@ export const VersionPublicada = z
     envios: z.array(EnvioDeVersion).default([]),
   })
   .meta({ id: "VersionPublicada" });
-
-/**
- * La visita de un informe. Los datos del encabezado (ADR-0051) son opcionales: solo el detalle los llena, y lo que falta
- * sale como marcador en el informe. El número de orden va ya escrito, como queda en la versión.
- */
-const VisitaDelInforme = z.object({
-  cliente: z.string(),
-  sitio: z.string(),
-  direccion: z.string(),
-  motivo: z.string(),
-  programadaPara: z.iso.date(),
-  nit: z.string().optional(),
-  ciudad: z.string().optional(),
-  solicitante: z.object({ nombre: z.string(), telefono: z.string().optional() }).optional(),
-  ordenDeServicio: z.string().optional(),
-  referencia: z.string().optional(),
-});
 
 export const PaginaInformes = z
   .object({

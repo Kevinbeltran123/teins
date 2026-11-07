@@ -261,6 +261,9 @@ describe("informe (corte 4)", () => {
     const detalle = (await get(oficina.cookie, `/api/informes/${informeId}`)).json();
     expect(detalle.visita).toMatchObject({ nit: "900.123.456-7", ciudad: "Ibagué", referencia: "TKT-4821", solicitante: { nombre: "Laura Gómez", telefono: "+573105550142" } });
     expect(detalle.visita.ordenDeServicio).toMatch(/^\d{4,}$/);
+    // La revisión muestra el capítulo con el mismo encabezado: sin él, el revisor veía «[NIT]» donde el cliente verá el NIT.
+    const enRevision = (await get(oficina.cookie, `/api/levantamientos/${revisado}`)).json();
+    expect(enRevision.visita).toMatchObject({ id: visitaId, ...detalle.visita });
     // La cédula solo la ve quien administra (ADR-0051): el detalle de oficina dice si la hay, no cuál es.
     const candidato = detalle.candidatos.find((c: { id: string }) => c.id === revisado);
     expect(candidato).toMatchObject({ tecnicoConCedula: true, revisorConCedula: true, revisadoEn: expect.any(String) });

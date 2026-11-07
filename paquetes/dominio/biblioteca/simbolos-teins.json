@@ -1,0 +1,239 @@
+[
+  {
+    "id": "b325f282-81fd-5f6e-941b-c0e30fa50055",
+    "nombre": "Tablero",
+    "categoria": "Energía",
+    "trazado": "M10 25H90V75H10Z",
+    "relleno": "M10 75L90 25V75Z"
+  },
+  {
+    "id": "3cb7cf5c-e855-52cf-a3a5-bf021000473a",
+    "nombre": "UPS",
+    "categoria": "Energía",
+    "trazado": "M10 25H90V75H10Z",
+    "texto": "UPS"
+  },
+  {
+    "id": "e4992c88-bdc9-5051-a3b4-3787e3d83d9a",
+    "nombre": "Transformador",
+    "categoria": "Energía",
+    "trazado": "M16 50a18 18 0 1 0 36 0a18 18 0 1 0 -36 0M48 50a18 18 0 1 0 36 0a18 18 0 1 0 -36 0"
+  },
+  {
+    "id": "c0ad615e-f722-511e-b850-b43490283abf",
+    "nombre": "Tomacorriente",
+    "categoria": "Energía",
+    "trazado": "M30 58a20 20 0 1 0 40 0a20 20 0 1 0 -40 0M42 18V38M58 18V38"
+  },
+  {
+    "id": "e6e4e1fd-6b21-53f2-8b29-494788f28e71",
+    "nombre": "Toma regulada",
+    "categoria": "Energía",
+    "trazado": "M30 58a20 20 0 1 0 40 0a20 20 0 1 0 -40 0M42 18V38M58 18V38",
+    "relleno": "M30 58a20 20 0 0 0 40 0Z"
+  },
+  {
+    "id": "dc9f79e7-4332-5cba-84c4-a8adc9906868",
+    "nombre": "Interruptor",
+    "categoria": "Energía",
+    "trazado": "M24 72a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M38 66L72 30M72 30L82 40"
+  },
+  {
+    "id": "f1ca0f37-f6e0-5bb7-8a9f-cd156b0e865a",
+    "nombre": "Luminaria",
+    "categoria": "Energía",
+    "trazado": "M25 50a25 25 0 1 0 50 0a25 25 0 1 0 -50 0M32 32L68 68M68 32L32 68"
+  },
+  {
+    "id": "d91a4d01-96cf-57a3-851b-314b7a7fc4f0",
+    "nombre": "Medidor",
+    "categoria": "Energía",
+    "trazado": "M20 50a30 30 0 1 0 60 0a30 30 0 1 0 -60 0",
+    "texto": "kWh"
+  },
+  {
+    "id": "1bdb39af-e27d-5781-be00-41283c11de32",
+    "nombre": "Batería",
+    "categoria": "Energía",
+    "trazado": "M14 50H40M40 28V72M56 38V62M56 50H86"
+  },
+  {
+    "id": "68f39d74-b306-5bcf-b903-74ab57c55d3e",
+    "nombre": "Planta eléctrica",
+    "categoria": "Energía",
+    "trazado": "M20 50a30 30 0 1 0 60 0a30 30 0 1 0 -60 0",
+    "texto": "G"
+  },
+  {
+    "id": "e1042e10-6bcd-53d7-9ce5-a9878ed8c1ae",
+    "nombre": "Puesta a tierra",
+    "categoria": "Energía",
+    "trazado": "M50 16V48M24 48H76M33 62H67M42 76H58"
+  },
+  {
+    "id": "a7a8a53e-dd89-5245-9d24-699b3e9bbcc9",
+    "nombre": "Aire acondicionado",
+    "categoria": "Energía",
+    "trazado": "M10 30H90V70H10Z",
+    "texto": "AA"
+  },
+  {
+    "id": "131dbd51-ea4f-5d0d-a3fc-de320a7c5d3a",
+    "nombre": "Rack",
+    "categoria": "Datos",
+    "trazado": "M25 10H75V90H25ZM25 30H75M25 50H75M25 70H75"
+  },
+  {
+    "id": "6a19fc9b-528d-5042-86d0-0764b9a1066d",
+    "nombre": "Punto de red",
+    "categoria": "Datos",
+    "trazado": "M50 24L80 76H20Z"
+  },
+  {
+    "id": "95368df2-a331-5d80-9378-d2c4a868558d",
+    "nombre": "Punto de acceso",
+    "categoria": "Datos",
+    "trazado": "M44 72a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M34 56a22 22 0 0 1 32 0M24 44a36 36 0 0 1 52 0"
+  },
+  {
+    "id": "3102c80d-b3f3-58b8-9bf3-8a67f2159020",
+    "nombre": "Cámara",
+    "categoria": "Datos",
+    "trazado": "M12 36H64V64H12ZM64 46L88 34V66L64 54"
+  },
+  {
+    "id": "3cac54db-f603-5e59-8d93-9432abb06be3",
+    "nombre": "Switch",
+    "categoria": "Datos",
+    "trazado": "M10 30H90V70H10Z",
+    "texto": "SW"
+  },
+  {
+    "id": "a39ceb4e-4284-53da-afc8-56f4543f97b1",
+    "nombre": "Puerta",
+    "categoria": "Obra",
+    "trazado": "M20 80H84M20 80V18M20 18A62 62 0 0 1 82 80"
+  },
+  {
+    "id": "864adacf-3109-5f50-8858-d4f90b586a6d",
+    "nombre": "Ventana",
+    "categoria": "Obra",
+    "trazado": "M8 42H92V58H8ZM8 50H92"
+  },
+  {
+    "id": "f6e7f119-c264-5373-9c43-f31661a84356",
+    "nombre": "Columna",
+    "categoria": "Obra",
+    "trazado": "M30 30H70V70H30Z",
+    "relleno": "M30 30H70V70H30Z"
+  },
+  {
+    "id": "c2ea299b-fd7f-5a80-848f-c7f6aef61d59",
+    "nombre": "Escalera",
+    "categoria": "Obra",
+    "trazado": "M25 10H75V90H25ZM25 26H75M25 42H75M25 58H75M25 74H75"
+  },
+  {
+    "id": "673369fb-505a-5d9d-90a6-3d1ccc3a8b79",
+    "nombre": "Breaker",
+    "categoria": "Energía",
+    "trazado": "M50 8V30M50 70V92M50 70L70 34M46 30a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M46 70a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"
+  },
+  {
+    "id": "a6937c71-7a98-5a79-b9eb-c30c2b26327a",
+    "nombre": "Bypass",
+    "categoria": "Energía",
+    "trazado": "M10 30H90V70H10Z",
+    "texto": "BP"
+  },
+  {
+    "id": "049ffc90-15cc-56f2-9fc5-1d0cbef9a8d9",
+    "nombre": "Caja de paso",
+    "categoria": "Energía",
+    "trazado": "M20 20H80V80H20ZM20 20L80 80M80 20L20 80"
+  },
+  {
+    "id": "6fa18957-d121-5a34-bf71-1247d42932f6",
+    "nombre": "Patch panel",
+    "categoria": "Datos",
+    "trazado": "M8 38H92V62H8ZM20 50H26M34 50H40M48 50H54M62 50H68M76 50H82"
+  },
+  {
+    "id": "f25ee1a3-d8cd-522c-867c-a073e99d27a5",
+    "nombre": "Cámara domo",
+    "categoria": "Seguridad",
+    "trazado": "M18 42H82M18 42a32 32 0 0 0 64 0M42 58a8 8 0 1 0 16 0a8 8 0 1 0 -16 0"
+  },
+  {
+    "id": "6166d031-c759-5245-a396-39814f53cb6a",
+    "nombre": "Grabador (DVR/NVR)",
+    "categoria": "Seguridad",
+    "trazado": "M10 30H90V70H10Z",
+    "texto": "NVR"
+  },
+  {
+    "id": "b18b2f90-154c-5a39-8914-82cd691b874f",
+    "nombre": "Panel de alarma",
+    "categoria": "Seguridad",
+    "trazado": "M15 20H85V80H15Z",
+    "texto": "PA"
+  },
+  {
+    "id": "95dd1d6c-1920-5f76-b5b7-c587dee3324a",
+    "nombre": "Teclado de alarma",
+    "categoria": "Seguridad",
+    "trazado": "M25 12H75V88H25ZM36 30H44M56 30H64M36 48H44M56 48H64M36 66H44M56 66H64"
+  },
+  {
+    "id": "f82b94ca-b6e4-5bea-9a4c-6e536f460eb5",
+    "nombre": "Sensor de movimiento",
+    "categoria": "Seguridad",
+    "trazado": "M22 50a28 28 0 1 0 56 0a28 28 0 1 0 -56 0",
+    "texto": "PIR"
+  },
+  {
+    "id": "7fe11a9f-2b7e-510f-b47c-8577119fc5ea",
+    "nombre": "Detector de humo",
+    "categoria": "Seguridad",
+    "trazado": "M22 50a28 28 0 1 0 56 0a28 28 0 1 0 -56 0",
+    "texto": "DH"
+  },
+  {
+    "id": "49acc41d-52c1-526c-9b6c-74e86fe447b6",
+    "nombre": "Contacto magnético",
+    "categoria": "Seguridad",
+    "trazado": "M12 40H44V60H12ZM56 40H88V60H56Z"
+  },
+  {
+    "id": "65ddf67a-5a69-5b16-9115-e103e80a69d3",
+    "nombre": "Sirena",
+    "categoria": "Seguridad",
+    "trazado": "M14 40H32L58 18V82L32 60H14ZM70 36a18 18 0 0 1 0 28M78 26a32 32 0 0 1 0 48"
+  },
+  {
+    "id": "6cc846d9-816e-594b-8521-9872bffe197d",
+    "nombre": "Lector de tarjeta",
+    "categoria": "Seguridad",
+    "trazado": "M30 10H70V90H30ZM40 24H60V46H40Z"
+  },
+  {
+    "id": "7d9287e1-9574-5091-91d1-23fa07e2a987",
+    "nombre": "Cerradura electromagnética",
+    "categoria": "Seguridad",
+    "trazado": "M10 35H90V65H10Z",
+    "texto": "EM"
+  },
+  {
+    "id": "20ec3a00-2b99-5227-b13a-8d1c1ca989dc",
+    "nombre": "Botón de salida",
+    "categoria": "Seguridad",
+    "trazado": "M22 50a28 28 0 1 0 56 0a28 28 0 1 0 -56 0M38 50a12 12 0 1 0 24 0a12 12 0 1 0 -24 0"
+  },
+  {
+    "id": "7185f49b-327f-56e6-a24f-306864eb593b",
+    "nombre": "Norte",
+    "categoria": "Obra",
+    "trazado": "M50 8L66 48H34ZM50 48V92",
+    "relleno": "M50 8L66 48H34Z"
+  }
+]

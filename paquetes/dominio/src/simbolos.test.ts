@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { bocetoNuevo, elementoDeSimbolo, hojaASvg, hojaNueva, leerBoceto, puntosDeElemento, serializarBoceto, validarBoceto, type BocetoV2 } from "./boceto";
 import { esTrazadoValido, validarBiblioteca, validarSimbolo, type DefinicionSimbolo } from "./simbolos";
+import bibliotecaTeins from "../biblioteca/simbolos-teins.json";
+import prueba from "../formatos-de-prueba/simbolos-prueba.json";
 
 const ups: DefinicionSimbolo = { id: "0b8f7c3e-2d4a-4f1b-9c6e-5a7d8e9f0a1b", nombre: "UPS", categoria: "Energía", trazado: "M10 25H90V75H10Z", texto: "UPS" };
 const tablero: DefinicionSimbolo = { id: "1c9e8d4f-3e5b-4a2c-8d7f-6b8e9f0a1b2c", nombre: "Tablero", categoria: "Energía", trazado: "M10 25H90V75H10Z", relleno: "M10 75L90 25V75Z", codigo: "TAB-01" };
@@ -56,5 +58,11 @@ describe("símbolos de los bocetos (iteración 19, ADR-0027)", () => {
     expect(svg).toContain('<path d="M10 75L90 25V75Z" fill="#15171A"/>');
     expect(svg).toContain(">UPS</text>");
     expect(puntosDeElemento({ ...elementoDeSimbolo(ups, [200, 300], 100), giro: 45 })[0]![0]).toBeCloseTo(200 - 50 * Math.SQRT2, 5);
+  });
+
+  it("la biblioteca de TEINS es válida y conserva los ids de la de prueba (volver a publicarla no duplica)", () => {
+    expect(validarBiblioteca(bibliotecaTeins)).toEqual([]);
+    const ids = new Set(bibliotecaTeins.map((s) => s.id));
+    expect(prueba.every((s) => ids.has(s.id))).toBe(true);
   });
 });

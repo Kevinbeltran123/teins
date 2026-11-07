@@ -18,7 +18,7 @@ import { cancelarEnviosDeVersion, cancelarOReanudarEnvio, enviarAlQuedarListo, e
 import type { Formatos } from "../formatos";
 import { nombreDe, type Identidad } from "../identidad";
 import type { Levantamientos } from "../levantamientos";
-import type { VisitaAsignada, Visitas } from "../visitas";
+import { visitaDelInforme, type VisitaAsignada, type Visitas } from "../visitas";
 import { fuenteIncrustada, imprimirPdf, producirPdf } from "../../plataforma/pdf";
 import { informes, versionesPublicadas, type EstadoPdf } from "./esquema";
 
@@ -39,19 +39,6 @@ export interface VersionVigente {
   publicadaEn: Date;
   visita: ContenidoVersion["visita"];
 }
-
-/**
- * Lo que el encabezado del informe pide de la visita (ADR-0051), solo lo que hay: lo que falta no se escribe y el informe
- * lo dice con un marcador. El número de orden se escribe aquí, para que una versión publicada no cambie si cambia cómo se
- * escribe.
- */
-const encabezadoDe = (v: VisitaAsignada) => ({
-  ...(v.cliente.nit ? { nit: v.cliente.nit } : {}),
-  ...(v.sitio.ciudad ? { ciudad: v.sitio.ciudad } : {}),
-  ...(v.solicitante ? { solicitante: { nombre: v.solicitante.nombre, ...(v.solicitante.celular ? { telefono: v.solicitante.celular } : {}) } } : {}),
-  ...(v.ordenDeServicio ? { ordenDeServicio: numeroDeOrden(v.ordenDeServicio) } : {}),
-  ...(v.referencia ? { referencia: v.referencia } : {}),
-});
 
 /** La visita tal como quedó congelada en la versión: de la misma fila, sin otra consulta. */
 const visitaDeLaVersion = sql<ContenidoVersion["visita"]>`${versionesPublicadas.contenido} -> 'visita'`;
@@ -321,7 +308,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
             id: r.informe.id,
             visitaId: r.informe.visitaId,
             clienteId: r.clienteId ?? "",
-            visita: { cliente: r.visita.cliente.nombre, sitio: r.visita.sitio.nombre, direccion: r.visita.sitio.direccion, motivo: r.visita.motivo, programadaPara: r.visita.programadaPara, ...encabezadoDe(r.visita) },
+            visita: visitaDelInforme(r.visita),
             version: r.informe.version,
             introduccion: r.informe.introduccion,
             conclusiones: r.informe.conclusiones,
@@ -417,7 +404,7 @@ export function crearInformes({ bd, almacenamiento, config, archivos, levantamie
               publicadaEn: publicadaEn.toISOString(),
               publicadaPor: nombreDe(nombres, actor.usuarioId),
               organizacion: { nombre: organizacion },
-              visita: { cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, motivo: visita.motivo, programadaPara: visita.programadaPara, ...encabezadoDe(visita) },
+              visita: visitaDelInforme(visita),
               introduccion: informe.introduccion,
               conclusiones: informe.conclusiones,
               levantamientos: [],
