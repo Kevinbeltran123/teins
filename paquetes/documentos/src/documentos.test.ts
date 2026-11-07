@@ -112,6 +112,29 @@ describe("plantillas", () => {
     expect(con("Correctivo")).toContain("Causas del correctivo");
   });
 
+  it("con su distribución, el capítulo sale como el papel: sin portada, cajas lado a lado y lo demás en anexos (ADR-0059)", () => {
+    const enPapel: VersionFormato = {
+      ...formato,
+      informe: { titulo: "Informe técnico de prueba", hoja: "oficio", filas: [{ secciones: ["cuarto_tecnico", "cierre"] }] },
+      secciones: [...formato.secciones, { clave: "cierre", titulo: "Cierre", campos: [{ clave: "nota", etiqueta: "Nota", tipo: "texto", largo: true }] }, { clave: "extra", titulo: "Sin lugar", campos: [{ clave: "dato", etiqueta: "Dato", tipo: "texto" }] }],
+    };
+    const html = plantillaInforme({ ...informe, conclusiones: "", levantamientos: [{ ...informe.levantamientos[0]!, formato: enPapel, respuestas: { ...informe.levantamientos[0]!.respuestas, extra: { dato: "Algo" } } }] }, { salida: PDF, fotos: new Map() });
+    expect(html).not.toContain('class="portada"');
+    expect(html).toContain('class="capitulo papel oficio"');
+    expect(html).toContain("Informe técnico de prueba");
+    expect(html).toContain('<div class="fila-papel c2">');
+    // Un dato sin respuesta es un renglón en blanco, como en la hoja.
+    expect(html).toContain('<tr class="largo ancha" data-dato="cierre/nota"><th>Nota</th><td class="tenue"></td></tr>');
+    // Las fotos y la sección sin lugar van en los anexos, después de la hoja.
+    const [hoja, anexos] = html.split('<section class="anexos">');
+    expect(hoja).not.toContain("[FOTO]");
+    expect(anexos).toContain("[FOTO]");
+    expect(anexos).toContain("Sin lugar");
+    // Sin conclusiones escritas, no hay cierre ni marcador de firma.
+    expect(html).not.toContain("[DATOS LEGALES]");
+    expect(html).not.toContain('id="conclusiones"');
+  });
+
   it("una línea sin precio, que solo existe en el borrador, va como marcador y sin total", () => {
     const html = plantillaCotizacion(cotizacion([linea("a0000001", 25000), linea("a0000002", null)]), { salida: VISTA });
     expect(html).toContain("[Precio]");

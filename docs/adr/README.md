@@ -112,6 +112,7 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0036](0036-correo-que-escribe-oficina.md) | El correo de un envío lo puede escribir oficina, sobre la vista previa (amplía 0028) | Aceptada |
 | [0047](0047-retirar-una-version-cancela-sus-envios.md) | Retirar una versión cancela sus envíos que no han salido, con el motivo, y no se reanudan (amplía 0034) | Aceptada |
 | [0039](0039-que-sale-en-el-informe.md) | Qué sale en el informe: oficina oculta partes de cada levantamiento | Aceptada |
+| [0059](0059-el-informe-como-el-papel.md) | El informe como el papel: el formato describe su distribución, el resto va en anexos | Aceptada |
 
 ### API y avisos
 

@@ -102,6 +102,18 @@ export function validarDefinicionFormato(definicion: VersionFormato): string[] {
   if (usa((c) => c.tipo === "foto" && c.sello !== undefined) && app < VERSION_APP_SELLO) errores.push(`El sello de las fotos exige appMinima ${VERSION_APP_SELLO} o mayor`);
   if (usa((c) => c.tipo === "firma" && c.documento !== undefined) && app < VERSION_APP_DOCUMENTO_DE_FIRMA) errores.push(`La cédula de la firma exige appMinima ${VERSION_APP_DOCUMENTO_DE_FIRMA} o mayor`);
   errores.push(...erroresDeVisibilidad(definicion));
+  // La distribución del informe (ADR-0059): cada sección existe, una sola vez, no repetible, y de 1 a 4 por fila.
+  const ubicadas = new Set<string>();
+  for (const fila of definicion.informe?.filas ?? []) {
+    if (fila.secciones.length < 1 || fila.secciones.length > 4) errores.push("Cada fila del informe lleva de 1 a 4 secciones");
+    for (const clave of fila.secciones) {
+      const seccion = definicion.secciones.find((s) => s.clave === clave);
+      if (!seccion) errores.push(`El informe ubica una sección que no existe: ${clave}`);
+      else if (seccion.repetible) errores.push(`El informe no ubica la sección repetible ${clave}: va en los anexos`);
+      if (ubicadas.has(clave)) errores.push(`El informe ubica dos veces la sección ${clave}`);
+      ubicadas.add(clave);
+    }
+  }
   if (usaVisibilidad(definicion) && app < VERSION_APP_VISIBILIDAD) errores.push(`Los campos condicionales exigen appMinima ${VERSION_APP_VISIBILIDAD} o mayor`);
   return errores;
 }
