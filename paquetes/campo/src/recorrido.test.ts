@@ -71,3 +71,32 @@ describe("enFrase", () => {
     expect(enFrase("Informe de baterías UPS")).toBe("informe de baterías UPS");
   });
 });
+
+describe("pasos con condiciones (ADR-0058)", () => {
+  const conCondiciones: VersionFormato = {
+    formato: "condiciones",
+    version: 1,
+    appMinima: 17,
+    secciones: [
+      {
+        clave: "servicio",
+        titulo: "Servicio",
+        campos: [
+          { clave: "tipo", etiqueta: "Tipo", tipo: "opcion", opciones: ["Preventivo", "Correctivo"] },
+          { clave: "nota", etiqueta: "Nota", tipo: "texto", visibleSi: { campo: "tipo", en: ["Correctivo"] } },
+        ],
+      },
+      { clave: "causas", titulo: "Causas", visibleSi: { seccion: "servicio", campo: "tipo", en: ["Correctivo"] }, campos: [{ clave: "causa", etiqueta: "Causa", tipo: "texto" }] },
+      { clave: "cierre", titulo: "Cierre", campos: [{ clave: "obs", etiqueta: "Observaciones", tipo: "texto" }] },
+    ],
+  };
+
+  it("lo oculto no da pasos ni campos; aparece al elegir la opción, con los mismos ids", () => {
+    const sin = pasosDe(conCondiciones, { servicio: { tipo: "Preventivo" } });
+    expect(sin.map((p) => p.id)).toEqual(["servicio#0", "cierre#0"]);
+    expect(sin[0]!.campos.map((c) => c.clave)).toEqual(["tipo"]);
+    const con = pasosDe(conCondiciones, { servicio: { tipo: "Correctivo" } });
+    expect(con.map((p) => p.id)).toEqual(["servicio#0", "causas#0", "cierre#0"]);
+    expect(con[0]!.campos.map((c) => c.clave)).toEqual(["tipo", "nota"]);
+  });
+});

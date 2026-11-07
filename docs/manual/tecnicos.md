@@ -202,7 +202,8 @@ Los formatos de TEINS (visita técnica y servicio de UPS) llevan la ubicación y
 - **Textos:** escribe el valor.
 - **Medidas** (potencia, distancia, corriente): escribe el número y elige la unidad tocándola (por ejemplo «kVA» o «kW»). En números usa coma para decimales, por ejemplo 12,5. Si escribes una letra, verás «Escribe solo el número, por ejemplo 12,5». Algunos datos traen **valores comunes** como botones debajo (por ejemplo «15», «30», «45»): toca uno para ponerlo.
 - **Opciones:** toca la fila completa. En las que dicen «todas las que apliquen» puedes elegir varias. Si tocas otra vez una ya elegida, se quita. «Otro» abre «¿Cuál?» para que escribas.
-- **Horario:** «Llegada» y «Salida», cada una con «Ahora» para poner la hora actual. La app te sugiere una hora con un botón, por ejemplo «Usar [hora] (foto de llegada)» o «Usar [hora] (inicio del levantamiento)»: tócalo si es correcta. La salida se activa cuando hay llegada, y abajo sale el «Total». Si la salida es menor que la llegada, dice «la salida es al día siguiente».
+- **Horario:** «Llegada» y «Salida», cada una con «Ahora» para poner la hora actual. La app te sugiere una hora con un botón, por ejemplo «Usar [hora] (foto de llegada)» o «Usar [hora] (inicio del levantamiento)»: tócalo si es correcta. La salida se activa cuando hay llegada, y abajo sale el «Total». Si la salida es menor que la llegada, dice «la salida es al día siguiente». Si el total pasa de 12 horas, te pide revisar el a. m. y el p. m.
+- **Partes que dependen de una respuesta:** algunas aparecen solo cuando aplican. Por ejemplo, «Causas del correctivo» aparece si marcaste «Correctivo», y la lista de materiales, si respondiste «Sí» a «¿Se emplearon materiales o equipos?». Si cambias la respuesta, la parte se oculta, y lo que escribiste no sale en el informe.
 
 ![Paso con el horario y la selección de opciones](capturas/tecnicos-09-horario-y-opciones.png)
 

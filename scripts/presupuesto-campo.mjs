@@ -7,7 +7,8 @@ import { gzipSync } from "node:zlib";
 // ADR-0030: 135 KB desde el rediseño Recorrido (antes 120, ADR-0011). ADR-0050: 136 KB, porque los tipos nuevos de
 // formato (selección, horario, tablas y sello) crecen el contrato y la validación que van en el arranque: la bajada
 // valida los formatos antes de abrir la captura. Los controles, en cambio, viajan en la captura, que se carga aparte.
-const PRESUPUESTO_JS_KB = 136;
+// ADR-0058: 137 KB, por lo mismo: la condición de los campos entra al contrato y a la validación del formato.
+const PRESUPUESTO_JS_KB = 137;
 const carpeta = "paquetes/campo/dist";
 
 const html = readFileSync(join(carpeta, "index.html"), "utf8");

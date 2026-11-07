@@ -1,9 +1,20 @@
 // Subconjunto del meta-esquema de ADR-0006 y ADR-0050: tipos texto, medida, opcion, opciones, horario, foto, boceto, cantidades y firma, secciones repetibles y tablas de medidas.
 
+/**
+ * Condición para que un campo o una sección aparezca (ADR-0058): la selección `campo` (de `seccion`, o de la misma) tiene
+ * alguna de las opciones de `en`. Lo oculto no se exige, no se muestra y no sale en el informe.
+ */
+export interface CondicionVisible {
+  seccion?: string | undefined;
+  campo: string;
+  en: readonly string[];
+}
+
 interface CampoBase {
   clave: string;
   etiqueta: string;
   obligatorio?: boolean | undefined;
+  visibleSi?: CondicionVisible | undefined;
 }
 
 export type DefinicionCampo =
@@ -76,6 +87,8 @@ export interface DefinicionSeccion {
   /** Solo para la empresa (ADR-0039): no sale en el informe del cliente salvo que oficina la muestre. Las fotos de llegada. */
   soloEmpresa?: boolean | undefined;
   repetible?: Repetible | undefined;
+  /** La sección aparece solo si se cumple (ADR-0058); la condición nombra otra sección. */
+  visibleSi?: CondicionVisible | undefined;
   /** Mediciones por fase u otras que se leen mejor en filas y columnas (ADR-0050). */
   tablas?: readonly TablaDeMedidas[] | undefined;
   campos: readonly DefinicionCampo[];
