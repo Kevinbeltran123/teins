@@ -1,6 +1,7 @@
 import type { Respuestas, Valor } from "./levantamiento";
 import { bloques, type Bloque, type Repeticiones } from "./repeticiones";
 import type { DefinicionCampo, VersionFormato } from "./formato";
+import { campoVisible, seccionVisible, usaVisibilidad } from "./visibilidad";
 
 /*
   Qué sale en el informe (ADR-0039). Oficina oculta o vuelve a mostrar partes de cada levantamiento: un bloque (una
@@ -87,15 +88,17 @@ export function aplicarSeleccion<T extends CapituloSeleccionable>(l: T, s: Selec
   const oculto = ocultosDe(s, l.id);
   const respuestas: Record<string, Record<string, Valor>> = {};
   const ocultos: string[] = [];
+  // Lo oculto por una condición del formato (ADR-0058) se decide aquí, con todas las respuestas: después, sin las de lo que
+  // oficina ocultó, una condición que dependa de ellas ya no se podría evaluar.
   for (const b of bloques(l.formato, l.repeticiones ?? {})) {
-    if (oculto.bloque(b)) {
+    if (oculto.bloque(b) || !seccionVisible(b.seccion, l.respuestas)) {
       ocultos.push(b.clave);
       continue;
     }
     const valores = l.respuestas[b.clave];
     const quedan: Record<string, Valor> = {};
     for (const c of b.seccion.campos) {
-      if (oculto.campo(b, c)) {
+      if (oculto.campo(b, c) || !campoVisible(c, b.clave, l.respuestas)) {
         ocultos.push(claveOcultable(b.clave, c.clave));
         continue;
       }
@@ -105,5 +108,6 @@ export function aplicarSeleccion<T extends CapituloSeleccionable>(l: T, s: Selec
     }
     if (valores !== undefined) respuestas[b.clave] = quedan;
   }
-  return { ...l, respuestas, ...(ocultos.length > 0 ? { ocultos } : {}) };
+  // Con condiciones, `ocultos` va siempre: dice a la plantilla que ya se aplicaron y que no las vuelva a evaluar.
+  return { ...l, respuestas, ...(ocultos.length > 0 || usaVisibilidad(l.formato) ? { ocultos } : {}) };
 }

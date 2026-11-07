@@ -1,12 +1,14 @@
 import {
   aDecimalColombiano,
   bloques,
+  campoVisible,
   describirValor,
   esBoceto,
   esCantidades,
   esDatoSimple,
   esFirma,
   esNoObtenido,
+  seccionVisible,
   sinRespuestasHuerfanas,
   validarRespuestas,
   type DefinicionCampo,
@@ -44,8 +46,10 @@ export function progreso(formato: VersionFormato, l: LevantamientoLocal) {
   let obligatorios = 0;
   let completos = 0;
   for (const b of bloques(formato, l.repeticiones ?? {})) {
+    // Lo oculto no se exige (ADR-0058): no cuenta en el avance.
+    if (!seccionVisible(b.seccion, limpio.respuestas)) continue;
     for (const c of b.seccion.campos) {
-      if (!c.obligatorio) continue;
+      if (!c.obligatorio || !campoVisible(c, b.clave, limpio.respuestas)) continue;
       obligatorios++;
       if (!conError.has(claveDeError(b.clave, c.clave))) completos++;
     }

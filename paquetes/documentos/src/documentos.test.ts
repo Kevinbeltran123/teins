@@ -99,6 +99,19 @@ describe("plantillas", () => {
     expect(html).toContain("[FOTO]");
   });
 
+  it("lo oculto por una condición del formato no sale en el informe (ADR-0058)", () => {
+    const conCondicion: VersionFormato = {
+      ...formato,
+      secciones: [
+        { ...formato.secciones[0]!, campos: [{ clave: "tipo", etiqueta: "Tipo de servicio", tipo: "opcion", opciones: ["Preventivo", "Correctivo"] }, ...formato.secciones[0]!.campos] },
+        { clave: "causas", titulo: "Causas del correctivo", visibleSi: { seccion: "cuarto_tecnico", campo: "tipo", en: ["Correctivo"] }, campos: [{ clave: "causa", etiqueta: "Causa", tipo: "texto" }] },
+      ],
+    };
+    const con = (tipo: string) => plantillaInforme({ ...informe, levantamientos: [{ ...informe.levantamientos[0]!, formato: conCondicion, respuestas: { cuarto_tecnico: { tipo }, causas: { causa: "Ventilador" } } }] }, { salida: PDF, fotos: new Map() });
+    expect(con("Preventivo")).not.toContain("Causas del correctivo");
+    expect(con("Correctivo")).toContain("Causas del correctivo");
+  });
+
   it("una línea sin precio, que solo existe en el borrador, va como marcador y sin total", () => {
     const html = plantillaCotizacion(cotizacion([linea("a0000001", 25000), linea("a0000002", null)]), { salida: VISTA });
     expect(html).toContain("[Precio]");

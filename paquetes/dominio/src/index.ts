@@ -1,4 +1,4 @@
-export type { DefinicionCampo, DefinicionSeccion, Repetible, SelloDeFoto, TablaDeMedidas, VersionFormato } from "./formato";
+export type { CondicionVisible, DefinicionCampo, DefinicionSeccion, Repetible, SelloDeFoto, TablaDeMedidas, VersionFormato } from "./formato";
 export { VERSION_APP_DOCUMENTO_DE_FIRMA, VERSION_APP_HORARIO, VERSION_APP_OPCIONES, VERSION_APP_SELLO, VERSION_APP_TABLAS } from "./formato";
 export type { Bloque, Repeticion, Repeticiones } from "./repeticiones";
 export { bloqueDe, bloques, claveDeRepeticion, ID_REPETICION, leerClave, nombreDeDato, rutaLegible, VERSION_APP_REPETIBLES } from "./repeticiones";
@@ -52,6 +52,7 @@ export { corregir, marcarRevisado, puedeEditar, tomarRevision } from "./revision
 export type { ResultadoEnvio } from "./estados";
 export { enviarLevantamiento } from "./estados";
 export { validarDefinicionFormato } from "./meta-esquema";
+export { bloquesVisibles, campoVisible, seccionVisible, VERSION_APP_VISIBILIDAD } from "./visibilidad";
 export { versionesVigentes } from "./vigencia";
 export { describirValor } from "./describir";
 export { numeroDeOrden } from "./orden";

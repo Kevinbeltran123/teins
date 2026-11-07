@@ -3,6 +3,7 @@ import {
   bloqueOcultoPorOmision,
   bloques,
   campoOcultoPorOmision,
+  campoVisible,
   claveOcultable,
   describirValor,
   esBoceto,
@@ -11,6 +12,7 @@ import {
   esNoObtenido,
   esOpciones,
   ocultosDe,
+  seccionVisible,
   type ContenidoVersion,
   type DefinicionCampo,
   type SeleccionInforme,
@@ -131,7 +133,12 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
       const elegidos = seleccion ? ocultosDe(seleccion, l.id) : undefined;
       const fuera = new Set(l.ocultos ?? []);
       // Cada sección, y cada repetición de las repetibles con su nombre, en orden (iteración 9).
-      const delCapitulo = bloques(l.formato, l.repeticiones ?? {});
+      // Sin lo oculto por las condiciones del formato (ADR-0058): no aplica, así que no sale ni como casilla vacía. En una
+      // versión publicada ya vienen en `ocultos` (las respuestas de lo que oficina ocultó no están para evaluarlas).
+      const evaluar = l.ocultos === undefined;
+      const delCapitulo = bloques(l.formato, l.repeticiones ?? {})
+        .filter((b) => !evaluar || seccionVisible(b.seccion, l.respuestas))
+        .map((b) => (evaluar ? { ...b, seccion: { ...b.seccion, campos: b.seccion.campos.filter((c) => campoVisible(c, b.clave, l.respuestas)) } } : b));
       const secciones = delCapitulo
         .map((bloque) => {
           const { seccion: s, clave, titulo } = bloque;

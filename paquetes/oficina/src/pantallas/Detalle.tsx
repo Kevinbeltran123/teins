@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { bloques, esNoObtenido } from "@teins/dominio";
+import { bloquesVisibles, esNoObtenido } from "@teins/dominio";
 import { ErrorApi } from "@teins/protocolo";
 import { ErrorDeCarga, BotonIcono, ChevronLeft, Dialogo, EncabezadoPagina, EsqueletoLista, nombreDeTransicion, PanelRight, sinMovimiento } from "@teins/ui";
 import { consultas } from "../api";
@@ -114,7 +114,8 @@ export function Detalle({ id, hilo }: { id: string; hilo?: string | undefined })
   const titulo = l.visita ? `${l.visita.cliente} · ${l.visita.sitio}` : `Levantamiento de ${l.tecnico.nombre}`;
 
   // Las secciones del formato, con sus repeticiones juntas bajo el mismo título (prototipo: "Tableros").
-  const todos = bloques(l.formatoDefinicion, l.repeticiones);
+  // Sin lo que el formato oculta por sus condiciones (ADR-0058): no aplica, no se revisa ni sale en el informe.
+  const todos = bloquesVisibles(l.formatoDefinicion, l.repeticiones, l.respuestas);
   const secciones = l.formatoDefinicion.secciones.map((s) => ({ seccion: s, bloques: todos.filter((b) => b.seccion.clave === s.clave) }));
   const corregidas = [...correcciones.keys()].map((k) => k.split("|")[0]!);
   const conCambios = (clave: string) => seccionCorregida(corregidas, clave);

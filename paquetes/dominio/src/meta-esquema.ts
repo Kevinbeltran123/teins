@@ -2,6 +2,7 @@ import { LIMITES_FIRMA, VERSION_APP_FIRMA } from "./firma";
 import { VERSION_APP_DOCUMENTO_DE_FIRMA, VERSION_APP_HORARIO, VERSION_APP_OPCIONES, VERSION_APP_SELLO, VERSION_APP_TABLAS, type DefinicionSeccion, type VersionFormato } from "./formato";
 import { LIMITES } from "./limites";
 import { VERSION_APP_REPETIBLES } from "./repeticiones";
+import { erroresDeVisibilidad, usaVisibilidad, VERSION_APP_VISIBILIDAD } from "./visibilidad";
 import { VERSION_APP_BOCETOS } from "./boceto";
 import { VERSION_APP_CANTIDADES } from "./cantidades";
 
@@ -100,5 +101,7 @@ export function validarDefinicionFormato(definicion: VersionFormato): string[] {
   if (definicion.secciones.some((s) => (s.tablas?.length ?? 0) > 0) && app < VERSION_APP_TABLAS) errores.push(`Las tablas de medidas exigen appMinima ${VERSION_APP_TABLAS} o mayor`);
   if (usa((c) => c.tipo === "foto" && c.sello !== undefined) && app < VERSION_APP_SELLO) errores.push(`El sello de las fotos exige appMinima ${VERSION_APP_SELLO} o mayor`);
   if (usa((c) => c.tipo === "firma" && c.documento !== undefined) && app < VERSION_APP_DOCUMENTO_DE_FIRMA) errores.push(`La cédula de la firma exige appMinima ${VERSION_APP_DOCUMENTO_DE_FIRMA} o mayor`);
+  errores.push(...erroresDeVisibilidad(definicion));
+  if (usaVisibilidad(definicion) && app < VERSION_APP_VISIBILIDAD) errores.push(`Los campos condicionales exigen appMinima ${VERSION_APP_VISIBILIDAD} o mayor`);
   return errores;
 }

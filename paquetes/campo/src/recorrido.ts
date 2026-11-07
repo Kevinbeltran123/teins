@@ -1,4 +1,4 @@
-import { esDatoSimple, leerClave, sinRespuestasHuerfanas, validarRespuestas, type DefinicionCampo, type DefinicionSeccion, type VersionFormato } from "@teins/dominio";
+import { campoVisible, esDatoSimple, leerClave, seccionVisible, sinRespuestasHuerfanas, validarRespuestas, type DefinicionCampo, type DefinicionSeccion, type Respuestas, type VersionFormato } from "@teins/dominio";
 import type { LevantamientoLocal } from "./datos/modelo";
 
 /**
@@ -16,7 +16,20 @@ export interface Paso {
 /** Bocetos, cantidades y firmas ocupan su paso; las fotos van con los datos. */
 const soloEnSuPaso = (c: DefinicionCampo) => !esDatoSimple(c) && c.tipo !== "foto";
 
-export function pasosDe(formato: VersionFormato): Paso[] {
+/**
+ * Con `respuestas`, sin lo oculto (ADR-0058): una sección oculta no da pasos y un paso sin campos visibles sale. Los pasos
+ * se arman con todos los campos y después se filtran: así el id de un paso no cambia cuando algo aparece o desaparece.
+ */
+export function pasosDe(formato: VersionFormato, respuestas: Respuestas = {}): Paso[] {
+  return todosLosPasos(formato).flatMap((p) => {
+    if (!seccionVisible(p.seccion, respuestas)) return [];
+    if (p.seccion.repetible) return [p];
+    const campos = p.campos.filter((c) => campoVisible(c, p.seccion.clave, respuestas));
+    return campos.length > 0 ? [{ ...p, campos }] : [];
+  });
+}
+
+function todosLosPasos(formato: VersionFormato): Paso[] {
   const pasos: Paso[] = [];
   for (const seccion of formato.secciones) {
     if (seccion.repetible) {
@@ -38,7 +51,7 @@ export function pasosDe(formato: VersionFormato): Paso[] {
 
 /** Cuántos pasos están hechos y cuál sigue, para la tarjeta de la visita en Mis visitas. */
 export function resumenDeRecorrido(formato: VersionFormato, l: LevantamientoLocal) {
-  const pasos = pasosDe(formato);
+  const pasos = pasosDe(formato, l.respuestas);
   // Lo de un tablero quitado no cuenta: no se puede completar y no sale al enviar (iteración 42).
   const limpio = sinRespuestasHuerfanas(l);
   const errores = validarRespuestas(formato, limpio.respuestas, limpio.repeticiones);
