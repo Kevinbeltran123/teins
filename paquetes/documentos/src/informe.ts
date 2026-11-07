@@ -60,13 +60,14 @@ const datoOMarcador = (valor: string | undefined, marcador: string) => (valor?.t
  * El encabezado del formato de TEINS (ADR-0051), en rejilla de tres columnas y con el logo: lo que ya sabe la visita, que
  * el técnico no vuelve a escribir. Lo que falta va como marcador, y la referencia del cliente solo si la hay.
  */
-function encabezado(v: ContenidoVersion["visita"]): string {
+function encabezado(v: ContenidoVersion["visita"], enPapel = false): string {
   const celda = (rotulo: string, valor: string) => `<div><dt>${rotulo}</dt><dd>${valor}</dd></div>`;
-  return `<div class="encabezado"><img class="marca" src="${LOGO_TEINS}" alt="TEINS"><dl>
+  // En papel, el logo y la referencia del cliente van arriba, junto al número de orden, como el «Ticket» del papel.
+  return `<div class="encabezado">${enPapel ? "" : `<img class="marca" src="${LOGO_TEINS}" alt="TEINS">`}<dl>
     ${celda("Cliente", escapar(v.cliente))}${celda("NIT", datoOMarcador(v.nit, "[NIT]"))}${celda("Orden de servicio", datoOMarcador(v.ordenDeServicio, "[N.º de orden]"))}
     ${celda("Dirección", escapar(v.direccion))}${celda("Ciudad", datoOMarcador(v.ciudad, "[Ciudad]"))}${celda("Sede", escapar(v.sitio))}
     ${celda("Solicitante", datoOMarcador(v.solicitante?.nombre, "[Solicitante]"))}${celda("Teléfono", datoOMarcador(v.solicitante?.telefono ? celularLegible(v.solicitante.telefono) : undefined, "[Teléfono]"))}${celda("Fecha", dia(v.programadaPara))}
-    ${v.referencia?.trim() ? celda("Referencia del cliente", escapar(v.referencia)) : ""}
+    ${!enPapel && v.referencia?.trim() ? celda("Referencia del cliente", escapar(v.referencia)) : ""}
   </dl></div>`;
 }
 
@@ -137,12 +138,17 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
       const delCapitulo = bloques(l.formato, l.repeticiones ?? {})
         .filter((b) => seccionVisible(b.seccion, l.respuestas))
         .map((b) => ({ ...b, seccion: { ...b.seccion, campos: b.seccion.campos.filter((c) => campoVisible(c, b.clave, l.respuestas)) } }));
-      const secciones = delCapitulo
-        .map((bloque) => {
+      // El formato que trae su distribución sale como su papel (ADR-0059); los demás, como siempre.
+      const papel = l.formato.informe;
+      /**
+       * El contenido de una sección por partes: lo que va en la hoja (datos, medidas, cantidades) y lo que en papel va en
+       * los anexos (fotos, croquis, constancias). Oculta por oficina, solo su franja en la vista (ADR-0039).
+       */
+      const partesDe = (bloque: (typeof delCapitulo)[number]) => {
           const { seccion: s, clave, titulo } = bloque;
           const claveBloque = claveOcultable(l.id, clave);
           if (elegidos ? elegidos.bloque(bloque) : fuera.has(clave)) {
-            return seleccion ? `<section class="seccion">${franjaOculta(titulo, bloqueOcultoPorOmision(bloque) ? "solo para la empresa" : "", claveBloque, bloqueOcultoPorOmision(bloque))}</section>` : "";
+            return { titulo, claveBloque, oculta: seleccion ? franjaOculta(titulo, bloqueOcultoPorOmision(bloque) ? "solo para la empresa" : "", claveBloque, bloqueOcultoPorOmision(bloque)) : "" };
           }
           const campoFuera = (campo: DefinicionCampo) => (elegidos ? elegidos.campo(bloque, campo) : fuera.has(claveOcultable(clave, campo.clave)));
           /** Un campo con bloque propio (fotos, croquis, cantidades, firma): oculto, su franja en la vista; si sale, con «Ocultar». */
@@ -163,16 +169,26 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
               if (!seleccion && campoFuera(campo)) return false;
               if (valor !== undefined && esNoObtenido(valor)) return true;
-              return esDatoSimple(campo) || (campo.tipo === "firma" && !esFirma(valor));
+              // En papel, la firma sin tomar ya sale vacía en la fila de firmas.
+              return esDatoSimple(campo) || (!papel && campo.tipo === "firma" && !esFirma(valor));
             })
             .map((campo) => {
               const valor = l.respuestas[clave]?.[campo.clave] as Valor | undefined;
               const vacio = valor === undefined || esNoObtenido(valor);
               // Una selección sin respuesta sale con todas sus opciones vacías, como el papel sin marcar.
               const selecciones = (campo.tipo === "opcion" || campo.tipo === "opciones") && (valor === undefined || !esNoObtenido(valor));
-              const celda = selecciones ? `<td class="opciones">${opcionesEnHtml(campo, valor)}</td>` : `<td${vacio ? ' class="tenue"' : ""}>${escapar(describirValor(campo, valor))}</td>`;
+              // En papel, un dato vacío es un renglón en blanco, como en la hoja (ADR-0059).
+              const texto = papel && valor === undefined ? "" : escapar(describirValor(campo, valor));
+              const celda = selecciones ? `<td class="opciones">${opcionesEnHtml(campo, valor)}</td>` : `<td${vacio ? ' class="tenue"' : ""}>${texto}</td>`;
+              // En papel, las casillas y los textos largos ocupan la fila de la rejilla; el texto largo, con alto de caja.
+              // Una selección corta (Sí/No) cabe en su celda; una de más opciones, no.
+              const anchaPorOpciones = selecciones && (campo.tipo === "opciones" || campo.opciones.length > 3 || Boolean(campo.otro));
+              // Un dato que se llama como su sección («Diagnóstico» en «Diagnóstico») no repite el rótulo bajo la barra.
+              const repiteTitulo = papel && campo.etiqueta.trim().toLowerCase() === titulo.trim().toLowerCase();
+              const clases = papel ? [...(repiteTitulo ? ["sin-rotulo"] : []), ...(campo.tipo === "texto" && campo.largo ? ["largo"] : []), ...(anchaPorOpciones || campo.tipo === "horario" || (campo.tipo === "texto" && campo.largo) ? ["ancha"] : [])] : [];
+              const largo = clases.length > 0 ? ` class="${clases.join(" ")}"` : "";
               // data-dato: la revisión resalta en la vista el dato corregido; el PDF lo ignora.
-              return `<tr data-dato="${escapar(`${clave}/${campo.clave}`)}"><th>${escapar(campo.etiqueta)}</th>${celda}</tr>`;
+              return `<tr${largo} data-dato="${escapar(`${clave}/${campo.clave}`)}"><th>${escapar(campo.etiqueta)}</th>${celda}</tr>`;
             })
             .join("");
           // Mediciones por fase (ADR-0050): una tabla con las columnas de la sección y una fila por medida. Lo que no se midió
@@ -253,12 +269,48 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
               return propio(campo, `<section class="constancia"><h4>Constancia de visita</h4><p>${escapar(valor.declaracion)}</p><p class="tenue">Firmado en el sitio el ${fechaHora.format(new Date(valor.firmadoEn))}, en el teléfono del técnico. La firma está al final del capítulo.</p></section>`);
             })
             .join("");
-          const contenido = `${datos ? `<table class="datos">${datos}</table>` : ""}${medidas}${cantidades}${galerias}${croquis}${constancias}`;
-          // En el PDF, una sección sin nada que mostrar (su único dato quedó oculto, como un croquis) no deja su título solo.
-          if (!seleccion && !contenido) return "";
-          return `<section class="seccion${seleccion ? " vista-ocultable" : ""}">${seleccion ? botonOcultar(claveBloque, bloqueOcultoPorOmision(bloque)) : ""}<h3>${escapar(titulo)}</h3>${contenido}</section>`;
-        })
-        .join("");
+          return { titulo, claveBloque, oculta: undefined, hoja: `${datos ? `<table class="datos${papel ? " celdas" : ""}">${datos}</table>` : ""}${medidas}${cantidades}`, anexos: `${galerias}${croquis}${constancias}` };
+      };
+      /** Una sección con su título; en la vista, con «Ocultar». En el PDF, una sin nada que mostrar no deja su título solo. */
+      const seccionCon = (bloque: (typeof delCapitulo)[number], contenido: string, clase: string) => {
+        if (!seleccion && !contenido) return "";
+        return `<section class="${clase}${seleccion ? " vista-ocultable" : ""}">${seleccion ? botonOcultar(claveOcultable(l.id, bloque.clave), bloqueOcultoPorOmision(bloque)) : ""}<h3>${escapar(bloque.titulo)}</h3>${contenido}</section>`;
+      };
+      const comoSiempre = (bloque: (typeof delCapitulo)[number]) => {
+        const p = partesDe(bloque);
+        if (p.oculta !== undefined) return p.oculta ? `<section class="seccion">${p.oculta}</section>` : "";
+        return seccionCon(bloque, `${p.hoja}${p.anexos}`, "seccion");
+      };
+      let secciones: string;
+      let anexos = "";
+      if (papel) {
+        const porClave = new Map(delCapitulo.map((b) => [b.clave, b]));
+        const ubicadas = new Set(papel.filas.flatMap((f) => f.secciones));
+        secciones = papel.filas
+          .map((fila) => {
+            const cajas = fila.secciones
+              .flatMap((k) => {
+                const bloque = porClave.get(k);
+                if (!bloque) return [];
+                const p = partesDe(bloque);
+                if (p.oculta !== undefined) return p.oculta ? [`<section class="caja-papel">${p.oculta}</section>`] : [];
+                const html = seccionCon(bloque, p.hoja, "caja-papel");
+                return html ? [html] : [];
+              });
+            return cajas.length > 0 ? `<div class="fila-papel c${cajas.length}">${cajas.join("")}</div>` : "";
+          })
+          .join("");
+        // Lo que no cabe en la hoja: las fotos, los croquis y las constancias de lo ubicado, y las secciones sin lugar.
+        anexos = delCapitulo
+          .map((bloque) => {
+            if (!ubicadas.has(bloque.clave)) return comoSiempre(bloque);
+            const p = partesDe(bloque);
+            return p.oculta === undefined && p.anexos ? `<section class="seccion"><h3>${escapar(bloque.titulo)}</h3>${p.anexos}</section>` : "";
+          })
+          .join("");
+      } else {
+        secciones = delCapitulo.map(comoSiempre).join("");
+      }
       // La fila de firmas (ADR-0051): quien asistió firma al enviar, quienes acompañaron dibujan la suya (cada campo de
       // firma, en orden) y quien revisó firma al marcar revisado. Sin campo de firma en el formato, o si oficina lo
       // ocultó, solo el técnico y el revisor.
@@ -279,13 +331,24 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
       };
       const cajas = 2 + acompanamientos.length;
       const columnas = cajas === 2 ? "dos" : cajas === 3 ? "tres" : cajas === 4 ? "cuatro" : "muchas";
-      const firmasDelCapitulo = `<section class="firmas ${columnas}">${caja(
+      const firmasDelCapitulo = `<section class="firmas ${columnas}${papel ? " papel" : ""}">${caja(
         "Técnico que asistió",
         `<p class="persona"><strong>${escapar(l.tecnico)}</strong><br>${cedula(l.tecnicoDocumento)}<br><span class="tenue">Firmó electrónicamente al enviar, el ${fechaHora.format(new Date(l.recibidoEn))}</span></p>`,
       )}${acompanamientos.map(trazoDeAcompanamiento).join("")}${caja(
         "Supervisado o validado por",
         `<p class="persona"><strong>${escapar(l.revisor)}</strong><br>${cedula(l.revisorDocumento)}<br><span class="tenue">Validó en ${escapar(c.organizacion.nombre)}${l.revisadoEn ? ` el ${fechaHora.format(new Date(l.revisadoEn))}` : ""}</span></p>`,
       )}</section>`;
+      if (papel) {
+        // Como el papel (ADR-0059): logo y título arriba, el número de orden a la derecha, la hoja, las firmas y los anexos.
+        return `<article class="capitulo papel${papel.hoja === "oficio" ? " oficio" : ""}" id="capitulo-${escapar(l.id)}">
+        ${c.levantamientos.length > 1 ? `<p class="numero">Levantamiento ${i + 1} de ${c.levantamientos.length}</p>` : ""}
+        <header class="papel-cabeza"><img class="marca" src="${LOGO_TEINS}" alt="TEINS"><h2>${escapar(papel.titulo ?? l.formato.nombre ?? l.formato.formato)}</h2><div class="papel-os"><span>Orden de servicio</span><strong>${datoOMarcador(c.visita.ordenDeServicio, "[N.º de orden]")}</strong>${c.visita.referencia?.trim() ? `<em>Referencia del cliente ${escapar(c.visita.referencia)}</em>` : ""}</div></header>
+        ${encabezado(c.visita, true)}
+        ${secciones}
+        ${firmasDelCapitulo}
+        ${anexos ? `<section class="anexos"><h2>Anexos</h2>${anexos}</section>` : ""}
+      </article>`;
+      }
       return `<article class="capitulo" id="capitulo-${escapar(l.id)}">
         <p class="numero">Levantamiento ${i + 1} de ${c.levantamientos.length}</p>
         <h2>${escapar(l.formato.nombre ?? l.formato.formato)}</h2>
@@ -297,6 +360,8 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
     })
     .join("");
 
+  // Con algún capítulo como su papel no hay portada, y lo de oficina sale solo si lo escribió (ADR-0059).
+  const enPapel = c.levantamientos.some((l) => l.formato.informe);
   const planos = c.planos.length
     ? `<section class="bloque" id="planos"><h2>Planos anexos</h2><p>Los planos se incluyen al final de este documento, en este orden:</p><ol>${c.planos.map((p) => `<li>${escapar(p.nombre)}</li>`).join("")}</ol></section>`
     : "";
@@ -309,7 +374,7 @@ export function plantillaInforme(c: ContenidoVersion, { salida, fotos, bocetos =
 ${estilosDe("informe", ESTILOS_INFORME, salida)}
 </head>
 <body>
-<section class="portada">
+${enPapel ? "" : `<section class="portada">
   <img class="logo" src="${LOGO_TEINS}" alt="TEINS">
   <h1>Informe técnico</h1>
   <p class="cliente">${escapar(c.visita.cliente)}</p>
@@ -323,13 +388,19 @@ ${estilosDe("informe", ESTILOS_INFORME, salida)}
   </dl>
   <span class="marquilla">Versión ${c.numero}</span>
   <p>${escapar(c.organizacion.nombre)}</p>
-</section>
+</section>`}
 ${c.introduccion.trim() ? `<section class="bloque" id="introduccion"><h2>Introducción</h2>${parrafos(c.introduccion)}</section>` : ""}
 ${capitulos}
-<section class="bloque cierre" id="conclusiones">
+${
+  enPapel
+    ? c.conclusiones.trim()
+      ? `<section class="bloque cierre" id="conclusiones"><h2>Conclusiones</h2>${parrafos(c.conclusiones)}</section>`
+      : ""
+    : `<section class="bloque cierre" id="conclusiones">
   ${c.conclusiones.trim() ? `<h2>Conclusiones</h2>${parrafos(c.conclusiones)}` : ""}
   <div class="firma"><div>[FIRMA]<br>Responsable del informe</div><div>[DATOS LEGALES]</div></div>
-</section>
+</section>`
+}
 ${planos}
 </body>
 </html>`;
@@ -421,6 +492,56 @@ table.medidas tr { break-inside: avoid; }
 .caja-firma .falta { height: 16mm; border: 1.5px dashed ${MARCA.division}; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: ${MARCA.secundario}; margin-bottom: 4pt; }
 .firma { break-inside: avoid; margin-top: 24pt; display: grid; grid-template-columns: 1fr 1fr; gap: 24pt; }
 .firma div { border-top: 1.5px solid ${MARCA.texto}; padding-top: 6pt; color: ${MARCA.secundario}; }
+/* Como el papel (ADR-0059): cajas de borde fino con barra de título, rótulos en mayúscula pequeña y filas lado a lado. */
+@page oficio { size: 8.5in 14in; margin: 9mm 12mm 12mm; }
+.capitulo.oficio { page: oficio; }
+.capitulo.papel { font-size: 8.5pt; line-height: 1.35; }
+.papel-cabeza { display: flex; align-items: center; gap: 14pt; border-bottom: 2px solid ${MARCA.superficie}; padding-bottom: 6pt; margin-bottom: 6pt; }
+.papel-cabeza .marca { height: 30pt; width: auto; }
+.papel-cabeza h2 { flex: 1; margin: 0; font-size: 13pt; }
+.papel-os { text-align: right; }
+.papel-os span { display: block; font-size: 7.5pt; letter-spacing: .06em; text-transform: uppercase; color: ${MARCA.secundario}; }
+.papel-os strong { display: block; font-size: 18pt; line-height: 1.1; color: ${MARCA.superficie}; }
+.papel-os em { display: block; font-style: normal; font-size: 7.5pt; color: ${MARCA.secundario}; }
+.papel .encabezado { border-radius: 0; border-color: #C9CED8; padding: 5pt 8pt; margin: 0; }
+.papel .encabezado dl { gap: 3pt 12pt; }
+.papel .encabezado dt { font-size: 7pt; }
+.fila-papel { display: grid; margin-top: 4pt; break-inside: avoid; }
+.fila-papel.c1 { grid-template-columns: 1fr; }
+.fila-papel.c2 { grid-template-columns: repeat(2, 1fr); }
+.fila-papel.c3 { grid-template-columns: repeat(3, 1fr); }
+.fila-papel.c4 { grid-template-columns: repeat(4, 1fr); }
+.caja-papel { border: 1px solid #C9CED8; break-inside: avoid; }
+.caja-papel + .caja-papel { border-left: 0; }
+.caja-papel h3 { margin: 0; padding: 2pt 5pt; background: ${MARCA.fondo}; border-bottom: 1px solid #C9CED8; font-size: 8pt; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: ${MARCA.superficie}; }
+.caja-papel h4 { margin: 4pt 6pt; font-size: 8pt; letter-spacing: .04em; text-transform: uppercase; color: ${MARCA.secundario}; }
+/* Los datos en rejilla de celdas, el rótulo encima del valor; sigue siendo una tabla para que la revisión marque su fila. */
+table.datos.celdas { display: block; }
+table.datos.celdas tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(29mm, 1fr)); }
+table.datos.celdas tr { display: flex; flex-direction: column; border-bottom: 1px solid ${MARCA.division}; border-right: 1px solid ${MARCA.division}; padding: 2pt 5pt; }
+table.datos.celdas tr.ancha { grid-column: 1 / -1; flex-direction: row; gap: 10pt; align-items: baseline; }
+table.datos.celdas tr.largo { flex-direction: column; gap: 1pt; }
+table.datos.celdas th, table.datos.celdas td { display: block; width: auto; padding: 0; border: 0; }
+table.datos.celdas th { font-size: 6.5pt; letter-spacing: .04em; text-transform: uppercase; }
+/* En una columna angosta (tres o cuatro lado a lado), las casillas van debajo del rótulo: al lado no caben. */
+.fila-papel.c3 table.datos.celdas tr.ancha, .fila-papel.c4 table.datos.celdas tr.ancha { flex-direction: column; gap: 2pt; }
+table.datos.celdas tr.ancha th { flex: 0 0 auto; min-width: 30mm; }
+table.datos.celdas td { font-weight: 500; }
+table.datos.celdas tr.largo td { min-height: 0; }
+table.datos.celdas tr.sin-rotulo th { display: none; }
+.caja-papel table.cantidades th:first-child, .caja-papel table.cantidades td:first-child { padding-left: 5pt; }
+.caja-papel table.cantidades thead th { font-size: 7pt; letter-spacing: .04em; text-transform: uppercase; }
+.caja-papel table.medidas, .caja-papel table.cantidades { margin: 0; font-size: 8pt; }
+.caja-papel table.medidas th, .caja-papel table.medidas td { padding: 1pt 5pt; }
+.fila-papel.c3 table.medidas tbody th, .fila-papel.c4 table.medidas tbody th { width: 55%; font-size: 6.5pt; }
+.firmas.papel { gap: 0; margin-top: 4pt; }
+.firmas.papel .caja-firma { border: 1px solid #C9CED8; padding: 4pt 5pt; justify-content: space-between; }
+.firmas.papel .caja-firma .rotulo { margin-bottom: 2pt; }
+.firmas.papel .caja-firma .trazo svg { max-height: 16mm; }
+.firmas.papel .caja-firma .falta { height: 12mm; }
+.firmas.papel .caja-firma + .caja-firma { border-left: 0; }
+.firmas.papel .caja-firma .rotulo { letter-spacing: .04em; text-transform: uppercase; }
+.anexos { break-before: page; }
 `;
 
 /** Pie de página con numeración (lo imprime Chromium fuera del flujo del documento). */
