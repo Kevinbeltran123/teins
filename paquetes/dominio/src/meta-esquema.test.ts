@@ -125,3 +125,23 @@ describe("tipos nuevos en el meta-esquema (ADR-0050)", () => {
     expect(mal({ clave: "f", etiqueta: "F", tipo: "foto", documento: "opcional" })).toEqual(["La cédula solo va en firmas: s.f"]);
   });
 });
+
+describe("distribución del informe (ADR-0059)", () => {
+  const base: VersionFormato = {
+    formato: "papel",
+    version: 1,
+    secciones: [
+      { clave: "a", titulo: "A", campos: [{ clave: "x", etiqueta: "X", tipo: "texto" }] },
+      { clave: "b", titulo: "B", campos: [{ clave: "y", etiqueta: "Y", tipo: "texto" }] },
+      { clave: "t", titulo: "Tableros", repetible: { etiqueta: "Tablero" }, campos: [{ clave: "z", etiqueta: "Z", tipo: "texto" }] },
+    ],
+  };
+  const con = (filas: { secciones: string[] }[]) => validarDefinicionFormato({ ...base, appMinima: 16, informe: { hoja: "oficio", filas } });
+  it("ubica secciones que existen, una vez, de 1 a 4 por fila, y no las repetibles", () => {
+    expect(con([{ secciones: ["a", "b"] }])).toEqual([]);
+    expect(con([{ secciones: ["a", "no"] }])).toContain("El informe ubica una sección que no existe: no");
+    expect(con([{ secciones: ["a"] }, { secciones: ["a"] }])).toContain("El informe ubica dos veces la sección a");
+    expect(con([{ secciones: ["t"] }])).toContain("El informe no ubica la sección repetible t: va en los anexos");
+    expect(con([{ secciones: ["a", "b", "a", "b", "a"] }])).toContain("Cada fila del informe lleva de 1 a 4 secciones");
+  });
+});

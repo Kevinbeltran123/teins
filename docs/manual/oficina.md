@@ -274,6 +274,8 @@ Hay un informe por visita. Se abre con «Abrir el informe» desde el levantamien
 
 A la izquierda está el editor; a la derecha, la **vista en vivo**: la hoja tal como la recibirá el cliente, que cambia mientras usted escribe.
 
+Con los formatos de TEINS, cada levantamiento sale **como su formato en papel**: el servicio de UPS en una hoja oficio, con cargador, inversor, generales y causas en cuatro columnas, y la visita técnica en hoja carta, con sus cajas y las tres firmas. Las fotos y el croquis van después, en «Anexos». El informe no lleva portada; la introducción y las conclusiones salen solo si usted las escribe.
+
 El editor tiene cuatro partes:
 
 1. **Introducción:** qué se visitó y para qué.
