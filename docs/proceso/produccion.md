@@ -127,6 +127,8 @@ Pendiente para cumplir del todo el nivel 2:
 - **Perder la cuenta.** El destino está en otro proyecto de Railway, así que no sobrevive a perder la cuenta. Con una cuenta de otro proveedor compatible con S3 (por ejemplo Cloudflare R2 o Backblaze B2), basta cambiar en el servicio `respaldos` las variables `DESTINO_BUCKET` y `RCLONE_CONFIG_DESTINO_*`.
 - **Que quien tome producción borre las copias.** El servicio `respaldos` tiene credenciales del destino que también borran, y los almacenamientos de Railway no ofrecen versiones, bloqueo de objetos ni credenciales limitadas (documentación de Railway, revisada el 2026-09-29). Al mover el destino a otro proveedor: una llave sin permiso de borrar y retención obligatoria (bloqueo del bucket en R2, Object Lock en B2), y la retención de 35 días como regla del bucket en vez del `rclone delete` de `respaldar.sh`.
 
+**Si el respaldo falla con `SignatureDoesNotMatch`** (2026-11-07, en producción y en pruebas): la clave secreta del destino que tiene el servicio `respaldos` ya no es la vigente del almacenamiento en `teins-respaldos`, y ningún respaldo llega. Se comparan por huella, sin mostrarlas: `railway bucket credentials --bucket respaldos-<entorno> --json` (con `teins-respaldos` enlazado) contra `RCLONE_CONFIG_DESTINO_SECRET_ACCESS_KEY` del servicio. Se copia la vigente por la entrada del comando, como `montar.sh` (`railway variable set ... --stdin --service respaldos --skip-deploys`), y después se redespliega `respaldos` (`railway redeploy --service respaldos`): con `--skip-deploys`, el respaldo sigue corriendo con la clave anterior hasta el próximo despliegue. Por eso se lanza un respaldo a mano antes de cada simulacro.
+
 ### Correr un respaldo ahora
 
 El servicio `respaldos` corre solo a las 07:00 UTC; desplegarlo no lo ejecuta. Para lanzarlo ya (antes de un simulacro o de una migración delicada), con el proyecto enlazado:
@@ -166,16 +168,17 @@ Si algo falla, termina con error. Cada simulacro se anota en la tabla de abajo.
 | 2026-09-25 | Local (Docker) | 0,0 h | 0 s | 435 íntegras, 0 rotas | 144 referenciados, 4 faltantes | Correcto: los 4 faltantes son las fotos que S3Mock perdió el 2026-09-24, antes de guardar en su volumen; tampoco están en el origen. El simulacro los detectó |
 | 2026-09-29 | Pruebas (Railway) | 0,0 h | 1 s | 177 íntegras (302 eslabones), 0 rotas | 27 referenciados, 0 faltantes | Correcto, primera copia cifrada (revisión 4d): la copia vieja pasó a `cifrado/` y en la raíz del destino no quedó nada en claro |
 | 2026-09-29 | Producción (Railway) | 0,1 h | 0 s | 2 íntegras (3 eslabones), 0 rotas | 0 referenciados, 0 faltantes | Correcto, primera copia cifrada de producción, después de actualizarla con las iteraciones 9 a 23 y la revisión de seguridad: los volcados en claro pasaron a `cifrado/` |
+| 2026-11-07 | Producción (Railway) | 0,0 h | 1 s | 2 íntegras (3 eslabones), 0 rotas | 0 referenciados, 0 faltantes | Correcto, con la `v0.9.1`, los dos formatos de TEINS y los 37 símbolos, antes de apagarla otra vez. El primer respaldo del día falló: la clave secreta del destino estaba desactualizada (ver «Copias») |
 
 ## Encender producción para el piloto
 
 El día que empieza el piloto ([`../entrega/piloto.md`](../entrega/piloto.md)), en este orden. Antes, las condiciones de «Antes de empezar» del piloto deben estar cumplidas: sin la autorización de TEINS no se carga información real en este proyecto (ADR-0021). Toma unos 30 minutos.
 
 1. **Versión.** Si todavía no existe la `v0.9.0` (o la que vaya al piloto), Actions → «Publicar versión», con `master`.
-2. **Encender.** Pasos 1 y 2 del inicio de este documento: `railway config apply` y el «Redeploy» de Postgres.
+2. **Encender.** Pasos 1 y 2 del inicio de este documento: `railway config apply` y el «Redeploy» de Postgres. Desde el 2026-11-07, el plan ya no tiene cambios y la base ya está en `us-east4`: queda solo el «Redeploy». La API de Railway todavía muestra el volumen en `us-west2`, aunque Postgres corre en `us-east4` (`RAILWAY_REPLICA_REGION`) con todos sus datos; si al encender el volumen pide migrarse, es esa copia.
 3. **Desplegar.** Actions → «Desplegar», con la etiqueta `v0.9.0` en «Use workflow from», `produccion` y la confirmación. `campo` aplica las migraciones pendientes antes de arrancar.
 4. **Exposición.** `infra/railway/verificar-exposicion.sh`.
-5. **Formatos reales.** Producción no se siembra, y los archivos de `datos-reales/formatos/` no van en la imagen. Se pasan por la entrada del comando, con el proyecto enlazado:
+5. **Formatos reales.** Ya publicados el 2026-11-07 (los dos formatos y los 37 símbolos, con la `v0.9.1`); se repite solo si hay una versión nueva de un formato o de la biblioteca. Producción no se siembra, y los archivos de `datos-reales/formatos/` no van en la imagen. Se pasan por la entrada del comando, con el proyecto enlazado:
 
    ```sh
    for f in servicio-ups visita-tecnica; do
