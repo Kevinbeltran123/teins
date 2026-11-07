@@ -563,15 +563,17 @@ export function crearVisitas(clientes: ClientesYSitios, formatos?: Pick<Formatos
             const [actual] = await tx.select().from(visitas).where(eq(visitas.id, id));
             if (actual) await sinCruces(tx, actor.organizacionId, cuerpo.programadaPara, cuerpo, actual.tecnicos.filter((t) => activos.has(t)), id);
             const { solicitanteId, referencia, formato, ...cambio } = cuerpo;
-            // Otro servicio solo mientras no se haya recibido nada (ADR-0057): lo recibido ya se llenó con el anterior.
             const nuevo = formato !== undefined && formato !== actual?.formato ? await servicio(tx, formato) : undefined;
-            if (nuevo && actual) {
+            await publica.reprogramar(tx, { ...autoria(actor, correlacion), visitaId: id, ...cambio, ...(nuevo ?? {}), ...(solicitanteId !== undefined ? { solicitanteContactoId: solicitanteId } : {}), ...(referencia !== undefined ? { referenciaCliente: referencia } : {}) });
+            // Otro servicio solo mientras no se haya recibido nada (ADR-0057): lo recibido ya se llenó con el anterior. Se
+            // cuenta después de reprogramar, con la visita ya tomada: un envío que llegue en medio espera o se ve aquí, y el
+            // error deshace todo.
+            if (nuevo) {
               const avance = (await conteos(tx, [id])).get(id);
               if (avance && avance.enviados + avance.enRevision + avance.revisados > 0) {
                 throw problema("estado_invalido", "Ya se recibió un levantamiento con el servicio anterior: para otro servicio, programe otra visita");
               }
             }
-            await publica.reprogramar(tx, { ...autoria(actor, correlacion), visitaId: id, ...cambio, ...(nuevo ?? {}), ...(solicitanteId !== undefined ? { solicitanteContactoId: solicitanteId } : {}), ...(referencia !== undefined ? { referenciaCliente: referencia } : {}) });
             return una(actor.organizacionId, tx, id);
           });
         },

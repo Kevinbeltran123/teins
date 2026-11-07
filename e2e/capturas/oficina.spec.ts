@@ -94,6 +94,8 @@ test("oficina y el portal", async ({ page, browser }) => {
   await expect(solicitante.locator("option", { hasText: CLIENTES.hotel.contacto.nombre })).toHaveCount(1);
   await solicitante.selectOption((await solicitante.locator("option", { hasText: CLIENTES.hotel.contacto.nombre }).getAttribute("value"))!);
   await page.getByLabel("Referencia del cliente").fill("SOL-0457");
+  // Con dos formatos no hay servicio puesto: se elige el primero, el de servicio (ADR-0057).
+  await page.getByLabel("Servicio", { exact: true }).selectOption({ index: 1 });
   await page.getByRole("checkbox", { name: new RegExp(`^${PERSONAS.tecnico2.nombre}`) }).check();
   const programar = page.getByRole("button", { name: /^Programar (con |la visita)/ });
   await capturar(page, "oficina-08-programar-visita", { resaltar: programar });
