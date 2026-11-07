@@ -15,7 +15,7 @@ import { avisar } from "../avisos";
 import { registrarCambios } from "../cambios";
 import type { Formatos } from "../formatos";
 import { nombreDe, type Identidad } from "../identidad";
-import type { Visitas } from "../visitas";
+import { visitaDelInforme, type Visitas } from "../visitas";
 import { recibirEnvio, type DependenciasEnvio } from "./aplicacion/recibir-envio";
 import { comentar, corregirCampos, corregirComentario, leerConversacion, marcar, responderComentario, tomar, vincular, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
 import { cantidadesRevisadas, comentariosDe, conteosPorVisita, conversacionesDe, detalle, deVisita, estadosDe, leidoHastaDe, lineasDeVisita, paginaPorEstado, vinculosDe, type ConteoDeVisita, type LineaRevisadaDeVisita } from "./consultas";
@@ -241,9 +241,7 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
             formatoDefinicion: definicion,
             creadoEnDispositivo: fila.creadoEnDispositivo.toISOString(),
             enviadoEnDispositivo: fila.enviadoEnDispositivo.toISOString(),
-            visita: visita
-              ? { id: visita.id, cliente: visita.cliente.nombre, sitio: visita.sitio.nombre, direccion: visita.sitio.direccion, motivo: visita.motivo, programadaPara: visita.programadaPara }
-              : null,
+            visita: visita ? { id: visita.id, ...visitaDelInforme(visita) } : null,
             comentarios: comentarios.map((c) => ({
               id: c.id,
               texto: c.texto,

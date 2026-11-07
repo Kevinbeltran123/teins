@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./formatos-de-prueba/*": "./formatos-de-prueba/*"
+    "./formatos-de-prueba/*": "./formatos-de-prueba/*",
+    "./biblioteca/*": "./biblioteca/*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

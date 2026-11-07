@@ -611,7 +611,7 @@ Llámelo: debe abrir la app con señal para que se envíe. Nunca le pida que bor
 ### A quién pedir ayuda
 
 - **Usuarios, contraseñas, accesos y precios:** la persona que administra TEINS en su empresa.
-- **Errores que no se resuelven recargando la página** (un PDF que no se genera, un historial que dice que fue alterado, una pantalla que no carga): soporte de TEINS, [contacto de soporte]. Diga qué estaba haciendo, el cliente, la visita y la hora aproximada. No envíe datos de clientes por canales no autorizados.
+- **Errores que no se resuelven recargando la página** (un PDF que no se genera, un historial que dice que fue alterado, una pantalla que no carga): soporte de TEINS, kevin.beltran@estudiantesunibague.edu.co. Diga qué estaba haciendo, el cliente, la visita y la hora aproximada. No envíe datos de clientes por canales no autorizados.
 
 ---
 

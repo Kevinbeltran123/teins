@@ -5,6 +5,7 @@ TypeScript puro: reglas del levantamiento, máquina de estados, meta-esquema de 
 - **Dependencias:** ninguna. Ni framework, ni red, ni base de datos.
 - **ADR:** 0001, 0006, 0018, y los de cada área (abajo).
 - **Pruebas:** `pnpm --filter @teins/dominio test`. Cada archivo de `src/` tiene su `.test.ts`; los casos de conformidad del validador están en `conformidad/validacion.json`.
+- **Biblioteca de símbolos de TEINS:** `biblioteca/simbolos-teins.json`, los 37 símbolos del croquis (energía, datos, seguridad y obra) que se publican en producción. Incluye los 21 de prueba con los mismos ids; los demás tienen ids fijos derivados del nombre. Una prueba de `src/simbolos.test.ts` la valida.
 - **Formatos de prueba:** `formatos-de-prueba/` tiene los formatos ficticios que siembra el servidor (`prueba-ups` v1 a v10 y `prueba-visita` v1) y la biblioteca de símbolos de prueba (`simbolos-prueba.json`). La v9 es la v8 con la Llegada `soloEmpresa`; la v10 suma lo de la iteración 47.
 
 ## Qué contiene

@@ -49,7 +49,7 @@ Variables, iguales en los tres servicios (las credenciales son referencias, nunc
 - **`oficina`:** salud en `/salud`.
 - **`worker`:** arranque con `node --enable-source-maps dist/worker.js`.
 - **Los cuatro:** reinicio si fallan (hasta 5 veces).
-- **Suspensión (desde 2026-11-06):** `campo`, `oficina` y `portal` se duermen tras 10 minutos sin tráfico y despiertan con la primera solicitud, que tarda unos segundos más (`sleepApplication` en `.railway/railway.ts`, solo en pruebas). La memoria se cobra por minuto, y dormidas no ocupan: antes, entre las tres, eran unos 400 MB todo el día. El `worker` y `Postgres` no duermen, porque la cola se revisa cada pocos segundos. Producción nunca duerme.
+- **Suspensión (desde 2026-11-06):** `campo`, `oficina` y `portal` se duermen tras 10 minutos sin tráfico y despiertan con la primera solicitud, que tarda unos segundos más (`sleepApplication` en `.railway/railway.ts`; desde el mismo día, también en producción). La memoria se cobra por minuto, y dormidas no ocupan: antes, entre las tres, eran unos 400 MB todo el día. El `worker` y `Postgres` no duermen, porque la cola se revisa cada pocos segundos.
 
 Credenciales de `tecnico.prueba` y `oficina.prueba`: en `privado/entorno-de-pruebas.txt` en el computador de Kevin (la carpeta la ignora git y no se sube). `oficina.prueba` tiene la marca de administrador: la primera vez que abre "Administración" activa su segundo factor con una app autenticadora, y desde entonces el ingreso a oficina le pide el código.
 
@@ -101,6 +101,10 @@ for f in pruebas/*.spec.ts; do npx playwright test "$f" --project chromium --wor
 No corra a la vez la suite local y la del entorno: comparten `e2e/test-results`, donde la preparación escribe `usuarios.json`, y una corrida le cambia los usuarios y le borra los rastros a la otra (pasó el 2026-09-29 con `envio.spec.ts` y `administracion.spec.ts`).
 
 Si más adelante se conecta el repositorio de GitHub (`railway service source connect --repo Kevinbeltran123/teins --branch <rama> --service <servicio>`), cada subida a esa rama despliega sola.
+
+## Organización TEINS en pruebas (2026-11-06)
+
+Para probar como en producción sin romper el extremo a extremo, el entorno tiene una segunda organización, «TEINS» (`00000000-0000-4000-8000-0000000000f1`). Tiene los formatos reales (`servicio-ups` y `visita-tecnica`, de `datos-reales/formatos/`) y la biblioteca de símbolos de TEINS (`paquetes/dominio/biblioteca/simbolos-teins.json`). Sus usuarios son `tecnico.teins` y `oficina.teins` (administra). Las contraseñas están en `privado/entorno-pruebas-teins.txt`. Tiene un cliente ficticio con una visita. Las pruebas usan la organización `…0001`, que conserva un solo formato vigente: con dos, la tarjeta de la visita muestra un botón por formato y el extremo a extremo no encuentra «Iniciar levantamiento». Para volver a publicar un formato o la biblioteca aquí, los mismos comandos de «Encender producción para el piloto» en `produccion.md`, con este identificador de organización.
 
 ## Ensayo de carga (iteración 51)
 

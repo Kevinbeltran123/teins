@@ -6,6 +6,8 @@ Cómo se monta, se respalda y se recupera un entorno de TEINS en Railway (ADR-00
 
 Si producción está encendida o apagada, y por qué, lo dice el "Estado actual" del [plan de entrega](plan-de-entrega.md). Apagarla es quitar el despliegue activo de sus seis servicios con `railway down`; el volumen de Postgres (con sus datos), las variables, los secretos y los dominios se conservan. Mientras está apagada, sus tres direcciones responden 404; apagarla no toca el entorno de pruebas.
 
+Encendida, `campo`, `oficina` y `portal` se duermen tras 10 minutos sin tráfico, como en pruebas (`sleepApplication` en `.railway/railway.ts`, desde el 2026-11-06): el primer ingreso después de un rato tarda unos segundos más. El `worker`, `Postgres` y los `respaldos` no duermen. Si con más uso esa espera molesta, se quita solo en producción en ese archivo.
+
 `railway scale <región>=0` **no** apaga un servicio: quita la región y Railway lo vuelve a poner en `us-west2` con una réplica. Así quedó producción ese día antes de apagarla, base incluida. Para encenderla, con el proyecto enlazado:
 
 1. `railway config plan` y `railway config apply`: devuelve los servicios a `us-east4`, como declara `.railway/railway.ts`.
@@ -182,6 +184,12 @@ El día que empieza el piloto ([`../entrega/piloto.md`](../entrega/piloto.md)), 
    ```
 
    No se corre `fijar-consecutivo-de-ordenes`: la numeración empieza en `0001` (Kevin, 2026-11-06).
+
+   Después, la biblioteca de símbolos del croquis (37, en el repositorio). Va por la entrada del comando para que sirva con cualquier versión de la imagen:
+
+   ```sh
+   railway ssh -s campo -- sh -c 'cat > /tmp/simbolos.json && node dist/cli/publicar-simbolos.js --organizacion 00000000-0000-4000-8000-000000000001 --archivo /tmp/simbolos.json' < paquetes/dominio/biblioteca/simbolos-teins.json
+   ```
 6. **Simulacro.** Sección «Simulacro», con su fila en la tabla.
 7. **Usuarios.** La persona administradora crea en oficina, en «Administración», los usuarios de los participantes, con contraseña temporal.
 8. **Prueba de humo.** Un levantamiento de práctica de punta a punta: la app instalada, sin señal, el envío, la revisión, el informe y el portal. Después se descarta.

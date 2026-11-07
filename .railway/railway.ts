@@ -59,10 +59,12 @@ export default defineRailway((ctx) => {
   // portal atienden solicitudes y no la reciben.
   const propietario = { DATABASE_URL_PROPIETARIO: ref("Postgres", "DATABASE_URL") };
   // Railway prueba la salud en PORT.
-  // En pruebas, las tres superficies se duermen tras 10 minutos sin tráfico y despiertan con la primera solicitud: casi
-  // nadie las usa y la memoria se cobra por minuto. Pueden dormir porque el pool cierra sus conexiones a los 30 s. El
-  // worker y Postgres no duermen: la cola se revisa cada pocos segundos. Producción nunca duerme.
-  const duerme = { sleepApplication: !produccion };
+  // Las tres superficies se duermen tras 10 minutos sin tráfico y despiertan con la primera solicitud (unos segundos):
+  // con pocas personas casi todo el día pasa sin uso y la memoria se cobra por minuto. Pueden dormir porque el pool
+  // cierra sus conexiones a los 30 s, y campo funciona sin conexión: el teléfono guarda y envía cuando el servidor
+  // responde. El worker y Postgres no duermen: la cola se revisa cada pocos segundos. Igual en pruebas y en producción
+  // (Kevin, 2026-11-06); si la espera del primer ingreso molesta con más uso, `sleepApplication: false` en producción.
+  const duerme = { sleepApplication: true };
   const web = { healthcheck: "/salud", healthcheckTimeout: 120, replicas: { [REGION]: 1 }, deploy: { restartPolicyMaxRetries: 5, ...duerme } };
 
   const campo = service("campo", {
