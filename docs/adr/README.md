@@ -57,7 +57,8 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0044](0044-retencion-y-poda.md) | Retención en el teléfono y poda en el servidor (amplía 0003) | Aceptada; ampliada por 0048 |
 | [0045](0045-volver-a-borrador-un-envio-rechazado.md) | Un envío que oficina nunca recibió vuelve a borrador para corregirlo (amplía 0035) | Aceptada |
 | [0048](0048-limpiar-archivos-sin-uso.md) | Los archivos de campo que nadie usa se borran a los 120 días (amplía 0007 y 0044) | Aceptada |
-| [0050](0050-seleccion-horario-tablas-y-sello-en-los-formatos.md) | Selección, horario, tablas de medidas y sello en los formatos (amplía 0006) | Aceptada |
+| [0050](0050-seleccion-horario-tablas-y-sello-en-los-formatos.md) | Selección, horario, tablas de medidas y sello en los formatos (amplía 0006) | Aceptada; ampliada por 0058 |
+| [0058](0058-campos-condicionales.md) | Campos condicionales: un campo o una sección aparece según una selección anterior (amplía 0050) | Aceptada |
 | [0051](0051-encabezado-y-firmas-del-informe.md) | El encabezado y las firmas del informe salen de la visita y de las cuentas | Aceptada |
 | [0052](0052-hora-ubicacion-y-mapa-en-la-foto-de-llegada.md) | Hora, ubicación y mapa en la foto de llegada (reemplaza en parte 0009) | Aceptada |
 | [0054](0054-un-levantamiento-por-tecnico-y-visita.md) | Un levantamiento por técnico y visita: el teléfono no ofrece otro y el servidor lo rechaza | Aceptada |
