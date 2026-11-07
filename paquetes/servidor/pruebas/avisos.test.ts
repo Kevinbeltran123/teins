@@ -52,7 +52,7 @@ async function clienteConSitio(cookie: string) {
 
 async function programar(org: Awaited<ReturnType<typeof s.nuevaOrganizacionConUsuarios>>, tecnicos = [org.tecnico.id], programadaPara = "2026-10-03") {
   const cliente = await clienteConSitio(org.oficina.cookie);
-  const r = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento UPS", programadaPara, tecnicos });
+  const r = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "prueba-ups", programadaPara, tecnicos });
   expect(r.statusCode, r.body).toBe(201);
   return r.json() as { id: string; version: number };
 }

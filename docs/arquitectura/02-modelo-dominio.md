@@ -13,7 +13,7 @@ Los diagramas de estados vigentes (levantamiento, visita, envíos al cliente y v
 | **Organización** | Empresa que usa el sistema. Hoy solo TEINS | No es el cliente de TEINS |
 | **Cliente** | Empresa o persona a la que TEINS presta servicio | No es un usuario interno |
 | **Sitio** | Lugar físico de un cliente donde se interviene | No es la dirección de facturación |
-| **Visita** | Desplazamiento a un sitio con un motivo (cotización, mantenimiento, modificación) | No es el documento que se llena |
+| **Visita** | Desplazamiento a un sitio para prestar un **servicio**: el formato que se llena (servicio de UPS, visita técnica). Oficina lo elige al programar ([ADR-0057](../adr/0057-la-visita-lleva-su-servicio.md)) | No es el documento que se llena |
 | **Levantamiento** | Información capturada por **un** técnico con **un** formato durante una visita | No es el informe |
 | **Formato** | Plantilla de un tipo de servicio | No es un levantamiento lleno |
 | **Versión de formato** | Definición congelada de un formato | Nunca cambia después de publicarse |
@@ -89,7 +89,7 @@ erDiagram
   INFORME ||--o{ VERSION_PUBLICADA : "publica"
 ```
 
-**Decisión clave:** una visita contiene varios levantamientos, y cada levantamiento tiene exactamente un técnico responsable y un formato. Resuelve varios técnicos por visita (P4) sin edición simultánea, visitas con varios servicios e informes consolidados. Cada técnico envía uno solo por visita ([ADR-0054](../adr/0054-un-levantamiento-por-tecnico-y-visita.md)).
+**Decisión clave:** una visita contiene varios levantamientos, y cada levantamiento tiene exactamente un técnico responsable y un formato. Resuelve varios técnicos por visita (P4) sin edición simultánea e informes consolidados. Una visita presta un solo servicio: otro servicio es otra visita ([ADR-0057](../adr/0057-la-visita-lleva-su-servicio.md)). Cada técnico envía uno solo por visita ([ADR-0054](../adr/0054-un-levantamiento-por-tecnico-y-visita.md)).
 
 ---
 
@@ -100,7 +100,7 @@ erDiagram
 | **Levantamiento** | Secciones, respuestas, líneas de cantidad, referencias a evidencias | Técnico en borrador; oficina después | Sube al enviar; su estado baja |
 | **Archivo** | Binario inmutable con huella digital | Quien lo crea | Sube |
 | **Comentario** | Texto, autor, fecha, referencia al campo y, si es respuesta, a qué comentario responde y de qué lado (ADR-0040) | Lo abre oficina; el técnico responde | Baja con sus respuestas; las del técnico suben |
-| **Visita** | Cliente, sitio, motivo, canal de origen, técnicos asignados, fecha y horario (ADR-0037); se cierra al día siguiente de atendida (ADR-0041) | Oficina, supervisor | Baja; atendida, sale del teléfono |
+| **Visita** | Cliente, sitio, servicio (formato, ADR-0057), canal de origen, técnicos asignados, fecha y horario (ADR-0037); se cierra al día siguiente de atendida (ADR-0041) | Oficina, supervisor | Baja; atendida, sale del teléfono |
 | **Formato** | Nombre, tipo de servicio, versión vigente | Administrador | No |
 | **Versión de formato** | Definición completa (ADR-0006) | Nadie tras publicarse | Baja |
 | **Ítem de catálogo** | Código, descripción, unidad por defecto, activo | Oficina, administrador | Baja |

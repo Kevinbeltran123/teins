@@ -91,7 +91,7 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 | `desactivar-usuario` | Revoca: cierra sus sesiones, no vuelve a entrar y sus teléfonos borran sus datos al conectarse; lo que tenía en revisión queda sin tomar |
 | `marcar-administrador` | Marca (o con `--quitar`, desmarca) a una persona de oficina como administradora; para administrar debe activar además el segundo factor en oficina |
 | `crear-cliente` | Cliente con su primer sitio |
-| `crear-visita`, `reasignar-visita` | Programa una visita para uno o varios técnicos (no valida cruces de horario); al reasignar, sale del teléfono de quien deja de tenerla. Al programar se le asigna el siguiente número de orden de servicio |
+| `crear-visita`, `reasignar-visita` | Programa una visita para uno o varios técnicos, con su servicio (`--formato <clave>`, ADR-0057; o `--motivo` libre, sin servicio) (no valida cruces de horario); al reasignar, sale del teléfono de quien deja de tenerla. Al programar se le asigna el siguiente número de orden de servicio |
 | `fijar-consecutivo-de-ordenes` | `--organizacion <uuid> --ultimo <n>`: la siguiente visita sigue desde el número de TEINS (ADR-0051). Nunca baja ni repite un número |
 | `publicar-formato` | Publica una versión de formato desde un JSON; llega a los teléfonos en la siguiente bajada |
 | `publicar-simbolos` | Publica la biblioteca de símbolos desde un JSON (ADR-0027): crea o cambia cada símbolo y retira los que ya no están. La de prueba es `@teins/dominio/formatos-de-prueba/simbolos-prueba.json`, que `sembrar` publica; la de TEINS, `@teins/dominio/biblioteca/simbolos-teins.json` |

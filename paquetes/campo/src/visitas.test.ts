@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VisitaLocal } from "./datos/modelo";
-import { accionDeVisita, agendaDeVisitas, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horarioDeVisita, sePuedeIniciar, terminadaEn } from "./visitas";
+import { accionDeVisita, agendaDeVisitas, formatosParaIniciar, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horarioDeVisita, sePuedeIniciar, terminadaEn } from "./visitas";
 
 const hoy = "2026-09-24";
 const visita = (id: string, programadaPara: string, cliente = `Cliente ${id}`, horario: Partial<VisitaLocal> = {}): VisitaLocal => ({
@@ -162,5 +162,18 @@ describe("accionDeVisita (ADR-0054)", () => {
   });
   it("un borrador de antes de la regla se sigue pudiendo continuar y enviar", () => {
     expect(accionDeVisita([l("e", "enviado"), l("b", "borrador")])).toEqual({ tipo: "continuar", id: "b" });
+  });
+});
+
+describe("formatosParaIniciar (ADR-0057)", () => {
+  const ups = { formato: "servicio-ups" };
+  const tecnica = { formato: "visita-tecnica" };
+  it("una visita con servicio ofrece solo ese formato; si falta en el teléfono, ninguno", () => {
+    expect(formatosParaIniciar({ formato: "visita-tecnica" }, [ups, tecnica])).toEqual([tecnica]);
+    expect(formatosParaIniciar({ formato: "visita-tecnica" }, [ups])).toEqual([]);
+  });
+  it("una visita sin servicio (anterior o de una app anterior) ofrece todos, como antes", () => {
+    expect(formatosParaIniciar({ formato: null }, [ups, tecnica])).toEqual([ups, tecnica]);
+    expect(formatosParaIniciar({}, [ups, tecnica])).toEqual([ups, tecnica]);
   });
 });

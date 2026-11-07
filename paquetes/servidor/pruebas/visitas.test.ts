@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { llaveDeEnvio } from "@teins/protocolo";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { verificarCadena } from "../src/modulos/auditoria";
-import { cabecerasSync, iniciarSesion, ORIGEN, servidorDePrueba } from "./ayudas";
+import { crearFormatos } from "../src/modulos/formatos";
+import { cabecerasSync, formatoDePrueba, iniciarSesion, ORIGEN, servidorDePrueba } from "./ayudas";
 
 const s = await servidorDePrueba();
 const { app } = s;
@@ -22,7 +23,7 @@ async function clienteConSitio(nombre = `Cliente ${randomUUID().slice(0, 6)}`) {
 }
 
 async function programar(cliente: { id: string; sitios: { id: string }[] }, tecnicos = [org.tecnico.id], programadaPara = "2026-10-01") {
-  const r = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara, tecnicos });
+  const r = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "prueba-ups", programadaPara, tecnicos });
   expect(r.statusCode, r.body).toBe(201);
   return r.json();
 }
@@ -125,7 +126,7 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
       await archivando.query("select id from clientes.clientes where id = $1 for update", [cliente.id]);
       await archivando.query("update clientes.clientes set archivado_en = now(), archivado_por = $2 where id = $1", [cliente.id, org.oficina.id]);
       const { rows } = await archivando.query("select pg_backend_pid() as pid");
-      const programada = pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: "2027-06-01", tecnicos: [org.tecnico.id] });
+      const programada = pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "prueba-ups", programadaPara: "2027-06-01", tecnicos: [org.tecnico.id] });
       // Se confirma el archivo cuando la programación quedó esperándolo (o ya terminó sin esperarlo, que es el fallo).
       await Promise.race([programada, esperarBloqueadoPor(rows[0].pid)]);
       await archivando.query("commit");
@@ -152,7 +153,7 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
     expect(await vista("activos")).not.toContain(cliente.id);
     expect(await vista("archivados")).toContain(cliente.id);
     // Ya no se le programa, ni se le agregan sitios, ni se corrige hasta recuperarlo.
-    const programada = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: "2027-02-01", tecnicos: [org.tecnico.id] });
+    const programada = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "prueba-ups", programadaPara: "2027-02-01", tecnicos: [org.tecnico.id] });
     expect(programada.json()).toMatchObject({ codigo: "estado_invalido" });
     expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios`, { nombre: "Bodega", direccion: "Carrera [N]" })).json()).toMatchObject({ codigo: "estado_invalido" });
 
@@ -260,7 +261,7 @@ describe("corregir clientes y sitios (ADR-0035)", () => {
     // En la lista (y en "Programar visita") solo quedan los activos.
     const enLista = ((await pedir(org.oficina.cookie, "GET", "/api/clientes")).json().clientes as { id: string; sitios: { id: string }[] }[]).find((c) => c.id === cliente.id)!;
     expect(enLista.sitios.map((x) => x.id)).toEqual([bodega]);
-    const programada = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: principal, motivo: "Mantenimiento", programadaPara: "2027-02-01", tecnicos: [org.tecnico.id] });
+    const programada = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: principal, formato: "prueba-ups", programadaPara: "2027-02-01", tecnicos: [org.tecnico.id] });
     expect(programada.json()).toMatchObject({ codigo: "estado_invalido" });
     expect((await pedir(org.oficina.cookie, "POST", `/api/clientes/${cliente.id}/sitios/${principal}/recuperar`)).json().sitios.find((x: { id: string }) => x.id === principal)).toMatchObject({ archivado: null });
   });
@@ -274,6 +275,50 @@ describe("pool de conexiones", () => {
   }, 30_000);
 });
 
+// Un segundo formato, con nombre visible, para elegir entre dos servicios (ADR-0057). Ficticio (R5).
+await enOrganizacion(s.conexionApp.bd, org.organizacionId, (tx) => crearFormatos().publicar(tx, org.organizacionId, { ...formatoDePrueba(1), formato: "visita-de-prueba", nombre: "Visita de prueba", version: 1 }));
+
+describe("el servicio de la visita (ADR-0057)", () => {
+
+  it("oficina ve los servicios de su organización, con el nombre visible y, si no tiene, la clave", async () => {
+    const { servicios } = (await pedir(org.oficina.cookie, "GET", "/api/visitas/servicios")).json();
+    expect(servicios).toEqual(expect.arrayContaining([{ clave: "visita-de-prueba", nombre: "Visita de prueba" }, { clave: "prueba-ups", nombre: expect.any(String) }]));
+    expect((await pedir(org.tecnico.cookie, "GET", "/api/visitas/servicios")).statusCode).toBe(403);
+  });
+
+  it("programar guarda el servicio, copia su nombre como motivo y lo baja al teléfono; uno que no existe se rechaza", async () => {
+    const cliente = await clienteConSitio();
+    const r = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "visita-de-prueba", programadaPara: "2026-12-01", tecnicos: [org.tecnico.id] });
+    expect(r.json()).toMatchObject({ formato: "visita-de-prueba", motivo: "Visita de prueba" });
+    expect((await bajar(org.tecnico.cookie)).json().cambios).toContainEqual({ tipo: "visita", visita: expect.objectContaining({ id: r.json().id, formato: "visita-de-prueba", motivo: "Visita de prueba" }) });
+
+    const mala = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "no-existe", programadaPara: "2026-12-02", tecnicos: [org.tecnico.id] });
+    expect(mala.json().codigo).toBe("entrada_invalida");
+  });
+
+  it("el servicio se cambia al reprogramar, salvo que ya se haya recibido un levantamiento", async () => {
+    const cliente = await clienteConSitio();
+    const visita = await programar(cliente, [org.tecnico.id], "2026-12-03");
+    const cambiada = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 1, programadaPara: "2026-12-03", formato: "visita-de-prueba" });
+    expect(cambiada.json()).toMatchObject({ version: 2, formato: "visita-de-prueba", motivo: "Visita de prueba" });
+
+    // Con un levantamiento recibido, el servicio queda: lo recibido se llenó con el anterior. El servidor no rechaza un
+    // levantamiento de otro formato que el de la visita (un borrador de antes del cambio, una app anterior): oficina lo ve.
+    const id = randomUUID();
+    const envio = await app.inject({
+      method: "POST",
+      url: "/api/sync/comandos",
+      headers: { cookie: org.tecnico.cookie, ...cabecerasSync },
+      payload: { tipo: "EnviarLevantamiento", llave: llaveDeEnvio(id), levantamiento: { id, visitaId: visita.id, formato: "prueba-ups", versionFormato: 1, respuestas: {}, creadoEn: new Date().toISOString(), enviadoEn: new Date().toISOString() } },
+    });
+    expect(envio.statusCode, envio.body).toBe(200);
+    const bloqueada = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 2, programadaPara: "2026-12-03", formato: "prueba-ups" });
+    expect(bloqueada.json().codigo).toBe("estado_invalido");
+    // Sin tocar el servicio, sí se reprograma.
+    expect((await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 2, programadaPara: "2026-12-04" })).statusCode).toBe(200);
+  });
+});
+
 describe("visitas (iteración 7)", () => {
   it("programar llega al teléfono; reprogramar le cambia la fecha; cancelar la saca con su motivo", async () => {
     const cliente = await clienteConSitio();
@@ -283,17 +328,17 @@ describe("visitas (iteración 7)", () => {
     const inicial = (await bajar(org.tecnico.cookie)).json();
     expect(inicial.cambios).toContainEqual({ tipo: "visita", visita: expect.objectContaining({ id: visita.id, programadaPara: "2026-10-01" }) });
 
-    const reprogramada = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 1, programadaPara: "2026-10-03", motivo: "Cotización" });
-    expect(reprogramada.json()).toMatchObject({ version: 2, programadaPara: "2026-10-03", motivo: "Cotización" });
+    const reprogramada = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 1, programadaPara: "2026-10-03" });
+    expect(reprogramada.json()).toMatchObject({ version: 2, programadaPara: "2026-10-03", formato: "prueba-ups" });
     const tras = (await bajar(org.tecnico.cookie, inicial.puntoDeControl)).json();
-    expect(tras.cambios).toEqual([{ tipo: "visita", visita: expect.objectContaining({ id: visita.id, programadaPara: "2026-10-03", motivo: "Cotización" }) }]);
+    expect(tras.cambios).toEqual([{ tipo: "visita", visita: expect.objectContaining({ id: visita.id, programadaPara: "2026-10-03", formato: "prueba-ups" }) }]);
 
     const cancelada = await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/cancelar`, { version: 2, motivo: "El cliente la aplazó" });
     expect(cancelada.json().cancelada).toMatchObject({ por: { id: org.oficina.id }, motivo: "El cliente la aplazó" });
     expect((await bajar(org.tecnico.cookie, tras.puntoDeControl)).json().cambios).toEqual([{ tipo: "fuera_de_alcance", entidad: "visita", id: visita.id, motivo: "cancelada" }]);
 
     // Una cancelada no se cambia más; aparece solo en su vista.
-    expect((await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 3, programadaPara: "2026-10-04", motivo: "X" })).json().codigo).toBe("estado_invalido");
+    expect((await pedir(org.oficina.cookie, "POST", `/api/visitas/${visita.id}/reprogramar`, { version: 3, programadaPara: "2026-10-04" })).json().codigo).toBe("estado_invalido");
     const ids = async (vista: string) => (await pedir(org.oficina.cookie, "GET", `/api/visitas?vista=${vista}&hoy=${HOY}`)).json().visitas.map((v: { id: string }) => v.id);
     expect(await ids("canceladas")).toContain(visita.id);
     expect(await ids("proximas")).not.toContain(visita.id);
@@ -337,7 +382,7 @@ describe("visitas (iteración 7)", () => {
 
   it("solo se asignan técnicos activos de la organización; la fecha y el sitio se validan", async () => {
     const cliente = await clienteConSitio();
-    const base = { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: "2026-10-01" };
+    const base = { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "prueba-ups", programadaPara: "2026-10-01" };
     const otra = await s.nuevaOrganizacionConUsuarios();
     for (const tecnicos of [[otra.tecnico.id], [org.oficina.id]]) {
       expect((await pedir(org.oficina.cookie, "POST", "/api/visitas", { ...base, tecnicos })).json().codigo).toBe("entrada_invalida");
@@ -363,7 +408,7 @@ describe("visitas (iteración 7)", () => {
     expect(r.statusCode).toBe(400);
     expect(r.json()).toMatchObject({ codigo: "entrada_invalida", detail: "Técnico Retirado no es un técnico activo de la organización: quítelo de la visita" });
     const otro = await s.nuevaOrganizacionConUsuarios();
-    const nueva = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: "2027-05-04", tecnicos: [id, otro.tecnico.id] });
+    const nueva = await pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "prueba-ups", programadaPara: "2027-05-04", tecnicos: [id, otro.tecnico.id] });
     // El de otra organización no se nombra: ni siquiera se sabe que existe.
     expect(nueva.json().detail).toBe("Técnico Retirado y [Usuario no disponible] no son técnicos activos de la organización: quítelos de la visita");
   });
@@ -377,7 +422,7 @@ describe("visitas con horario (ADR-0037)", () => {
   };
   const conHorario = async (tecnicos: string[], horaInicio: string | null, horaFin: string | null, programadaPara = "2026-11-02") => {
     const cliente = await clienteConSitio();
-    return pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara, horaInicio, horaFin, tecnicos });
+    return pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "prueba-ups", programadaPara, horaInicio, horaFin, tecnicos });
   };
 
   it("de una hora a otra: se cruza con lo que la toca, no con lo que empieza cuando termina", async () => {
@@ -463,7 +508,7 @@ describe("visitas con horario (ADR-0037)", () => {
       await reprogramando.query("begin");
       await reprogramando.query("select pg_advisory_xact_lock(hashtext($1))", [`visitas:${org.organizacionId}:${fecha}`]);
       const { rows } = await reprogramando.query("select pg_backend_pid() as pid");
-      const programada = pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: fecha, tecnicos: [org.tecnico.id] });
+      const programada = pedir(org.oficina.cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "prueba-ups", programadaPara: fecha, tecnicos: [org.tecnico.id] });
       expect(await esperarBloqueadoPor(rows[0].pid)).toBe(true);
       // Mientras programar espera el día, no tiene tomado el registro de cambios: reprogramar lo toma y termina.
       const { rows: libre } = await reprogramando.query("select pg_try_advisory_xact_lock(hashtextextended($1, 0)) as libre", [`cambios:${org.organizacionId}`]);

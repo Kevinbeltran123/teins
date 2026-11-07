@@ -27,7 +27,6 @@ import {
   EsqueletoTexto,
   EstadoVacio,
   FilaTabla,
-  GrupoDeOpciones,
   MenuAcciones,
   Pencil,
   Pestanas,
@@ -57,14 +56,32 @@ import { formatearDia, numeroDeOrden } from "@teins/dominio";
 type Visita = Respuesta<"listarVisitas">["visitas"][number];
 type Tecnico = Respuesta<"listarTecnicos">["tecnicos"][number];
 
-/** Motivos del lenguaje común (modelo de dominio): cotización, mantenimiento, modificación. */
-const MOTIVOS = [
-  { valor: "Mantenimiento", texto: "Mantenimiento" },
-  { valor: "Cotización", texto: "Cotización" },
-  { valor: "Modificación", texto: "Modificación" },
-] as const;
-type Motivo = (typeof MOTIVOS)[number]["valor"];
-const motivoConocido = (m: string): Motivo => MOTIVOS.find((x) => x.valor === m)?.valor ?? "Mantenimiento";
+/**
+ * El servicio de la visita (ADR-0057): uno de los formatos de la organización, el que el técnico llenará. La lista sale de
+ * los formatos publicados, no del código: uno nuevo aparece solo.
+ */
+function CampoServicio({ valor, onCambio, error, vacio = "Elija el servicio", deshabilitado, unoQuedaPuesto }: { valor: string; onCambio: (clave: string) => void; error?: string | undefined; vacio?: string; deshabilitado?: boolean; unoQuedaPuesto?: boolean }) {
+  const servicios = useQuery(consultasDeProgramacion.servicios());
+  const lista = servicios.data?.servicios ?? [];
+  // Al programar, con un solo servicio no hay qué elegir: queda puesto. Al reprogramar no: cambiaría el de una visita anterior.
+  useEffect(() => {
+    if (unoQuedaPuesto && valor === "" && lista.length === 1) onCambio(lista[0]!.clave);
+  }, [unoQuedaPuesto, valor, lista, onCambio]);
+  if (servicios.isSuccess && lista.length === 0) {
+    return <Aviso tono="alerta">La organización no tiene formatos publicados: sin uno no hay servicio que programar. Se publican con el comando «publicar-formato».</Aviso>;
+  }
+  return (
+    <CampoSeleccion
+      etiqueta="Servicio"
+      vacio={servicios.isPending ? "Cargando los servicios" : servicios.isError ? "No se pudieron cargar los servicios" : vacio}
+      valor={valor}
+      error={error}
+      onCambio={onCambio}
+      deshabilitado={deshabilitado || !servicios.isSuccess}
+      opciones={lista.map((x) => ({ valor: x.clave, texto: x.nombre }))}
+    />
+  );
+}
 
 /** "sáb, 26 sept"; con el año solo si no es el actual: en una agenda, el año casi nunca decide nada. */
 const dia = (aaaaMmDd: string) =>
@@ -232,7 +249,7 @@ export function Visitas() {
               { titulo: "Hora" },
               { titulo: "Cliente y sitio" },
               { titulo: "Técnicos" },
-              { titulo: "Motivo" },
+              { titulo: "Servicio" },
               { titulo: vista === "canceladas" ? "Cancelación" : "Levantamientos" },
               { titulo: "Acciones", oculto: true, derecha: true },
             ]}
@@ -413,18 +430,18 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
   const tecnicos = useQuery(consultasDeProgramacion.tecnicos());
   const [clienteId, setClienteId] = useState("");
   const [sitioId, setSitioId] = useState("");
-  const [motivo, setMotivo] = useState<Motivo>("Mantenimiento");
+  const [formato, setFormato] = useState("");
   const [fecha, setFecha] = useState(hoy);
   // Por omisión, de 9 a 11: lo más común; "Todo el día" y "No sé cuánto dura" están a un toque.
   const [horario, setHorario] = useState<Horario>({ horaInicio: "09:00", horaFin: "11:00" });
   const [elegidos, setElegidos] = useState<string[]>([]);
   const [solicitanteId, setSolicitanteId] = useState("");
   const [referencia, setReferencia] = useState("");
-  const [errores, setErrores] = useState<{ cliente?: string; sitio?: string; tecnicos?: string }>({});
+  const [errores, setErrores] = useState<{ cliente?: string; sitio?: string; servicio?: string; tecnicos?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const programar = useAccionDeProgramacion(() =>
     cliente.llamar("programarVisita", {
-      cuerpo: { clienteId, sitioId, motivo, programadaPara: fecha, ...horario, ...(solicitanteId ? { solicitanteId } : {}), ...(referencia.trim() ? { referencia: referencia.trim() } : {}), tecnicos: elegidos },
+      cuerpo: { clienteId, sitioId, formato, programadaPara: fecha, ...horario, ...(solicitanteId ? { solicitanteId } : {}), ...(referencia.trim() ? { referencia: referencia.trim() } : {}), tecnicos: elegidos },
     }),
   );
 
@@ -443,6 +460,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
     const faltan = {
       ...(!clienteId ? { cliente: "Elija el cliente." } : {}),
       ...(clienteId && !sitioId ? { sitio: "Elija el sitio." } : {}),
+      ...(!formato ? { servicio: "Elija el servicio: es el formato que el técnico llenará." } : {}),
       ...(elegidos.length === 0 ? { tecnicos: "Elija al menos un técnico libre." } : {}),
     };
     setErrores(faltan);
@@ -515,9 +533,7 @@ function ProgramarVisita({ hoy, alCerrar, alProgramar }: { hoy: string; alCerrar
             // Sin enlace: salir del diálogo perdería lo escrito. Se programa igual y se completa después en Clientes.
             <Aviso tono="info">{`El informe saldrá sin ${enLista(falta)}. Se puede programar igual; complételo en Clientes antes de publicar el informe.`}</Aviso>
           )}
-          <div className="opciones-pastilla">
-            <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
-          </div>
+          <CampoServicio unoQuedaPuesto valor={formato} error={errores.servicio} onCambio={(clave) => (setFormato(clave), setErrores((e) => sinError(e, "servicio")))} />
           <CuandoVisita fecha={fecha} horario={horario} hoy={hoy} alCambiar={(f, h) => (setFecha(f), setHorario(h))} />
           {nombres.length > 0 && (
             <p className="nota-capa">
@@ -653,7 +669,9 @@ function Reprogramar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: ()
   const hoy = hoyLocal();
   const [fecha, setFecha] = useState(v.programadaPara < hoy ? hoy : v.programadaPara);
   const [horario, setHorario] = useState<Horario>({ horaInicio: v.horaInicio, horaFin: v.horaFin });
-  const [motivo, setMotivo] = useState<Motivo>(motivoConocido(v.motivo));
+  const [formato, setFormato] = useState(v.formato ?? "");
+  // Lo recibido ya se llenó con el servicio de la visita: después no se cambia (ADR-0057).
+  const recibido = v.levantamientos.enviados + v.levantamientos.enRevision + v.levantamientos.revisados > 0;
   const [solicitanteId, setSolicitanteId] = useState(v.solicitante?.id ?? "");
   const [referencia, setReferencia] = useState(v.referencia ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -661,7 +679,7 @@ function Reprogramar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: ()
   const accion = useAccionDeProgramacion(() =>
     cliente.llamar("reprogramarVisita", {
       parametros: { id: v.id },
-      cuerpo: { version: v.version, programadaPara: fecha, ...horario, motivo, solicitanteId: solicitanteId === "" ? null : solicitanteId, referencia: referencia.trim() === "" ? null : referencia.trim() },
+      cuerpo: { version: v.version, programadaPara: fecha, ...horario, ...(formato && formato !== v.formato ? { formato } : {}), solicitanteId: solicitanteId === "" ? null : solicitanteId, referencia: referencia.trim() === "" ? null : referencia.trim() },
     }),
   );
 
@@ -698,9 +716,9 @@ function Reprogramar({ v, releer, alCerrar, alGuardar }: { v: Visita; releer: ()
       <form id={formulario} onSubmit={enviar} noValidate className="flex flex-col gap-5">
         <CuandoVisita fecha={fecha} horario={horario} hoy={hoy} alCambiar={(f, h) => (setFecha(f), setHorario(h))} />
         {v.tecnicos.length > 0 && <p className="nota-capa">{`${v.tecnicos.map((t) => t.nombre).join(" y ")} ${v.tecnicos.length > 1 ? "reciben" : "recibe"} el cambio en su teléfono. Si a esa hora tienen otra visita, no se guarda.`}</p>}
-        <div className="opciones-pastilla">
-          <GrupoDeOpciones etiqueta="Motivo" valor={motivo} onCambio={setMotivo} opciones={MOTIVOS} />
-        </div>
+        {/* Una visita de antes del servicio guarda su motivo: se ve como la opción vacía y se conserva si no se elige otro. */}
+        <CampoServicio valor={formato} onCambio={setFormato} vacio={v.formato ? "Elija el servicio" : `${v.motivo} (sin cambiar)`} deshabilitado={recibido} />
+        {recibido && <p className="nota-capa">Ya se recibió un levantamiento: el servicio queda. Para otro servicio, programe otra visita.</p>}
         <DatosDelPedido clienteId={v.cliente.id} solicitanteId={solicitanteId} referencia={referencia} alCambiar={(c) => (c.solicitanteId !== undefined && setSolicitanteId(c.solicitanteId), c.referencia !== undefined && setReferencia(c.referencia))} />
         {error && <Aviso tono="error">{error}</Aviso>}
       </form>

@@ -157,8 +157,8 @@ La sección **Visitas** tiene tres pestañas: «Próximas», «Anteriores» y «
    - «Todo el día»: ocupa al técnico ese día entero.
    - Una hora de inicio con su **Duración** (de 30 minutos a 8 horas).
    - Una hora de inicio con «No sé cuánto dura»: el técnico queda ocupado hasta que la termine desde su teléfono.
-4. Elija el **Motivo**: «Mantenimiento», «Cotización» o «Modificación».
-5. En **Técnicos**, marque uno o varios. TEINS separa «Libres a esa hora» de «Ocupados», con el motivo de cada ocupado. Con «Buscar técnico» encuentra a alguien por su nombre.
+4. Elija el **Servicio**: el formato que el técnico llenará, por ejemplo «Servicio de UPS» o «Visita técnica». En su teléfono solo podrá empezar ese. Si la organización tiene un solo servicio, ya aparece elegido.
+5. En **Técnicos**, marque uno o varios. TEINS separa «Libres a esa hora» de «Ocupados», con el servicio de cada ocupado. Con «Buscar técnico» encuentra a alguien por su nombre.
 6. Si aplica, elija el **Solicitante** (el contacto del cliente que pidió la visita) y escriba la **Referencia del cliente** (por ejemplo, el número de su ticket).
 7. Toque el botón de abajo: con un técnico dice «Programar con [Nombre]»; con varios, «Programar la visita».
 
@@ -170,7 +170,7 @@ El **número de orden** lo asigna TEINS solo, en orden. Sale en la fila de la vi
 
 En la fila de la visita, abra «Más acciones»:
 
-- «Reprogramar»: cambia fecha, hora, motivo, solicitante o referencia. Toque «Reprogramar la visita». Si el técnico ya empezó el levantamiento, lo puede seguir.
+- «Reprogramar»: cambia fecha, hora, servicio, solicitante o referencia. El servicio no se puede cambiar si ya llegó un levantamiento: para otro servicio, programe otra visita. Toque «Reprogramar la visita». Si el técnico ya empezó el levantamiento, lo puede seguir.
 - «Reasignar técnicos»: agrega o quita técnicos. Si un técnico fue desactivado, la fila dice «Sin técnico» o «Se desactivó a [Nombre]», y aquí se elige otro.
 - «Exportar cantidades»: descarga los materiales de la visita para Excel, con «Descargar el detalle (CSV)» y «Descargar el resumen (CSV)». Si hay levantamientos sin revisar, TEINS avisa que sus cantidades todavía pueden cambiar.
 - «Cancelar visita»: escriba el motivo y confirme con «Cancelar visita». **No se puede deshacer**; si hace falta, programe otra. La visita pasa a «Canceladas» con quién la canceló, cuándo y por qué. Lo que el técnico ya empezó se conserva y lo puede enviar.

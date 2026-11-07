@@ -17,6 +17,8 @@ export const consultasDeProgramacion = {
   // Un minuto, como el catálogo: un técnico que otra persona desactiva deja de ofrecerse pronto. Lo que se cambia aquí
   // en Administración la vuelve a leer al instante.
   tecnicos: () => queryOptions({ queryKey: ["programacion", "tecnicos"], queryFn: () => cliente.llamar("listarTecnicos"), staleTime: 60_000 }),
+  /** Los servicios que se pueden programar (ADR-0057): los formatos de la organización. Cambian solo al publicar uno. */
+  servicios: () => queryOptions({ queryKey: ["programacion", "servicios"], queryFn: () => cliente.llamar("serviciosParaProgramar"), staleTime: 5 * 60_000 }),
   /** Lo que ocupa a cada técnico ese día (ADR-0037): para programar solo con los libres. */
   ocupacion: (fecha: string) => queryOptions({ queryKey: ["programacion", "ocupacion", fecha], queryFn: () => cliente.llamar("ocupacionDeTecnicos", { consulta: { fecha } }), staleTime: 15_000 }),
   visitas: (vista: Vista, hoy: string) =>

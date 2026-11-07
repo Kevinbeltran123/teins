@@ -337,8 +337,9 @@ test("el teléfono del técnico", async ({ page, context, browser }) => {
   await aLaVista(siguiente.getByText(CLIENTES.clinica.nombre));
   await page.evaluate(() => navigator.serviceWorker.ready);
   await capturar(page, "tecnicos-04-inicio");
-  const botonA = siguiente.getByRole("button", { name: A.nombre, exact: true });
-  await capturar(page, "tecnicos-05-tarjeta-de-visita", { elemento: siguiente, resaltar: [botonA, siguiente.getByRole("button", { name: B.nombre, exact: true })] });
+  // La visita llega con su servicio (ADR-0057): un solo botón, con el nombre del servicio en la tarjeta.
+  const botonA = siguiente.getByRole("button", { name: "Iniciar levantamiento" });
+  await capturar(page, "tecnicos-05-tarjeta-de-visita", { elemento: siguiente, resaltar: botonA });
   const despues = page.getByRole("region", { name: "Después" });
   const manana = despues.getByRole("article").filter({ hasText: CLIENTES.colegio.nombre });
   await manana.getByRole("button", { name: new RegExp(CLIENTES.colegio.nombre) }).click();
@@ -393,7 +394,7 @@ test("el teléfono del técnico", async ({ page, context, browser }) => {
   // 7. Descartar y recuperar: la segunda visita, con el formato general.
   const bodegas = page.getByRole("region", { name: "Siguiente visita" }).filter({ hasText: CLIENTES.bodegas.nombre });
   await aLaVista(bodegas);
-  await bodegas.getByRole("button", { name: B.nombre, exact: true }).click();
+  await bodegas.getByRole("button", { name: "Iniciar levantamiento" }).click();
   await aLaVista(page.getByRole("heading", { level: 1, name: B.secciones[0]!.titulo }));
   await irAlRecorrido(page);
   await page.getByRole("button", { name: "Descartar levantamiento" }).click();
@@ -419,7 +420,7 @@ test("el teléfono del técnico", async ({ page, context, browser }) => {
   await entrar(t, PERSONAS.tecnico2.usuario, CONTRASENA);
   const suya = t.getByRole("region", { name: "Siguiente visita" });
   await aLaVista(suya.getByText(CLIENTES.hotel.nombre));
-  await suya.getByRole("button", { name: A.nombre, exact: true }).click();
+  await suya.getByRole("button", { name: "Iniciar levantamiento" }).click();
   await recorrer(t, A, false);
   await enviar(t);
   await otro.close();

@@ -55,3 +55,22 @@ test("con dos formatos vigentes, la visita ofrece los dos, el levantamiento sigu
   await expect(bandeja.getByText("Diagnóstico de prueba E2E")).toBeVisible();
   await escritorio.close();
 });
+
+test("con el servicio elegido al programar, la visita ofrece solo su formato (ADR-0057)", async ({ page }) => {
+  test.skip(REMOTO, "Publica formatos en una organización propia: solo en local.");
+  const organizacion = nuevaOrganizacion(["prueba-ups.v10.json", "prueba-visita.v1.json"]);
+  const tecnico = nuevoUsuario("tecnico", "tecnico.e2e", organizacion);
+  const { cliente } = nuevaVisitaConCliente(tecnico, 0, organizacion, "prueba-visita");
+
+  await page.goto(`${CAMPO}/`);
+  await iniciarSesion(page, tecnico);
+  const visita = page.getByRole("region", { name: "Siguiente visita" });
+  await expect(visita.getByText(cliente)).toBeVisible();
+  // El nombre del servicio se ve en la tarjeta, y hay un solo botón: el técnico no puede llenar el otro formato.
+  await expect(visita.getByText("Visita de prueba")).toBeVisible();
+  await expect(visita.getByRole("button", { name: "Formato de prueba" })).toHaveCount(0);
+  await visita.getByRole("button", { name: "Iniciar levantamiento" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Llegada" })).toBeVisible();
+  await irAlPaso(page, "Diagnóstico");
+  await expect(page.getByRole("textbox", { name: "Diagnóstico" })).toBeVisible();
+});

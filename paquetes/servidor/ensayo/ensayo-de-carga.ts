@@ -370,8 +370,11 @@ async function programarVisitas(o: Persona, tecnicos: Persona[]): Promise<Map<st
     await o.api.llamar("cancelarVisita", { parametros: { id: v.id }, cuerpo: { version: v.version, motivo: "Corrida anterior del ensayo de carga" } });
   }
   const porTecnico = new Map<string, string>();
+  // El servicio es el formato que llena el ensayo (ADR-0057).
+  const { servicios } = await o.api.llamar("serviciosParaProgramar");
+  const formato = servicios.find((s) => s.clave === "prueba-ups")?.clave ?? servicios[0]!.clave;
   for (const t of tecnicos) {
-    const visita = await o.api.llamar("programarVisita", { cuerpo: { clienteId, sitioId, motivo: "Ensayo de carga", programadaPara: hoy(), tecnicos: [t.id] } });
+    const visita = await o.api.llamar("programarVisita", { cuerpo: { clienteId, sitioId, formato, programadaPara: hoy(), tecnicos: [t.id] } });
     porTecnico.set(t.usuario, visita.id);
   }
   return porTecnico;
