@@ -42,6 +42,18 @@ describe("símbolos de los bocetos (iteración 19, ADR-0027)", () => {
     expect(cambios).toHaveLength(2);
   });
 
+  it("publicar repara los símbolos que perdieron su entrada en el registro: un teléfono nuevo los recibe", async () => {
+    const org = await s.nuevaOrganizacionConUsuarios();
+    await publicar(org.organizacionId, deArchivo);
+    // Lo que hacía la limpieza de pruebas antes de ADR-0038: borrar todo el registro de la organización.
+    await s.propietario.pool.query("delete from cambios.registro where organizacion_id = $1", [org.organizacionId]);
+    expect(simbolosDe((await bajar(org.tecnico.cookie, 10)).json())).toEqual([]);
+
+    // Nada cambió en la biblioteca, pero volver a publicarla deja de nuevo la entrada de cada símbolo.
+    expect(await publicar(org.organizacionId, deArchivo)).toEqual({ nuevos: 0, cambiados: 0, retirados: 0 });
+    expect(simbolosDe((await bajar(org.tecnico.cookie, 10)).json())).toHaveLength(21);
+  });
+
   it("cada organización tiene su biblioteca, aunque usen los mismos ids", async () => {
     const [una, otra] = [await s.nuevaOrganizacionConUsuarios(), await s.nuevaOrganizacionConUsuarios()];
     await publicar(una.organizacionId, [tablero]);

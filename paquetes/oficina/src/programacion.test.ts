@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ErrorApi, tipoDeProblema } from "@teins/protocolo";
-import { cambiosAlReasignar, mensajeDeProgramacion } from "./programacion";
+import { cambiosAlReasignar, faltaEnElEncabezado, mensajeDeProgramacion } from "./programacion";
 
 const estadoInvalido = (detail?: string) =>
   new ErrorApi({ type: tipoDeProblema("estado_invalido"), title: "La acción no aplica en el estado actual", status: 409, codigo: "estado_invalido", ...(detail ? { detail } : {}) });
@@ -33,5 +33,16 @@ describe("reasignar una visita con un técnico desactivado", () => {
 
   it("mientras no llega la lista de activos, no se quita a nadie", () => {
     expect(cambiosAlReasignar([ana], ["ana"], undefined)).toEqual({ finales: ["ana"], inactivos: [], salen: [], entran: [] });
+  });
+});
+
+describe("lo que le falta al encabezado del informe al programar (ADR-0051)", () => {
+  it("nombra lo que saldría como marcador, en el orden del encabezado", () => {
+    expect(faltaEnElEncabezado({ nit: null, ciudad: null, solicitante: { celular: null } })).toEqual(["el NIT", "la ciudad del sitio", "el celular del solicitante"]);
+    expect(faltaEnElEncabezado({ nit: "900", ciudad: "Ibagué", solicitante: { celular: "+573105550142" } })).toEqual([]);
+  });
+
+  it("sin solicitante elegido, el celular no se pide: el solicitante es opcional", () => {
+    expect(faltaEnElEncabezado({ nit: "900", ciudad: null, solicitante: null })).toEqual(["la ciudad del sitio"]);
   });
 });

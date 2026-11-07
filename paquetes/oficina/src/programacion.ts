@@ -71,3 +71,11 @@ export function mensajeDeProgramacion(problema: unknown): string {
       return textoDelServidor(error, "No se pudo guardar. Intente de nuevo.");
   }
 }
+
+/**
+ * Lo que saldría como marcador en el encabezado del informe (ADR-0051): NIT del cliente, ciudad del sitio y celular del
+ * solicitante. Son opcionales; se avisa al programar para que oficina los complete antes de que llegue al cliente.
+ */
+export function faltaEnElEncabezado(d: { nit: string | null; ciudad: string | null; solicitante: { celular: string | null } | null }): string[] {
+  return [...(d.nit ? [] : ["el NIT"]), ...(d.ciudad ? [] : ["la ciudad del sitio"]), ...(d.solicitante && !d.solicitante.celular ? ["el celular del solicitante"] : [])];
+}

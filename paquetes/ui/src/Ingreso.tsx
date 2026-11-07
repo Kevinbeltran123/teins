@@ -63,7 +63,7 @@ export function CampoDeIngreso({
           {etiqueta}
         </label>
         {olvido && (
-          <button type="button" aria-expanded={explicando} aria-controls={idRespuesta} onClick={() => setExplicando((e) => !e)} className="rounded text-[13.5px] text-texto-secundario hover:text-texto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco">
+          <button type="button" aria-expanded={explicando} aria-controls={idRespuesta} onClick={() => setExplicando((e) => !e)} className="-my-3 inline-flex min-h-11 items-center rounded text-[13.5px] text-texto-secundario hover:text-texto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco">
             {olvido.pregunta}
           </button>
         )}
@@ -91,7 +91,7 @@ export function CampoDeIngreso({
             onClick={() => setVisible((v) => !v)}
             aria-label={visible ? "Ocultar lo escrito" : "Mostrar lo escrito"}
             aria-pressed={visible}
-            className="absolute top-1.5 right-1.5 grid size-[34px] place-items-center rounded-lg text-texto-terciario hover:bg-panel-hundido hover:text-texto focus-visible:outline-2 focus-visible:outline-foco [&_svg]:size-[18px]"
+            className="absolute top-1.5 right-1.5 grid size-[34px] place-items-center before:absolute before:-inset-[5px] before:content-[''] rounded-lg text-texto-terciario hover:bg-panel-hundido hover:text-texto focus-visible:outline-2 focus-visible:outline-foco [&_svg]:size-[18px]"
           >
             {visible ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
           </button>

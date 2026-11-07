@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { v7 as uuidv7 } from "uuid";
 import { crearLevantamiento, fotosReferenciadas, sinRespuestasHuerfanas, type VersionFormato } from "@teins/dominio";
 import { Activity, UserRound, Aviso, Boton, BotonSiguiente, Building, CalendarDays, CircleAlert, CircleCheck, Clock, Eye, Pencil, Confirmacion, Dialogo, EsqueletoBloques, EstadoVacio, FilaDeAjuste, FilaDeTema, FranjaSincronizacion, GrupoDeAjustes, Insignia, LockKeyhole, MapPin, Send, Smartphone, nombreDeTransicion, Trash, useMinuto, useNombreEnPantalla, useNotificar, useSinRepetir } from "@teins/ui";
-import { resumenDeRecorrido } from "../recorrido";
+import { enFrase, resumenDeRecorrido } from "../recorrido";
+import { horaSinPartir } from "../formato";
 import { nuevoIdDeRepeticion } from "../datos/dexie";
 import { db, repositorio } from "../datos/instancia";
 import { useLecturaRecordada } from "../datos/lecturaRecordada";
@@ -428,11 +429,12 @@ function Solicitante({ visita }: { visita: VisitaLocal }) {
   const s = visita.solicitante;
   if (!s) return null;
   return (
-    <span className="flex flex-wrap items-center gap-x-1.5">
-      <UserRound aria-hidden className="size-3.5 shrink-0" />
+    // Ícono y texto en rejilla: con un nombre largo el texto baja, no el ícono queda solo en su renglón.
+    <span className="grid grid-cols-[auto_1fr] items-start gap-x-1.5">
+      <UserRound aria-hidden className="mt-[0.2em] size-3.5 shrink-0" />
       <span>{`Pregunta por ${s.nombre}${s.cargo ? ` (${s.cargo})` : ""}`}</span>
       {s.celular && (
-        <a href={`tel:${s.celular}`} className="inline-flex min-h-11 items-center font-medium text-superficie focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco">
+        <a href={`tel:${s.celular}`} className="col-start-2 inline-flex min-h-11 items-center justify-self-start font-medium text-superficie focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foco">
           {celularLegible(s.celular)}
         </a>
       )}
@@ -488,7 +490,7 @@ function VisitaFocal({ visita, levantamientos, contexto }: { visita: VisitaLocal
           </div>
           <span className="text-ayuda text-texto-secundario">
             {`${resumen.hechos.filter(Boolean).length} de ${resumen.pasos.length} pasos`}
-            {resumen.siguiente ? ` · sigue ${resumen.siguiente.titulo.toLowerCase()}` : " · listo para revisar y enviar"}
+            {resumen.siguiente ? ` · sigue ${enFrase(resumen.siguiente.titulo)}` : " · listo para revisar y enviar"}
           </span>
         </div>
       )}
@@ -539,7 +541,7 @@ function TerminarVisita({ visita, contexto }: { visita: VisitaLocal; contexto: C
 function cuandoEs(visita: VisitaLocal): string {
   const horario = horarioDeVisita(visita);
   const dia = fechaDeVisita(visita.programadaPara, hoyLocal());
-  return horario ? `${dia} · ${horario.charAt(0).toLowerCase()}${horario.slice(1)}` : dia;
+  return horario ? horaSinPartir(`${dia} · ${horario.charAt(0).toLowerCase()}${horario.slice(1)}`) : dia;
 }
 
 /** La línea de la hora en una fila: terminada, en curso o el horario; nada si es de todo el día. */

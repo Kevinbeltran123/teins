@@ -100,6 +100,18 @@ describe("CampoHorario", () => {
     expect(pintar({ valorInicial: { desde: "08:14" } })).not.toContain("Total");
   });
 
+  it("más de 12 horas avisa revisar a. m. y p. m.; un turno normal no", () => {
+    expect(pintar({ valorInicial: { desde: "00:34", hasta: "14:34" } })).toContain("Más de 12 horas");
+    expect(pintar({ valorInicial: { desde: "08:14", hasta: "11:30" } })).not.toContain("Más de 12 horas");
+    // Cruza la medianoche: de 10 p. m. a 1:30 a. m. son 3 h 30 min.
+    expect(pintar({ valorInicial: { desde: "22:00", hasta: "01:30" } })).not.toContain("Más de 12 horas");
+  });
+
+  it("los dos campos de hora pueden encogerse: en iPhone no empujan la pantalla hacia un lado", () => {
+    const html = pintar();
+    expect(html.match(/type="time"[^>]*class="[^"]*min-w-0[^"]*appearance-none/g)).toHaveLength(2);
+  });
+
   it("sugiere la llegada solo mientras está vacía, sin llenarla", () => {
     const sugerencia = { hora: "08:14", texto: "Usar 8:14 a. m. (foto de llegada)" };
     const vacia = pintar({ sugerenciaDeLlegada: sugerencia });

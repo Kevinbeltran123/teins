@@ -49,3 +49,6 @@ export function resumenDeRecorrido(formato: VersionFormato, l: LevantamientoLoca
   });
   return { pasos, hechos, siguiente: pasos.find((_, i) => !hechos[i]) };
 }
+
+/** Un título dentro de una frase («Siguiente: identificación del equipo»): baja solo la primera letra, nunca la de una sigla («UPS»). */
+export const enFrase = (titulo: string) => (/^\p{Lu}{2}/u.test(titulo) ? titulo : titulo.charAt(0).toLowerCase() + titulo.slice(1));

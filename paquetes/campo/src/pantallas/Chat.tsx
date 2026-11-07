@@ -314,7 +314,7 @@ export function Chat({
               type="submit"
               aria-label="Enviar"
               aria-disabled={!texto.trim() || enviando || !objetivo}
-              className="absolute bottom-[5px] right-[5px] grid size-[30px] place-items-center rounded-full bg-acento text-sobre-acento aria-disabled:bg-superficie-pista aria-disabled:text-texto-terciario"
+              className="absolute bottom-[5px] right-[5px] grid size-[30px] place-items-center before:absolute before:-inset-[7px] before:content-[''] rounded-full bg-acento text-sobre-acento aria-disabled:bg-superficie-pista aria-disabled:text-texto-terciario"
             >
               <ArrowUp aria-hidden className="size-[17px]" strokeWidth={2.4} />
             </button>

@@ -1,12 +1,13 @@
 import { useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { pasosDe, type Paso } from "../../recorrido";
+import { enFrase, pasosDe, type Paso } from "../../recorrido";
 import { cifrasDelBorrador, claveDeError, progreso, resumenDePaso } from "../../resumen";
 import { useLiveQuery } from "dexie-react-hooks";
-import { bloques, claveDeRepeticion, type DefinicionSeccion, type TablaDeMedidas, esFirma, leerClave, fotosReferenciadas, nombreDeDato, rutaLegible, sinRespuestasHuerfanas, type CodigoErrorValidacion, type DefinicionCampo, type ErrorValidacion, type Valor, type VersionFormato } from "@teins/dominio";
+import { bloques, claveDeRepeticion, horaCorta, type DefinicionSeccion, type TablaDeMedidas, esFirma, leerClave, fotosReferenciadas, nombreDeDato, rutaLegible, sinRespuestasHuerfanas, type CodigoErrorValidacion, type DefinicionCampo, type ErrorValidacion, type Valor, type VersionFormato } from "@teins/dominio";
 import { Aviso, BarraDePaso, Boton, BotonSiguiente, CifrasDeRepaso, EncabezadoDePaso, FilaDeRepaso, FranjaSincronizacion, ListaRecorrido, PasoDelRecorrido, Repaso, conTransicion, type EstadoDePaso, CircleAlert, Confirmacion, Dialogo, ListaFaltantes, type DatoFaltante, Send, Smartphone, TriangleAlert, Trash } from "@teins/ui";
 import { db, repositorio } from "../../datos/instancia";
 import { cuantosPorSubir, momentosDeArchivos } from "../../datos/lecturasDeCaptura";
-import { huellasConSello, sugerenciaDeLlegada } from "../../llegada";
+import { horaLocalDe, huellasConSello, sugerenciaDeLlegada } from "../../llegada";
+import { horaSinPartir } from "../../formato";
 import type { LevantamientoLocal } from "../../datos/modelo";
 import { mensajeDeValidacion } from "../../mensajes";
 import { useServidorAlcanzable } from "../../dispositivo/useConexion";
@@ -14,7 +15,7 @@ import { sincronizarEnSegundoPlano } from "../../sincronizacion/disparar";
 import { PasoCroquis } from "./Boceto";
 import { Campo } from "./Campo";
 import { TablaDeCampos } from "./TablaDeCampos";
-import { MiniaturaDeFirma, soloHora } from "./Firma";
+import { MiniaturaDeFirma } from "./Firma";
 import { MiniaturasDeFotos } from "./Fotos";
 import { Repeticion, Repeticiones } from "./Repeticiones";
 import { anclaDeDato, anclaDeSeccion, CabeceraDeLaVisita, PasoPropio, SugerenciaDeLlegada, VigilarGuardado } from "./contexto";
@@ -138,7 +139,6 @@ export function Borrador({
     p.seccion.repetible ? (repeticiones[p.seccion.clave]?.length ?? 0) > 0 : p.campos.some((c) => actual.respuestas[p.seccion.clave]?.[c.clave] !== undefined);
   const hecho = (p: Paso) => faltanDe(p) === 0 && (tocado(p) || visitados.has(p.id));
   const actualEnRecorrido = pasos.find((p) => !hecho(p));
-  const hechos = pasos.filter(hecho).length;
 
   function estadoDe(p: Paso): EstadoDePaso {
     if (p === actualEnRecorrido) return errores && faltanDe(p) > 0 ? "falta" : "actual";
@@ -284,7 +284,6 @@ export function Borrador({
   };
   const total = pasos.length + 1;
   const fotosDelBorrador = fotosReferenciadas(sinRespuestasHuerfanas(actual).respuestas).length;
-  const contador = `${hechos}/${pasos.length}`;
 
   let pantalla: ReactNode;
   if (vista.tipo === "recorrido") {
@@ -293,7 +292,7 @@ export function Borrador({
         <EncabezadoDePaso transicion={cabecera} contexto={contexto} avance={avance} volver={volver} etiquetaVolver="Volver a mis visitas" />
         <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 pt-3 pb-40">
           {/* Cada dato se guarda al escribirlo: la hora confirma que nada se pierde si la app se cierra. */}
-          <FranjaSincronizacion enLinea={enLinea} porSubir={porSubir ?? 0} guardado={`Guardado en este teléfono a las ${soloHora.format(new Date(actual.actualizadoEn))}`} />
+          <FranjaSincronizacion enLinea={enLinea} porSubir={porSubir ?? 0} guardado={`Guardado en este teléfono a las ${horaSinPartir(horaCorta(horaLocalDe(actual.actualizadoEn)))}`} />
           <div className="flex flex-col gap-1">
             <h1 className="text-titulo leading-tight font-extrabold tracking-tight">El recorrido</h1>
             <p className="text-ayuda text-texto-secundario">{nombre}</p>
@@ -349,7 +348,7 @@ export function Borrador({
       />
     ) : (
       <>
-        <EncabezadoDePaso transicion={cabecera} contexto={`Paso ${i + 1} de ${total} · ${paso.seccion.titulo}`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
+        <EncabezadoDePaso transicion={cabecera} contexto={`Paso ${i + 1} de ${total} · ${paso.seccion.titulo}`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" />
         <main className="mx-auto flex max-w-xl flex-col gap-8 px-4 pt-3 pb-40">
           <h1 className="text-titulo leading-tight font-extrabold tracking-tight">{paso.titulo}</h1>
           {paso.seccion.repetible ? (
@@ -370,7 +369,7 @@ export function Borrador({
         {/* Sin firma, la acción del paso es entregar el teléfono (la pone la firma). */}
         {!(paso.campos.length === 1 && paso.campos[0]!.tipo === "firma" && !esFirma(actual.respuestas[paso.seccion.clave]?.[paso.campos[0]!.clave])) && (
           <BarraDePaso>
-            <BotonSiguiente onClick={() => avanzarDesde(paso.id)}>{siguiente.tipo === "paso" ? `Siguiente: ${titulo.toLowerCase()}` : "Revisar y enviar"}</BotonSiguiente>
+            <BotonSiguiente onClick={() => avanzarDesde(paso.id)}>{siguiente.tipo === "paso" ? `Siguiente: ${enFrase(titulo)}` : "Revisar y enviar"}</BotonSiguiente>
           </BarraDePaso>
         )}
       </>
@@ -407,7 +406,7 @@ export function Borrador({
   } else {
     pantalla = (
       <>
-        <EncabezadoDePaso transicion={cabecera} contexto={`Paso ${total} de ${total} · Revisar`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" contador={contador} alContador={recorrido} />
+        <EncabezadoDePaso transicion={cabecera} contexto={`Paso ${total} de ${total} · Revisar`} avance={avance} volver={recorrido} etiquetaVolver="Ver el recorrido" />
         <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 pt-3 pb-40">
           <div className="flex flex-col gap-1">
             <h1 className="text-titulo leading-tight font-extrabold tracking-tight">Revisa y envía</h1>

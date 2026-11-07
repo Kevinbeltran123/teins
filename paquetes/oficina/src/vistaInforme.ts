@@ -22,7 +22,7 @@ export const capituloDe = (d: Detalle, firmas: FirmasDelCapitulo = {}): Contenid
   id: d.id,
   formato: d.formatoDefinicion,
   tecnico: d.tecnico.nombre,
-  revisor: d.revisor?.nombre ?? "[Revisor]",
+  revisor: d.revisor?.nombre ?? "[Quien lo revise]",
   ...(firmas.tecnicoConCedula ? { tecnicoDocumento: "registrada" } : {}),
   ...(firmas.revisorConCedula ? { revisorDocumento: "registrada" } : {}),
   ...(firmas.revisadoEn ? { revisadoEn: firmas.revisadoEn } : {}),
