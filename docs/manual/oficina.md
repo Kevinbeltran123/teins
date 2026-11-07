@@ -1,8 +1,8 @@
 # Manual de oficina de TEINS
 
-Versión del manual: 0.9.0 (piloto). Las capturas de pantalla se agregan después del piloto.
+Versión del manual: 0.9.0 (piloto).
 
-Este manual es para las personas de oficina que revisan levantamientos, preparan informes y cotizaciones, y atienden a los clientes. Los nombres entre «comillas» son los botones y textos tal como aparecen en pantalla.
+Este manual es para las personas de oficina que revisan levantamientos, preparan informes y cotizaciones, y atienden a los clientes. Los nombres entre «comillas» son los botones y textos tal como aparecen en pantalla. Las capturas usan clientes y un formato de ejemplo: los nombres y los datos de su empresa serán otros.
 
 ## Contenido
 
@@ -17,6 +17,7 @@ Este manual es para las personas de oficina que revisan levantamientos, preparan
 9. [Administración](#9-administración)
 10. [Búsqueda y atajos del teclado](#10-búsqueda-y-atajos-del-teclado)
 11. [Problemas frecuentes y a quién pedir ayuda](#11-problemas-frecuentes-y-a-quién-pedir-ayuda)
+12. [Glosario](#12-glosario)
 
 ---
 
@@ -48,8 +49,13 @@ Quien administra le crea su usuario y le entrega una **contraseña temporal**, e
 
 1. Abra TEINS en el navegador del computador.
 2. En «Ingresar», escriba su **Usuario** y la **Contraseña** temporal, y toque «Ingresar».
-3. Aparece «Cree su contraseña»: escriba la temporal, la contraseña nueva y repítala.
-4. Toque «Guardar y entrar». Las demás pantallas se abren después de cambiarla.
+
+   ![Pantalla «Ingresar» de oficina](capturas/oficina-01-ingresar.png)
+
+3. Aparece «Cree su contraseña»: escriba la contraseña nueva en «Contraseña nueva» y repítala en «Repita la contraseña nueva». Debajo se marcan los requisitos: «De 10 a 128 caracteres», «Distinta de la contraseña actual» y «Las dos coinciden».
+4. Toque «Guardar y entrar». Aparece «Contraseña cambiada»: toque «Ir a Levantamientos». Las demás pantallas se abren después de cambiarla.
+
+   ![Pantalla «Cree su contraseña» con los requisitos cumplidos](capturas/oficina-02-cree-su-contrasena.png)
 
 La próxima vez entre con su contraseña nueva. Si la olvida, toque «¿La olvidó?»: la respuesta es pedirle a administración que la restablezca (ver la sección 9).
 
@@ -60,10 +66,15 @@ Las personas que administran deben activar un **segundo factor**: un código de 
 1. Abra **Administración**. Si no lo ha activado, la pantalla dice «Active el segundo factor para administrar».
 2. Escriba su contraseña en «Su contraseña» y toque «Continuar».
 3. Escanee el código QR con la app autenticadora. Si no puede escanearlo, toque «¿No puede escanearlo?» y escriba la clave en la app, sin los espacios.
-4. Escriba los 6 dígitos que muestra la app y toque «Verificar y activar».
-5. Aparece «Guarde los códigos de respaldo». Cada uno sirve una vez para entrar si pierde el celular, y **no se vuelven a mostrar**. Cópielos con «Copiar los códigos de respaldo», guárdelos en un lugar seguro y toque «Ya los guardé».
+4. Escriba los 6 dígitos que muestra la app en «Código de 6 dígitos que muestra la app» y toque «Verificar y activar».
 
-Desde ese momento, después de la contraseña, TEINS le pide el «Código de verificación». Escriba los 6 dígitos de la app y toque «Verificar». Si no tiene el celular, use uno de sus códigos de respaldo.
+   ![Activación del segundo factor: código QR, clave y «Verificar y activar»](capturas/oficina-03-segundo-factor.png)
+
+5. Aparece «Guarde los códigos de respaldo». Cada uno sirve una vez para entrar si pierde el celular, y **no se vuelven a mostrar**. Guárdelos con «Descargar» o «Copiar» en un lugar seguro y toque «Ya los guardé».
+
+Desde ese momento, después de la contraseña, TEINS le pide el «Código de verificación». Escriba los 6 dígitos de la app y toque «Verificar». Si no tiene el celular, use uno de sus códigos de respaldo. «Volver a la contraseña» lo regresa a la pantalla anterior.
+
+![Pantalla «Código de verificación» con los 6 dígitos](capturas/oficina-04-codigo-de-verificacion.png)
 
 > Si el código no entra, revise que la hora del celular esté al día: la app autenticadora depende de ella.
 
@@ -88,6 +99,8 @@ Si deja TEINS abierto mucho tiempo o cierra la sesión en otra pestaña, aparece
 
 La sección **Clientes** tiene dos pestañas: «Activos» y «Archivados». La columna «Reciben el informe» dice cuántos contactos reciben los documentos; si dice «Nadie», ese cliente no recibirá ningún correo.
 
+![Lista de clientes con sus sitios y cuántos reciben el informe](capturas/oficina-05-clientes.png)
+
 **Crear un cliente**
 
 1. Toque «Nuevo cliente».
@@ -97,6 +110,10 @@ La sección **Clientes** tiene dos pestañas: «Activos» y «Archivados». La c
 El NIT y la ciudad son opcionales, pero salen en el encabezado del informe. Si faltan, el informe muestra el marcador `[NIT]` o `[Ciudad]` en su lugar.
 
 **Dentro de un cliente**
+
+Arriba ve el nombre, el NIT, cuántos sitios y contactos tiene, y los botones «Editar» y «Nuevo contacto». Debajo están los contactos, con lo que recibe cada uno y su acceso al portal, y los sitios.
+
+![Cliente con sus contactos, la columna «Portal» y sus sitios](capturas/oficina-06-cliente.png)
 
 - «Editar»: cambia el nombre o el NIT. Lo ya publicado conserva el nombre con que salió.
 - **Sitios:** «Agregar sitio»; en el menú de cada sitio, «Editar sitio» y «Archivar sitio». Si corrige la dirección de un sitio con una visita pendiente, el técnico ve la dirección nueva en su teléfono.
@@ -130,6 +147,8 @@ Si un correo rebota, el contacto muestra «El correo rebotó el [fecha]: revíse
 
 La sección **Visitas** tiene tres pestañas: «Próximas», «Anteriores» y «Canceladas». Cada fila muestra la hora, el número de orden («Orden 0001»), el cliente y el sitio, los técnicos y el avance de sus levantamientos.
 
+![Visitas próximas agrupadas por día, con su orden y su avance](capturas/oficina-07-visitas.png)
+
 **Programar una visita**
 
 1. Toque «Programar visita».
@@ -139,9 +158,11 @@ La sección **Visitas** tiene tres pestañas: «Próximas», «Anteriores» y «
    - Una hora de inicio con su **Duración** (de 30 minutos a 8 horas).
    - Una hora de inicio con «No sé cuánto dura»: el técnico queda ocupado hasta que la termine desde su teléfono.
 4. Elija el **Motivo**: «Mantenimiento», «Cotización» o «Modificación».
-5. En **Técnicos**, marque uno o varios. TEINS separa «Libres a esa hora» de «Ocupados», con el motivo de cada ocupado.
+5. En **Técnicos**, marque uno o varios. TEINS separa «Libres a esa hora» de «Ocupados», con el motivo de cada ocupado. Con «Buscar técnico» encuentra a alguien por su nombre.
 6. Si aplica, elija el **Solicitante** (el contacto del cliente que pidió la visita) y escriba la **Referencia del cliente** (por ejemplo, el número de su ticket).
-7. Toque «Programar la visita».
+7. Toque el botón de abajo: con un técnico dice «Programar con [Nombre]»; con varios, «Programar la visita».
+
+![Hoja «Programar visita» con el cliente, el horario y los técnicos libres](capturas/oficina-08-programar-visita.png)
 
 El **número de orden** lo asigna TEINS solo, en orden. Sale en la fila de la visita, en el informe y se puede buscar. El técnico ve la visita en su teléfono la próxima vez que abra la app con señal, y la tarjeta le dice a quién preguntar en el sitio.
 
@@ -172,6 +193,8 @@ Arriba puede buscar por cliente, sitio, técnico o formato. «Tomar el más anti
 
 Un punto azul con «[Técnico] respondió · [hora]» indica que el técnico contestó una pregunta y usted no lo ha leído.
 
+![Bandeja «Esperando revisión» con «Tomar el más antiguo»](capturas/oficina-09-bandeja.png)
+
 ### Un solo editor a la vez
 
 Un levantamiento solo lo corrige **la persona que lo tomó**. Así nadie pisa el trabajo de otro.
@@ -191,6 +214,8 @@ Si lo tiene otra persona, el botón dice «Tomar la revisión de [Nombre]». Al 
 
 Puede cambiar el ancho del panel arrastrando el divisor, ampliarlo con «Ampliar», u ocultarlo y volver a abrirlo con «Mostrar el panel». En pantallas pequeñas, «Mostrar el panel» lo abre como hoja lateral.
 
+![Revisión tomada: los datos a la izquierda y «En el informe» a la derecha](capturas/oficina-10-revision.png)
+
 ### Corregir un dato
 
 Cada corrección queda registrada con su autor, el dato, el valor anterior, el valor nuevo y el motivo.
@@ -199,6 +224,8 @@ Cada corrección queda registrada con su autor, el dato, el valor anterior, el v
 2. Escriba el valor nuevo. Mientras escribe, «En el informe» muestra el valor nuevo enmarcado con «sin guardar».
 3. Escriba el **Motivo de la corrección** (obligatorio, queda en el historial). Por ejemplo: «la placa dice 25 kVA».
 4. Toque «Guardar corrección». En «En el informe» aparece el valor nuevo con «Antes: [valor anterior]».
+
+![Corrección de un dato con el valor nuevo, el motivo y «Guardar corrección»](capturas/oficina-11-corregir.png)
 
 Si otra persona guardó el mismo dato antes que usted, TEINS le avisa y no pisa nada: revise el valor y vuelva a corregir si hace falta.
 
@@ -217,12 +244,14 @@ Cuando algo no está claro, pregúntele al técnico sin llamarlo:
 
 En la pestaña «Comentarios» también puede escribir un comentario general, que no es sobre un dato. Bajo cada dato comentado aparece el resumen con «Ver la conversación».
 
+![Pestaña «Comentarios» con la pregunta de oficina, la respuesta del técnico y el cuadro para responder](capturas/oficina-12-comentarios.png)
+
 Para cambiar o retirar un comentario suyo, use su menú («Más acciones para el comentario»): «Editar» o «Borrar». Al borrar, la notificación ofrece «Deshacer».
 
 ### Marcar revisado
 
-1. Cuando todo esté bien, toque «Marcar revisado» y confirme.
-2. La confirmación avisa que **las conversaciones se cierran**: el técnico las sigue viendo, pero ya no puede responder. Si dejó un comentario escrito sin enviar, también le avisa que se pierde.
+1. Cuando todo esté bien, toque «Marcar revisado».
+2. La confirmación «¿Marcar revisado el levantamiento de [Técnico]?» dice que queda listo para el informe, que el técnico lo ve como revisado y que **las conversaciones se cierran**: el técnico las sigue viendo, pero ya no puede responder. Si dejó un comentario escrito sin enviar, también le avisa que se pierde. Confirme con «Marcar revisado».
 3. Arriba queda «Revisado · por usted, [hora]», con «Abrir el informe», y «Siguiente: …» le ofrece el próximo levantamiento que espera revisión.
 
 Después de marcarlo revisado, el levantamiento ya no se corrige desde la revisión.
@@ -231,7 +260,9 @@ Después de marcarlo revisado, el levantamiento ya no se corrige desde la revisi
 
 La pestaña «Historial» muestra, con autor y fecha: «Envió el levantamiento», «Tomó la revisión», «Corrigió» (con el valor anterior y el nuevo), «Comentó», «Respondió», «Vinculó al catálogo», «Marcó el levantamiento revisado» y más.
 
-Abajo aparece el sello «Historial íntegro», que confirma que nadie alteró el historial por fuera de TEINS. Si alguna vez dice «El historial fue alterado fuera del sistema», avísele de inmediato a soporte.
+Arriba aparece el sello «Historial íntegro», que confirma que nadie alteró el historial por fuera de TEINS. Si alguna vez dice «El historial fue alterado fuera del sistema», avísele de inmediato a soporte.
+
+![Pestaña «Historial» con el sello «Historial íntegro» y cada cambio con su autor](capturas/oficina-13-historial.png)
 
 ---
 
@@ -252,6 +283,8 @@ El editor tiene cuatro partes:
 
 **Se guarda solo.** Junto a «Publicar» verá «Guardando» y luego «Guardado». No hay botón de guardar borrador. Si se va la conexión, dice «Sin conexión · se guarda al volver».
 
+![Editor del informe con la introducción, los levantamientos y la vista en vivo](capturas/oficina-14-informe.png)
+
 Si otra persona guarda el mismo informe mientras usted escribe, TEINS le pide elegir: «Guardar la mía encima» o «Cargar la guardada».
 
 ### Qué sale en el informe
@@ -266,6 +299,8 @@ Bajo cada levantamiento incluido está «Qué sale en el informe»:
 Algunas partes nunca salen, porque así lo define el formato: por ejemplo, la llegada dice «Solo para la empresa (lo marca el formato)». El croquis del técnico tampoco sale: el plano formal se adjunta en Planos anexos.
 
 Lo que no sale sigue en el levantamiento para oficina.
+
+![«Qué sale en el informe»: un interruptor por bloque y lo que no sale](capturas/oficina-15-que-sale.png)
 
 ### La vista previa
 
@@ -283,6 +318,8 @@ Una versión publicada **queda congelada: no se puede modificar**. Para corregir
 1. Toque «Publicar versión [N]».
 2. La confirmación «¿Publicar la versión [N]?» dice que el cliente la verá en el portal y, en «Enviar el PDF cuando esté listo», muestra los contactos que reciben informes. Marque o desmarque a quién enviarlo.
 3. Confirme con «Publicar y enviar a [N]» o, si no marcó a nadie, con «Publicar versión [N]».
+
+   ![Confirmación «¿Publicar la versión 1?» con los contactos que reciben el PDF](capturas/oficina-16-publicar.png)
 4. Arriba del editor ve el avance: publicada, el PDF (tarda unos segundos), el portal y cada envío. Si ya había una versión vigente, dice «Mientras, el cliente ve la versión [N]».
 5. Cuando el PDF está listo, aparece «Descargar PDF de la versión [N]».
 
@@ -297,7 +334,7 @@ En «Envíos de la versión [N]» cada envío dice su estado:
 | Estado | Qué significa |
 |---|---|
 | «En cola» | Espera a que el PDF esté listo. |
-| «Enviado» | Salió hacia el contacto. |
+| «Enviado» | Salió hacia el contacto. Mientras el servidor del contacto no confirme, dice «El servidor del cliente no ha confirmado la entrega». |
 | «Entregado» | Llegó al buzón del contacto. «· con su texto» indica que llevaba el texto que usted escribió. |
 | «No llegó» | No se pudo entregar; dice el motivo. |
 | «Cancelado» | No sale. |
@@ -305,6 +342,8 @@ En «Envíos de la versión [N]» cada envío dice su estado:
 - **Cancelar mientras está en cola:** toque «Cancelar» en la fila del envío. No pide confirmación, y la notificación ofrece «Deshacer». Una vez que salió, **lo enviado no se puede recuperar**.
 - **Volver a enviar:** si dice «No llegó», corrija el correo del contacto en Clientes y toque «Volver a enviar» en su fila.
 - **Enviar a otro contacto:** solo ofrece a quienes todavía no la recibieron. «Ver cómo llega» muestra al lado lo que recibirá.
+
+![«Versiones publicadas»: la versión vigente y el estado de cada envío](capturas/oficina-17-envios.png)
 
 Si un envío no llegó, la lista de **Informes** marca ese informe con «Envío sin entregar».
 
@@ -341,6 +380,8 @@ Las cotizaciones salen de las **cantidades revisadas** de una visita, sumadas po
 
 La hoja de la derecha cambia mientras escribe, y la pestaña «Correo» muestra lo que recibe el contacto. Se guarda solo, como el informe.
 
+![Cotización con sus líneas, los precios, el IVA y la vista previa](capturas/oficina-18-cotizacion.png)
+
 ### Publicar y enviar
 
 1. Toque «Publicar versión [N]». La cotización queda congelada con sus precios e impuestos.
@@ -355,7 +396,9 @@ Los envíos funcionan igual que en el informe (sección 5). Para corregir una co
 
 ## 7. Catálogo y lista de precios
 
-El **Catálogo** tiene los ítems con los que oficina vincula los materiales que anota el técnico y con los que se arman las cotizaciones. Cada ítem tiene **Código**, **Descripción**, **Unidad** y **Precio sin IVA**.
+El **Catálogo** tiene los ítems con los que oficina vincula los materiales que anota el técnico y con los que se arman las cotizaciones. Cada ítem tiene **Código**, **Descripción**, **Unidad** y **Precio sin IVA** (con la fecha desde la que rige).
+
+![Catálogo con sus precios y los botones «Importar CSV» y «Nuevo ítem»](capturas/oficina-19-catalogo.png)
 
 ### Importar desde Excel
 
@@ -364,6 +407,8 @@ El **Catálogo** tiene los ítems con los que oficina vincula los materiales que
 3. En **Catálogo**, toque «Importar CSV» y después «Elegir archivo CSV».
 4. TEINS dice cuántos ítems están listos y cuáles filas no se importan, con el motivo.
 5. Toque «Importar [N] ítems». Al terminar dice «Importado: [N] ítems nuevos y [N] actualizados».
+
+![Hoja «Importar desde un archivo» con los ítems listos para importar](capturas/oficina-20-importar-csv.png)
 
 Los precios van en pesos enteros, como 4.800. Si usted no administra y el archivo trae precios, se importan los ítems sin ellos: los precios los carga administración.
 
@@ -387,6 +432,8 @@ En el portal, cada contacto con acceso entra con su correo y un código que le l
 3. Revise la confirmación «¿Dar acceso al portal a [Nombre]?»: dice a qué correo le llega la invitación y qué verá.
 4. Toque «Dar acceso». El contacto queda en «Aún no entra» y recibe el correo de invitación con «Entrar al portal».
 
+![Confirmación «¿Dar acceso al portal a [Nombre]?»](capturas/oficina-21-dar-acceso-portal.png)
+
 Cuando entra por primera vez, la columna muestra «Último ingreso: [fecha]».
 
 El contacto ve lo mismo que recibe: si deja de recibir informes o cotizaciones, deja de verlos en el portal.
@@ -394,9 +441,14 @@ El contacto ve lo mismo que recibe: si deja de recibir informes o cotizaciones, 
 ### Cómo entra el cliente
 
 1. Abre el portal (desde «Entrar al portal» en la invitación o «Ver en el portal de TEINS» en el correo de un documento, que lo lleva directo a ese documento).
-2. Escribe su correo y toca «Enviar código».
-3. Le llega un código de 6 dígitos al correo. Lo escribe y toca «Entrar». Si no le llega, puede tocar «Reenviar código» al minuto y revisar el correo no deseado.
+2. En «Sus informes y cotizaciones», escribe su correo y toca «Enviar código».
+
+   ![Portal: «Sus informes y cotizaciones» con el correo escrito](capturas/oficina-22-portal-ingresar.png)
+
+3. En «Revise su correo», escribe el código de 6 dígitos que le llegó y toca «Entrar». Si no le llega, puede tocar «Reenviar código» cuando termine la cuenta regresiva (un minuto) y revisar el correo no deseado. «Usar otro correo» vuelve al paso anterior.
 4. Ve el nombre del cliente, las pestañas «Informes» y «Cotizaciones», y en cada documento «Descargar».
+
+   ![Portal: los informes del cliente con «Descargar»](capturas/oficina-23-portal-documentos.png)
 
 La sesión del portal se cierra sola después de 30 minutos sin uso. Para entrar de nuevo, el cliente pide otro código.
 
@@ -426,7 +478,9 @@ La sección **Administración** solo la ven quienes tienen la marca de administr
 3. Elija el **Rol**: «Técnico (campo)» u «Oficina».
 4. Si quiere, escriba la **Cédula**: sale en la firma de los informes que esta persona atiende o revisa. Solo la ve quien administra.
 5. Toque «Crear usuario».
-6. Aparece la **contraseña temporal una sola vez**. Cópiela con «Copiar la contraseña temporal» y entréguela en persona o por un medio distinto al del usuario. Toque «Ya la entregué».
+6. Aparece la **contraseña temporal una sola vez**. Cópiela con «Copiar» y entréguela en persona o por un medio distinto al del usuario. Toque «Ya la entregué».
+
+![Ventana «Usuario creado» con la contraseña temporal y «Copiar»](capturas/oficina-24-usuario-creado.png)
 
 La persona la cambia al entrar. Mientras no lo haga, su fila dice «Debe cambiar su contraseña».
 
@@ -446,7 +500,9 @@ Si un usuario de oficina se desactiva mientras tenía un levantamiento en revisi
 Esta pestaña muestra cada teléfono que se ha conectado, con su técnico, «Último contacto» y versión de la app, lo que tiene «Sin enviar», el almacenamiento y el «Estado».
 
 - Si un técnico tiene algo sin enviar desde hace más de un día, aparece «El más antiguo espera desde [fecha]. Llame al técnico.»
-- «No persistente: el sistema puede borrar los datos» indica que ese teléfono podría perder lo que no ha enviado. Pídale al técnico que envíe cuanto antes.
+- «No persistente: el sistema puede borrar los datos» indica que ese teléfono podría perder lo que no ha enviado. Pídale al técnico que envíe cuanto antes y que instale la app desde el ícono (manual para técnicos, sección 2).
+
+![«Teléfonos de campo» con el último contacto, lo que falta por enviar y el estado](capturas/oficina-25-telefonos-de-campo.png)
 
 **Si un técnico pierde el teléfono o se lo roban:**
 
@@ -471,7 +527,9 @@ Presione ⌘K en Mac (Ctrl + K en Windows) o toque **Buscar** en el menú. Se ab
 - **Acciones:** «Programar visita», «Nuevo cliente», «Nueva cotización» y «Tomar el más antiguo».
 - **Secciones** del menú.
 
-Escriba parte de un nombre (sin importar tildes ni mayúsculas) y presione Enter. Los resultados salen agrupados: clientes, visitas, levantamientos, informes y cotizaciones.
+Escriba parte de un nombre (sin importar tildes ni mayúsculas) y presione Enter. Los resultados salen agrupados: clientes, visitas, levantamientos, informes y cotizaciones. Con las flechas se mueve entre ellos, con Enter abre y con Esc cierra.
+
+![«Buscar en oficina» con resultados agrupados para «santa lucia»](capturas/oficina-26-buscar.png)
 
 Cada lista también tiene su propio buscador, y TEINS recuerda la pestaña y la búsqueda de cada sección cuando usted vuelve.
 
@@ -497,6 +555,8 @@ Presione «?» para ver la lista «Atajos del teclado». Las letras solas no hac
 
 ## 11. Problemas frecuentes y a quién pedir ayuda
 
+Cada problema empieza por lo que usted ve en la pantalla y sigue con qué hacer.
+
 **No puedo entrar: «Usuario o contraseña incorrectos».**
 Revise mayúsculas y que el usuario esté bien escrito. Si olvidó la contraseña, pídale a quien administra que la restablezca. Si su cuenta fue desactivada, también verá este mensaje.
 
@@ -505,6 +565,12 @@ Revise que la hora del celular esté al día. Si no tiene el celular, use un có
 
 **No veo Administración.**
 Esa sección es para quienes administran. Si la necesita, pídasela a quien administra en TEINS.
+
+**Abro Administración y dice «Active el segundo factor para administrar».**
+Es la primera vez que administra: siga los pasos de la sección 2 («Segundo factor»). Sin él no se abren usuarios, teléfonos ni precios.
+
+**El técnico dice que envió, pero no está en la bandeja.**
+Si en su teléfono dice «Esperando señal» o «Sin señal», todavía no llega: debe abrir la app con señal. Si en Administración › «Teléfonos de campo» su fila dice «Sin enviar», llámelo. Revise también las pestañas «En revisión» y «Revisados»: alguien pudo tomarlo ya.
 
 **No puedo corregir un dato.**
 Primero tome el levantamiento con «Tomar para revisar». Si ya está revisado, ya no se corrige desde la revisión.
@@ -517,6 +583,9 @@ Solo entran los revisados. Márquelo revisado y vuelva al informe para marcar su
 
 **Me equivoqué en un informe ya publicado.**
 Corrija en el editor y publique la versión siguiente. La anterior se conserva. Si el error es grave, pídale a quien administra que retire la versión equivocada del portal y avísele al cliente.
+
+**Publiqué y no aparece «Descargar PDF de la versión [N]».**
+El PDF tarda unos segundos en generarse. Espere y no publique otra vez. Si pasan varios minutos, recargue la página.
 
 **El PDF dice «No se generó. Avísele a soporte.»**
 No reintente varias veces: avísele a soporte con el cliente y el número de versión.
@@ -543,3 +612,30 @@ Llámelo: debe abrir la app con señal para que se envíe. Nunca le pida que bor
 
 - **Usuarios, contraseñas, accesos y precios:** la persona que administra TEINS en su empresa.
 - **Errores que no se resuelven recargando la página** (un PDF que no se genera, un historial que dice que fue alterado, una pantalla que no carga): soporte de TEINS, [contacto de soporte]. Diga qué estaba haciendo, el cliente, la visita y la hora aproximada. No envíe datos de clientes por canales no autorizados.
+
+---
+
+## 12. Glosario
+
+| Palabra | Qué quiere decir |
+|---|---|
+| **Visita** | Lo que oficina programa: un cliente, un sitio, una fecha, un horario y uno o varios técnicos. Tiene un número de orden. |
+| **Levantamiento** | Lo que un técnico captura en una visita: datos, fotos, croquis, materiales y la firma de quien lo recibe. |
+| **Formato** | La lista de secciones y datos de un tipo de levantamiento (por ejemplo, servicio de UPS o visita técnica). |
+| **Borrador** | Un levantamiento que el técnico empezó y no ha enviado: solo existe en su teléfono. También, un informe o una cotización sin publicar. |
+| **Enviar** | Lo que hace el técnico para pasar su levantamiento a oficina. Después solo oficina lo corrige. |
+| **Bandeja** | La sección **Levantamientos**: lo que llegó de campo, por estado. |
+| **Revisar** | Tomar un levantamiento, corregir lo necesario (con motivo) y preguntarle al técnico. |
+| **Revisado** | El levantamiento ya puede entrar al informe. Las conversaciones se cierran. |
+| **Corrección** | Un cambio de oficina sobre un dato del técnico. Queda en el historial con autor, valor anterior, valor nuevo y motivo. |
+| **Informe** | El documento PDF de una visita para el cliente, con los levantamientos revisados, la introducción, las conclusiones y los planos. |
+| **Publicar** | Congelar una versión del informe o de la cotización, generar su PDF y enviarla a los contactos. |
+| **Versión** | Cada publicación. No se modifica: para corregir se publica la siguiente y la anterior se conserva. La «Vigente» es la que ve el cliente. |
+| **Retirar** | Quitar una versión del portal (solo quien administra). No se puede deshacer. |
+| **Cotización** | El documento de precios que sale de las cantidades revisadas de una visita. |
+| **Catálogo** | Los ítems (código, descripción, unidad y precio sin IVA) con los que se vinculan los materiales y se arman las cotizaciones. |
+| **Contacto** | Una persona del cliente que recibe informes, cotizaciones o los dos. |
+| **Portal** | La página donde un contacto con acceso entra con su correo y un código y descarga lo que recibe. |
+| **Segundo factor** | El código de 6 dígitos de una app autenticadora, obligatorio para administrar. |
+| **Contraseña temporal** | La que entrega quien administra al crear o restablecer un usuario. Se cambia al entrar. |
+

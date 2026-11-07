@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["pruebas", "playwright.config.ts", "preparar.ts"]
+  "include": ["pruebas", "capturas", "playwright.config.ts", "playwright.capturas.config.ts", "preparar.ts"]
 }

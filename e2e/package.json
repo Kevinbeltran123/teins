@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "capturas": "playwright test --config playwright.capturas.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",

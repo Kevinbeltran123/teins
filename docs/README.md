@@ -36,7 +36,7 @@ Mapa de lo que hay en `docs/` y en la raíz (lo marcado «local» está en `.git
 | [`proceso/produccion.md`](proceso/produccion.md) | Montaje, respaldos, simulacro y cómo encender o apagar producción | Cambia la infraestructura o su estado |
 | [`proceso/verificacion-manual.md`](proceso/verificacion-manual.md) | El recorrido a mano en un teléfono real | Una iteración agrega algo que solo se comprueba a mano |
 | [`entrega/`](entrega/README.md) | Alcance de la versión 1, lo que falta de TEINS y el piloto con sus criterios de aceptación | Cambia el alcance, llega una respuesta de TEINS o avanza el piloto |
-| [`manual/`](manual/) | Manuales para técnicos y oficina, en lenguaje no técnico | Cambia lo que ve o hace un usuario: un botón, un texto o un paso |
+| [`manual/`](manual/) | Manuales para técnicos y oficina, en lenguaje no técnico, con capturas en `manual/capturas` | Cambia lo que ve o hace un usuario: un botón, un texto o un paso. Las capturas se regeneran con `pnpm --filter @teins/e2e capturas` |
 | [`../AGENTS.md`](../AGENTS.md) | Reglas, convenciones y comandos para quien programa | Cambia una regla, la estructura o un comando |
 | [`../README.md`](../README.md) | Qué es y qué hace el sistema, en grande | Cambia lo que el sistema hace en grande |
 | `paquetes/*/README.md` | Qué contiene cada paquete y cómo se usa | Cambia el paquete |
