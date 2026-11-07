@@ -6,6 +6,8 @@ Cómo se monta, se respalda y se recupera un entorno de TEINS en Railway (ADR-00
 
 Si producción está encendida o apagada, y por qué, lo dice el "Estado actual" del [plan de entrega](plan-de-entrega.md). Apagarla es quitar el despliegue activo de sus seis servicios con `railway down`; el volumen de Postgres (con sus datos), las variables, los secretos y los dominios se conservan. Mientras está apagada, sus tres direcciones responden 404; apagarla no toca el entorno de pruebas.
 
+Encendida, `campo`, `oficina` y `portal` se duermen tras 10 minutos sin tráfico, como en pruebas (`sleepApplication` en `.railway/railway.ts`, desde el 2026-11-06): el primer ingreso después de un rato tarda unos segundos más. El `worker`, `Postgres` y los `respaldos` no duermen. Si con más uso esa espera molesta, se quita solo en producción en ese archivo.
+
 `railway scale <región>=0` **no** apaga un servicio: quita la región y Railway lo vuelve a poner en `us-west2` con una réplica. Así quedó producción ese día antes de apagarla, base incluida. Para encenderla, con el proyecto enlazado:
 
 1. `railway config plan` y `railway config apply`: devuelve los servicios a `us-east4`, como declara `.railway/railway.ts`.

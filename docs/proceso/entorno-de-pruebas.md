@@ -49,7 +49,7 @@ Variables, iguales en los tres servicios (las credenciales son referencias, nunc
 - **`oficina`:** salud en `/salud`.
 - **`worker`:** arranque con `node --enable-source-maps dist/worker.js`.
 - **Los cuatro:** reinicio si fallan (hasta 5 veces).
-- **Suspensión (desde 2026-11-06):** `campo`, `oficina` y `portal` se duermen tras 10 minutos sin tráfico y despiertan con la primera solicitud, que tarda unos segundos más (`sleepApplication` en `.railway/railway.ts`, solo en pruebas). La memoria se cobra por minuto, y dormidas no ocupan: antes, entre las tres, eran unos 400 MB todo el día. El `worker` y `Postgres` no duermen, porque la cola se revisa cada pocos segundos. Producción nunca duerme.
+- **Suspensión (desde 2026-11-06):** `campo`, `oficina` y `portal` se duermen tras 10 minutos sin tráfico y despiertan con la primera solicitud, que tarda unos segundos más (`sleepApplication` en `.railway/railway.ts`; desde el mismo día, también en producción). La memoria se cobra por minuto, y dormidas no ocupan: antes, entre las tres, eran unos 400 MB todo el día. El `worker` y `Postgres` no duermen, porque la cola se revisa cada pocos segundos.
 
 Credenciales de `tecnico.prueba` y `oficina.prueba`: en `privado/entorno-de-pruebas.txt` en el computador de Kevin (la carpeta la ignora git y no se sube). `oficina.prueba` tiene la marca de administrador: la primera vez que abre "Administración" activa su segundo factor con una app autenticadora, y desde entonces el ingreso a oficina le pide el código.
 
