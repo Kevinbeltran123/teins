@@ -1,7 +1,7 @@
 import { expect, request, test, type APIRequestContext } from "@playwright/test";
 import { OFICINA } from "../destino";
 import { codigoTotp } from "../totp";
-import { CATALOGO, CLIENTES, CONTRASENA, dia, guardarEstado, hhmm, horaDeAhora, PERSONAS, type Estado } from "./comun";
+import { CATALOGO, CLIENTES, CONTRASENA, dia, FORMATOS, guardarEstado, hhmm, horaDeAhora, leerFormato, PERSONAS, type Estado } from "./comun";
 
 /**
  * Los datos de la historia que cuentan las capturas, por la API de oficina como los dejaría TEINS: clientes con NIT,
@@ -57,12 +57,14 @@ test("datos de las capturas", async () => {
   const tecnicos = ((await (await a.get("/api/tecnicos")).json()) as { tecnicos: { id: string; usuario: string }[] }).tecnicos;
   const idTecnico = (usuario: string) => tecnicos.find((t) => t.usuario === usuario)!.id;
   const h = horaDeAhora();
-  const visita = async (cliente: keyof typeof CLIENTES, datos: { motivo: string; fecha: string; inicio: string | null; fin: string | null; tecnicos: string[]; referencia?: string }) => {
+  // El servicio de cada visita (ADR-0057): A es el formato de servicio, B el general.
+  const [A, B] = FORMATOS.map((f) => leerFormato(f).formato);
+  const visita = async (cliente: keyof typeof CLIENTES, datos: { formato: string; fecha: string; inicio: string | null; fin: string | null; tecnicos: string[]; referencia?: string }) => {
     const c = clientes[cliente];
     const v = await post<{ id: string }>(a, "/api/visitas", {
       clienteId: c.id,
       sitioId: c.sitioId,
-      motivo: datos.motivo,
+      formato: datos.formato,
       programadaPara: datos.fecha,
       horaInicio: datos.inicio,
       horaFin: datos.fin,
@@ -74,11 +76,11 @@ test("datos de las capturas", async () => {
   };
   const andres = PERSONAS.tecnico.usuario;
   const visitas: Estado["visitas"] = {
-    principal: await visita("clinica", { motivo: "Mantenimiento", fecha: dia(), inicio: hhmm(h), fin: hhmm(h + 2), tecnicos: [andres], referencia: "TK-2291" }),
-    segunda: await visita("bodegas", { motivo: "Cotización", fecha: dia(), inicio: hhmm(h + 2, 30), fin: hhmm(h + 4), tecnicos: [andres] }),
-    manana: await visita("colegio", { motivo: "Modificación", fecha: dia(1), inicio: "08:00", fin: "10:00", tecnicos: [andres], referencia: "OC-1187" }),
-    delSegundo: await visita("hotel", { motivo: "Mantenimiento", fecha: dia(), inicio: hhmm(h), fin: hhmm(h + 3), tecnicos: [PERSONAS.tecnico2.usuario] }),
-    delTercero: await visita("colegio", { motivo: "Mantenimiento", fecha: dia(), inicio: null, fin: null, tecnicos: [PERSONAS.tecnico3.usuario] }),
+    principal: await visita("clinica", { formato: A!, fecha: dia(), inicio: hhmm(h), fin: hhmm(h + 2), tecnicos: [andres], referencia: "TK-2291" }),
+    segunda: await visita("bodegas", { formato: B!, fecha: dia(), inicio: hhmm(h + 2, 30), fin: hhmm(h + 4), tecnicos: [andres] }),
+    manana: await visita("colegio", { formato: A!, fecha: dia(1), inicio: "08:00", fin: "10:00", tecnicos: [andres], referencia: "OC-1187" }),
+    delSegundo: await visita("hotel", { formato: A!, fecha: dia(), inicio: hhmm(h), fin: hhmm(h + 3), tecnicos: [PERSONAS.tecnico2.usuario] }),
+    delTercero: await visita("colegio", { formato: B!, fecha: dia(), inicio: null, fin: null, tecnicos: [PERSONAS.tecnico3.usuario] }),
   };
 
   guardarEstado({ secretoAdmin: secreto, temporalTecnico: tecnico.contrasena, temporalOficina: oficina.contrasena, clientes, visitas });

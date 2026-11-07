@@ -18,7 +18,7 @@ import { horaDelChat, sinLeerDe, ultimoDeOficina } from "../conversacion";
 import { ponerInsignia } from "../dispositivo/insignia";
 import { terminarVisita } from "../datos/terminacion";
 import { sincronizarEnSegundoPlano } from "../sincronizacion/disparar";
-import { accionDeVisita, agendaDeVisitas, cuandoSePodraIniciar, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, sePuedeIniciar, terminadaEn } from "../visitas";
+import { accionDeVisita, agendaDeVisitas, cuandoSePodraIniciar, formatosParaIniciar, enCurso, fechaDeVisita, horaCorta, horaDe, horarioDeVisita, hoyLocal, sePuedeIniciar, terminadaEn } from "../visitas";
 import { permisoLocal } from "../sesion/permiso";
 import { VERSION_APP } from "../version";
 import { AvisoDeAlmacenamiento } from "./AvisoDeAlmacenamiento";
@@ -581,7 +581,7 @@ function AvisoDeSalida({ visita }: { visita: VisitaLocal }) {
   );
 }
 
-/** Continuar el borrador de la visita, o iniciar uno con la versión vigente de cada formato. */
+/** Continuar el borrador de la visita, o iniciar uno con la versión vigente del formato de su servicio (ADR-0057). */
 function Acciones({
   visita,
   levantamientos,
@@ -594,7 +594,7 @@ function Acciones({
   variante: "principal" | "secundaria";
 }) {
   const accion = accionDeVisita(levantamientos);
-  const disponibles = vigentes(contexto.formatos);
+  const disponibles = formatosParaIniciar(visita, vigentes(contexto.formatos));
 
   if (accion.tipo === "continuar") {
     return variante === "principal" ? (
@@ -625,7 +625,11 @@ function Acciones({
     );
   }
   if (disponibles.length === 0) {
-    return <p className="text-ayuda text-texto-secundario">Faltan los formatos en este teléfono. Conéctate un momento para descargarlos.</p>;
+    return (
+      <p className="text-ayuda text-texto-secundario">
+        {visita.formato ? `Falta el formato de ${visita.motivo} en este teléfono. Conéctate un momento para descargarlo.` : "Faltan los formatos en este teléfono. Conéctate un momento para descargarlos."}
+      </p>
+    );
   }
   if (disponibles.length === 1) {
     return variante === "principal" ? (

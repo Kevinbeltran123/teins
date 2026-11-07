@@ -43,7 +43,7 @@ async function clienteConSitio(extra: { nit?: string; ciudad?: string; contactos
 let dias = 0;
 const diaNuevo = () => new Date(Date.UTC(2027, 0, 1 + dias++)).toISOString().slice(0, 10);
 const programar = (cliente: { id: string; sitios: { id: string }[] }, extra: object = {}, cookie = org.oficina.cookie, dia = diaNuevo()) =>
-  pedir(cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, motivo: "Mantenimiento", programadaPara: dia, tecnicos: [org.tecnico.id], ...extra });
+  pedir(cookie, "POST", "/api/visitas", { clienteId: cliente.id, sitioId: cliente.sitios[0]!.id, formato: "prueba-ups", programadaPara: dia, tecnicos: [org.tecnico.id], ...extra });
 
 describe("el NIT del cliente y la ciudad del sitio", () => {
   it("se escriben al crear, se corrigen y salen en el detalle y en la lista", async () => {

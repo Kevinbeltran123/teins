@@ -68,7 +68,7 @@ Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizac
 
 ### Visitas
 
-- Pestañas de próximas, anteriores y canceladas, con técnicos y avance según sus levantamientos. Programar, reasignar, reprogramar y cancelar con motivo; abrir el informe cuando hay levantamientos revisados.
+- Pestañas de próximas, anteriores y canceladas, con técnicos y avance según sus levantamientos. Programar con su servicio (el formato, ADR-0057), reasignar, reprogramar y cancelar con motivo; abrir el informe cuando hay levantamientos revisados.
 - Horario (ADR-0037, `HorarioDeVisita.tsx`: `CuandoVisita` y `TecnicosDisponibles`): todo el día, de una hora a otra o hasta que el técnico la termine.
 - Una visita con su técnico desactivado dice "Sin técnico" y se reasigna sin trabarse (`cambiosAlReasignar`). Tras un conflicto, los diálogos toman la versión vigente (`releer`).
 - "Exportar las cantidades" descarga el detalle y el resumen en CSV para Excel en español (punto y coma, coma decimal, BOM y celdas que no se ejecutan como fórmula), generados en el navegador (`src/csv.ts`).

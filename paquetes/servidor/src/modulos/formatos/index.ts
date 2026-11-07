@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { validarDefinicionFormato, type VersionFormato } from "@teins/dominio";
 import { VersionFormato as EsquemaVersionFormato } from "@teins/protocolo";
 import type { TxOrganizacion } from "../../plataforma/base-de-datos";
@@ -10,6 +10,8 @@ import { versiones } from "./esquema";
 
 export interface Formatos {
   obtener(tx: TxOrganizacion, formato: string, version: number): Promise<VersionFormato | undefined>;
+  /** Los servicios para programar (ADR-0057): cada formato con su nombre visible, ordenados por nombre. */
+  vigentes(tx: TxOrganizacion): Promise<{ clave: string; nombre: string }[]>;
   /** Claves de los formatos cuyo nombre visible contiene el texto: la bandeja busca por lo que se ve. */
   coincidentes(tx: TxOrganizacion, texto: string): Promise<string[]>;
   /**
@@ -37,6 +39,16 @@ export function crearFormatos(): Formatos {
         .from(versiones)
         .where(and(eq(versiones.formato, formato), eq(versiones.version, version)));
       return fila?.definicion;
+    },
+
+    async vigentes(tx) {
+      // El nombre de la versión más alta que lo tiene y, si ninguna, la clave: lo mismo que muestra campo (`nombreDeFormato`).
+      const nombre = sql`${versiones.definicion}->>'nombre'`;
+      const filas = await tx
+        .selectDistinctOn([versiones.formato], { clave: versiones.formato, nombre: sql<string>`coalesce(${nombre}, ${versiones.formato})` })
+        .from(versiones)
+        .orderBy(asc(versiones.formato), sql`${nombre} is null`, desc(versiones.version));
+      return filas.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
     },
 
     async coincidentes(tx, texto) {
