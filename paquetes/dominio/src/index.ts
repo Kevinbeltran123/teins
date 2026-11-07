@@ -52,7 +52,7 @@ export { corregir, marcarRevisado, puedeEditar, tomarRevision } from "./revision
 export type { ResultadoEnvio } from "./estados";
 export { enviarLevantamiento } from "./estados";
 export { validarDefinicionFormato } from "./meta-esquema";
-export { campoVisible, seccionVisible, VERSION_APP_VISIBILIDAD } from "./visibilidad";
+export { bloquesVisibles, campoVisible, seccionVisible, VERSION_APP_VISIBILIDAD } from "./visibilidad";
 export { versionesVigentes } from "./vigencia";
 export { describirValor } from "./describir";
 export { numeroDeOrden } from "./orden";

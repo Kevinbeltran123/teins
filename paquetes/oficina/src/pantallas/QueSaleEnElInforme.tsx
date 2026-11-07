@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { bloqueOcultoPorOmision, bloques, campoOcultoPorOmision, claveOcultable, elegir, mostrarTodo, ocultosDe, tieneBloquePropio, type Bloque, type DefinicionCampo, type SeleccionInforme } from "@teins/dominio";
+import { bloqueOcultoPorOmision, bloquesVisibles, campoOcultoPorOmision, claveOcultable, elegir, mostrarTodo, ocultosDe, tieneBloquePropio, type Bloque, type DefinicionCampo, type SeleccionInforme } from "@teins/dominio";
 import type { Respuesta } from "@teins/protocolo";
 import { Check } from "@teins/ui";
 
@@ -14,7 +14,8 @@ const plural = (n: number, uno: string, varios: string) => (n === 1 ? `1 ${uno}`
  */
 export function QueSaleEnElInforme({ detalle, seleccion, alCambiar, fotos }: { detalle: Detalle; seleccion: SeleccionInforme; alCambiar: (s: SeleccionInforme) => void; fotos: ReadonlyMap<string, string> }) {
   const [eligiendo, setEligiendo] = useState<string | null>(null);
-  const lista = bloques(detalle.formatoDefinicion, detalle.repeticiones);
+  // Lo que el formato oculta por sus condiciones no sale: no hay qué elegir (ADR-0058).
+  const lista = bloquesVisibles(detalle.formatoDefinicion, detalle.repeticiones, detalle.respuestas);
   const oculto = ocultosDe(seleccion, detalle.id);
   const valores = (b: Bloque) => detalle.respuestas[b.clave] ?? {};
   const conValor = (b: Bloque) => b.seccion.campos.filter((c) => valores(b)[c.clave] !== undefined);

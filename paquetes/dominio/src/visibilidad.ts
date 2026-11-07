@@ -1,5 +1,6 @@
 import type { CondicionVisible, DefinicionCampo, DefinicionSeccion, VersionFormato } from "./formato";
 import { esOpciones, type Respuestas } from "./levantamiento";
+import { bloques, leerClave, type Bloque, type Repeticiones } from "./repeticiones";
 
 /** Primera versión de `campo` que evalúa las condiciones (ADR-0058, ADR-0015 punto 4). */
 export const VERSION_APP_VISIBILIDAD = 17;
@@ -9,7 +10,9 @@ export const VERSION_APP_VISIBILIDAD = 17;
  * `seccion~id` en una repetible); sin `seccion`, la condición se lee ahí. Sin respuesta, no se cumple.
  */
 function cumple(condicion: CondicionVisible, bloque: string, respuestas: Respuestas): boolean {
-  const valor = respuestas[condicion.seccion ?? bloque]?.[condicion.campo];
+  // La propia sección, nombrada o no, se lee en este bloque: en una repetible, la misma repetición (`seccion~id`).
+  const clave = !condicion.seccion || condicion.seccion === leerClave(bloque).seccion ? bloque : condicion.seccion;
+  const valor = respuestas[clave]?.[condicion.campo];
   const elegidas = typeof valor === "string" ? [valor] : esOpciones(valor) ? valor.elegidas : [];
   return elegidas.some((o) => condicion.en.includes(o));
 }
@@ -24,15 +27,18 @@ export const campoVisible = (campo: Pick<DefinicionCampo, "visibleSi">, bloque: 
  */
 export function erroresDeVisibilidad(definicion: VersionFormato): string[] {
   const errores: string[] = [];
-  // Lo que ya apareció, en el orden del formato: solo se puede depender de eso.
-  const antes = new Map<string, DefinicionCampo>();
+  // Lo que ya apareció, en el orden del formato: solo se puede depender de eso. Con la sección, para saber si es condicional.
+  const antes = new Map<string, { campo: DefinicionCampo; seccion: DefinicionSeccion }>();
   const revisar = (donde: string, condicion: CondicionVisible, seccionPropia: DefinicionSeccion, esDeSeccion: boolean) => {
     const seccion = condicion.seccion ?? seccionPropia.clave;
     if (esDeSeccion && seccion === seccionPropia.clave) return errores.push(`La condición de la sección ${seccionPropia.clave} debe nombrar otra sección`);
     const otra = definicion.secciones.find((s) => s.clave === seccion);
     if (otra?.repetible && otra.clave !== seccionPropia.clave) return errores.push(`La condición de ${donde} no puede depender de la sección repetible ${seccion}`);
-    const campo = antes.get(`${seccion}.${condicion.campo}`);
-    if (!campo) return errores.push(`La condición de ${donde} apunta a un campo que no existe antes: ${seccion}.${condicion.campo}`);
+    const previo = antes.get(`${seccion}.${condicion.campo}`);
+    if (!previo) return errores.push(`La condición de ${donde} apunta a un campo que no existe antes: ${seccion}.${condicion.campo}`);
+    const campo = previo.campo;
+    // Sin cadenas: si lo que se mira también puede ocultarse, su valor viejo seguiría mostrando esto (ADR-0058).
+    if (campo.visibleSi || (previo.seccion.visibleSi && previo.seccion.clave !== seccionPropia.clave)) return errores.push(`La condición de ${donde} depende de ${seccion}.${condicion.campo}, que también es condicional`);
     if (campo.tipo !== "opcion" && campo.tipo !== "opciones") return errores.push(`La condición de ${donde} apunta a ${seccion}.${condicion.campo}, que no es una selección`);
     if (condicion.en.length === 0 || condicion.en.some((o) => !campo.opciones.includes(o))) errores.push(`La condición de ${donde} usa opciones que ${seccion}.${condicion.campo} no tiene`);
     return undefined;
@@ -41,10 +47,17 @@ export function erroresDeVisibilidad(definicion: VersionFormato): string[] {
     if (seccion.visibleSi) revisar(seccion.clave, seccion.visibleSi, seccion, true);
     for (const campo of seccion.campos) {
       if (campo.visibleSi) revisar(`${seccion.clave}.${campo.clave}`, campo.visibleSi, seccion, false);
-      antes.set(`${seccion.clave}.${campo.clave}`, campo);
+      antes.set(`${seccion.clave}.${campo.clave}`, { campo, seccion });
     }
   }
   return errores;
 }
 
 export const usaVisibilidad = (definicion: VersionFormato) => definicion.secciones.some((s) => s.visibleSi || s.campos.some((c) => c.visibleSi));
+
+/** Los bloques del levantamiento sin lo oculto por condiciones (ADR-0058), cada uno con solo sus campos visibles: lo que revisa oficina. */
+export function bloquesVisibles(formato: VersionFormato, repeticiones: Repeticiones, respuestas: Respuestas): Bloque[] {
+  return bloques(formato, repeticiones)
+    .filter((b) => seccionVisible(b.seccion, respuestas))
+    .map((b) => ({ ...b, seccion: { ...b.seccion, campos: b.seccion.campos.filter((c) => campoVisible(c, b.clave, respuestas)) } }));
+}
