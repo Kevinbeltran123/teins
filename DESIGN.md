@@ -247,4 +247,5 @@ Toda vista con datos diseña **vacío, cargando, error y sin conexión**. En cam
 - **El producto se llama "TEINS"**, sin más. Campo, oficina y portal son nombres internos de la arquitectura: nunca se muestran (títulos, `<title>`, etiquetas accesibles, nombres de archivo, correos).
 - **Donde va la marca va el logo oficial** (`paquetes/ui/src/logo-teins.png`, PNG transparente de 292 × 90: los anillos azules, "teins" y la razón social): inicio de sesión, menú de oficina y PDF. No se escribe "TEINS" al lado del logo ni se repite en la misma pantalla.
 - En el tema oscuro, el logo se pinta en blanco con un filtro (`--t-filtro-logo`).
+- **Ícono de la app, de la pestaña y de los avisos:** solo el símbolo (los anillos), sobre blanco. Está trazado en vector sobre el logo oficial (`paquetes/ui/src/simbolo-teins.svg`), y los PNG de cada superficie salen de él con `sh scripts/generar-iconos.sh`. Cuando TEINS entregue su logo en vector, se reemplaza ese archivo y se vuelve a correr.
 - **Pendiente:** de TEINS, el logo en vector y su versión en negativo.

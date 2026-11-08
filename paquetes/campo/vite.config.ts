@@ -27,10 +27,11 @@ export default defineConfig({
         orientation: "portrait",
         background_color: "#0B0F17",
         theme_color: "#0B0F17",
-        // Íconos provisionales hasta tener el logo de TEINS.
+        // El símbolo de TEINS (scripts/generar-iconos.sh). El «maskable» deja margen para que Android lo recorte.
         icons: [
-          { src: "icono-192.png", sizes: "192x192", type: "image/png" },
-          { src: "icono-512.png", sizes: "512x512", type: "image/png" },
+          { src: "icono-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icono-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icono-mascara-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
     }),

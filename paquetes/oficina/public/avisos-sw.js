@@ -24,7 +24,7 @@ self.addEventListener("push", (evento) => {
   }
   const aviso = datos && datos.notification;
   if (!aviso || !aviso.title) return;
-  const opciones = { body: aviso.body, tag: aviso.tag, lang: aviso.lang, dir: aviso.dir, data: { navigate: aviso.navigate } };
+  const opciones = { body: aviso.body, tag: aviso.tag, lang: aviso.lang, dir: aviso.dir, icon: "/icono-192.png", badge: "/insignia-96.png", data: { navigate: aviso.navigate } };
   evento.waitUntil(
     self.clients.matchAll({ type: "window" }).then(async (ventanas) => {
       const mirando = ventanas.find((v) => v.focused && abiertas.get(v.id) === aviso.tag);
