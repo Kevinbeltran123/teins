@@ -143,7 +143,7 @@ describe("qué se avisa (ADR-0023)", () => {
 
     const visita = await programar(org);
     await s.procesarCola();
-    expect(avisos()).toEqual([{ titulo: "Visita nueva", cuerpo: "Para el sáb, 3 de oct. Ábrela para ver el cliente y el sitio." }]);
+    expect(avisos()).toEqual([{ titulo: "Visita nueva", cuerpo: "prueba-ups para el sáb, 3 de oct. Ábrela para ver el cliente y el sitio." }]);
     const [{ carga, tema }] = recibidos as [(typeof recibidos)[number]];
     expect(carga).toMatchObject({ web_push: 8030, notification: { navigate: `${ORIGEN}/`, tag: `visita:${visita.id}` } });
     expect(tema).toMatch(/^[A-Za-z0-9_-]{32}$/);
@@ -200,7 +200,7 @@ describe("qué se avisa (ADR-0023)", () => {
     const id = await enviarLevantamiento(org.tecnico.cookie);
     await s.procesarCola();
     expect(recibidos.map((r) => [r.carga.notification.title, r.carga.notification.body, r.carga.notification.navigate])).toEqual([
-      ["Levantamiento nuevo", "Técnico de prueba envió un levantamiento.", "http://localhost:5174/"],
+      ["Levantamiento nuevo", "Técnico de prueba envió un levantamiento.", `http://localhost:5174/levantamientos/${id}`],
     ]);
 
     recibidos.length = 0;

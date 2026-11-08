@@ -241,7 +241,7 @@ export function crearVisitas(clientes: ClientesYSitios, formatos?: Pick<Formatos
       await registrar(tx, [
         { organizacionId, agregadoTipo: "visita", agregadoId: id, tipoEvento: "visita_creada", autorId, correlacion, valorNuevo: { clienteId, sitioId, formato, programadaPara, horaInicio, horaFin, tecnicos: unicos, ordenDeServicio, solicitanteContactoId, referenciaCliente: referencia } },
       ]);
-      await avisarPush(tx, { tipo: "visita_asignada", organizacionId, tecnicos: unicos, visitaId: id, programadaPara, horaInicio });
+      await avisarPush(tx, { tipo: "visita_asignada", organizacionId, tecnicos: unicos, visitaId: id, programadaPara, horaInicio, servicio: formato ? motivo.trim() : null });
       await registrarCambios(tx, avisar(organizacionId, id, unicos, "cambio"));
       return id;
     },
@@ -285,7 +285,7 @@ export function crearVisitas(clientes: ClientesYSitios, formatos?: Pick<Formatos
       const salen = [...anteriores].filter((t) => !nuevos.has(t));
       const entran = [...nuevos].filter((t) => !anteriores.has(t));
       await avisarPush(tx, { tipo: "visita_retirada", organizacionId, tecnicos: salen, visitaId, programadaPara: actual.programadaPara });
-      await avisarPush(tx, { tipo: "visita_asignada", organizacionId, tecnicos: entran, visitaId, programadaPara: actual.programadaPara });
+      await avisarPush(tx, { tipo: "visita_asignada", organizacionId, tecnicos: entran, visitaId, programadaPara: actual.programadaPara, horaInicio: aHoraCorta(actual.horaInicio), servicio: actual.formato ? actual.motivo : null });
       await registrarCambios(tx, [...avisar(organizacionId, visitaId, salen, "fuera_de_alcance"), ...avisar(organizacionId, visitaId, entran, "cambio")]);
     },
 

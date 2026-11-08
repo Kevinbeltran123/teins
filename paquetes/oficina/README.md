@@ -5,7 +5,7 @@ Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizac
 - **Dependencias:** `dominio`, `protocolo`, `documentos` y `ui`. TanStack Query para el estado del servidor y TanStack Router para las rutas (ADR-0011). El QR lo genera `qrcode` (MIT) en un fragmento que solo se carga al necesitarlo.
 - **ADR:** 0002, 0011, 0014, 0023, 0024, 0025, 0026, 0028, 0029, 0031, 0033 a 0037, 0039, 0040.
 - **Estilos:** la escala de oficina de los tokens con `data-superficie="oficina"` y `@teins/ui/oficina.css`. Ninguna pantalla define estilos propios.
-- **Service worker:** el único (`public/avisos-sw.js`) muestra avisos push; no guarda nada en caché (ADR-0023).
+- **Service worker:** el único (`public/avisos-sw.js`) muestra avisos push, con el símbolo de TEINS (`public/icono-192.png`, de `scripts/generar-iconos.sh`); no guarda nada en caché (ADR-0023). «Levantamiento nuevo» abre ese levantamiento y un envío que no llegó abre Informes o Cotizaciones.
 - La historia de cada iteración está en [`docs/proceso/historia/`](../../docs/proceso/historia/).
 
 ## Cómo se usa

@@ -1,0 +1,7 @@
+<!-- Símbolo de TEINS (los anillos del logo oficial), en vector. Se trazó sobre paquetes/ui/src/logo-teins.png mientras TEINS entrega su logo en vector (DESIGN.md, "Nombre público y logo"). De aquí salen los íconos: scripts/generar-iconos.sh. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0.95 0.85 82.9 88.3" fill="none" stroke-width="5.2" stroke-linecap="round">
+  <path d="M36.89 28.86A19.5 19.5 0 1 1 16.86 48.89" stroke="#76AADB"/>
+  <path d="M3.56 41.98A33.4 33.4 0 1 1 28.16 80.73" stroke="#1773B0"/>
+  <path d="M36.11 3.45A44.9 44.9 0 0 1 59.94 86.55" stroke="#002B81"/>
+  <circle cx="36.35" cy="48.35" r="8.6" fill="#002B81" stroke="none"/>
+</svg>

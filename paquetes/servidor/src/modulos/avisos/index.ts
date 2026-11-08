@@ -13,7 +13,9 @@ import { fechaEnColombia, formatearDia } from "@teins/dominio";
 
 /** Hechos que merecen un aviso (ADR-0023): cada uno pide una acción de quien lo recibe. */
 export type Aviso =
-  | { tipo: "visita_asignada" | "visita_cancelada" | "visita_retirada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; programadaPara: string; horaInicio?: string | null }
+  | { tipo: "visita_cancelada" | "visita_retirada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; programadaPara: string }
+  /** Con el servicio (ADR-0057): es el nombre del formato, no un dato del cliente. */
+  | { tipo: "visita_asignada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; programadaPara: string; horaInicio?: string | null; servicio?: string | null }
   | { tipo: "visita_reprogramada"; organizacionId: string; tecnicos: readonly string[]; visitaId: string; antes: string; despues: string; horaAntes?: string | null; horaDespues?: string | null }
   | { tipo: "levantamiento_revisado"; organizacionId: string; tecnicoId: string; levantamientoId: string; creadoEn: Date }
   /** Oficina escribió en una conversación (ADR-0040): con el cliente y el texto, por decisión de Kevin. */
@@ -53,7 +55,11 @@ const diaDe = (momento: Date) => dia(fechaEnColombia(momento));
 export function contenidoDe(aviso: Aviso): Contenido {
   switch (aviso.tipo) {
     case "visita_asignada":
-      return { titulo: "Visita nueva", cuerpo: `Para el ${dia(aviso.programadaPara)}${aLas(aviso.horaInicio)}. Ábrela para ver el cliente y el sitio.`, etiqueta: `visita:${aviso.visitaId}` };
+      return {
+        titulo: "Visita nueva",
+        cuerpo: `${aviso.servicio ? `${aviso.servicio} para` : "Para"} el ${dia(aviso.programadaPara)}${aLas(aviso.horaInicio)}. Ábrela para ver el cliente y el sitio.`,
+        etiqueta: `visita:${aviso.visitaId}`,
+      };
     case "visita_reprogramada":
       return aviso.antes !== aviso.despues
         ? { titulo: "Visita reprogramada", cuerpo: `La del ${dia(aviso.antes)} pasó al ${dia(aviso.despues)}${aLas(aviso.horaDespues)}.`, etiqueta: `visita:${aviso.visitaId}` }
@@ -76,11 +82,11 @@ export function contenidoDe(aviso: Aviso): Contenido {
     case "levantamiento_revisado":
       return { titulo: "Levantamiento revisado", cuerpo: `Oficina revisó tu levantamiento del ${diaDe(aviso.creadoEn)}.`, etiqueta: `levantamiento:${aviso.levantamientoId}` };
     case "levantamiento_enviado":
-      return { titulo: "Levantamiento nuevo", cuerpo: `${aviso.tecnico} envió un levantamiento.`, etiqueta: `levantamiento:${aviso.levantamientoId}` };
+      return { titulo: "Levantamiento nuevo", cuerpo: `${aviso.tecnico} envió un levantamiento.`, etiqueta: `levantamiento:${aviso.levantamientoId}`, ruta: `/levantamientos/${aviso.levantamientoId}` };
     case "envio_fallido":
       return aviso.documento === "cotizacion"
-        ? { titulo: "Un envío de la cotización no llegó", cuerpo: "Abra Cotizaciones para ver cuál y volver a enviarla.", etiqueta: `envio:${aviso.versionId}` }
-        : { titulo: "Un envío del informe no llegó", cuerpo: "Abra Informes para ver cuál y volver a enviarlo.", etiqueta: `envio:${aviso.versionId}` };
+        ? { titulo: "Un envío de la cotización no llegó", cuerpo: "Abra Cotizaciones para ver cuál y volver a enviarla.", etiqueta: `envio:${aviso.versionId}`, ruta: "/cotizaciones" }
+        : { titulo: "Un envío del informe no llegó", cuerpo: "Abra Informes para ver cuál y volver a enviarlo.", etiqueta: `envio:${aviso.versionId}`, ruta: "/informes" };
   }
 }
 
