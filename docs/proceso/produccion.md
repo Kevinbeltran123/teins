@@ -11,7 +11,13 @@ Encendida, `campo`, `oficina` y `portal` se duermen tras 10 minutos sin tráfico
 `railway scale <región>=0` **no** apaga un servicio: quita la región y Railway lo vuelve a poner en `us-west2` con una réplica. Así quedó producción ese día antes de apagarla, base incluida. Para encenderla, con el proyecto enlazado:
 
 1. `railway config plan` y `railway config apply`: devuelve los servicios a `us-east4`, como declara `.railway/railway.ts`.
-2. Postgres primero: en el panel de Railway, su último despliegue → «Redeploy». Espera a que quede activo.
+2. Postgres primero. Después de `railway down` no le queda un despliegue que repetir (`railway redeploy` responde «No deployment found»): se despliega desde su configuración, que conserva la imagen y el volumen con los datos. Espera a que quede en `SUCCESS`:
+
+   ```sh
+   railway api 'mutation { serviceInstanceDeployV2(serviceId: "<id de Postgres>", environmentId: "<id del entorno>") }'
+   ```
+
+   Los ids salen de `railway api '{ project(id: "<id del proyecto>") { environments { edges { node { id name } } } services { edges { node { id name } } } } }'`.
 3. Despliega con el flujo «Desplegar» (sección "Desplegar una versión"), o desde el computador: `railway up --service campo --detach` (migra antes de arrancar) y, después, `oficina`, `portal`, `worker` y `respaldos`.
 4. Comprueba que `/salud` responde en las tres direcciones y corre `infra/railway/verificar-exposicion.sh`.
 
@@ -38,7 +44,7 @@ Direcciones de producción (dominios gratuitos de Railway, con HTTPS):
 
 Primera persona administradora: usuario `administracion`, contraseña en `privado/teins-produccion.txt` (computador de Kevin; git lo ignora). Al abrir "Administración" pide activar el segundo factor.
 
-Producción no tiene formatos publicados todavía: se publican los de TEINS con `publicar-formato` cuando respondan P7 y P8. Los de prueba (`prueba-ups`) no se publican allí.
+Producción tiene los formatos de TEINS (versiones 1 y 2, publicados con `publicar-formato`) y los 37 símbolos. Los de prueba (`prueba-ups`) no se publican allí. Para probarla sin datos reales, la organización tiene `tecnico.prueba` y `oficina.prueba` (2026-11-07), con sus contraseñas en `privado/teins-produccion.txt`.
 
 Proyectos en Railway:
 
@@ -169,13 +175,14 @@ Si algo falla, termina con error. Cada simulacro se anota en la tabla de abajo.
 | 2026-09-29 | Pruebas (Railway) | 0,0 h | 1 s | 177 íntegras (302 eslabones), 0 rotas | 27 referenciados, 0 faltantes | Correcto, primera copia cifrada (revisión 4d): la copia vieja pasó a `cifrado/` y en la raíz del destino no quedó nada en claro |
 | 2026-09-29 | Producción (Railway) | 0,1 h | 0 s | 2 íntegras (3 eslabones), 0 rotas | 0 referenciados, 0 faltantes | Correcto, primera copia cifrada de producción, después de actualizarla con las iteraciones 9 a 23 y la revisión de seguridad: los volcados en claro pasaron a `cifrado/` |
 | 2026-11-07 | Producción (Railway) | 0,0 h | 1 s | 2 íntegras (3 eslabones), 0 rotas | 0 referenciados, 0 faltantes | Correcto, con la `v0.9.1`, los dos formatos de TEINS y los 37 símbolos, antes de apagarla otra vez. El primer respaldo del día falló: la clave secreta del destino estaba desactualizada (ver «Copias») |
+| 2026-11-07 | Producción (Railway) | 11,4 h | 0 s | 2 íntegras (3 eslabones), 0 rotas | 0 referenciados, 0 faltantes | Correcto, al encenderla de nuevo con la `v0.10.0`: Postgres volvió con sus datos y el volcado era el de esa mañana |
 
 ## Encender producción para el piloto
 
 El día que empieza el piloto ([`../entrega/piloto.md`](../entrega/piloto.md)), en este orden. Antes, las condiciones de «Antes de empezar» del piloto deben estar cumplidas: sin la autorización de TEINS no se carga información real en este proyecto (ADR-0021). Toma unos 30 minutos.
 
 1. **Versión.** Si todavía no existe la `v0.9.0` (o la que vaya al piloto), Actions → «Publicar versión», con `master`.
-2. **Encender.** Pasos 1 y 2 del inicio de este documento: `railway config apply` y el «Redeploy» de Postgres. Desde el 2026-11-07, el plan ya no tiene cambios y la base ya está en `us-east4`: queda solo el «Redeploy». La API de Railway todavía muestra el volumen en `us-west2`, aunque Postgres corre en `us-east4` (`RAILWAY_REPLICA_REGION`) con todos sus datos; si al encender el volumen pide migrarse, es esa copia.
+2. **Encender.** Pasos 1 y 2 del inicio de este documento: `railway config apply` y el despliegue de Postgres. Desde el 2026-11-07, el plan ya no tiene cambios y la base ya está en `us-east4`: queda solo desplegar Postgres. La API de Railway todavía muestra el volumen en `us-west2`, aunque Postgres corre en `us-east4` (`RAILWAY_REPLICA_REGION`) con todos sus datos; si al encender el volumen pide migrarse, es esa copia.
 3. **Desplegar.** Actions → «Desplegar», con la etiqueta `v0.9.0` en «Use workflow from», `produccion` y la confirmación. `campo` aplica las migraciones pendientes antes de arrancar.
 4. **Exposición.** `infra/railway/verificar-exposicion.sh`.
 5. **Formatos reales.** Ya publicados el 2026-11-07 (los dos formatos y los 37 símbolos, con la `v0.9.1`); se repite solo si hay una versión nueva de un formato o de la biblioteca. Producción no se siembra, y los archivos de `datos-reales/formatos/` no van en la imagen. Se pasan por la entrada del comando, con el proyecto enlazado:
