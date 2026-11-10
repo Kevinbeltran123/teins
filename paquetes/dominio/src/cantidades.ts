@@ -61,7 +61,7 @@ export function sumarDecimales(a: string, b: string): string {
   const decimales = Math.max(fa.length, fb.length);
   const total = (BigInt(ea + fa.padEnd(decimales, "0")) + BigInt(eb + fb.padEnd(decimales, "0"))).toString().padStart(decimales + 1, "0");
   const entero = total.slice(0, total.length - decimales).replace(/^0+(?=\d)/, "");
-  const fraccion = total.slice(total.length - decimales).replace(/0+$/, "");
+  const fraccion = total.slice(total.length - decimales).replace(/(?<!0)0+$/, "");
   return fraccion ? `${entero}.${fraccion}` : entero;
 }
 

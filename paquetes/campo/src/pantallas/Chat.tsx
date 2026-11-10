@@ -240,16 +240,13 @@ export function Chat({
           const d = f.referencia ? dato(m.comentarioId) : null;
           const elegir = () => !revisado && setElegido((e) => ({ comentarioId: m.comentarioId, vez: (e?.vez ?? 0) + 1 }));
           return (
-            // Tocar el globo elige la pregunta; el teclado lo hace con el botón del texto.
-            <div key={m.id} onClick={elegir} className={`flex max-w-[78%] cursor-pointer flex-col self-start rounded-[19px] bg-superficie-pista px-[13px] py-2 text-[16px] leading-[1.35] text-texto ${forma}`}>
+            // Tocar el globo elige la pregunta: el botón del texto lo cubre entero.
+            <div key={m.id} className={`relative flex max-w-[78%] flex-col self-start rounded-[19px] bg-superficie-pista px-[13px] py-2 text-[16px] leading-[1.35] text-texto ${forma}`}>
               {d && (
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    verDato(d.seccion, d.campo);
-                  }}
-                  className="-mx-[5px] mb-1.5 flex flex-col gap-px rounded-[8px] border-l-[3px] border-acento bg-texto/[0.07] px-2.5 py-1.5 text-left text-[14px] leading-tight text-texto focus-visible:outline-3 focus-visible:outline-foco"
+                  onClick={() => verDato(d.seccion, d.campo)}
+                  className="relative z-10 -mx-[5px] mb-1.5 flex flex-col gap-px rounded-[8px] border-l-[3px] border-acento bg-texto/[0.07] px-2.5 py-1.5 text-left text-[14px] leading-tight text-texto focus-visible:outline-3 focus-visible:outline-foco"
                 >
                   <small className="text-[12px] text-texto-secundario">Tu respuesta · {d.titulo}</small>
                   <span className="font-semibold">{d.pregunta}</span>
@@ -260,11 +257,8 @@ export function Chat({
                 type="button"
                 aria-label={`Responder: ${m.texto}`}
                 disabled={revisado}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  elegir();
-                }}
-                className="whitespace-pre-line text-left [overflow-wrap:anywhere] focus-visible:outline-3 focus-visible:outline-foco disabled:cursor-default"
+                onClick={elegir}
+                className="whitespace-pre-line text-left [overflow-wrap:anywhere] after:absolute after:inset-0 after:rounded-[inherit] focus-visible:outline-3 focus-visible:outline-foco disabled:cursor-default"
               >
                 {m.texto}
               </button>

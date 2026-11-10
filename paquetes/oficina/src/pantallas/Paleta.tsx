@@ -226,7 +226,7 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
               const i = k;
               const Icono = g.grupo === "Recientes" ? Clock : iconoDe(r);
               return (
-                <div key={`${r.tipo}:${r.id}`} id={`${idLista}-${i}`} role="option" aria-selected={i === actual} className="item-p" onPointerMove={() => i !== actual && setActivo(i)} onClick={() => void abrir(r)}>
+                <div key={`${r.tipo}:${r.id}`} id={`${idLista}-${i}`} role="option" aria-selected={i === actual} tabIndex={-1} className="item-p" onPointerMove={() => i !== actual && setActivo(i)} onClick={() => void abrir(r)}>
                   <Icono aria-hidden size={16} strokeWidth={1.6} />
                   <span className="t">{r.titulo}</span>
                   {r.detalle && <span className="d">{r.detalle}</span>}

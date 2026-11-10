@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Aviso, Boton, ChevronLeft, ChevronRight, ChevronDown, Clock, RefreshCw, Search } from "@teins/ui";
 import { cruceDe, duracionTexto, hora12, aHora, aMinutos, libreTexto, ocupadoTexto, DIA_COMPLETO, type Horario, type Ocupacion } from "../horario";
@@ -48,16 +48,19 @@ export function CuandoVisita({ fecha, horario, hoy, alCambiar }: { fecha: string
   useEffect(() => {
     if (!abierto) return;
     const fuera = (e: MouseEvent) => !caja.current?.contains(e.target as Node) && setAbierto(null);
-    document.addEventListener("mousedown", fuera);
-    return () => document.removeEventListener("mousedown", fuera);
-  }, [abierto]);
-  const conEsc = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && abierto) {
+    const conEsc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !caja.current?.contains(e.target as Node)) return;
       e.preventDefault();
       e.stopPropagation();
       setAbierto(null);
-    }
-  };
+    };
+    document.addEventListener("mousedown", fuera);
+    document.addEventListener("keydown", conEsc, true);
+    return () => {
+      document.removeEventListener("mousedown", fuera);
+      document.removeEventListener("keydown", conEsc, true);
+    };
+  }, [abierto]);
   const duracion = horario.horaInicio && horario.horaFin ? aMinutos(horario.horaFin) - aMinutos(horario.horaInicio) : null;
   const elegirHora = (inicio: string | null) => {
     setAbierto(null);
@@ -117,7 +120,7 @@ export function CuandoVisita({ fecha, horario, hoy, alCambiar }: { fecha: string
   return (
     <div className="campo">
       <span className="etq">Cuándo</span>
-      <div className="cuando" ref={caja} onKeyDown={conEsc}>
+      <div className="cuando" ref={caja}>
         <Selector id="fecha" abierto={abierto} valor={fechaCorta(fecha, hoy)} etiqueta="Fecha" alAbrir={setAbierto} />
         <Selector id="hora" abierto={abierto} valor={horario.horaInicio ? hora12(horario.horaInicio) : "Todo el día"} etiqueta="Hora" alAbrir={setAbierto} />
         {horario.horaInicio && <Selector id="duracion" abierto={abierto} valor={duracion === null ? "Sin definir" : duracionTexto(duracion)} etiqueta="Duración" alAbrir={setAbierto} />}

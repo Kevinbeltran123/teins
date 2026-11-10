@@ -60,7 +60,7 @@ export function MenuAcciones({ etiqueta, opciones }: { etiqueta: string; opcione
       <span ref={ancla} className="inline-flex">
         <BotonIcono icono={Ellipsis} etiqueta={etiqueta} tamano="pequeno" popoverTarget={id} aria-haspopup="menu" aria-expanded={abierto} />
       </span>
-      <div ref={menu} id={id} popover="auto" role="menu" aria-label={etiqueta} onKeyDown={teclado} className="menu-acc inset-auto m-0 min-w-52 rounded-control border border-division bg-panel p-1 text-texto shadow-menu">
+      <div ref={menu} id={id} popover="auto" role="menu" aria-label={etiqueta} tabIndex={-1} onKeyDown={teclado} className="menu-acc inset-auto m-0 min-w-52 rounded-control border border-division bg-panel p-1 text-texto shadow-menu">
         {visibles.map((o) => (
           <button
             key={o.texto}
