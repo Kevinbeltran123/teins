@@ -51,9 +51,13 @@ jobs:
             echo "::error::El commit $GITHUB_SHA no tiene una corrida exitosa de la integración continua."
             exit 1
           fi
-      # La misma CLI que se usa desde el computador; la versión se fija aquí.
+      # La misma CLI que se usa desde el computador; la versión se fija aquí. Sin los scripts de las dependencias:
+      # solo corre el del paquete, que descarga el binario.
       - name: CLI de Railway
-        run: npm install --global @railway/cli@5.63.3
+        run: |
+          npm install --global --ignore-scripts @railway/cli@5.63.3
+          (cd "$(npm root --global)/@railway/cli" && node npm-install/postinstall.js)
+          railway --version
       # Solo este paso ve el token. `--ci` espera a que termine la construcción y falla si falla.
       - name: campo (migra antes de arrancar), oficina, portal, worker y respaldos
         env:

@@ -32,8 +32,8 @@ const porLicencia = JSON.parse(salida);
 const problemas = [];
 for (const [licencia, paquetes] of Object.entries(porLicencia)) {
   // Expresiones SPDX: con OR basta una alternativa permitida; con AND, cada parte debe serlo.
-  const alternativas = licencia.replace(/[()]/g, "").split(/\s+OR\s+/);
-  if (alternativas.some((a) => a.split(/\s+AND\s+/).every((parte) => PERMITIDAS.has(parte.trim())))) continue;
+  const alternativas = licencia.replace(/[()]/g, "").split(/\s+/).join(" ").split(" OR ");
+  if (alternativas.some((a) => a.split(" AND ").every((parte) => PERMITIDAS.has(parte.trim())))) continue;
   for (const p of paquetes) problemas.push(`${p.name}@${p.versions.join(",")}: ${licencia}`);
 }
 

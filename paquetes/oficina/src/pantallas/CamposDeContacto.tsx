@@ -83,7 +83,7 @@ export function useCamposDeContacto(contacto: Contacto | null, { algunCanal = fa
       ...(nombre.trim() === "" ? { nombre: "Escriba el nombre del contacto." } : {}),
       ...(algunCanal && correoLimpio === "" && !celularE164 ? { correo: "Escriba el correo, el celular o los dos: por ahí le llegan los documentos." } : {}),
       ...(recibeCorreo && correoLimpio === "" && !(algunCanal && !celularE164) ? { correo: "Para recibir el informe por correo hace falta el correo." } : {}),
-      ...(correoLimpio !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoLimpio) ? { correo: "Revise el correo: le falta algo, como la @ o el dominio." } : {}),
+      ...(correoLimpio !== "" && !/^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/.test(correoLimpio) ? { correo: "Revise el correo: le falta algo, como la @ o el dominio." } : {}),
       ...(recibeWhatsapp && !celularE164 ? { celular: "Para recibir el informe por WhatsApp hace falta el celular." } : {}),
       ...(celularE164 && !CELULAR.test(celularE164) ? { celular: "Escriba los 10 dígitos del celular, o el número con + y el indicativo si es de otro país." } : {}),
       ...(recibeWhatsapp && !autorizado ? { autorizacion: "WhatsApp exige que el contacto haya autorizado los mensajes." } : {}),

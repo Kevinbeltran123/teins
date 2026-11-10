@@ -87,7 +87,7 @@ function mismoSellado(a: VisitaGuardada, b: VisitaGuardada): boolean {
 /** 32 bytes aleatorios en base64url. */
 function secretoAleatorio(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 /** Lo que el técnico descartó en este teléfono (`teins-…:<id>`: sugerencias de llave y de avisos). */
