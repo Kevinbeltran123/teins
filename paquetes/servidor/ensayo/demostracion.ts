@@ -166,16 +166,17 @@ const huellaDe = (texto: string) => createHash("sha256").update(texto).digest("h
 /** Un UUID v4 que sale siempre igual del mismo texto: así una corrida reconoce el levantamiento de la anterior. */
 function uuidEstable(texto: string): string {
   const h = huellaDe(texto);
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h[16]!, 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((Number.parseInt(h[16]!, 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 /** Id corto de una línea de cantidades: ocho caracteres en minúsculas y dígitos. */
 const idCorto = (texto: string) => BigInt(`0x${huellaDe(texto).slice(0, 16)}`).toString(36).padStart(8, "0").slice(-8);
 
 /** Azar con semilla: los mismos valores en cada corrida para la misma visita. */
 function azarDe(semilla: string) {
-  let a = parseInt(huellaDe(semilla).slice(0, 8), 16);
+  let a = Number.parseInt(huellaDe(semilla).slice(0, 8), 16);
   const siguiente = () => {
-    a = (a + 0x6d2b79f5) | 0;
+    // mulberry32: la suma va en 32 bits sin signo, como en el original.
+    a = (a + 0x6d2b79f5) >>> 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -192,7 +193,7 @@ type Azar = ReturnType<typeof azarDe>;
 /** Decimal canónico (punto, sin ceros de más): lo que acepta una medida o una cantidad. */
 function decimal(n: number, decimales = 1): string {
   const s = n.toFixed(decimales);
-  return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+  return s.includes(".") ? s.replace(/(?<!0)0+$/, "").replace(/\.$/, "") : s;
 }
 
 // Datos inventados ---------------------------------------------------------------------------------
@@ -780,9 +781,7 @@ function opcion(campo: Extract<DefinicionCampo, { tipo: "opcion" }>, ctx: Contex
         ? "Selladas"
         : /solucionado/i.test(e)
           ? (ctx.visita?.solucionado ?? "Totalmente")
-          : /emplearon|materiales/i.test(e)
-            ? "Sí"
-            : "Sí";
+          : "Sí";
   return campo.opciones.includes(preferida) ? preferida : campo.opciones[0]!;
 }
 
