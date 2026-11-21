@@ -204,6 +204,52 @@ El día que empieza el piloto ([`../entrega/piloto.md`](../entrega/piloto.md)), 
 7. **Usuarios.** La persona administradora crea en oficina, en «Administración», los usuarios de los participantes, con contraseña temporal.
 8. **Prueba de humo.** Un levantamiento de práctica de punta a punta: la app instalada, sin señal, el envío, la revisión, el informe y el portal. Después se descarta.
 
+## Entrega con datos de demostración y Chispa (2026-11-21)
+
+Para mostrarle a TEINS todo funcionando en producción, con datos inventados y creíbles en su organización (ADR-0060). Desde la raíz del repositorio, en este orden:
+
+1. **Versión.** Con el pull request de la iteración 53 fusionado: Actions → «Publicar versión», con `master` y `0.11.0`.
+2. **Chispa, antes de desplegar.** Las variables entran con el despliegue. Ponga en la consola de Anthropic un límite de gasto mensual, y después, con la llave de producción copiada:
+
+   ```sh
+   railway link -p teins-produccion -e production
+   pbpaste | railway variable set ANTHROPIC_API_KEY --stdin -s worker --skip-deploys
+   railway variable set ASISTENTE_ACTIVO=true -s oficina --skip-deploys
+   ```
+
+   La llave va solo en el worker. `pbpaste | … --stdin` no la deja en pantalla ni en el historial.
+3. **Desplegar.** Actions → «Desplegar», con la etiqueta `v0.11.0` en «Use workflow from», `produccion` y la confirmación. `campo` aplica la migración 0044 antes de arrancar.
+4. **Exposición.** `infra/railway/verificar-exposicion.sh`.
+5. **Datos de demostración.**
+   - **Quién lo corre:** un técnico y una persona de oficina que ya existan en la organización de TEINS. Si la persona de oficina administra con segundo factor, el comando pide su código y también pone los precios del catálogo.
+
+     ```sh
+     cd paquetes/servidor
+     read -rs DEMO_TECNICO_CONTRASENA && export DEMO_TECNICO_CONTRASENA
+     read -rs DEMO_OFICINA_CONTRASENA && export DEMO_OFICINA_CONTRASENA
+     DEMO_CAMPO_URL=https://campo-production-21f0.up.railway.app DEMO_OFICINA_URL=https://oficina-production-9584.up.railway.app \
+       DEMO_TECNICO=<técnico> DEMO_OFICINA=<oficina> pnpm demostracion
+     ```
+
+   - **Qué crea**, todo por la API, como lo harían el técnico y oficina:
+     - catálogo con precios;
+     - 8 clientes y sus sitios en Ibagué, Espinal y Melgar;
+     - 23 visitas: 18 de los últimos meses y 5 próximas;
+     - 18 levantamientos con fotos, firma y materiales;
+     - 16 revisados, y 2 que quedan en la bandeja;
+     - 8 informes con su PDF y 2 cotizaciones.
+   - **Nada se envía a nadie**, y se puede repetir sin duplicar.
+   - **La fecha de recibido es la de hoy:** la pone el servidor al recibir.
+6. **Probar.** Oficina, botón «Chispa»: las cuatro sugerencias, la pestaña de uso en Administración y la fase 53 de la [verificación manual](verificacion-manual.md).
+7. **Antes del primer dato real** hacen falta la autorización escrita de TEINS para el asistente (pendiente 23) y la cuenta de Anthropic a su nombre. Sin ellas, se apaga:
+
+   ```sh
+   railway variable set ASISTENTE_ACTIVO=false -s oficina
+   railway variable delete ANTHROPIC_API_KEY -s worker
+   ```
+
+   Los datos de demostración entran en las listas y en las cifras de Chispa. La auditoría está encadenada, así que no se borran uno por uno. Para empezar con datos reales limpios, conviene empezar con una base nueva (hoy producción no tiene nada real): migrar, publicar los formatos y crear los usuarios, como en «Encender producción para el piloto».
+
 ## Transferir a TEINS
 
 Cuando TEINS tenga su espacio de trabajo en Railway (plan Hobby o Pro):

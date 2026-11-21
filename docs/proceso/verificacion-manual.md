@@ -839,24 +839,24 @@ En el iPhone, con una visita de hoy y la batería por encima del 50 %.
 
 ## Fase 53 · Chispa, el asistente de datos (iteración 53, ADR-0060)
 
-**En producción no se enciende sin la autorización escrita de TEINS** (pendiente 23 de [`docs/entrega/pendientes-de-teins.md`](../entrega/pendientes-de-teins.md)): enviar a Anthropic lo que el asistente consulta exige su autorización y una cuenta de Anthropic a nombre de TEINS. Esta fase se hace **solo en el entorno de pruebas**, con datos ficticios (R5) y una llave real de Anthropic, la de Kevin. Producción no lleva llave hasta entonces.
+**Para la entrega (2026-11-21) se hace en producción**, con los datos de demostración que carga `pnpm demostracion` y una llave real de Anthropic ([producción](produccion.md), «Entrega con datos de demostración y Chispa»). Son datos inventados: no sale nada de TEINS ni de sus clientes. **Antes del primer dato real** hacen falta la autorización escrita de TEINS (pendiente 23 de [`docs/entrega/pendientes-de-teins.md`](../entrega/pendientes-de-teins.md)) y una cuenta de Anthropic a su nombre; sin ellas, el asistente se apaga.
 
 En el computador, con una persona de oficina y otra con la marca de administrador y el segundo factor. Antes de empezar:
 
-- El worker de pruebas tiene `ANTHROPIC_API_KEY` y la web, `ASISTENTE_ACTIVO=true`. La llave **no** va en la web.
-- Están los datos de ejemplo de `sembrar` (cableados en Ibagué, Espinal y Melgar, y visitas de UPS por mes).
+- El worker tiene `ANTHROPIC_API_KEY` y oficina, `ASISTENTE_ACTIVO=true`. La llave **no** va en la web.
+- Están los datos de demostración de `pnpm demostracion` (clientes en Ibagué, Espinal y Melgar, cableados y servicios de UPS de los últimos meses).
 - En la consola de Anthropic, el límite de gasto mensual de esa llave está puesto (paso 12), antes de preguntar nada.
 
 1. Mire la barra superior de oficina.
    - Debe: el botón con el destello y «Chispa» en el extremo derecho, en todas las pantallas; el borde da una vuelta y un destello cada tanto, y gira sin pausa al pasar el cursor. Tóquelo: se abre un panel a la derecha, debajo de la barra, sin velo (lo de atrás se puede usar); «Hola, [su nombre]», cuántos levantamientos revisados hay y las cuatro sugerencias.
 2. Toque «¿Cuánto cable se gastó en los últimos 12 meses?».
-   - Debe: ver las consultas una por una y «Escribiendo la respuesta»; al terminar, la cifra destacada **4.485 m** de UTP categoría 6, su tabla con «Copiar tabla» y las fuentes con **5 visitas**. La visita sin revisar no entra en la suma.
-3. Compare la cifra con los datos: abra los levantamientos revisados de esas cinco visitas y sume a mano los metros de UTP categoría 6.
+   - Debe: ver las consultas una por una y «Escribiendo la respuesta»; al terminar, la cifra destacada de UTP categoría 6, su tabla con «Copiar tabla» y las fuentes con las visitas revisadas que aportaron. Las sin revisar no entran en la suma.
+3. Compare la cifra con los datos: abra los levantamientos revisados de las visitas de las fuentes y sume a mano los metros de UTP categoría 6.
    - Debe: dar lo mismo que la cifra y la tabla. Toque «Copiar tabla» y pegue en una hoja de cálculo: cada columna en la suya.
 4. Abra la pastilla de fuentes y toque un número de orden.
    - Debe: llevar al levantamiento de esa visita. La visita sin revisar (si sale en la lista) dice «Sin revisar».
 5. En la misma conversación, toque «¿Cuánto UTP presupuesto para un cableado de 40 puntos?» (o escríbala).
-   - Debe: las dos cifras en el destacado, **1.215 m** y **$ 3.523.500**, con su tabla y fuentes. Dice qué dio por hecho y que, con pocas visitas, el estimado es orientativo.
+   - Debe: las dos cifras en el destacado, los metros y su costo al precio vigente, con su tabla (mediana y percentil 80 por punto) y sus fuentes. Dice qué dio por hecho y que, con pocas visitas, el estimado es orientativo.
 6. Abra «Nueva conversación» y toque «¿Cuántas visitas hubo cada mes este año?»; después, otra y toque «Resuma el último levantamiento revisado».
    - Debe: la primera con un gráfico de barras (con «Ver los datos»); la segunda con las secciones del levantamiento y sin correos ni celulares (salen como `[correo]` y `[celular]`), firmas, fotos ni coordenadas. En ambas, el texto es solo párrafos y viñetas, sin enlaces ni formato.
 7. Toque «Conversaciones», busque una por su texto, elimínela desde «Más acciones» y toque **Deshacer** en la notificación.
@@ -870,7 +870,7 @@ En el computador, con una persona de oficina y otra con la marca de administrado
 11. Administración, con la persona que administra: abra la pestaña «Chispa».
     - Debe: el mes, lo gastado frente al tope («US$… de US$5,00 de tope»), el medidor y las preguntas y el gasto por persona. Compare el gasto con el uso de la consola de Anthropic: debe estar en el mismo orden de magnitud (centavos de dólar por pregunta). Toque «Cambiar el tope», escriba **0** y «Guardar el tope».
     - Debe: «Tope guardado»; en el panel de oficina, el aviso «Se usó el tope de Chispa de este mes…» con «Cambiar el tope» (solo para quien administra) y la caja deshabilitada. Vuelva el tope a 5 y la caja se habilita. La persona de oficina sin la marca no ve la pestaña ni «Cambiar el tope».
-12. En los registros del worker de pruebas (`railway logs`, servicio del worker), busque las preguntas que hizo.
+12. En los registros del worker (`railway logs -s worker`, con el proyecto enlazado), busque las preguntas que hizo.
     - Debe: no aparece el texto de ninguna pregunta ni de los resultados; solo ids, tokens, duración y códigos de error. Después, en la consola de Anthropic, confirme el **límite de gasto mensual** de la llave: debe estar puesto y ser mayor que el tope de TEINS.
 13. Cambie el tema a **Oscuro** (Mi cuenta) y recorra el panel, el botón y la pestaña de Administración.
     - Debe: el botón, el orbe, las tarjetas, la respuesta, las tablas y el gráfico legibles y con los colores de la marca; con «movimiento reducido» del sistema, nada se mueve.
