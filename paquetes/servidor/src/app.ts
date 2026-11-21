@@ -204,7 +204,12 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   crearMapas({ config }).registrarRutas(app);
   visitas.registrarRutas(app, { bd, identidad, conteos: levantamientos.conteosPorVisita });
   // El asistente (ADR-0060): la web atiende sus operaciones; el bucle con el modelo corre en el worker, que tiene la llave.
-  crearAsistente({ bd, disponible: config.ASISTENTE_ACTIVO || config.ASISTENTE_SIMULADO, identidad, cobertura: levantamientos.cobertura }).registrarRutas(app);
+  // La cobertura es el periodo de las visitas de los levantamientos revisados, no la hora en que llegaron.
+  const coberturaDelAsistente = async (tx: Parameters<typeof levantamientos.cobertura>[0]) => {
+    const { revisados, visitaIds } = await levantamientos.cobertura(tx);
+    return { revisados, ...(await visitas.rangoDeFechas(tx, visitaIds)) };
+  };
+  crearAsistente({ bd, disponible: config.ASISTENTE_ACTIVO || config.ASISTENTE_SIMULADO, identidad, cobertura: coberturaDelAsistente }).registrarRutas(app);
   if (bdPortal) crearPortal({ bdPortal, almacenamiento, config }).registrarRutas(app);
 
   const superficies: Superficie[] = [

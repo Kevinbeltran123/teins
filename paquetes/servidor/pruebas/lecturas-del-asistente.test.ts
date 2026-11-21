@@ -182,6 +182,19 @@ describe("visitas para el asistente", () => {
   });
 });
 
+describe("rango de fechas de unas visitas", () => {
+  it("da la primera y la última fecha programada, sin las de otra organización", async () => {
+    expect(await en(orgA, (tx) => visitas.rangoDeFechas(tx, [v1, v3, vB]))).toEqual({ desde: "2026-09-10", hasta: "2026-10-05" });
+    expect(await en(orgA, (tx) => visitas.rangoDeFechas(tx, []))).toEqual({ desde: null, hasta: null });
+    expect(await en(orgB, (tx) => visitas.rangoDeFechas(tx, [v1, v2]))).toEqual({ desde: null, hasta: null });
+  });
+
+  it("con muchos ids consulta en lotes y no se pierde ninguno", async () => {
+    const muchos = [...Array.from({ length: 2500 }, () => randomUUID()), v2];
+    expect(await en(orgA, (tx) => visitas.rangoDeFechas(tx, muchos))).toEqual({ desde: "2026-09-20", hasta: "2026-09-20" });
+  });
+});
+
 describe("sitios para el asistente", () => {
   it("lista los sitios con su ciudad y su cliente, todos o por ids, sin contactos", async () => {
     const todos = await en(orgA, (tx) => clientesYSitios.sitiosConCliente(tx));
@@ -231,10 +244,10 @@ describe("levantamientos para el asistente", () => {
     expect(await en(orgA, (tx) => levantamientos.contenido(tx, lB))).toBeUndefined();
   });
 
-  it("da la cobertura: cuántos revisados y la primera y la última fecha de recibido", async () => {
-    expect(await en(orgA, (tx) => levantamientos.cobertura(tx))).toEqual({ revisados: 2, primerRecibido: new Date("2026-09-11T15:00:00.000Z"), ultimoRecibido: new Date("2026-09-12T15:00:00.000Z") });
+  it("da la cobertura: cuántos revisados con visita y los ids de esas visitas, sin repetir", async () => {
+    expect(await en(orgA, (tx) => levantamientos.cobertura(tx))).toEqual({ revisados: 2, visitaIds: [v1] });
     const vacia = await nuevaOrganizacion(propietario, "Organización vacía");
-    expect(await en(vacia, (tx) => levantamientos.cobertura(tx))).toEqual({ revisados: 0, primerRecibido: null, ultimoRecibido: null });
+    expect(await en(vacia, (tx) => levantamientos.cobertura(tx))).toEqual({ revisados: 0, visitaIds: [] });
   });
 
   it("rechaza demasiados ids de una vez", async () => {

@@ -86,8 +86,11 @@ export interface Levantamientos {
    * `visitas.porOrden` da la visita y `deVisitas` sus levantamientos.
    */
   contenido(tx: TxOrganizacion, id: string): Promise<ContenidoDeLevantamiento | undefined>;
-  /** Cuántos levantamientos revisados de una visita hay y la primera y la última fecha de recibido de ellos. */
-  cobertura(tx: TxOrganizacion): Promise<{ revisados: number; primerRecibido: Date | null; ultimoRecibido: Date | null }>;
+  /**
+   * Cuántos levantamientos revisados con visita hay y los ids de esas visitas, sin repetir: el periodo que cubren es el
+   * de sus visitas (`visitas.rangoDeFechas`), no la hora en que llegaron.
+   */
+  cobertura(tx: TxOrganizacion): Promise<{ revisados: number; visitaIds: string[] }>;
   registrarRutas(app: FastifyInstance): void;
 }
 

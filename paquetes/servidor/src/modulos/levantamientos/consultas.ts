@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, max, min, or, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, max, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { EstadoRevision } from "@teins/dominio";
 import { Uuid } from "@teins/protocolo";
@@ -330,10 +330,10 @@ export async function lineasVigentes(tx: TxOrganizacion, levantamientoIds: reado
  * Cuántos levantamientos revisados de una visita hay y entre qué fechas de recibido: qué tanto puede responder el
  * asistente. Los que no tienen visita (cortes 0 y 1) no cuentan, como en `cantidadesRevisadas`.
  */
-export async function cobertura(tx: TxOrganizacion): Promise<{ revisados: number; primerRecibido: Date | null; ultimoRecibido: Date | null }> {
+export async function cobertura(tx: TxOrganizacion): Promise<{ revisados: number; visitaIds: string[] }> {
   const [fila] = await tx
-    .select({ revisados: count(), primerRecibido: min(levantamientos.recibidoEn), ultimoRecibido: max(levantamientos.recibidoEn) })
+    .select({ revisados: count(), visitaIds: sql<string[]>`coalesce(array_agg(distinct ${levantamientos.visitaId}), '{}')` })
     .from(levantamientos)
     .where(and(eq(levantamientos.estado, "revisado"), isNotNull(levantamientos.visitaId)));
-  return { revisados: fila?.revisados ?? 0, primerRecibido: fila?.primerRecibido ?? null, ultimoRecibido: fila?.ultimoRecibido ?? null };
+  return { revisados: fila?.revisados ?? 0, visitaIds: fila?.visitaIds ?? [] };
 }

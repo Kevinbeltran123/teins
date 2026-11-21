@@ -211,6 +211,29 @@ describe("operaciones del asistente", () => {
     expect(r.json()).toEqual({ disponible: true, nombre: "Chispa", cobertura: { revisados: 0, desde: null, hasta: null }, topeAgotado: false });
   });
 
+  it("la cobertura va por la fecha de las visitas, no por cuándo llegaron sus levantamientos", async () => {
+    const o = await s.nuevaOrganizacionConUsuarios();
+    const visitasDePrueba = crearVisitas(clientesYSitios);
+    const ids = await enOrganizacion(s.conexionApp.bd, o.organizacionId, async (tx) => {
+      const sitio = await clientesYSitios.crear(tx, { organizacionId: o.organizacionId, nombre: "Cliente de prueba", sitio: { nombre: "Sede", direccion: "Calle [N]", ciudad: "Ibagué" } });
+      const programar = (programadaPara: string) =>
+        visitasDePrueba.crear(tx, { organizacionId: o.organizacionId, autorId: "prueba", correlacion: "prueba", clienteId: sitio.clienteId, sitioId: sitio.sitioId, motivo: "Revisión", formato: null, programadaPara, tecnicos: [] });
+      return [await programar("2026-06-14"), await programar("2026-10-03"), await programar("2026-11-01")];
+    });
+    // Los dos primeros, revisados y recibidos hoy; el tercero, sin revisar: no cuenta.
+    for (const [visitaId, estado] of [[ids[0], "revisado"], [ids[1], "revisado"], [ids[2], "en_revision"]] as const) {
+      await s.propietario.pool.query(
+        `insert into levantamientos.levantamientos (id, organizacion_id, tecnico_id, formato, version_formato, visita_id, estado, respuestas, repeticiones, creado_en_dispositivo, enviado_en_dispositivo, recibido_en)
+         values ($1, $2, $3, 'prueba-ups', 1, $4, $5, '{}', '{}', now(), now(), now())`,
+        [randomUUID(), o.organizacionId, o.tecnico.id, visitaId, estado],
+      );
+    }
+    const { cobertura } = (await pedir(o.oficina.cookie, "GET", "/api/asistente")).json();
+    expect(cobertura).toEqual({ revisados: 2, desde: "2026-06-14T12:00:00-05:00", hasta: "2026-10-03T12:00:00-05:00" });
+    // Otra organización no ve nada de esto.
+    expect((await pedir(oficina, "GET", "/api/asistente")).json().cobertura).toEqual({ revisados: 0, desde: null, hasta: null });
+  });
+
   it("solo oficina: un técnico no ve nada del asistente", async () => {
     for (const [method, url] of [["GET", "/api/asistente"], ["GET", "/api/asistente/conversaciones"], ["POST", "/api/asistente/preguntas"]] as const) {
       const r = await pedir(org.tecnico.cookie, method, url, method === "POST" ? { llave: randomUUID(), conversacionId: null, texto: "hola" } : undefined);

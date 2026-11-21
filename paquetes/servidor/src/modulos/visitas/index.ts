@@ -178,6 +178,8 @@ export interface Visitas {
   clienteDe(tx: TxOrganizacion, visitaId: string): Promise<string | undefined>;
   /** Cliente, sitio, motivo y fecha de cada visita, sin importar a quién esté asignada (oficina). */
   resumenes(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, VisitaAsignada>>;
+  /** La primera y la última fecha programada de unas visitas (AAAA-MM-DD), sin traer filas; las que no existen no cuentan. */
+  rangoDeFechas(tx: TxOrganizacion, ids: readonly string[]): Promise<{ desde: string | null; hasta: string | null }>;
   /** Visitas cuyo cliente o sitio contienen el texto: para buscar levantamientos por cliente (iteración 23). */
   coincidentes(tx: TxOrganizacion, texto: string): Promise<string[]>;
   /**
@@ -428,6 +430,21 @@ export function crearVisitas(clientes: ClientesYSitios, formatos?: Pick<Formatos
 
     asignadas: (tx, ids, tecnicoId) => leer(tx, ids, tecnicoId),
     resumenes: (tx, ids) => leer(tx, ids),
+
+    async rangoDeFechas(tx, ids) {
+      let desde: string | null = null;
+      let hasta: string | null = null;
+      // En lotes: la lista de una organización grande no cabe en un solo parámetro razonable.
+      for (let i = 0; i < ids.length; i += 1000) {
+        const [fila] = await tx
+          .select({ desde: sql<string | null>`min(${visitas.programadaPara})::text`, hasta: sql<string | null>`max(${visitas.programadaPara})::text` })
+          .from(visitas)
+          .where(inArray(visitas.id, ids.slice(i, i + 1000)));
+        if (fila?.desde && (!desde || fila.desde < desde)) desde = fila.desde;
+        if (fila?.hasta && (!hasta || fila.hasta > hasta)) hasta = fila.hasta;
+      }
+      return { desde, hasta };
+    },
 
     async coincidentes(tx, texto) {
       const sitios = await clientes.buscarSitios(tx, texto);

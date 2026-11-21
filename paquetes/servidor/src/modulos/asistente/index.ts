@@ -31,7 +31,11 @@ const EN_CURSO_POR_PERSONA = 2;
 const ELIMINADA_SE_BORRA_EN_MS = 24 * 60 * 60 * 1000;
 const INACTIVA_SE_BORRA_EN_MS = 365 * 24 * 60 * 60 * 1000;
 
-export type CoberturaDeLevantamientos = (tx: TxOrganizacion) => Promise<{ revisados: number; primerRecibido: Date | null; ultimoRecibido: Date | null }>;
+/** Cuántos levantamientos revisados hay y la primera y la última fecha de sus visitas (AAAA-MM-DD). */
+export type CoberturaDeLevantamientos = (tx: TxOrganizacion) => Promise<{ revisados: number; desde: string | null; hasta: string | null }>;
+
+/** Un día de calendario como instante del contrato: el mediodía de Bogotá, que es el mismo día en cualquier zona de América. */
+const diaComoFecha = (dia: string | null) => (dia ? `${dia}T12:00:00-05:00` : null);
 
 export interface Asistente {
   registrarRutas(app: FastifyInstance): void;
@@ -145,11 +149,11 @@ export function crearAsistente({
         politica: politicas.oficina,
         manejar: async ({ actor }) =>
           enOrganizacion(bd, actor.organizacionId, async (tx) => {
-            const c = cobertura ? await cobertura(tx) : { revisados: 0, primerRecibido: null, ultimoRecibido: null };
+            const c = cobertura ? await cobertura(tx) : { revisados: 0, desde: null, hasta: null };
             return {
               disponible,
               nombre: (await ajustesDe(tx)).nombre,
-              cobertura: { revisados: c.revisados, desde: c.primerRecibido?.toISOString() ?? null, hasta: c.ultimoRecibido?.toISOString() ?? null },
+              cobertura: { revisados: c.revisados, desde: diaComoFecha(c.desde), hasta: diaComoFecha(c.hasta) },
               topeAgotado: await topeAgotado(tx),
             };
           }),
