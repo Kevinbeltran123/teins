@@ -8,7 +8,7 @@ import { defineConfig, devices } from "@playwright/test";
  * Un solo recorrido, en orden: los datos, el teléfono del técnico (Safari de iPhone), oficina y el portal (escritorio).
  */
 const CLAVE_PUBLICA_AVISOS = "BOXZWm72IS92BJJBRVsOr18iQm923oFhf1AEZDwBe6t-q8GJISfEGyTTVn4agceqiue9pH2hTy8V1NqMosVxqpk";
-const servidor = { cwd: "../paquetes/servidor", env: { INICIOS_DE_SESION_POR_MINUTO: "10000", PORTAL_INTENTOS_POR_ORIGEN: "10000", AVISOS_VAPID_PUBLICA: CLAVE_PUBLICA_AVISOS } };
+const servidor = { cwd: "../paquetes/servidor", env: { INICIOS_DE_SESION_POR_MINUTO: "10000", PORTAL_INTENTOS_POR_ORIGEN: "10000", AVISOS_VAPID_PUBLICA: CLAVE_PUBLICA_AVISOS, ASISTENTE_SIMULADO: "true" } };
 const escritorio = { ...devices["Desktop Chrome"], viewport: { width: 1366, height: 860 } };
 
 export default defineConfig({

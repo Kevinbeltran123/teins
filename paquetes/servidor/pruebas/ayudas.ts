@@ -52,6 +52,7 @@ import { almacenamientoS3 } from "../src/plataforma/almacenamiento";
 import { enOrganizacion } from "../src/plataforma/base-de-datos";
 import { cerrarNavegador } from "../src/plataforma/pdf";
 import { crearArchivos } from "../src/modulos/archivos";
+import { crearAsistente, type Herramienta, type ModeloAsistente, type RegistroDelAsistente } from "../src/modulos/asistente";
 import { crearAvisos, type EnviadorDeAvisos } from "../src/modulos/avisos";
 import { crearEnvios, type ProveedorDeCorreo, type Proveedores } from "../src/modulos/envios";
 import { crearFormatos } from "../src/modulos/formatos";
@@ -65,7 +66,7 @@ import { definirTareas } from "../src/tareas";
 import { codigoTotp } from "./totp";
 
 const requerir = createRequire(import.meta.url);
-export const formatoDePrueba = (version: 1 | 2) =>
+export const formatoDePrueba = (version: number) =>
   JSON.parse(readFileSync(requerir.resolve(`@teins/dominio/formatos-de-prueba/prueba-ups.v${version}.json`), "utf8"));
 
 export const ORIGEN = "http://localhost:5173";
@@ -77,7 +78,14 @@ export const cabecerasSync = { [CABECERA_VERSION]: String(VERSION_PROTOCOLO) };
  * con `correosDelPortal` (ADR-0053): solo el archivo que lo trae envía los correos del portal.
  */
 export async function servidorDePrueba(
-  opciones: { config?: Partial<Record<string, string>>; enviadorDeAvisos?: EnviadorDeAvisos; proveedoresDeEnvio?: Proveedores; correosDelPortal?: ProveedorDeCorreo } = {},
+  opciones: {
+    config?: Partial<Record<string, string>>;
+    enviadorDeAvisos?: EnviadorDeAvisos;
+    proveedoresDeEnvio?: Proveedores;
+    correosDelPortal?: ProveedorDeCorreo;
+    /** El modelo y las herramientas del asistente (ADR-0060): solo el archivo que lo trae responde sus preguntas. */
+    asistente?: { modelo: ModeloAsistente; herramientas: Herramienta[]; registro?: RegistroDelAsistente; limites?: { vueltas?: number; duracionMs?: number } };
+  } = {},
 ) {
   const config = configDePrueba({ INICIOS_DE_SESION_POR_MINUTO: "1000", ...opciones.config });
   const { app: conexionApp, propietario } = conexionesDePrueba();
@@ -130,12 +138,14 @@ export async function servidorDePrueba(
     envios,
     cotizaciones: crearGeneradorPdfDeCotizaciones({ bd: conexionApp.bd, almacenamiento, config }),
     portal: crearCorreosDelPortal({ bd: conexionApp.bd, config, proveedores: { correo: opciones.correosDelPortal } }),
+    asistente: crearAsistente({ bd: conexionApp.bd, disponible: true, identidad, ...opciones.asistente }),
     mantenimiento: { recuperar: () => recuperarTrabajosAMedias(conexionApp.bd) },
   });
   // La cola es compartida entre archivos: solo el que trae sus proveedores procesa los envíos, con los suyos.
   if (!opciones.proveedoresDeEnvio) delete tareas["envios.enviar"];
   if (!opciones.enviadorDeAvisos) delete tareas["avisos.enviar"];
   if (!opciones.correosDelPortal) delete tareas["portal.correo"];
+  if (!opciones.asistente) delete tareas["asistente.responder"];
   /**
    * Ejecuta los trabajos pendientes, como lo haría el worker. Los archivos de pruebas corren en paralelo
    * y comparten la cola: una pasada puede terminar mientras otro archivo aún procesa un trabajo, así que

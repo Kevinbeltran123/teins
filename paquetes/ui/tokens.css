@@ -89,6 +89,14 @@
   --t-resplandor-1: light-dark(#D3E4F4, #0F1E36);
   --t-resplandor-2: light-dark(rgb(118 170 219 / 0.35), rgb(59 111 245 / 0.20));
 
+  /* El asistente (iteración 53): el azul de la marca con la chispa amarilla de --marca-acento, solo para él */
+  --t-ia-1: light-dark(#2F5FE8, #3B6FF5);
+  --t-ia-2: light-dark(#6E95FF, #8FB0FF);
+  --t-ia-3: var(--marca-acento);
+  --t-ia-hondo: light-dark(#002B81, #0B2F86);
+  /* El destello de cuatro puntas, como máscara: el color lo pone el degradado de debajo */
+  --t-forma-destello: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M10 3c.6 4.3 3.7 7.4 8 8-4.3.6-7.4 3.7-8 8-.6-4.3-3.7-7.4-8-8 4.3-.6 7.4-3.7 8-8z'/><path d='M19 2c.3 1.6 1.4 2.7 3 3-1.6.3-2.7 1.4-3 3-.3-1.6-1.4-2.7-3-3 1.6-.3 2.7-1.4 3-3z'/></svg>");
+
   /* El logo oficial es a color; en oscuro se pinta en blanco (abajo) hasta tener la versión en negativo */
   --t-filtro-logo: none;
 

@@ -1,6 +1,7 @@
 import { parseCronItems, type ParsedCronItem, type Task, type TaskList } from "graphile-worker";
 import { z } from "zod";
 import type { Archivos, RegistroDeTrabajo } from "./modulos/archivos";
+import type { Asistente } from "./modulos/asistente";
 import type { Avisos } from "./modulos/avisos";
 import type { GeneradorPdfCotizaciones } from "./modulos/cotizaciones";
 import type { Envios } from "./modulos/envios";
@@ -17,6 +18,7 @@ const esquemas: { [N in NombreTrabajo]: z.ZodType<Trabajos[N]> } = {
   "envios.enviar": z.object({ organizacionId: z.uuid(), envioId: z.uuid(), pdfRuta: z.string().min(1) }),
   "cotizaciones.generarPdf": z.object({ organizacionId: z.uuid(), versionId: z.uuid() }),
   "portal.correo": z.object({ organizacionId: z.uuid(), accesoId: z.uuid(), tipo: z.enum(["codigo", "invitacion"]), pedidoId: z.uuid().optional() }),
+  "asistente.responder": z.object({ organizacionId: z.uuid(), intercambioId: z.uuid() }),
   // Programada por el crontab: Graphile le pone sus propios datos (`_cron`), que no se usan.
   "mantenimiento.recuperar": z.record(z.string(), z.unknown()),
 };
@@ -38,6 +40,7 @@ export function definirTareas({
   envios,
   cotizaciones,
   portal,
+  asistente,
   mantenimiento,
 }: {
   archivos: Archivos;
@@ -46,6 +49,7 @@ export function definirTareas({
   envios: Pick<Envios, "enviar">;
   cotizaciones: GeneradorPdfCotizaciones;
   portal: Pick<CorreosDelPortal, "enviar">;
+  asistente: Pick<Asistente, "responder">;
   /** Tarea periódica (ADR-0043). */
   mantenimiento: { recuperar: () => Promise<unknown> };
 }): TaskList {
@@ -56,6 +60,7 @@ export function definirTareas({
     "envios.enviar": (datos, contexto) => envios.enviar(datos, contexto),
     "cotizaciones.generarPdf": (datos, contexto) => cotizaciones.generarPdf(datos, contexto),
     "portal.correo": (datos, contexto) => portal.enviar(datos, contexto),
+    "asistente.responder": (datos) => asistente.responder(datos),
     "mantenimiento.recuperar": async () => {
       await mantenimiento.recuperar();
     },

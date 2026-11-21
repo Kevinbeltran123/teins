@@ -216,7 +216,7 @@ El resto, por agregado:
 | Ítem de catálogo | `item_catalogo_creado`, `item_catalogo_actualizado`, `precio_cambiado` |
 | Usuario | `usuario_creado`, `usuario_reactivado`, `contrasena_restablecida`, `contrasena_cambiada`, `administrador_cambiado`, `segundo_factor_activado`, `segundo_factor_quitado`, `llave_de_acceso_creada`, `llave_de_acceso_quitada`, `borrado_local_confirmado` |
 | Acceso al portal | En el cliente: `acceso_portal_activado`, `acceso_portal_quitado`; en el acceso: `ingreso_portal`, `descarga_portal` (antes de ADR-0053, `acceso_cliente_creado` y `acceso_cliente_regenerado`) |
-| Organización | `inicio_de_sesion`, `catalogo_importado` |
+| Organización | `inicio_de_sesion`, `catalogo_importado`, `tope_del_asistente_cambiado` (ADR-0060) |
 
 Cerrar una visita atendida (ADR-0041) no deja evento: es una marca que pone el sistema al bajar.
 

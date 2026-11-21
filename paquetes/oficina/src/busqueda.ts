@@ -8,7 +8,7 @@ import { normalizarTexto } from "@teins/ui";
 */
 
 export interface Resultado {
-  tipo: "accion" | "ir" | "cliente" | "visita" | "levantamiento" | "informe" | "cotizacion";
+  tipo: "accion" | "ir" | "cliente" | "visita" | "levantamiento" | "informe" | "cotizacion" | "asistente";
   id: string;
   titulo: string;
   detalle?: string;

@@ -247,6 +247,12 @@ describe("configuración (ADR-0016)", () => {
     expect(() => urlDelPropietario(sinDueno)).toThrow(/DATABASE_URL_PROPIETARIO/);
     expect(urlDelPropietario(configDePrueba())).toBe(configDePrueba().DATABASE_URL_PROPIETARIO);
   });
+
+  it("las variables del asistente vacías, como las deja `.env.example`, cuentan como ausentes (ADR-0060)", () => {
+    expect(configDePrueba({ ANTHROPIC_API_KEY: "" }).ANTHROPIC_API_KEY).toBeUndefined();
+    expect(configDePrueba({ ASISTENTE_MODELO: "" }).ASISTENTE_MODELO).toBe("claude-haiku-5-5");
+    expect(() => configDePrueba({ ANTHROPIC_API_KEY: "otra-cosa" })).toThrow(/ANTHROPIC_API_KEY/);
+  });
 });
 
 describe("archivos (ADR-0007)", () => {

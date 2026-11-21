@@ -3,6 +3,7 @@ import type { Almacenamiento } from "../../plataforma/almacenamiento";
 import type { BaseDeDatos } from "../../plataforma/base-de-datos";
 import { enOrganizacion } from "../../plataforma/base-de-datos";
 import { borrarArchivosSinUso, recuperarArchivosAtascados } from "../archivos";
+import { purgarConversaciones } from "../asistente";
 import { compactarRegistro } from "../cambios";
 import { recuperarCotizacionesAtascados } from "../cotizaciones";
 import { idsDeOrganizaciones, podarSesionesVencidas } from "../identidad";
@@ -81,4 +82,14 @@ export async function quitarAccesosSinUso(bd: BaseDeDatos, ahora = new Date()): 
   let quitados = 0;
   for (const organizacionId of await idsDeOrganizaciones(bd)) quitados += await enOrganizacion(bd, organizacionId, (tx) => quitarAccesosSinUsoDelPortal(tx, antesDe, correlacion));
   return quitados;
+}
+
+/**
+ * Conservación de las conversaciones del asistente (Ley 1581, principio de temporalidad): las eliminadas hace más de un
+ * día y las que llevan un año sin actividad se borran del todo, en cada organización. Devuelve cuántas borró.
+ */
+export async function purgarConversacionesDelAsistente(bd: BaseDeDatos, ahora = new Date()): Promise<number> {
+  let borradas = 0;
+  for (const organizacionId of await idsDeOrganizaciones(bd)) borradas += await enOrganizacion(bd, organizacionId, (tx) => purgarConversaciones(tx, ahora));
+  return borradas;
 }

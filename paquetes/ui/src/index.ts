@@ -1,4 +1,5 @@
 export { Aviso } from "./Aviso";
+export { BotonAsistente, Destello, OrbeAsistente } from "./Asistente";
 export { FilaDeAjuste, FilaDeTema, GrupoDeAjustes, SelectorDeTema } from "./Ajustes";
 export { Boceto, ElementoDeBoceto, HojasDeBoceto } from "./Boceto";
 export { Firma } from "./Firma";

@@ -97,11 +97,12 @@ export function ProveedorNotificaciones({ children, lugar }: { children: ReactNo
 
   const posicion =
     lugar === "abajo-derecha"
-      ? "right-6 bottom-6 w-[min(400px,calc(100vw-48px))]"
+      ? // --hueco-derecho: lo que ocupa a la derecha un panel abierto (el del asistente en oficina); sin él, 0.
+        "right-[calc(var(--hueco-derecho,0px)+1.5rem)] bottom-6 w-[min(400px,calc(100vw-48px))]"
       : "right-3 bottom-4 left-3 mx-auto max-w-xl [html:has([data-barra-inferior])_&]:bottom-[104px]";
 
   const region = (
-    <div role="status" aria-live="polite" className={`pointer-events-none fixed z-40 flex flex-col gap-2 ${posicion}`}>
+    <div role="status" aria-live="polite" data-notificaciones className={`pointer-events-none fixed z-40 flex flex-col gap-2 ${posicion}`}>
       {visibles.map((n) => (
         <div
           key={n.id}

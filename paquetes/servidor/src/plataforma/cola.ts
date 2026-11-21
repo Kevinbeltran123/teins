@@ -10,6 +10,8 @@ export interface Trabajos {
   "cotizaciones.generarPdf": { organizacionId: string; versionId: string };
   /** Correos del portal (ADR-0053): el código de un pedido o la invitación al dar acceso. Nunca llevan el código. */
   "portal.correo": { organizacionId: string; accesoId: string; tipo: "codigo" | "invitacion"; pedidoId?: string | undefined };
+  /** La respuesta del asistente (ADR-0060): un solo intento, cada intento cuesta. */
+  "asistente.responder": { organizacionId: string; intercambioId: string };
   /** Tarea periódica (ADR-0043): sin datos; la programa el worker cada hora. */
   "mantenimiento.recuperar": Record<string, unknown>;
 }

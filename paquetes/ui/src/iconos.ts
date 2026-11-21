@@ -7,6 +7,7 @@ export type { LucideIcon } from "lucide-react";
 export {
   Activity,
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   ArrowUp,
   Bell,
@@ -75,6 +76,7 @@ export {
   LockKeyhole,
   History,
   Smartphone,
+  Square,
   SquarePlus,
   Trash,
   TriangleAlert,

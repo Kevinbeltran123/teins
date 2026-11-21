@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { Boton, Building, CalendarDays, ClipboardCheck, DestinoAccionesBarra, DestinoBarraSuperior, esAtajo, etiquetaAtajo, FileText, Logo, LogOut, Package, PanelLeftClose, PanelLeftOpen, Receipt, RefreshCw, Search, ShieldCheck, useConexion, WifiOff, type LucideIcon } from "@teins/ui";
+import { Boton, BotonAsistente, Building, CapturaDeErrores, CalendarDays, ClipboardCheck, DestinoAccionesBarra, FallaAlDibujar, DestinoBarraSuperior, esAtajo, etiquetaAtajo, FileText, Logo, LogOut, Package, PanelLeftClose, PanelLeftOpen, Receipt, RefreshCw, Search, ShieldCheck, useConexion, WifiOff, type LucideIcon } from "@teins/ui";
 import { cliente } from "../api";
+import { ID_BOTON_ASISTENTE, ID_PANEL_ASISTENTE, useAsistente } from "../asistente";
 import { desactivarAvisos, renovarSuscripcion } from "../avisos";
 import { useTeclaSuelta } from "../atajos";
 import { esBooleano, usePreferencia } from "../preferencias";
@@ -18,6 +19,9 @@ interface Seccion {
   texto: string;
   icono: LucideIcon;
 }
+
+// El panel del asistente se carga la primera vez que se abre: quien no lo usa no lo descarga.
+const PanelAsistente = lazy(() => import("./Asistente").then((m) => ({ default: m.PanelAsistente })));
 
 const SECCIONES: Seccion[] = [
   { a: "/", texto: "Levantamientos", icono: ClipboardCheck },
@@ -52,6 +56,7 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
   // Buscar en todo y la lista de atajos (iteración 37).
   const [buscando, setBuscando] = useState(false);
   const [viendoAtajos, setViendoAtajos] = useState(false);
+  const asistente = useAsistente();
   useTeclaSuelta("?", () => setViendoAtajos(true));
   // Un aviso tocado con oficina abierta lleva a lo suyo sin recargar; uno silenciado pide consultar ya (ADR-0040).
   const router = useRouter();
@@ -156,6 +161,9 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
         <div className="barra-sup">
           <nav ref={setBarra} aria-label="Ubicación" />
           <div ref={setAccionesBarra} className="barra-acciones" />
+          {asistente.disponible && (
+            <BotonAsistente id={ID_BOTON_ASISTENTE} controla={ID_PANEL_ASISTENTE} nombre={asistente.nombre} abierto={asistente.abierto} pensando={asistente.pensando} listo={asistente.listo} onClick={asistente.alternar} />
+          )}
         </div>
         <main className="contenido-interior">
           {!enLinea && (
@@ -173,13 +181,20 @@ export function Marco({ nombre, administrador, children }: { nombre: string; adm
               </Boton>
             </div>
           )}
-          {buscando && <Paleta alCerrar={() => setBuscando(false)} alVerAtajos={() => setViendoAtajos(true)} />}
+          {buscando && <Paleta alCerrar={() => setBuscando(false)} alVerAtajos={() => setViendoAtajos(true)} asistente={asistente.disponible ? asistente : null} />}
           {viendoAtajos && <HojaDeAtajos alCerrar={() => setViendoAtajos(false)} />}
           <DestinoBarraSuperior.Provider value={barra}>
             <DestinoAccionesBarra.Provider value={accionesBarra}>{children}</DestinoAccionesBarra.Provider>
           </DestinoBarraSuperior.Provider>
         </main>
       </div>
+      {asistente.abierto && (
+        <CapturaDeErrores respaldo={<aside id={ID_PANEL_ASISTENTE} className="asis-panel" aria-label={asistente.nombre}><div className="asis-cuerpo"><FallaAlDibujar texto={`No se pudo abrir ${asistente.nombre}.`} /></div></aside>}>
+          <Suspense fallback={<aside id={ID_PANEL_ASISTENTE} className="asis-panel" aria-label={asistente.nombre} aria-busy="true" />}>
+            <PanelAsistente control={asistente} persona={nombre} administrador={administrador} />
+          </Suspense>
+        </CapturaDeErrores>
+      )}
     </div>
   );
 }

@@ -15,9 +15,10 @@ Este manual es para las personas de oficina que revisan levantamientos, preparan
 7. [Catálogo y lista de precios](#7-catálogo-y-lista-de-precios)
 8. [Portal del cliente](#8-portal-del-cliente)
 9. [Administración](#9-administración)
-10. [Búsqueda y atajos del teclado](#10-búsqueda-y-atajos-del-teclado)
-11. [Problemas frecuentes y a quién pedir ayuda](#11-problemas-frecuentes-y-a-quién-pedir-ayuda)
-12. [Glosario](#12-glosario)
+10. [Preguntarle a Chispa](#10-preguntarle-a-chispa)
+11. [Búsqueda y atajos del teclado](#11-búsqueda-y-atajos-del-teclado)
+12. [Problemas frecuentes y a quién pedir ayuda](#12-problemas-frecuentes-y-a-quién-pedir-ayuda)
+13. [Glosario](#13-glosario)
 
 ---
 
@@ -469,7 +470,7 @@ Si un cliente llama porque no le llega el código, revise su contacto: si dice �
 
 ## 9. Administración
 
-La sección **Administración** solo la ven quienes tienen la marca de administrador y el segundo factor activo (sección 2). Tiene dos pestañas: «Usuarios» y «Teléfonos de campo».
+La sección **Administración** solo la ven quienes tienen la marca de administrador y el segundo factor activo (sección 2). Tiene dos pestañas: «Usuarios» y «Teléfonos de campo». Si Chispa está disponible, suma una tercera con su nombre (sección 10).
 
 ### Usuarios
 
@@ -519,7 +520,105 @@ Retirar una versión de un informe o de una cotización se hace desde el propio 
 
 ---
 
-## 10. Búsqueda y atajos del teclado
+## 10. Preguntarle a Chispa
+
+Chispa es el asistente de datos de oficina. Usted le pregunta con sus palabras por lo que ya está en TEINS (cuánto material se usó, cuántas visitas hubo, cuánto presupuestar, qué dice un levantamiento) y le responde con la cifra, una tabla y las visitas de donde salió. Es para quien hoy lo saca a mano de las listas y de Excel. La empresa puede cambiarle el nombre; aquí se le dice Chispa.
+
+Si el botón de Chispa no aparece, el asistente no está disponible en su empresa.
+
+### Qué hace y qué no
+
+- **Las cifras las calcula TEINS, no la IA.** Chispa decide qué consultar y redacta la respuesta; las sumas, los conteos y los costos salen de los datos. La cifra grande, las tablas, el gráfico y las fuentes se dibujan con esos resultados.
+- **Solo usa levantamientos revisados.** Lo que oficina no ha marcado revisado no entra en las sumas. Si una visita queda fuera por eso, la lista de fuentes la marca con «Sin revisar».
+- **No cambia nada.** Solo lee: no corrige datos, no crea cotizaciones ni envía informes. Para pasar una tabla a otro lado, use «Copiar tabla».
+- **No ve todo.** No usa contactos (nombres, correos, celulares), firmas, fotos, bocetos, coordenadas ni documentos de identidad. Los correos y celulares escritos dentro de un texto se cambian por `[correo]` y `[celular]`, y un campo que pregunta por una persona sale como «[dato personal]». Fuera de eso, el sistema le manda a Anthropic, el proveedor del modelo, su pregunta y lo que devuelve cada consulta.
+- **Si no puede saberlo, lo dice.** También dice lo que dio por hecho (por ejemplo, qué ciudades contó) y avisa cuando hay pocas visitas y el estimado es solo orientativo.
+- **Solo ve lo suyo.** Cada persona ve únicamente sus conversaciones.
+
+### Abrirla
+
+Hay dos caminos:
+
+- El botón con el destello y el nombre, en el extremo derecho de la barra superior. Está en todas las pantallas de oficina. Con el panel abierto, el botón queda marcado; tocarlo de nuevo lo cierra.
+- **Buscar** (⌘K en Mac, Ctrl + K en Windows). Sin escribir, en «Acciones» sale «Abrir Chispa». Al escribir, el grupo «Chispa» ofrece «Preguntarle a Chispa «lo que escribió»». Enter manda esa pregunta en una conversación nueva.
+
+Se abre un panel a la derecha, debajo de la barra superior. **No tapa nada:** lo que hay detrás sigue a la vista y se puede usar. Lo cierran Esc (con el cursor dentro del panel), la equis («Cerrar Chispa») o el mismo botón. TEINS recuerda si lo dejó abierto o cerrado.
+
+![Chispa con una respuesta: la cifra destacada, la tabla y las fuentes](capturas/oficina-asistente.png)
+
+### Preguntar
+
+Al empezar, el panel dice «Hola» con su nombre, qué hace Chispa y con cuántos levantamientos revisados responde, y desde cuándo hasta cuándo. Si todavía no hay ninguno revisado, lo dice y no muestra sugerencias; mientras tanto solo responde sobre las visitas programadas.
+
+Debajo hay cuatro sugerencias. Toque una para preguntarla:
+
+- «¿Cuánto cable se gastó en los últimos 12 meses?»
+- «¿Cuánto UTP presupuesto para un cableado de 40 puntos?»
+- «¿Cuántas visitas hubo cada mes este año?»
+- «Resuma el último levantamiento revisado»
+
+También puede escribir su propia pregunta en la caja de abajo («Pregúntele a Chispa por visitas, materiales o servicios»), de hasta 2.000 caracteres. **Enter** pregunta y **Mayús + Enter** baja de línea. Dentro de una conversación, la caja dice «Pregúntele algo más a Chispa»: las preguntas siguientes tienen en cuenta las anteriores.
+
+Pregunte con lo que necesita saber, y con el periodo y el servicio si los tiene: «¿Cuántos metros de UTP se usaron en cableados de Ibagué este año?» da una respuesta más precisa que «¿cuánto cable?».
+
+### Los pasos y la respuesta
+
+Mientras responde, el orbe gira y se ven las consultas una por una, con una marca cuando termina cada una, y al final «Escribiendo la respuesta». Al terminar, las consultas se pliegan en una pastilla («3 consultas a sus datos · 4 s»); tóquela para verlas de nuevo.
+
+La respuesta puede traer, de arriba abajo:
+
+- **La cifra destacada:** una o dos cifras grandes con lo que significan. Por ejemplo, para el cable de los últimos 12 meses, «4.485 m» de UTP categoría 6. Para el presupuesto de un cableado de 40 puntos, «1.215 m» y «$ 3.523.500».
+- **El gráfico:** barras, por ejemplo las visitas de cada mes. Pase el cursor por una barra para ver su valor; «Ver los datos» muestra la tabla debajo del gráfico y «Ocultar los datos» la quita.
+- **El texto:** párrafos y viñetas. Es texto plano: nunca trae enlaces ni imágenes.
+- **Las tablas**, con «Copiar tabla». Copia la tabla separada por tabuladores, así que al pegarla en Excel cada columna queda en la suya. Una línea que no está vinculada a un ítem del catálogo lleva «Sin vincular».
+- **Las fuentes:** una pastilla (tóquela para abrirla) con las visitas de donde salió la cifra: número de orden, fecha, ciudad, cliente y sitio. El número de orden es un enlace a su levantamiento; si la visita no tiene levantamiento, lleva a la visita en «Visitas». Una visita sin revisar dice «Sin revisar».
+- **«Copiar la respuesta»** (el ícono de copiar al final): el texto, las tablas y las fuentes juntos, para pegarlos donde los necesite. Dice «Respuesta copiada» al hacerlo.
+
+Compruebe siempre una cifra importante contra sus fuentes antes de usarla en una cotización o un informe.
+
+### Historial, eliminar y deshacer
+
+- **«Nueva conversación»** (el ícono «+» arriba) empieza de cero.
+- **«Conversaciones»** (el ícono del reloj arriba) abre el historial: sus conversaciones, las más recientes primero, hasta 100. Se buscan con «Buscar en sus conversaciones». Toque una para seguirla. «Volver» sale del historial. En el inicio del panel también salen las tres últimas, con «Ver todas».
+- **Eliminar:** en el historial, el menú «Más acciones» de la conversación › «Eliminar conversación». Sale la notificación «Conversación eliminada» con **Deshacer**. Pasadas 24 horas, una conversación eliminada se borra del todo y ya no se puede recuperar.
+- **Sin actividad:** una conversación que no se usa en 12 meses se borra sola.
+
+### Cuando el panel está cerrado
+
+Puede hacer la pregunta, cerrar el panel y seguir trabajando: la respuesta sigue en marcha.
+
+- Mientras responde, el borde del botón gira rápido y el destello late.
+- Al terminar, sale la notificación «Chispa respondió: [su pregunta]» con **Ver**, que abre la conversación, y el botón queda con un **punto**. El punto se quita al abrir el panel.
+- Si terminó con un error, no hay notificación: solo el punto. Al abrir el panel está el «No se pudo terminar la respuesta».
+- Si usted mismo detuvo la respuesta, no hay aviso.
+
+### Detener
+
+Mientras Chispa responde, el botón de enviar pasa a ser un cuadrado, «Detener la respuesta». Al tocarlo queda «Detuvo la respuesta», con lo que alcanzó a consultar arriba, y «Volver a preguntar». Lo mismo ofrece una respuesta que terminó mal («No se pudo terminar la respuesta»): «Volver a preguntar» repite la pregunta en esa conversación.
+
+### Los límites
+
+- **Una respuesta a la vez por conversación.** Si pregunta mientras hay una en curso, dice «Espere a que termine la respuesta en curso de esta conversación, o deténgala.»
+- **Hasta dos respuestas en curso por persona.** Con más, «Hizo muchas preguntas seguidas. Espere un momento e intente de nuevo.»
+- **Turnos en la empresa.** Las respuestas de toda la empresa se atienden de a una: si varias personas preguntan a la vez, la suya espera su turno y puede tardar un poco más.
+- **Tope mensual.** Cada mes la empresa tiene un tope de gasto (5 dólares por omisión). Al llegar a él, la caja se deshabilita y el panel dice «Se usó el tope de Chispa de este mes. Se puede volver a preguntar el 1 de [mes siguiente].» Quien administra ve ahí «Cambiar el tope».
+- **Sin conexión,** la caja dice «Podrá preguntar cuando vuelva la conexión». Una respuesta que estaba en curso sigue en el servidor y aparece al volver.
+
+### Administración: el uso de Chispa
+
+Quien administra ve una pestaña con el nombre del asistente (por omisión «Chispa») en **Administración**. Muestra:
+
+- el mes, lo gastado frente al tope («US$1,20 de US$5,00 de tope») y un medidor;
+- cuántas preguntas se hicieron y, en una tabla, cuántas hizo cada persona y cuánto costaron;
+- **«Cambiar el tope»:** abre «Tope mensual de Chispa». Escriba el valor en dólares, de 0 a 1.000, y toque «Guardar el tope». Sale «Tope guardado». Con 0, nadie puede preguntar hasta que se suba. El cambio queda en el registro de la organización.
+
+Borrar una conversación no baja el gasto del mes.
+
+![Pestaña «Chispa» de Administración con el gasto del mes y las preguntas por persona](capturas/oficina-asistente-uso.png)
+
+---
+
+## 11. Búsqueda y atajos del teclado
 
 ### Buscar en todo
 
@@ -528,6 +627,7 @@ Presione ⌘K en Mac (Ctrl + K en Windows) o toque **Buscar** en el menú. Se ab
 - **Recientes:** lo último que abrió.
 - **Acciones:** «Programar visita», «Nuevo cliente», «Nueva cotización» y «Tomar el más antiguo».
 - **Secciones** del menú.
+- **Chispa:** «Abrir Chispa», y al escribir, «Preguntarle a Chispa» con lo que escribió (sección 10). Solo si Chispa está disponible.
 
 Escriba parte de un nombre (sin importar tildes ni mayúsculas) y presione Enter. Los resultados salen agrupados: clientes, visitas, levantamientos, informes y cotizaciones. Con las flechas se mueve entre ellos, con Enter abre y con Esc cierra.
 
@@ -555,7 +655,7 @@ Presione «?» para ver la lista «Atajos del teclado». Las letras solas no hac
 
 ---
 
-## 11. Problemas frecuentes y a quién pedir ayuda
+## 12. Problemas frecuentes y a quién pedir ayuda
 
 Cada problema empieza por lo que usted ve en la pantalla y sigue con qué hacer.
 
@@ -617,7 +717,7 @@ Llámelo: debe abrir la app con señal para que se envíe. Nunca le pida que bor
 
 ---
 
-## 12. Glosario
+## 13. Glosario
 
 | Palabra | Qué quiere decir |
 |---|---|
@@ -638,6 +738,7 @@ Llámelo: debe abrir la app con señal para que se envíe. Nunca le pida que bor
 | **Catálogo** | Los ítems (código, descripción, unidad y precio sin IVA) con los que se vinculan los materiales y se arman las cotizaciones. |
 | **Contacto** | Una persona del cliente que recibe informes, cotizaciones o los dos. |
 | **Portal** | La página donde un contacto con acceso entra con su correo y un código y descarga lo que recibe. |
+| **Chispa** | El asistente de datos de oficina: responde preguntas sobre visitas, materiales y servicios con cifras calculadas por TEINS y sus fuentes. Solo lee y solo usa levantamientos revisados (sección 10). |
 | **Segundo factor** | El código de 6 dígitos de una app autenticadora, obligatorio para administrar. |
 | **Contraseña temporal** | La que entrega quien administra al crear o restablecer un usuario. Se cambia al entrar. |
 

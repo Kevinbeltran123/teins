@@ -15,3 +15,4 @@ export * from "./modulos/avisos/esquema";
 export * from "./modulos/simbolos/esquema";
 export * from "./modulos/envios/esquema";
 export * from "./modulos/cotizaciones/esquema";
+export * from "./modulos/asistente/esquema";

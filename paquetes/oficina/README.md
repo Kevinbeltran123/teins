@@ -3,7 +3,7 @@
 Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizaciones, visitas, clientes, catálogo, cuenta y administración. Trata de usted.
 
 - **Dependencias:** `dominio`, `protocolo`, `documentos` y `ui`. TanStack Query para el estado del servidor y TanStack Router para las rutas (ADR-0011). El QR lo genera `qrcode` (MIT) en un fragmento que solo se carga al necesitarlo.
-- **ADR:** 0002, 0011, 0014, 0023, 0024, 0025, 0026, 0028, 0029, 0031, 0033 a 0037, 0039, 0040.
+- **ADR:** 0002, 0011, 0014, 0023, 0024, 0025, 0026, 0028, 0029, 0031, 0033 a 0037, 0039, 0040, 0060.
 - **Estilos:** la escala de oficina de los tokens con `data-superficie="oficina"` y `@teins/ui/oficina.css`. Ninguna pantalla define estilos propios.
 - **Service worker:** el único (`public/avisos-sw.js`) muestra avisos push, con el símbolo de TEINS (`public/icono-192.png`, de `scripts/generar-iconos.sh`); no guarda nada en caché (ADR-0023). «Levantamiento nuevo» abre ese levantamiento y un envío que no llegó abre Informes o Cotizaciones.
 - La historia de cada iteración está en [`docs/proceso/historia/`](../../docs/proceso/historia/).
@@ -31,6 +31,7 @@ Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizac
 | `src/preferencias.ts` | Lo que se recuerda de cada persona en el equipo |
 | `src/busqueda.ts`, `src/atajos.ts`, `src/pedido.ts` | Buscar en todo, atajos de teclado, pedidos de una navegación |
 | `src/conversacion.ts`, `src/avisos.ts` | Conversaciones con el técnico y avisos push |
+| `src/asistente.ts` | El asistente (ADR-0060): `useAsistente` (estado del panel, pregunta con su llave, seguimiento de la respuesta con el panel cerrado, punto y notificación), `consultasDelAsistente` y las decisiones en funciones puras (`alTerminar`, `accionDeTecla`, `partirTexto`, `tablaComoTsv`, `destinoDeFuente`, `escalaDeSerie`, `mensajeAlPreguntar`, `validarTope`) |
 | `src/csv.ts`, `src/formato.ts`, `src/usarRetraso.ts`, `src/version.ts` | CSV para Excel, fechas cortas, pesos (`leerPesos`) y listas de nombres (`enLista`), búsqueda con espera, aviso de versión nueva |
 
 ## Qué hace cada sección
@@ -82,6 +83,15 @@ Aplicación de oficina, siempre en línea: bandeja, revisión, informes, cotizac
 
 Buscar, crear, editar, desactivar e importar un CSV de Excel (punto y coma o coma, con o sin encabezado, con columna de precio opcional). La unidad es libre, con sugerencias. Columna "Precio sin IVA", filtro "Solo los que no tienen precio" y, para administración, "Cambiar precio" con la historia.
 
+### El asistente «Chispa» (iteración 53, ADR-0060)
+
+- **Conexión en `Marco.tsx`:** `useAsistente()` vive en el marco. Si `estadoDelAsistente.disponible`, la barra superior muestra el `BotonAsistente` (`ID_BOTON_ASISTENTE`); si no, no hay botón ni panel. El panel se monta junto al contenido, sin velo, dentro de `CapturaDeErrores` y `Suspense`.
+- **`pantallas/Asistente.tsx` se carga aparte** (`lazy` en `Marco.tsx`) la primera vez que se abre el panel: quien no lo usa no lo descarga. Tiene el inicio con las cuatro sugerencias, el historial (buscar, eliminar con «Deshacer»), la conversación (pasos, cifra destacada, gráfico, texto plano, tablas con «Copiar tabla», fuentes con enlace y «Copiar la respuesta») y la caja de pregunta con «Detener». El texto del modelo se pinta como texto plano; los únicos enlaces son los de las fuentes, armados con sus ids.
+- **`pantallas/UsoDelAsistente.tsx`:** la pestaña con el nombre del asistente en Administración (gasto del mes, medidor, preguntas por persona y «Cambiar el tope»). `Administracion.tsx` la suma solo si el asistente está disponible y la abre con el pedido `abrir: "tope"` que manda el aviso del panel.
+- **Con el panel cerrado** la respuesta se sigue consultando; al terminar, el botón lleva un punto y sale la notificación «{nombre} respondió: {pregunta}» con «Ver» (`alTerminar`). Una respuesta detenida no avisa; una con error deja solo el punto.
+- **Buscar (`Paleta.tsx`, `conAsistente`):** «Abrir {nombre}» entre las acciones y, al escribir, «Preguntarle a {nombre} «texto»» (una conversación nueva).
+- Abierto o cerrado se recuerda por persona (`asistente-abierto`, `usePreferencia`). El nombre es el de la organización («Chispa» por omisión).
+
 ### Mi cuenta y administración
 
 - **Ingreso:** contraseña, segundo factor (código de la app autenticadora o de respaldo) o llave de acceso. Con una contraseña temporal solo se ve "Cree su contraseña" (`pantallas/ContrasenaObligatoria.tsx`, ADR-0033); si la página se recargó, la temporal se pide de nuevo.
@@ -102,5 +112,5 @@ Buscar, crear, editar, desactivar e importar un CSV de Excel (punto y coma o com
 
 ## Pruebas
 
-- `src/*.test.ts`: CSV, cotizaciones, envíos, contactos, horario, informes, revisión, lo escrito sin enviar, programación, administración, mensajes (todos los traductores dicen igual los errores comunes), búsqueda y usabilidad.
+- `src/*.test.ts`: el asistente (`asistente.test.ts`) y su pantalla (`pantallas/Asistente.test.tsx`), CSV, cotizaciones, envíos, contactos, horario, informes, revisión, lo escrito sin enviar, programación, administración, mensajes (todos los traductores dicen igual los errores comunes), búsqueda y usabilidad.
 - Extremo a extremo en `e2e/pruebas/` (por ejemplo `revision.spec.ts`, `informe.spec.ts`, `cotizaciones.spec.ts`, `usabilidad.spec.ts`, `robustez-oficina.spec.ts`).

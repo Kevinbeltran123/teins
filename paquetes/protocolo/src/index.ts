@@ -58,6 +58,16 @@ export {
   VersionPublicada,
   VisitaAsignada,
   VisitaProgramada,
+  CeldaDelAsistente,
+  DestacadoDelAsistente,
+  FuenteDelAsistente,
+  FuentesDelAsistente,
+  IntercambioDelAsistente,
+  LARGO_MAXIMO_DE_PREGUNTA,
+  PasoDelAsistente,
+  RespuestaDelAsistente,
+  SerieDelAsistente,
+  TablaDelAsistente,
 } from "./operaciones";
 export type {
   Consulta,

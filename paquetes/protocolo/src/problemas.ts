@@ -35,6 +35,8 @@ export const ESTADO_POR_CODIGO = {
   formato_desconocido: 422,
   version_protocolo_no_soportada: 426,
   demasiadas_solicitudes: 429,
+  /** Se agotó el gasto del mes del asistente para la organización: no vuelve a haber hasta el mes siguiente o un tope mayor. */
+  tope_agotado: 429,
   error_interno: 500,
   /** Un servicio externo que no es esencial no responde o no está configurado (el mapa de la foto de llegada, ADR-0052). */
   no_disponible: 503,
@@ -68,6 +70,7 @@ export const REINTENTABLE: Readonly<Record<CodigoProblema, boolean>> = {
   formato_desconocido: false,
   version_protocolo_no_soportada: false,
   demasiadas_solicitudes: true,
+  tope_agotado: false,
   error_interno: true,
   no_disponible: true,
 };

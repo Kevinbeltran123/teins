@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, arrayContains, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, arrayContains, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { enOrganizacion, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
 import { problema } from "../../plataforma/errores";
@@ -82,6 +82,45 @@ export interface VisitaPorHacer {
   tecnicos: string[];
 }
 
+/** Visita para consultar (asistente, iteración 53): sin contactos ni técnicos. */
+export interface VisitaParaConsultar {
+  id: string;
+  /** Escrito como lo muestra la app ("0012"); null en las visitas anteriores al número (ADR-0051). */
+  ordenDeServicio: string | null;
+  programadaPara: string;
+  sitioId: string;
+  clienteId: string;
+  /** El servicio (ADR-0057): la clave del formato y el nombre copiado al programar; null en las anteriores. */
+  formato: { clave: string; nombre: string } | null;
+  cancelada: boolean;
+}
+
+/** Fechas AAAA-MM-DD, inclusivas. Una lista vacía de `formatos` o `sitioIds` no coincide con nada. */
+export interface FiltroDeVisitas {
+  desde?: string | undefined;
+  hasta?: string | undefined;
+  formatos?: readonly string[] | undefined;
+  sitioIds?: readonly string[] | undefined;
+}
+
+/** Visitas sin cancelar de un mes, un servicio y un sitio: con el sitio, el que consulta agrupa también por ciudad o cliente. */
+export interface ConteoDeVisitas {
+  /** AAAA-MM; null si no se agrupó por mes. */
+  mes: string | null;
+  /** Null sin servicio o si no se agrupó por formato. */
+  formato: string | null;
+  /** Null si no se agrupó por sitio. */
+  sitioId: string | null;
+  visitas: number;
+}
+
+export type AgrupacionDeVisitas = "mes" | "formato" | "sitio";
+
+/** Tope de las lecturas para consultar: lo que pasa de aquí se dice con `hayMas`. */
+const LIMITE_CONSULTA = 1000;
+/** Tope de filas del conteo: un grupo por mes, servicio y sitio. */
+const LIMITE_CONTEOS = 5000;
+
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 /** Las vistas de historia muestran las más recientes; la agenda (próximas) va completa. */
 const LIMITE_HISTORIA = 100;
@@ -139,8 +178,22 @@ export interface Visitas {
   clienteDe(tx: TxOrganizacion, visitaId: string): Promise<string | undefined>;
   /** Cliente, sitio, motivo y fecha de cada visita, sin importar a quién esté asignada (oficina). */
   resumenes(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, VisitaAsignada>>;
+  /** La primera y la última fecha programada de unas visitas (AAAA-MM-DD), sin traer filas; las que no existen no cuentan. */
+  rangoDeFechas(tx: TxOrganizacion, ids: readonly string[]): Promise<{ desde: string | null; hasta: string | null }>;
   /** Visitas cuyo cliente o sitio contienen el texto: para buscar levantamientos por cliente (iteración 23). */
   coincidentes(tx: TxOrganizacion, texto: string): Promise<string[]>;
+  /**
+   * Visitas por filtro, canceladas incluidas (con su marca), por fecha y número de orden (asistente, iteración 53).
+   * `limite`: hasta 1000 (por omisión); `hayMas` dice si quedaron fuera.
+   */
+  porFiltro(tx: TxOrganizacion, filtro: FiltroDeVisitas & { limite?: number | undefined }): Promise<{ visitas: VisitaParaConsultar[]; hayMas: boolean }>;
+  /**
+   * Visitas sin cancelar por mes, servicio y sitio, ordenadas así (asistente, iteración 53). Cuenta en la base, sin el
+   * tope de `porFiltro`; agrupar por ciudad o cliente se hace con los sitios. Con más de 5000 grupos, `entrada_invalida`.
+   */
+  conteos(tx: TxOrganizacion, filtro: FiltroDeVisitas, agrupar?: readonly AgrupacionDeVisitas[]): Promise<ConteoDeVisitas[]>;
+  /** La visita con ese número de orden de servicio (ADR-0051), o undefined. */
+  porOrden(tx: TxOrganizacion, orden: number): Promise<string | undefined>;
   registrarRutas(app: FastifyInstance, deps: { bd: BaseDeDatos; identidad: Pick<Identidad, "nombres" | "tecnicosActivos">; conteos: ConteosPorVisita }): void;
 }
 
@@ -193,6 +246,24 @@ const seCruzan = (a: [number, number], b: [number, number]) => a[0] < b[1] && b[
 const validarFecha = (programadaPara: string) => {
   if (!FECHA.test(programadaPara) || Number.isNaN(Date.parse(programadaPara))) throw problema("entrada_invalida", "Fecha inválida: use AAAA-MM-DD");
 };
+
+/** Una fecha que existe: "2026-02-30" se escribe bien pero no se lee igual de vuelta. La escribe un modelo (asistente). */
+const validarDiaQueExiste = (fecha: string) => {
+  validarFecha(fecha);
+  if (new Date(`${fecha}T00:00:00Z`).toISOString().slice(0, 10) !== fecha) throw problema("entrada_invalida", `La fecha ${fecha} no existe`);
+};
+
+function condicionDe({ desde, hasta, formatos, sitioIds }: FiltroDeVisitas) {
+  if (desde !== undefined) validarDiaQueExiste(desde);
+  if (hasta !== undefined) validarDiaQueExiste(hasta);
+  if ((formatos?.length ?? 0) > LIMITE_CONSULTA || (sitioIds?.length ?? 0) > LIMITE_CONSULTA) throw problema("entrada_invalida", `Hasta ${LIMITE_CONSULTA} servicios o sitios por consulta`);
+  return and(
+    desde !== undefined ? gte(visitas.programadaPara, desde) : undefined,
+    hasta !== undefined ? lte(visitas.programadaPara, hasta) : undefined,
+    formatos ? (formatos.length > 0 ? inArray(visitas.formato, [...formatos]) : sql`false`) : undefined,
+    sitioIds ? (sitioIds.length > 0 ? inArray(visitas.sitioId, [...sitioIds]) : sql`false`) : undefined,
+  );
+}
 
 /** Interfaz pública del módulo de visitas (soporte, capas simples). */
 export function crearVisitas(clientes: ClientesYSitios, formatos?: Pick<Formatos, "vigentes">): Visitas {
@@ -360,11 +431,83 @@ export function crearVisitas(clientes: ClientesYSitios, formatos?: Pick<Formatos
     asignadas: (tx, ids, tecnicoId) => leer(tx, ids, tecnicoId),
     resumenes: (tx, ids) => leer(tx, ids),
 
+    async rangoDeFechas(tx, ids) {
+      let desde: string | null = null;
+      let hasta: string | null = null;
+      // En lotes: la lista de una organización grande no cabe en un solo parámetro razonable.
+      for (let i = 0; i < ids.length; i += 1000) {
+        const [fila] = await tx
+          .select({ desde: sql<string | null>`min(${visitas.programadaPara})::text`, hasta: sql<string | null>`max(${visitas.programadaPara})::text` })
+          .from(visitas)
+          .where(inArray(visitas.id, ids.slice(i, i + 1000)));
+        if (fila?.desde && (!desde || fila.desde < desde)) desde = fila.desde;
+        if (fila?.hasta && (!hasta || fila.hasta > hasta)) hasta = fila.hasta;
+      }
+      return { desde, hasta };
+    },
+
     async coincidentes(tx, texto) {
       const sitios = await clientes.buscarSitios(tx, texto);
       if (sitios.length === 0) return [];
       const filas = await tx.select({ id: visitas.id }).from(visitas).where(inArray(visitas.sitioId, sitios));
       return filas.map((f) => f.id);
+    },
+
+    async porFiltro(tx, { limite = LIMITE_CONSULTA, ...filtro }) {
+      const tope = Number.isFinite(limite) ? Math.min(Math.max(1, Math.trunc(limite)), LIMITE_CONSULTA) : LIMITE_CONSULTA;
+      const filas = await tx
+        .select({
+          id: visitas.id,
+          ordenDeServicio: visitas.ordenDeServicio,
+          programadaPara: visitas.programadaPara,
+          sitioId: visitas.sitioId,
+          clienteId: visitas.clienteId,
+          formato: visitas.formato,
+          motivo: visitas.motivo,
+          canceladaEn: visitas.canceladaEn,
+        })
+        .from(visitas)
+        .where(condicionDe(filtro))
+        .orderBy(asc(visitas.programadaPara), sql`${visitas.ordenDeServicio} nulls last`, asc(visitas.id))
+        .limit(tope + 1);
+      return {
+        hayMas: filas.length > tope,
+        visitas: filas.slice(0, tope).map((f) => ({
+          id: f.id,
+          ordenDeServicio: f.ordenDeServicio === null ? null : numeroDeOrden(f.ordenDeServicio),
+          programadaPara: f.programadaPara,
+          sitioId: f.sitioId,
+          clienteId: f.clienteId,
+          formato: f.formato ? { clave: f.formato, nombre: f.motivo } : null,
+          cancelada: f.canceladaEn !== null,
+        })),
+      };
+    },
+
+    async conteos(tx, filtro, agrupar = ["mes", "formato", "sitio"]) {
+      // Agrupar solo por lo que se pide: por mes no se multiplica por cada sitio y no choca con el tope.
+      const por = new Set(agrupar);
+      const nulo = sql<null>`null`;
+      const mes = sql<string>`to_char(${visitas.programadaPara}, 'YYYY-MM')`;
+      const columnas = [...(por.has("mes") ? [mes] : []), ...(por.has("formato") ? [visitas.formato] : []), ...(por.has("sitio") ? [visitas.sitioId] : [])];
+      const orden = [...(por.has("mes") ? [mes] : []), ...(por.has("formato") ? [sql`${visitas.formato} nulls last`] : []), ...(por.has("sitio") ? [asc(visitas.sitioId)] : [])];
+      const consulta = tx
+        .select({ mes: por.has("mes") ? mes : nulo, formato: por.has("formato") ? visitas.formato : nulo, sitioId: por.has("sitio") ? visitas.sitioId : nulo, visitas: sql<number>`count(*)::int` })
+        .from(visitas)
+        .where(and(condicionDe(filtro), isNull(visitas.canceladaEn)))
+        .$dynamic();
+      if (columnas.length > 0) consulta.groupBy(...columnas).orderBy(...orden);
+      const filas = await consulta.limit(LIMITE_CONTEOS + 1);
+      // Cortar daría totales menores sin que nadie lo sepa.
+      if (filas.length > LIMITE_CONTEOS) throw problema("entrada_invalida", "Hay demasiados grupos: acote el periodo o los servicios");
+      return filas;
+    },
+
+    async porOrden(tx, orden) {
+      // Fuera del rango de la columna (integer), ninguna visita lo tiene.
+      if (!Number.isInteger(orden) || orden < 1 || orden > 2_147_483_647) return undefined;
+      const [fila] = await tx.select({ id: visitas.id }).from(visitas).where(eq(visitas.ordenDeServicio, orden));
+      return fila?.id;
     },
 
     async porCerrar(tx, tecnicoId, hoy, conteos) {

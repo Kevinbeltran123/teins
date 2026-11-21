@@ -2,9 +2,10 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { Respuesta } from "@teins/protocolo";
-import { Building, CalendarDays, ClipboardCheck, Clock, etiquetaEnter, FileText, Keyboard, Package, Receipt, Search, useModal, useNotificar, UserRound, type LucideIcon } from "@teins/ui";
+import { Building, CalendarDays, ClipboardCheck, Clock, Destello, etiquetaEnter, FileText, Keyboard, Package, Receipt, Search, useModal, useNotificar, UserRound, type LucideIcon } from "@teins/ui";
 import { cliente, consultas, REFRESCO_BANDEJA_MS } from "../api";
-import { resultadosDeBusqueda, type Resultado } from "../busqueda";
+import type { ControlDelAsistente } from "../asistente";
+import { resultadosDeBusqueda, type Grupo, type Resultado } from "../busqueda";
 import { consultasDeCotizaciones } from "../cotizaciones";
 import { useIrConPedido } from "../pedido";
 import { esTexto, unoDe, usePreferencia } from "../preferencias";
@@ -42,7 +43,7 @@ const SECCIONES: [string, "/" | "/visitas" | "/clientes" | "/catalogo" | "/infor
   ["Mi cuenta", "/cuenta"],
 ];
 
-const ICONO: Record<Resultado["tipo"], LucideIcon> = { accion: Clock, ir: Package, cliente: Building, visita: CalendarDays, levantamiento: ClipboardCheck, informe: FileText, cotizacion: Receipt };
+const ICONO: Record<Resultado["tipo"], LucideIcon> = { asistente: Search, accion: Clock, ir: Package, cliente: Building, visita: CalendarDays, levantamiento: ClipboardCheck, informe: FileText, cotizacion: Receipt };
 const iconoDe = (r: Resultado): LucideIcon =>
   r.tipo === "accion" ? ({ programar: CalendarDays, "nuevo-cliente": Building, "nueva-cotizacion": Receipt, tomar: ClipboardCheck, atajos: Keyboard } as Record<string, LucideIcon>)[r.id] ?? Clock : r.tipo === "ir" ? ({ "/": ClipboardCheck, "/visitas": CalendarDays, "/clientes": Building, "/catalogo": Package, "/informes": FileText, "/cotizaciones": Receipt, "/cuenta": UserRound } as Record<string, LucideIcon>)[r.id] ?? Package : ICONO[r.tipo];
 
@@ -79,7 +80,20 @@ export function useAnotarReciente(r: Resultado | null) {
   }, [clave]);
 }
 
-export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerAtajos: () => void }) {
+/**
+ * El asistente en Buscar (iteración 53, prototipos/analisis): sin texto, «Abrir {nombre}» entre las acciones; al
+ * escribir, lo que no está en las listas se le puede preguntar.
+ */
+export function conAsistente(grupos: Grupo[], texto: string, nombre: string): Grupo[] {
+  const t = texto.trim();
+  if (!t) {
+    const abrir: Resultado = { tipo: "asistente", id: "abrir", titulo: `Abrir ${nombre}` };
+    return grupos.some((g) => g.grupo === "Acciones") ? grupos.map((g) => (g.grupo === "Acciones" ? { ...g, resultados: [...g.resultados, abrir] } : g)) : [...grupos, { grupo: "Acciones", resultados: [abrir] }];
+  }
+  return [...grupos, { grupo: nombre, resultados: [{ tipo: "asistente", id: "preguntar", titulo: `Preguntarle a ${nombre} «${t}»` }] }];
+}
+
+export function Paleta({ alCerrar, alVerAtajos, asistente }: { alCerrar: () => void; alVerAtajos: () => void; asistente: ControlDelAsistente | null }) {
   const modal = useModal(true, alCerrar);
   const navegar = useNavigate();
   const irConPedido = useIrConPedido();
@@ -119,7 +133,7 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
     [...deClientes, ...deVisitas, ...deInformes, ...deCotizaciones, ...levantamientosRecientes.flatMap((q) => (q.data ? [recienteDeLevantamiento(q.data)] : []))].map((r) => [`${r.tipo}:${r.id}`, r]),
   );
 
-  const grupos = resultadosDeBusqueda(texto, {
+  const halladas = resultadosDeBusqueda(texto, {
     recientes: recientes.map((r) => vigentes.get(`${r.tipo}:${r.id}`) ?? r),
     acciones: [...ACCIONES, ...(masAntiguo ? [TOMAR] : []), ATAJOS],
     secciones: SECCIONES.map(([titulo, a]) => ({ tipo: "ir", id: a, titulo })),
@@ -135,6 +149,7 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
     informes: deInformes,
     cotizaciones: deCotizaciones,
   });
+  const grupos = asistente ? conAsistente(halladas, texto, asistente.nombre) : halladas;
   const planos = grupos.flatMap((g) => g.resultados);
   const actual = Math.min(activo, Math.max(planos.length - 1, 0));
   const cargando = [informes, cotizaciones, clientes, visitas].some((q) => q.isPending) || (buscar.length > 0 && levantamientos.isPending);
@@ -145,9 +160,14 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
   }, [actual, idLista]);
 
   async function abrir(r: Resultado) {
-    if (r.tipo !== "accion" && r.tipo !== "ir") anotar(r);
+    if (r.tipo !== "accion" && r.tipo !== "ir" && r.tipo !== "asistente") anotar(r);
     alCerrar();
     switch (r.tipo) {
+      case "asistente":
+        if (!asistente) return;
+        // Una pregunta desde aquí empieza una conversación nueva.
+        if (r.id === "preguntar") return asistente.preguntar(texto, null, "buscar");
+        return asistente.abrir();
       case "cliente":
         return navegar({ to: "/clientes/$id", params: { id: r.id } });
       case "levantamiento":
@@ -225,9 +245,10 @@ export function Paleta({ alCerrar, alVerAtajos }: { alCerrar: () => void; alVerA
               k++;
               const i = k;
               const Icono = g.grupo === "Recientes" ? Clock : iconoDe(r);
+              const icono = r.tipo === "asistente" ? <Destello /> : <Icono aria-hidden size={16} strokeWidth={1.6} />;
               return (
                 <div key={`${r.tipo}:${r.id}`} id={`${idLista}-${i}`} role="option" aria-selected={i === actual} tabIndex={-1} className="item-p" onPointerMove={() => i !== actual && setActivo(i)} onClick={() => void abrir(r)}>
-                  <Icono aria-hidden size={16} strokeWidth={1.6} />
+                  {icono}
                   <span className="t">{r.titulo}</span>
                   {r.detalle && <span className="d">{r.detalle}</span>}
                   {i === actual && (

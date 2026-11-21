@@ -114,6 +114,12 @@ Agrupadas por área para encontrarlas rápido. Cada ADR aparece una sola vez, en
 | [0039](0039-que-sale-en-el-informe.md) | Qué sale en el informe: oficina oculta partes de cada levantamiento | Aceptada |
 | [0059](0059-el-informe-como-el-papel.md) | El informe como el papel: el formato describe su distribución, el resto va en anexos | Aceptada |
 
+### Análisis
+
+| ADR | Decisión | Estado |
+|---|---|---|
+| [0060](0060-asistente-de-datos-con-la-api-de-claude.md) | Asistente de datos de oficina con la API de mensajes de Claude y herramientas propias de solo lectura, con tope mensual y minimización | Aceptada; en producción, solo con la autorización escrita de TEINS |
+
 ### API y avisos
 
 | ADR | Decisión | Estado |

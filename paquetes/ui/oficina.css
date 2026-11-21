@@ -1011,3 +1011,191 @@ dialog.capa-lateral .lienzo.panel-revision .lienzo-cab { margin-top: -4px; }
 .hilo-res .resp-r b { font-weight: 600; }
 .hilo-res .ver-r { font-size: 12px; font-weight: 500; color: var(--marca); }
 @media (prefers-reduced-motion: reduce) { .hilo-o.destella, .grupo-m.llega { animation: none; } }
+
+/* El asistente (iteración 53, prototipos/analisis, versión 5): botón con borde de color que se mueve «cada tanto»
+   (una vuelta, un destello y un halo cada 12 s), continuo al pasar el cursor y rápido mientras responde. */
+@property --giro { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.destello { display: inline-block; width: 16px; height: 16px; flex: none; background: linear-gradient(135deg, var(--t-ia-1) 10%, var(--t-ia-2) 58%, var(--t-ia-3) 96%); -webkit-mask: var(--t-forma-destello) center / contain no-repeat; mask: var(--t-forma-destello) center / contain no-repeat; }
+.destello.latiendo { animation: ia-latido 1s ease-in-out infinite; }
+.ia { position: relative; display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px 0 11px; border: 0; border-radius: 999px; background: var(--t-panel); color: var(--t-texto); font-size: 13px; font-weight: 500; box-shadow: var(--t-sombra-boton); animation: ia-halo-pausa 12s infinite; transition: background .2s var(--t-curva); }
+/* El anillo: el degradado cónico recortado al borde con la máscara */
+.ia::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none; background: conic-gradient(from var(--giro), var(--t-ia-1), var(--t-ia-2) 28%, var(--t-ia-3) 40%, var(--t-ia-2) 52%, var(--t-ia-1) 72%, var(--t-ia-hondo) 88%, var(--t-ia-1)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: ia-giro-pausa 12s var(--t-curva) infinite; }
+.ia .destello { animation: ia-destello-pausa 12s infinite; }
+.ia:hover { animation: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-ia-1) 14%, transparent), 0 4px 16px color-mix(in srgb, var(--t-ia-1) 30%, transparent); }
+.ia:hover::before { animation: ia-giro 1.6s linear infinite; }
+.ia[aria-expanded="true"] { background: color-mix(in srgb, var(--t-ia-1) 10%, var(--t-panel)); }
+.ia .punto { position: absolute; top: -2px; right: -2px; box-shadow: 0 0 0 2px var(--t-fondo); pointer-events: none; }
+.ia.pensando::before { animation: ia-giro 1.1s linear infinite; }
+.ia.pensando .destello { animation: ia-latido 1s ease-in-out infinite; }
+.orbe-ia { position: relative; width: 26px; height: 26px; border-radius: 999px; flex: none; display: grid; place-items: center; background: radial-gradient(circle, var(--t-ia-hondo) 0 54%, transparent 56%), conic-gradient(from var(--giro), var(--t-ia-1), var(--t-ia-2) 22%, var(--t-ia-3) 32%, var(--t-ia-1) 45%, var(--t-ia-hondo) 66%, var(--t-ia-2) 86%, var(--t-ia-1)); }
+.orbe-ia .destello { background: var(--t-sobre-superficie); width: 13px; height: 13px; }
+.orbe-ia.pensando { animation: ia-giro 1.1s linear infinite; }
+.orbe-ia.grande { width: 54px; height: 54px; animation: ia-giro 9s linear infinite; box-shadow: 0 10px 30px color-mix(in srgb, var(--t-ia-1) 30%, transparent); }
+.orbe-ia.grande .destello { width: 25px; height: 25px; animation: ia-destello 3.2s ease-in-out infinite; }
+/* Lo que está escribiendo, con el brillo que usan las demás apps mientras la IA trabaja */
+.brillo-texto { background: linear-gradient(90deg, var(--t-texto-secundario) 0%, var(--t-texto-secundario) 38%, var(--t-texto) 50%, var(--t-texto-secundario) 62%, var(--t-texto-secundario) 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: ia-barrido 1.8s linear infinite; }
+@keyframes ia-giro { to { --giro: 360deg; } }
+@keyframes ia-giro-pausa { 0% { --giro: 0deg; } 22%, 100% { --giro: 360deg; } }
+@keyframes ia-destello { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.18) rotate(15deg); } }
+@keyframes ia-destello-pausa { 0%, 16%, 100% { transform: scale(1) rotate(0deg); } 8% { transform: scale(1.24) rotate(18deg); } }
+@keyframes ia-latido { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .55; transform: scale(.84); } }
+@keyframes ia-halo-pausa { 0%, 24%, 100% { box-shadow: var(--t-sombra-boton); } 10% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-ia-1) 12%, transparent), 0 4px 18px color-mix(in srgb, var(--t-ia-1) 32%, transparent); } }
+@keyframes ia-barrido { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .ia, .ia::before, .ia .destello, .destello.latiendo, .orbe-ia, .orbe-ia .destello, .brillo-texto { animation: none !important; }
+  .brillo-texto { color: var(--t-texto-secundario); background: none; }
+}
+
+/* El panel del asistente (iteración 53, prototipos/analisis, versión 5). Prefijo asis- en todo: oficina.css ya usa
+   nombres como .sugerencias, .paso o .aviso. A la derecha, debajo de la barra de 48 px y sin velo. */
+.asis-panel { position: fixed; top: 48px; right: 0; bottom: 0; width: min(440px, 100vw); z-index: 30; background: var(--sup); border-left: 1px solid var(--borde); box-shadow: var(--t-sombra-capa); display: flex; flex-direction: column; overflow: hidden; animation: asis-entra .26s var(--curva) both; }
+@keyframes asis-entra { from { opacity: 0; transform: translateX(14px); } }
+/* Arriba, un brillo suave de la marca */
+.asis-panel::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 260px; pointer-events: none; background: radial-gradient(110% 85% at 88% -10%, color-mix(in srgb, var(--t-ia-2) 20%, transparent), transparent 62%), radial-gradient(70% 60% at 0% -5%, color-mix(in srgb, var(--t-ia-3) 12%, transparent), transparent 58%); }
+@media (max-width: 640px) { .asis-panel { top: 0; } }
+/* Con el panel abierto y espacio de sobra, las notificaciones van sobre lo que queda a la vista, no encima de la caja.
+   Más angosto, quedan en su sitio de siempre, encima del panel: así nunca salen de la pantalla. */
+@media (min-width: 900px) { :root:has(.asis-panel) { --hueco-derecho: min(440px, 100vw); } }
+.asis-cab, .asis-cuerpo, .asis-pie { position: relative; }
+.asis-cab { height: 46px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 8px 0 16px; }
+.asis-cab h2 { margin: 0; font-size: 14px; font-weight: 600; flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.asis-cab .asis-volver { margin-left: -8px; }
+.asis-cuerpo { flex: 1; overflow-y: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 16px; }
+.asis-pie { flex: none; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; background: linear-gradient(to top, var(--sup) 70%, transparent); }
+.asis-pie-nota { margin: 0; font-size: 11.5px; color: var(--t-texto-terciario); text-align: center; }
+
+/* Inicio: el orbe, el saludo, la cobertura, las sugerencias en tarjetas y las recientes */
+.asis-bienvenida { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 2px 4px; }
+.asis-bienvenida h3 { margin: 8px 0 0; font-size: 21px; font-weight: 600; letter-spacing: -.02em; }
+.asis-bienvenida p { margin: 0; color: var(--sec); font-size: 13.5px; line-height: 1.5; }
+.asis-bienvenida .asis-cobertura { font-size: 12.5px; }
+.asis-cobertura b { color: var(--texto); font-weight: 600; }
+.asis-sugerencias { display: flex; flex-direction: column; gap: 8px; }
+.asis-sugerencia { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; padding: 10px 12px; border: 0; border-radius: 12px; background: color-mix(in srgb, var(--t-ia-1) 5%, var(--sup)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-ia-1) 18%, transparent); font-size: 13.5px; line-height: 1.4; color: var(--texto); transition: box-shadow .2s var(--curva), transform .15s var(--curva); }
+.asis-sugerencia:not([disabled]):hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-ia-1) 45%, transparent), 0 6px 18px color-mix(in srgb, var(--t-ia-1) 14%, transparent); transform: translateY(-1px); }
+.asis-sugerencia[disabled] { opacity: .55; cursor: not-allowed; }
+.asis-sugerencia svg { color: var(--t-ia-1); margin-top: 1px; flex: none; }
+.asis-bloque { display: flex; flex-direction: column; }
+.asis-bloque-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--borde); }
+.asis-bloque-cab h3 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.asis-conv-boton { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--borde); padding: 10px 4px; font-size: 13.5px; line-height: 1.4; color: var(--texto); transition: background .12s; }
+.asis-conv-boton:hover { background: var(--sup2); }
+.asis-conv-boton svg { color: var(--sec); margin-top: 1px; flex: none; }
+.asis-conv-boton small { display: block; color: var(--sec); font-size: 12px; margin-top: 2px; }
+.asis-conv { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--borde); }
+.asis-conv .asis-conv-boton { border-bottom: 0; flex: 1; min-width: 0; }
+.asis-cuerpo .buscar { width: 100%; }
+.asis-vacio { margin: 0; padding: 6px 2px; color: var(--sec); font-size: 13px; line-height: 1.5; }
+
+/* Una pregunta y su respuesta: la pregunta en burbuja a la derecha; la respuesta con el orbe como avatar */
+.asis-intercambio { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; }
+.asis-intercambio + .asis-intercambio { padding-top: 6px; }
+.asis-yo { align-self: flex-end; max-width: 86%; margin: 0; background: color-mix(in srgb, var(--t-ia-1) 11%, var(--sup)); color: var(--texto); padding: 9px 13px; border-radius: 16px 16px 4px 16px; font-size: 13.5px; font-weight: 400; line-height: 1.45; text-wrap: pretty; white-space: pre-line; overflow-wrap: anywhere; }
+.asis-ia { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; }
+.asis-cuerpo-ia { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding-top: 3px; }
+.asis-pastilla { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--sec); border: 0; padding: 4px 11px 4px 9px; border-radius: 999px; width: fit-content; background: var(--sup2); }
+.asis-pastilla.fuente { background: color-mix(in srgb, var(--t-ia-1) 6%, var(--sup2)); }
+.asis-pastilla:hover { color: var(--texto); }
+.asis-pastilla svg:first-child { color: var(--sec); }
+.asis-chev { transition: transform .2s var(--curva); }
+[aria-expanded="true"] > .asis-chev { transform: rotate(90deg); }
+.asis-pasos { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.asis-paso { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.4; padding: 3px 0; animation: asis-asoma .28s var(--curva) both; }
+.asis-marca-paso { width: 16px; height: 16px; display: grid; place-items: center; flex: none; color: var(--exito); }
+.asis-marca-paso .destello { width: 13px; height: 13px; }
+.asis-paso.en-curso, .asis-paso.en-curso .asis-marca-paso { color: var(--sec); }
+.asis-paso.fallo .asis-marca-paso { color: var(--peligro); }
+.asis-res { color: var(--sec); }
+.asis-giro { animation: asis-girar .9s linear infinite; }
+@keyframes asis-girar { to { transform: rotate(360deg); } }
+@keyframes asis-asoma { from { opacity: 0; transform: translateY(4px); } }
+.asis-respuesta { display: flex; flex-direction: column; gap: 14px; animation: asis-asoma .32s var(--curva) both; }
+.asis-resultado { display: flex; flex-direction: column; gap: 2px; }
+.asis-cifras { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.asis-cifra { font-size: 26px; font-weight: 600; letter-spacing: -.025em; line-height: 1.15; }
+.asis-cifra.segunda { font-size: 19px; letter-spacing: -.015em; }
+.asis-unidad { font-size: 15px; font-weight: 500; color: var(--sec); letter-spacing: 0; margin-left: 3px; }
+.asis-cifra-que { font-size: 12.5px; color: var(--sec); }
+.asis-texto { display: flex; flex-direction: column; gap: 8px; }
+.asis-texto p { margin: 0; line-height: 1.55; font-size: 13.5px; white-space: pre-line; overflow-wrap: anywhere; }
+.asis-texto ul { margin: 0; padding-left: 18px; line-height: 1.55; font-size: 13.5px; list-style: disc; }
+.asis-texto li + li { margin-top: 4px; }
+.asis-acciones { display: flex; gap: 2px; margin-left: -6px; }
+.asis-nota { font-size: 12.5px; color: var(--sec); margin: 0; line-height: 1.5; }
+
+/* Tablas en tarjeta, fuentes y los datos del gráfico */
+.asis-tabla { display: flex; flex-direction: column; border: 1px solid var(--borde); border-radius: 12px; padding: 8px 12px 2px; background: var(--sup); }
+.asis-tabla-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 2px; }
+.asis-tabla-cab h4, .asis-grafico-cab h4 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.asis-desliza { overflow-x: auto; }
+.asis-tabla .asis-nota { padding: 6px 0 8px; }
+.asis-tabla table, .asis-datos table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.asis-tabla th, .asis-datos th { text-align: left; font-size: 11.5px; font-weight: 500; color: var(--sec); padding: 6px; white-space: normal; text-wrap: balance; vertical-align: bottom; border-bottom: 1px solid var(--borde); }
+.asis-tabla td, .asis-datos td { padding: 7px 6px; border-bottom: 1px solid var(--borde); vertical-align: middle; }
+.asis-tabla tbody tr:last-child td { border-bottom: 0; }
+.asis-tabla th:first-child, .asis-tabla td:first-child, .asis-datos th:first-child, .asis-datos td:first-child { padding-left: 0; }
+.asis-tabla th:last-child, .asis-tabla td:last-child, .asis-datos th:last-child, .asis-datos td:last-child { padding-right: 0; }
+.asis-tabla .num, .asis-datos .num { text-align: right; }
+/* Los encabezados se parten en dos líneas; las cifras nunca: así caben cuatro columnas en el panel. */
+.asis-tabla td.num, .asis-datos td.num { white-space: nowrap; }
+.asis-principal { font-weight: 500; display: block; }
+.asis-detalle { display: block; color: var(--sec); font-size: 11.5px; margin-top: 2px; }
+.asis-datos { border-top: 1px solid var(--borde); }
+.asis-fuente { display: flex; flex-direction: column; gap: 6px; }
+.asis-fuentes { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--borde); }
+.asis-fuentes li { display: flex; flex-direction: column; gap: 1px; padding: 8px 0; border-bottom: 1px solid var(--borde); font-size: 12.5px; }
+.asis-l1 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.asis-l1 .ins { margin-left: auto; }
+.asis-meta, .asis-l2 { color: var(--sec); }
+
+/* Gráfico de barras de una serie, sin leyenda: solo el valor más alto lleva su cifra */
+.asis-grafico { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.asis-grafico-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.asis-trazado { position: relative; height: 140px; margin-top: 16px; display: grid; grid-template-columns: 28px minmax(0, 1fr); }
+.asis-eje-y { position: relative; }
+.asis-eje-y span { position: absolute; right: 6px; transform: translateY(50%); font-size: 11px; color: var(--sec); }
+.asis-area { position: relative; border-bottom: 1px solid var(--t-borde-suave); }
+.asis-guia { position: absolute; left: 0; right: 0; border-top: 1px solid var(--borde); }
+.asis-barras { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; align-items: end; padding: 0 2px; }
+.asis-barra { position: relative; height: var(--h); width: min(100%, 20px); justify-self: center; background: var(--t-texto-terciario); border-radius: 4px 4px 0 0; }
+.asis-barra.max { background: var(--texto); }
+.asis-valor { position: absolute; bottom: calc(100% + 3px); left: 50%; transform: translateX(-50%); font-size: 11.5px; font-weight: 600; color: var(--texto); }
+.asis-tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--texto); color: var(--fondo); font-size: 12px; font-weight: 500; padding: 4px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 2; }
+.asis-barra:hover .asis-tip { opacity: 1; }
+.asis-barra:hover .asis-valor { opacity: 0; }
+.asis-eje-x { display: grid; grid-template-columns: 28px minmax(0, 1fr); }
+.asis-eje-x div { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; padding: 0 2px; }
+.asis-eje-x span { text-align: center; font-size: 11px; color: var(--sec); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* La caja de pregunta: toma un borde de color al enfocarla */
+.asis-caja { position: relative; background: var(--sup); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--t-borde-suave), var(--t-sombra-boton); padding: 10px 8px 8px 12px; display: flex; flex-direction: column; gap: 4px; transition: box-shadow .15s var(--curva); }
+.asis-caja::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none; background: linear-gradient(120deg, var(--t-ia-1), var(--t-ia-2) 55%, var(--t-ia-3)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0; transition: opacity .2s var(--curva); }
+.asis-caja:focus-within { box-shadow: 0 0 0 4px color-mix(in srgb, var(--t-ia-1) 12%, transparent), 0 6px 20px color-mix(in srgb, var(--t-ia-1) 12%, transparent); }
+.asis-caja:focus-within::before { opacity: 1; }
+.asis-caja textarea { border: 0; outline: 0; background: transparent; resize: none; font-size: 13.5px; line-height: 1.5; color: var(--texto); min-height: 40px; max-height: 140px; padding: 0 4px 0 0; width: 100%; }
+.asis-caja textarea::placeholder { color: var(--t-texto-terciario); }
+.asis-caja textarea:disabled { cursor: not-allowed; }
+.asis-caja-pie { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.asis-pista { font-size: 12px; color: var(--t-texto-terciario); display: flex; gap: 6px; align-items: center; }
+.asis-enviar { width: 30px; height: 30px; border-radius: 999px; border: 0; display: grid; place-items: center; background: linear-gradient(135deg, var(--t-ia-hondo), var(--t-ia-1)); color: var(--t-sobre-superficie); transition: filter .15s; }
+.asis-enviar:not([disabled]):hover { filter: brightness(1.06); }
+.asis-enviar[disabled] { background: var(--sup3); color: var(--t-texto-terciario); cursor: not-allowed; }
+.asis-enviar.detener { background: var(--texto); color: var(--fondo); }
+.asis-enviar.detener svg { fill: currentColor; }
+
+/* Administración · el gasto del mes frente al tope */
+.asis-uso { display: flex; flex-direction: column; gap: 10px; max-width: 780px; }
+.asis-uso-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.asis-mes { font-size: 12px; font-weight: 500; color: var(--sec); }
+.asis-gasto { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+.asis-gasto span { font-size: 14px; font-weight: 400; color: var(--sec); letter-spacing: 0; }
+.asis-medidor { height: 6px; border-radius: 999px; background: var(--sup3); overflow: hidden; }
+.asis-medidor div { height: 100%; width: var(--p); background: var(--sec); border-radius: 999px; }
+.asis-medidor.lleno div { background: var(--alerta); }
+.asis-persona { display: inline-flex; gap: 8px; align-items: center; }
+.asis-persona .avatar { width: 22px; height: 22px; font-size: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .asis-panel, .asis-paso, .asis-respuesta, .asis-giro { animation: none !important; }
+  .asis-sugerencia, .asis-chev, .asis-caja, .asis-caja::before, .asis-tip { transition: none; }
+}

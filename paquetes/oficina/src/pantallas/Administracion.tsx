@@ -42,12 +42,15 @@ import {
 } from "@teins/ui";
 import { cliente, consultas } from "../api";
 import { consultasDeAdministracion, credencialConQr, mensajeDeAdministracion, useAccion } from "../administracion";
+import { consultasDelAsistente } from "../asistente";
+import { usePedido } from "../pedido";
+import { UsoDelAsistente } from "./UsoDelAsistente";
 import { aFechaHora, haceCuanto } from "../formato";
 import { errorDelTelefono, sinError } from "../mensajes";
 
 type Sesion = Respuesta<"obtenerSesion">;
 type Usuario = Respuesta<"listarUsuarios">["usuarios"][number];
-type Seccion = "usuarios" | "dispositivos";
+type Seccion = "usuarios" | "dispositivos" | "asistente";
 
 const SECCIONES: { valor: Seccion; etiqueta: string }[] = [
   { valor: "usuarios", etiqueta: "Usuarios" },
@@ -64,6 +67,17 @@ export function Administracion({ sesion }: { sesion: Sesion }) {
   // Al verificar, el segundo factor ya queda activo y la sesión releída lo dice: la activación sigue a la vista
   // hasta que la persona diga que guardó los códigos de respaldo, que no se vuelven a mostrar.
   const [activando, setActivando] = useState(!sesion.usuario.segundoFactor);
+  // La pestaña del asistente lleva su nombre y solo aparece si está disponible (iteración 53).
+  const asistente = useQuery(consultasDelAsistente.estado());
+  const nombreDelAsistente = asistente.data?.disponible ? asistente.data.nombre : null;
+  const [cambiandoTope, setCambiandoTope] = useState(false);
+  // «Cambiar el tope» desde el aviso del panel abre esta pestaña con su diálogo.
+  usePedido("abrir", (pedido) => {
+    if (pedido !== "tope") return;
+    setSeccion("asistente");
+    setCambiandoTope(true);
+  });
+  const secciones = nombreDelAsistente ? [...SECCIONES, { valor: "asistente" as const, etiqueta: nombreDelAsistente }] : SECCIONES;
   if (!sesion.usuario.administrador) {
     return (
       <>
@@ -86,11 +100,12 @@ export function Administracion({ sesion }: { sesion: Sesion }) {
         }
       />
       <BarraLista buscador={seccion === "usuarios" && <Buscador etiqueta="Buscar usuarios" ejemplo="Buscar por nombre o usuario" valor={busqueda} onCambio={setBusqueda} />}>
-        <Pestanas etiqueta="Qué administrar" activa={seccion} onCambio={setSeccion} pestanas={SECCIONES} />
+        <Pestanas etiqueta="Qué administrar" activa={seccion} onCambio={setSeccion} pestanas={secciones} />
       </BarraLista>
-      <div role="tabpanel" aria-label={SECCIONES.find((s) => s.valor === seccion)!.etiqueta}>
+      <div role="tabpanel" aria-label={secciones.find((s) => s.valor === seccion)?.etiqueta ?? "Usuarios"}>
         {seccion === "usuarios" && <Usuarios propioId={sesion.usuario.id} creando={creando} setCreando={setCreando} busqueda={busqueda} />}
         {seccion === "dispositivos" && <Dispositivos />}
+        {seccion === "asistente" && nombreDelAsistente && <UsoDelAsistente nombre={nombreDelAsistente} cambiandoTope={cambiandoTope} setCambiandoTope={setCambiandoTope} />}
       </div>
     </>
   );

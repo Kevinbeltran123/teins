@@ -26,6 +26,7 @@ const TITULOS: Record<CodigoProblema, string> = {
   formato_desconocido: "Versión de formato desconocida",
   version_protocolo_no_soportada: "La app debe actualizarse para enviar",
   demasiadas_solicitudes: "Demasiadas solicitudes",
+  tope_agotado: "Se agotó el tope de gasto del mes",
   error_interno: "Error interno",
   no_disponible: "El servicio no está disponible",
 };

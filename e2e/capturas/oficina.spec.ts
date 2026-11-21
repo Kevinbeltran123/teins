@@ -245,6 +245,22 @@ test("oficina y el portal", async ({ page, browser }) => {
   await aLaVista(page.getByRole("row").filter({ hasText: PERSONAS.tecnico.nombre }));
   await capturar(page, "oficina-25-telefonos-de-campo");
 
+  // Chispa, el asistente: una respuesta con destacado, tabla y fuentes (modelo simulado), y su uso en Administración.
+  const chispa = page.getByRole("button", { name: "Chispa", exact: true });
+  await chispa.click();
+  const panel = page.getByRole("complementary", { name: "Chispa" });
+  await panel.getByRole("group", { name: "Preguntas sugeridas" }).getByRole("button").filter({ hasText: "¿Cuánto cable se gastó en los últimos 12 meses?" }).click();
+  await aLaVista(panel.getByRole("button", { name: /consultas? a sus datos/ }), 60_000);
+  await aLaVista(panel.getByRole("table", { name: "Cable por material" }));
+  await panel.getByRole("button", { name: /^De \d+ visitas?/ }).click();
+  await panel.getByRole("article").last().evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await capturar(page, "oficina-asistente", { resaltar: page.locator("#boton-asistente") });
+  await panel.getByRole("button", { name: "Cerrar Chispa" }).click();
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("tab", { name: "Chispa" }).click();
+  await aLaVista(page.getByRole("table", { name: "Preguntas y gasto por persona" }));
+  await capturar(page, "oficina-asistente-uso", { resaltar: page.getByRole("tabpanel", { name: "Chispa" }).getByRole("button", { name: "Cambiar el tope" }) });
+
   // 10. Búsqueda.
   await page.getByRole("navigation", { name: "Secciones" }).getByRole("button", { name: "Buscar" }).click();
   const paleta = page.getByRole("dialog", { name: "Buscar en oficina" });

@@ -94,6 +94,9 @@ export default defineRailway((ctx) => {
       AVISOS_VAPID_PUBLICA: ref("worker", "AVISOS_VAPID_PUBLICA"),
       // Los eventos de Resend llegan a oficina (ADR-0028); su secreto lo guarda Kevin, nunca este archivo.
       ...(produccion ? {} : { RESEND_SECRETO_EVENTOS: preserve() }),
+      // El asistente (ADR-0060): "true" solo cuando el worker tiene la llave de Anthropic. No es secreto; la llave nunca
+      // llega a un servicio expuesto a internet. Lo pone Kevin en Railway; en producción, solo con la autorización de TEINS.
+      ASISTENTE_ACTIVO: preserve(),
     },
   });
   // Solo el portal tiene la conexión con el rol `teins_portal` (ADR-0009, parte 3).
@@ -119,6 +122,9 @@ export default defineRailway((ctx) => {
       ...(produccion
         ? {}
         : { ENVIOS_SIMULADOS: "whatsapp", RESEND_CLAVE_API: preserve(), CORREO_REMITENTE: "TEINS pruebas <teins-pruebas@deportur.tech>" }),
+      // La llave de Anthropic del asistente (ADR-0060) vive solo aquí: el worker es quien llama al modelo. La pone Kevin en
+      // Railway, de la cuenta a nombre de TEINS; nunca este archivo ni el repositorio.
+      ANTHROPIC_API_KEY: preserve(),
     },
   });
 

@@ -66,8 +66,8 @@ export default function preparar() {
     if (clave.startsWith("admin")) comando("marcar-administrador", ["--usuario", p.usuario]);
   }
 
-  // El worker: PDF, verificación de fotos y envíos simulados (nada sale del equipo).
-  const worker = spawn("npx", ["tsx", "--env-file=.env", "src/worker.ts"], { cwd: servidor.cwd, stdio: "ignore", env: { ...process.env, ENVIOS_SIMULADOS: "true" } });
+  // El worker: PDF, verificación de fotos, envíos simulados y el asistente con el modelo simulado (nada sale del equipo).
+  const worker = spawn(process.execPath, ["--env-file=.env", "--import", "tsx", "src/worker.ts"], { cwd: servidor.cwd, stdio: "ignore", env: { ...process.env, ENVIOS_SIMULADOS: "true", ASISTENTE_SIMULADO: "true" } });
   return async () => {
     worker.kill("SIGTERM");
   };

@@ -43,3 +43,9 @@ Información y decisiones que solo TEINS puede dar. Cada punto dice para qué si
 | 20 | ¿Deben quedar vinculadas las visitas repetidas al mismo sitio? (P5) y ¿quién decide qué técnico va y cuándo? (P2) | Ajustar cómo se programan las visitas | Oficina programa cada visita con fecha |
 | 21 | Número de WhatsApp Business aprobado por Meta | Enviar el informe por WhatsApp | Solo correo |
 | 22 | ¿Qué tan concreta es la idea de ofrecer el sistema a otras empresas? (P44) | Decidir si se prepara el alta de empresas | No se prepara |
+
+## Para el asistente de oficina
+
+| # | Qué necesitamos | Para qué | Si no llega |
+|---|---|---|---|
+| 23 | Autorización escrita para enviar a Anthropic (Estados Unidos) los datos que el asistente consulta para responder, y una cuenta de Anthropic a nombre de TEINS que acepte sus términos como encargado. **Sale:** la pregunta y lo que devuelve cada consulta: números de orden, fechas, clientes, sitios, ciudades, servicios, materiales con sus cantidades y precios, y los textos de los levantamientos. **No sale:** contactos (nombres, correos, celulares), firmas, fotos, bocetos, coordenadas ni documentos de identidad; los correos y celulares escritos en un texto se cambian por `[correo]` y `[celular]`. **Retención:** Anthropic no entrena con estos datos y los borra a más tardar a los 30 días; con un acuerdo de retención cero, no guarda nada; lo que marcan sus filtros de seguridad puede guardarse hasta 2 años (ADR-0060) | Que oficina pregunte por sus datos («¿cuánto cable se gastó este año?») y reciba la cifra con sus fuentes | El asistente queda apagado en producción |
