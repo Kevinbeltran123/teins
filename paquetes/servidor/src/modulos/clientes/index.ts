@@ -24,6 +24,18 @@ export interface Sitio {
   archivado: boolean;
 }
 
+/** Un sitio para consultar (asistente, iteración 53): sin dirección ni contactos. La ciudad es texto libre. */
+export interface SitioConCliente {
+  id: string;
+  nombre: string;
+  ciudad: string | null;
+  clienteId: string;
+  cliente: string;
+}
+
+/** Tope de `sitiosConCliente`. */
+const LIMITE_SITIOS = 5000;
+
 /** Lo que el módulo de visitas lee de un contacto (ADR-0051): a quién preguntar al llegar. */
 export interface ContactoDeVisita {
   id: string;
@@ -176,6 +188,24 @@ export const clientesYSitios = {
       .innerJoin(clientes, eq(clientes.id, sitios.clienteId))
       .where(inArray(sitios.id, [...ids]));
     return new Map(filas.map((f) => [f.id, f]));
+  },
+
+  /**
+   * Sitios con su ciudad y su cliente, por cliente y nombre (asistente, iteración 53): los de `ids` o, sin ellos, todos
+   * los de la organización, archivados incluidos (sus visitas siguen contando). Con más de 5000, `entrada_invalida`.
+   */
+  async sitiosConCliente(tx: TxOrganizacion, ids?: readonly string[]): Promise<SitioConCliente[]> {
+    if (ids && ids.length === 0) return [];
+    if (ids && ids.length > LIMITE_SITIOS) throw problema("entrada_invalida", `Hasta ${LIMITE_SITIOS} sitios por consulta`);
+    const filas = await tx
+      .select({ id: sitios.id, nombre: sitios.nombre, ciudad: sitios.ciudad, clienteId: sitios.clienteId, cliente: clientes.nombre })
+      .from(sitios)
+      .innerJoin(clientes, eq(clientes.id, sitios.clienteId))
+      .where(ids ? inArray(sitios.id, [...ids]) : undefined)
+      .orderBy(asc(clientes.nombre), asc(sitios.nombre), asc(sitios.id))
+      .limit(LIMITE_SITIOS + 1);
+    if (filas.length > LIMITE_SITIOS) throw problema("entrada_invalida", "Hay demasiados sitios: pida los de unas visitas");
+    return filas;
   },
 
   /** Contactos por id, para la visita (ADR-0051): también los quitados, que conservan el nombre y pierden el celular. */

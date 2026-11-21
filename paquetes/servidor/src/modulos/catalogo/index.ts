@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { enOrganizacion, esViolacionUnica, type BaseDeDatos, type TxOrganizacion } from "../../plataforma/base-de-datos";
+import { contieneTexto } from "../../plataforma/busqueda";
 import { problema } from "../../plataforma/errores";
 import { evaluar, politicas } from "../../plataforma/politicas";
 import { registrarOperacion } from "../../plataforma/rutas";
@@ -18,6 +19,14 @@ export interface ItemDeCatalogo {
   activo: boolean;
 }
 
+/** Un ítem con su precio vigente (ADR-0029) o null si no tiene. */
+export interface ItemConPrecio extends ItemDeCatalogo {
+  precio: { valor: number; desde: Date } | null;
+}
+
+/** Tope de `buscar`, por texto o por ids. */
+const LIMITE_BUSQUEDA = 200;
+
 /** El catálogo baja a los teléfonos (ADR-0025): cada ítem creado o cambiado se registra para toda la organización. */
 const paraLosTelefonos = (tx: TxOrganizacion, organizacionId: string, ids: readonly string[]) =>
   registrarCambios(tx, ids.map((entidadId) => ({ organizacionId, entidad: "item_catalogo" as const, entidadId, operacion: "cambio" as const })));
@@ -28,6 +37,11 @@ export interface Catalogo {
   items(tx: TxOrganizacion, ids: readonly string[]): Promise<Map<string, ItemDeCatalogo>>;
   /** Precio vigente de cada ítem que tiene uno (ADR-0029). */
   preciosVigentes(tx: TxOrganizacion, ids?: readonly string[]): Promise<Map<string, { valor: number; desde: Date }>>;
+  /**
+   * Ítems activos o no, por código, con su precio vigente (asistente, iteración 53): los que contienen el texto en el
+   * código o la descripción, sin distinguir mayúsculas ni tildes, o los de `ids`. Hasta 200; un texto vacío no busca.
+   */
+  buscar(tx: TxOrganizacion, consulta: { texto: string } | { ids: readonly string[] }): Promise<ItemConPrecio[]>;
   registrarRutas(app: FastifyInstance): void;
 }
 
@@ -61,6 +75,21 @@ export function crearCatalogo(bd: BaseDeDatos, identidad: Pick<Identidad, "nombr
     },
 
     preciosVigentes: vigentes,
+
+    async buscar(tx, consulta) {
+      let condicion;
+      if ("ids" in consulta) {
+        if (consulta.ids.length === 0) return [];
+        if (consulta.ids.length > LIMITE_BUSQUEDA) throw problema("entrada_invalida", `Hasta ${LIMITE_BUSQUEDA} ítems por consulta`);
+        condicion = inArray(itemsCatalogo.id, [...consulta.ids]);
+      } else {
+        if (!consulta.texto.trim()) return [];
+        condicion = or(contieneTexto(itemsCatalogo.codigo, consulta.texto), contieneTexto(itemsCatalogo.descripcion, consulta.texto));
+      }
+      const filas = await tx.select().from(itemsCatalogo).where(condicion).orderBy(asc(itemsCatalogo.codigo)).limit(LIMITE_BUSQUEDA);
+      const precios = await vigentes(tx, filas.map((f) => f.id));
+      return filas.map((f) => ({ id: f.id, codigo: f.codigo, descripcion: f.descripcion, unidad: f.unidad, activo: f.activo, precio: precios.get(f.id) ?? null }));
+    },
 
     registrarRutas(app) {
       registrarOperacion(app, "listarCatalogo", {

@@ -1,6 +1,6 @@
 import { and, eq, inArray, or, sql, type AnyColumn } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { bloques, rutaLegible, type EstadoRevision, type Repeticiones, type Respuestas } from "@teins/dominio";
+import { bloques, rutaLegible, type EstadoRevision, type Repeticiones, type Respuestas, type VersionFormato } from "@teins/dominio";
 import type { BaseDeDatos, TxOrganizacion } from "../../plataforma/base-de-datos";
 import { enOrganizacion } from "../../plataforma/base-de-datos";
 import { contieneTexto } from "../../plataforma/busqueda";
@@ -18,9 +18,9 @@ import { nombreDe, type Identidad } from "../identidad";
 import { visitaDelInforme, type Visitas } from "../visitas";
 import { recibirEnvio, type DependenciasEnvio } from "./aplicacion/recibir-envio";
 import { comentar, corregirCampos, corregirComentario, leerConversacion, marcar, responderComentario, tomar, vincular, type DependenciasRevision, type EstadoDeRevision } from "./aplicacion/revision";
-import { cantidadesRevisadas, comentariosDe, conteosPorVisita, conversacionesDe, detalle, deVisita, estadosDe, leidoHastaDe, lineasDeVisita, paginaPorEstado, vinculosDe, type ConteoDeVisita, type LineaRevisadaDeVisita } from "./consultas";
+import { cantidadesRevisadas, cobertura, comentariosDe, conteosPorVisita, conversacionesDe, detalle, deVisita, deVisitas, estadosDe, leidoHastaDe, lineasDeVisita, lineasVigentes, paginaPorEstado, vinculosDe, type ConteoDeVisita, type LevantamientoResumido, type LineaDeLevantamiento, type LineaRevisadaDeVisita } from "./consultas";
 
-export type { LineaRevisadaDeVisita } from "./consultas";
+export type { LevantamientoResumido, LineaDeLevantamiento, LineaRevisadaDeVisita } from "./consultas";
 import { levantamientos } from "./esquema";
 import { repositorioDrizzle, repositorioRevision } from "./repositorio";
 
@@ -58,6 +58,16 @@ export interface LevantamientoDeVisita {
   repeticiones: Repeticiones;
 }
 
+/**
+ * Un levantamiento para leerlo (asistente, iteración 53): la definición de su formato con las respuestas y las
+ * repeticiones tal como están guardadas. Quitar fotos, firmas, bocetos, coordenadas y contactos le toca a quien lo muestra.
+ */
+export interface ContenidoDeLevantamiento extends LevantamientoResumido {
+  definicion: VersionFormato;
+  respuestas: Respuestas;
+  repeticiones: Repeticiones;
+}
+
 export interface Levantamientos {
   /** Levantamientos de una visita con sus respuestas, para componer y congelar su informe. */
   deVisita(tx: TxOrganizacion, visitaId: string): Promise<LevantamientoDeVisita[]>;
@@ -67,6 +77,17 @@ export interface Levantamientos {
   conteosPorVisita(tx: TxOrganizacion, visitaIds: readonly string[]): Promise<Map<string, ConteoDeVisita>>;
   /** Cantidades de los levantamientos revisados, para cotizar (ADR-0029). */
   cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readonly string[], recibidosDesde?: Date): Promise<LineaRevisadaDeVisita[]>;
+  /** Levantamientos de estas visitas (hasta 1000), en el orden pedido y por fecha de recibido (asistente, iteración 53). */
+  deVisitas(tx: TxOrganizacion, visitaIds: readonly string[]): Promise<LevantamientoResumido[]>;
+  /** Líneas de cantidad vigentes de estos levantamientos (hasta 1000), en cualquier estado: filtrar por revisado es de quien pide. */
+  lineasVigentes(tx: TxOrganizacion, levantamientoIds: readonly string[]): Promise<LineaDeLevantamiento[]>;
+  /**
+   * El contenido de un levantamiento de una visita, o undefined si no existe (o no tiene visita). Por el número de orden:
+   * `visitas.porOrden` da la visita y `deVisitas` sus levantamientos.
+   */
+  contenido(tx: TxOrganizacion, id: string): Promise<ContenidoDeLevantamiento | undefined>;
+  /** Cuántos levantamientos revisados de una visita hay y la primera y la última fecha de recibido de ellos. */
+  cobertura(tx: TxOrganizacion): Promise<{ revisados: number; primerRecibido: Date | null; ultimoRecibido: Date | null }>;
   registrarRutas(app: FastifyInstance): void;
 }
 
@@ -144,6 +165,27 @@ export function crearLevantamientos({ bd, formatos, archivos, visitas, identidad
     deVisita,
     conteosPorVisita,
     cantidadesRevisadas,
+    deVisitas,
+    lineasVigentes,
+    cobertura,
+
+    async contenido(tx, id) {
+      const fila = await detalle(tx, id);
+      if (!fila?.visitaId) return undefined;
+      const definicion = await formatos.obtener(tx, fila.formato, fila.versionFormato);
+      if (!definicion) return undefined;
+      return {
+        id: fila.id,
+        visitaId: fila.visitaId,
+        estado: fila.estado as EstadoRevision,
+        formato: fila.formato,
+        versionFormato: fila.versionFormato,
+        recibidoEn: fila.recibidoEn,
+        definicion,
+        respuestas: fila.respuestas,
+        repeticiones: fila.repeticiones,
+      };
+    },
 
     registrarRutas(app) {
       registrarOperacion(app, "enviarComando", {

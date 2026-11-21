@@ -17,7 +17,12 @@ export default function preparar() {
   if (REMOTO) return;
   // El worker no tiene puerto que esperar: se arranca aquí y se detiene al terminar la corrida.
   // Envíos al cliente simulados (ADR-0028): nada sale del equipo y "rebota" se rechaza. El .env no los pisa.
-  const worker = spawn("npx", ["tsx", "--env-file=.env", "src/worker.ts"], { cwd: servidor.cwd, stdio: "ignore", env: { ...process.env, ENVIOS_SIMULADOS: "true" } });
+  // El asistente, con el modelo simulado (ADR-0060): no llama a ninguna API; la pausa por paso deja ver el avance.
+  const worker = spawn("npx", ["tsx", "--env-file=.env", "src/worker.ts"], {
+    cwd: servidor.cwd,
+    stdio: "ignore",
+    env: { ...process.env, ENVIOS_SIMULADOS: "true", ASISTENTE_SIMULADO: "true", ASISTENTE_SIMULADO_PAUSA_MS: "600" },
+  });
   return async () => {
     worker.kill("SIGTERM");
   };

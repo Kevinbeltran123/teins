@@ -2,12 +2,20 @@ import { run, Logger } from "graphile-worker";
 import pino from "pino";
 import { leerConfig, urlDelPropietario } from "./config";
 import { crearArchivos } from "./modulos/archivos";
+import { crearAsistente, modeloAnthropic, modeloSimulado } from "./modulos/asistente";
+import { crearHerramientasDelAsistente } from "./modulos/asistente/herramientas";
+import { crearCatalogo } from "./modulos/catalogo";
+import { clientesYSitios } from "./modulos/clientes";
+import { crearFormatos } from "./modulos/formatos";
+import { crearIdentidad } from "./modulos/identidad";
+import { crearLevantamientos } from "./modulos/levantamientos";
+import { crearVisitas } from "./modulos/visitas";
 import { crearAvisos, enviadorSegunConfig } from "./modulos/avisos";
 import { crearGeneradorPdfDeCotizaciones } from "./modulos/cotizaciones";
 import { crearEnvios, proveedoresSegunConfig } from "./modulos/envios";
 import { crearGeneradorPdf } from "./modulos/informes";
 import { accesosDelPortal, crearCorreosDelPortal } from "./modulos/portal";
-import { limpiarArchivosSinUso, podarVencido, quitarAccesosSinUso, recuperarTrabajosAMedias } from "./modulos/mantenimiento";
+import { limpiarArchivosSinUso, podarVencido, purgarConversacionesDelAsistente, quitarAccesosSinUso, recuperarTrabajosAMedias } from "./modulos/mantenimiento";
 import { almacenamientoS3 } from "./plataforma/almacenamiento";
 import { conectar } from "./plataforma/base-de-datos";
 import { cerrarNavegador } from "./plataforma/pdf";
@@ -32,23 +40,45 @@ const envios = crearEnvios({ bd: negocio.bd, almacenamiento, config, proveedores
 // Los correos del portal (ADR-0053) salen por el mismo proveedor de correo.
 const portal = crearCorreosDelPortal({ bd: negocio.bd, config, proveedores });
 const cotizaciones = crearGeneradorPdfDeCotizaciones({ bd: negocio.bd, almacenamiento, config });
+// El asistente (ADR-0060): simulado fuera de producción, el real con la llave, o ninguno (la respuesta queda en error).
+const modeloDelAsistente = config.ASISTENTE_SIMULADO
+  ? modeloSimulado({ pausaMs: config.ASISTENTE_SIMULADO_PAUSA_MS })
+  : config.ANTHROPIC_API_KEY
+    ? modeloAnthropic({ llave: config.ANTHROPIC_API_KEY, modelo: config.ASISTENTE_MODELO })
+    : null;
+// Las herramientas de solo lectura leen de cada módulo por su interfaz pública, compuestos como en la web (app.ts).
+const identidad = crearIdentidad(negocio.bd, config);
+const formatos = crearFormatos();
+const visitas = crearVisitas(clientesYSitios, formatos);
+const catalogo = crearCatalogo(negocio.bd, identidad);
+const levantamientos = crearLevantamientos({ bd: negocio.bd, formatos, archivos, visitas, identidad, catalogo });
+const herramientasDelAsistente = crearHerramientasDelAsistente({ visitas, clientesYSitios, levantamientos, catalogo, formatos });
+const asistente = crearAsistente({
+  bd: negocio.bd,
+  disponible: modeloDelAsistente !== null,
+  identidad,
+  modelo: modeloDelAsistente,
+  herramientas: herramientasDelAsistente,
+  registro: registro.child({ modulo: "asistente" }),
+});
 
 const logger = new Logger((alcance) => (nivel, mensaje, meta) => {
   const metodo = nivel === "error" ? "error" : nivel === "warning" ? "warn" : nivel === "debug" ? "debug" : "info";
   registro[metodo]({ ...alcance, ...meta }, mensaje);
 });
 
-/** La tarea periódica (ADR-0043, ADR-0044, ADR-0048, ADR-0055): recupera lo que quedó a medias, poda lo vencido, quita los accesos al portal sin uso y borra los archivos sin uso (este último, al final: depende de S3). */
+/** La tarea periódica (ADR-0043, ADR-0044, ADR-0048, ADR-0055, ADR-0060): recupera lo que quedó a medias, poda lo vencido, quita los accesos al portal sin uso, purga las conversaciones viejas del asistente y borra los archivos sin uso (este último, al final: depende de S3). */
 const mantener = async (bds: { negocio: typeof negocio.bd; propietario: typeof cola.bd }) => {
   await recuperarTrabajosAMedias(bds.negocio);
   await podarVencido(bds);
   await quitarAccesosSinUso(bds.negocio);
+  await purgarConversacionesDelAsistente(bds.negocio);
   await limpiarArchivosSinUso({ ...bds, almacenamiento });
 };
 
 const corredor = await run({
   pgPool: cola.pool,
-  taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones, portal, mantenimiento: { recuperar: () => mantener({ negocio: negocio.bd, propietario: cola.bd }) } }),
+  taskList: definirTareas({ archivos, informes, avisos, envios, cotizaciones, portal, asistente, mantenimiento: { recuperar: () => mantener({ negocio: negocio.bd, propietario: cola.bd }) } }),
   concurrency: 4,
   parsedCronItems: periodicas(),
   noHandleSignals: true,

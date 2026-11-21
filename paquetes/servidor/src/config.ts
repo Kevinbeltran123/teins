@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BYTES_MAXIMOS_ARCHIVO } from "@teins/protocolo";
+import { MODELOS_CON_PRECIO } from "./modulos/asistente/costo";
 
 const booleano = z.enum(["true", "false"]).transform((v) => v === "true");
 const listaDeUrls = z
@@ -126,11 +127,33 @@ const Esquema = z.object({
   WHATSAPP_PLANTILLA_COTIZACION: z.string().regex(/^[a-z0-9_]+$/).default("cotizacion_publicada"),
   WHATSAPP_IDIOMA: z.string().regex(/^[a-z]{2}(_[A-Z]{2})?$/).default("es"),
   WHATSAPP_VERSION_API: z.string().regex(/^v\d+\.\d+$/).default("v25.0"),
+
+  /**
+   * Asistente de datos de oficina (ADR-0060). La llave de Anthropic vive solo en el worker, que es quien llama al modelo;
+   * los servicios web nunca la reciben. `ASISTENTE_ACTIVO` le dice a la web, sin secreto, que el worker tiene modelo:
+   * sin él (ni modo simulado), el asistente responde `no_disponible` y el botón no aparece. El modelo cambia sin tocar
+   * código, pero debe tener precio en `modulos/asistente/costo.ts` para contar el gasto.
+   */
+  ANTHROPIC_API_KEY: z.string().regex(/^sk-ant-[\w-]+$/, "Llave de API de Anthropic (sk-ant-…)").optional(),
+  ASISTENTE_MODELO: z
+    .string()
+    .default("claude-haiku-5-5")
+    .refine((m) => MODELOS_CON_PRECIO.includes(m), { message: `Modelo sin precio en el código; use uno de: ${MODELOS_CON_PRECIO.join(", ")}` }),
+  ASISTENTE_ACTIVO: booleano.default(false),
+  /** Modelo falso con guion fijo que usa las herramientas reales: pruebas, extremo a extremo y entorno de pruebas. */
+  ASISTENTE_SIMULADO: booleano.default(false),
+  /** Pausa del modelo simulado en cada vuelta, para que la pantalla alcance a mostrar el avance. */
+  ASISTENTE_SIMULADO_PAUSA_MS: z.coerce.number().int().min(0).max(10_000).default(400),
 })
   // Los envíos simulados nunca corren en producción real: el cliente no recibiría nada y oficina vería "Enviado".
   .refine((c) => !(c.ENVIOS_SIMULADOS.correo || c.ENVIOS_SIMULADOS.whatsapp) || c.NODE_ENV !== "production" || c.ENTORNO_DE_PRUEBAS, {
     path: ["ENVIOS_SIMULADOS"],
     message: "Los envíos simulados solo se permiten fuera de producción o en el entorno de pruebas",
+  })
+  // El asistente simulado nunca corre en producción real: oficina recibiría respuestas inventadas.
+  .refine((c) => !c.ASISTENTE_SIMULADO || c.NODE_ENV !== "production" || c.ENTORNO_DE_PRUEBAS, {
+    path: ["ASISTENTE_SIMULADO"],
+    message: "El asistente simulado solo se permite fuera de producción o en el entorno de pruebas",
   })
   // Un origen https es un despliegue: en modo de desarrollo saldrían cookies sin Secure, sin HSTS y `sembrar`
   // quedaría permitido. Si falta NODE_ENV, no se arranca con el valor por defecto.

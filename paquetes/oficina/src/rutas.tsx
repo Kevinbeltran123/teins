@@ -224,8 +224,8 @@ declare module "@tanstack/react-router" {
     siguiente?: "contactos";
     /** La pestaña con que abre Clientes ("Ver en Archivados" al archivar uno). */
     vista?: "activos" | "archivados";
-    /** Lo que se pidió desde la búsqueda (⌘K / Ctrl + K): la pantalla abre ese formulario (iteración 37). */
-    abrir?: "programar" | "nuevo" | "nueva";
+    /** Lo que se pidió desde la búsqueda (⌘K / Ctrl + K): la pantalla abre ese formulario (iteración 37). «tope»: el del asistente (iteración 53). */
+    abrir?: "programar" | "nuevo" | "nueva" | "tope";
     /** La visita que pidió ver un aviso ("Ver en Canceladas"): Visitas abre en su pestaña y la resalta. */
     mostrarVisita?: { vista: "proximas" | "anteriores" | "canceladas"; id: string };
   }

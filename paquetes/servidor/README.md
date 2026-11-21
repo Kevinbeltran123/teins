@@ -39,8 +39,10 @@ src/
     envios/          Informe y cotización al cliente por correo y WhatsApp (ADR-0028, 0034, 0036).
     portal/          Acceso al portal de cada contacto, ingreso con código y rutas del portal, con la conexión de `teins_portal` (ADR-0009, ADR-0053).
     avisos/          Avisos push (ADR-0023, ADR-0040).
+    asistente/       El asistente de datos de oficina (ADR-0060): conversaciones, el bucle con el modelo en el worker,
+                     el modelo de Anthropic y el simulado, el costo por modelo y el tope mensual.
     mantenimiento/   La tarea periódica: recupera trabajos a medias, poda, borra archivos sin uso y quita accesos al portal sin uso (ADR-0043, ADR-0044, ADR-0048, ADR-0055).
-migraciones/    SQL generado por drizzle-kit más migraciones propias (permisos, cola). La última es 0042 (portal por contacto, ADR-0053).
+migraciones/    SQL generado por drizzle-kit más migraciones propias (permisos, cola). La última es 0044 (asistente, ADR-0060).
 infra/          SQL que ejecuta la infraestructura, no las migraciones (roles de la base).
 scripts/        compilar.mjs (la imagen) y vaciar-almacenamiento.mjs (entorno de pruebas).
 pruebas/        Integración con PostgreSQL y S3Mock reales en contenedores.
@@ -86,6 +88,7 @@ Nueva migración: cambie el esquema del módulo y ejecute `pnpm --filter @teins/
 |---|---|
 | `migrar` | Aplica las migraciones (antes de cada versión) |
 | `sembrar` | Datos de prueba. Solo en desarrollo o con `ENTORNO_DE_PRUEBAS=true`; nunca en producción |
+| `sembrar-asistente` | `--organizacion <uuid> --tecnico <usuario> --revisor <usuario>`: los datos de ejemplo del asistente en esa organización, con el formato `prueba-ups` v10. Se puede repetir; la misma guarda que `sembrar` |
 | `crear-organizacion` | Crea la organización de un entorno que no se siembra (producción); si ya existe, no la toca |
 | `crear-usuario`, `restablecer-contrasena` | Usuarios internos y recuperación de acceso. No marcan la contraseña como temporal: quien corre el comando la elige |
 | `desactivar-usuario` | Revoca: cierra sus sesiones, no vuelve a entrar y sus teléfonos borran sus datos al conectarse; lo que tenía en revisión queda sin tomar |
@@ -188,6 +191,21 @@ Por último, quita los accesos al portal sin ingresos en 12 meses; si nunca entr
 ### Portal (ADR-0053)
 
 Un acceso por contacto, con correo; lo dan y lo quitan las rutas de clientes (`cambiarAccesoAlPortal`) por el puerto `PortalDeContactos`, que `app.ts` conecta con `accesosDelPortal`. Lo que cambia en el contacto (correo, nombre, qué recibe) cambia el acceso en la misma transacción; quitarlo borra sus sesiones y su pedido. El código (6 dígitos, 10 minutos, 5 intentos, un solo uso, atado a la cookie del navegador que lo pidió) se deriva con HMAC del id del pedido y un secreto por HKDF de `AUTH_SECRETO` (`portal/claves.ts`): no se guarda en la base ni pasa por la cola; el worker lo calcula al enviar el correo (`crearCorreosDelPortal`, trabajo `portal.correo`). Límite de pedidos por correo y de intentos por origen, y sesiones de 30 minutos desde el último uso, siempre con la conexión de `teins_portal`. El botón «Ver en el portal» de los correos de documentos sale solo si el contacto tiene acceso (`accesoAlPortal` en `crearEnvios`).
+
+### Asistente de datos (ADR-0060)
+
+- Tablas en el esquema `asistente` (migración 0044): `conversaciones`, `intercambios`, `ajustes` y `gastos` (preguntas y gasto por persona y mes AAAA-MM de Bogotá), con seguridad por fila. Además de la organización, toda lectura y escritura filtra por la persona: una conversación ajena responde `no_encontrado`. Eliminar es lógico (`eliminada_en`) y «Deshacer» la restaura.
+- `preguntarAlAsistente` es idempotente por su `llave`, abre una conversación (su título es la primera pregunta, recortada) o sigue una propia, y encola `asistente.responder` en la misma transacción con **un solo intento**, en la cola `asistente:<organización>`: Graphile corre en serie los de una cola, así el asistente ocupa un solo cupo del worker por organización. Cada persona tiene como mucho dos respuestas en curso (`demasiadas_solicitudes`). Responde `estado_invalido` si ya hay una respuesta en curso en esa conversación (un índice único lo asegura también con pedidos a la vez), `tope_agotado` si el gasto del mes llegó al tope y `no_disponible` sin modelo.
+- El bucle (`asistente/bucle.ts`) corre en el worker: historial compacto (preguntas y respuestas en texto, sin bloques de herramientas), y en cada vuelta revisa `detener_pedido` y el tope, llama al modelo, ejecuta en paralelo las herramientas pedidas (cada una en su `enOrganizacion` con la conexión de negocio) y guarda los pasos y el costo. Termina con `entregar_respuesta` (la respuesta se arma con los resultados guardados de los pasos citados; una referencia que no existe se descarta), con `end_turn` (el texto, sin referencias), en error con `refusal` o `max_tokens`, o a las 8 vueltas o 3 minutos. Nunca queda en curso: una excepción lo deja en error, y uno que venció (5 minutos desde que el worker lo tomó, o 30 desde creado si nunca arrancó) se cierra en error al leer la conversación o al preguntar; el bucle revisa el estado en cada vuelta y para si ya no está en curso. Por vuelta se ejecutan como mucho 5 herramientas; un resultado de más de 60 KB, o lo que pasa de 200 KB en la vuelta, le llega al modelo como error. `entregar_respuesta` va sola: junto con otras se rechaza. `pause_turn` y `end_turn` sin texto terminan en error.
+- Las herramientas implementan `Herramienta` (`asistente/tipos.ts`). `worker.ts` las arma con `crearHerramientasDelAsistente` (`asistente/herramientas/`) y las pasa a `crearAsistente({ herramientas })`. La web no recibe modelo ni herramientas.
+- `entregar_respuesta` destaca hasta dos cifras de un paso (`destacado: { paso, cifras }`): el servidor quita repetidas y las que no existen y corta en dos, porque el esquema estricto de la API no exige el máximo. La raya larga del texto pasa a viñeta al inicio de una línea y a coma en medio de una frase.
+- Lo que recibe el modelo cuando algo falla: los problemas de su entrada (ruta y mensaje de Zod), el detalle de una herramienta que responde `entrada_invalida` o `no_encontrado` («acote el periodo…»), o «La consulta falló.» para lo demás, sin detalles internos. Si el resultado trae `etiqueta`, reemplaza la etiqueta hecha del paso.
+- Conservación (Ley 1581, principio de temporalidad): al terminar, cada paso guarda solo herramienta, etiquetas, estado y resumen; el resultado completo se borra. La tarea periódica (`purgarConversacionesDelAsistente`) borra del todo, con sus intercambios, las conversaciones eliminadas hace más de un día y las que llevan un año sin actividad. El gasto vive en `gastos`: borrar nunca lo baja, y el tope y el uso leen de ahí. Por eso `teins_app` puede borrar en `conversaciones` e `intercambios`, y no en `gastos` ni `ajustes`.
+- Costo y reintentos: la SDK reintenta una vez (`maxRetries: 1`). El gasto se suma con lo que informa cada respuesta, así que una vuelta cortada por tiempo (o un reintento que la API cobró sin devolver respuesta) no queda contada. El respaldo es el límite de gasto en la consola de Anthropic, que debe estar puesto. La caché leída se cobra 0,1 de la entrada en Haiku y 0,05 en Sonnet y Opus (`costo.ts`).
+- Cambiar el tope queda en la auditoría de la organización (`tope_del_asistente_cambiado`), con quién y el valor anterior y el nuevo.
+- Modelo: `modeloAnthropic` (Messages API, herramientas estrictas, caché del sistema y de la conversación) o `modeloSimulado`, un guion por palabras clave que pide las herramientas reales por nombre. Los precios por modelo están en `asistente/costo.ts`, en enteros; el costo de cada vuelta se guarda en decimal.
+- Variables: `ANTHROPIC_API_KEY` (opcional, `sk-ant-…`) **solo en el worker**; `ASISTENTE_MODELO` (por omisión `claude-haiku-5-5`, debe tener precio en el código); `ASISTENTE_ACTIVO=true` en la web cuando el worker tiene llave (la web nunca la recibe, y `disponible` sale de ahí); `ASISTENTE_SIMULADO=true` en web y worker, solo fuera de producción o en el entorno de pruebas, con `ASISTENTE_SIMULADO_PAUSA_MS` (400 por omisión) entre vueltas.
+- Los registros solo llevan ids, tokens, duración y códigos de error; nunca la pregunta ni los resultados (ADR-0017).
 
 ## Pruebas
 

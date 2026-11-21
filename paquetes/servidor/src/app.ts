@@ -25,6 +25,7 @@ import { crearAvisos } from "./modulos/avisos";
 import { crearMapas } from "./modulos/mapas";
 import { crearEnvios } from "./modulos/envios";
 import { crearCotizaciones } from "./modulos/cotizaciones";
+import { crearAsistente } from "./modulos/asistente";
 import { fechaEnColombia } from "@teins/dominio";
 
 export interface Dependencias {
@@ -202,6 +203,8 @@ export async function construirApp({ config, bd, bdPortal, almacenamiento }: Dep
   // La hora de red y el mapa de la foto de llegada (ADR-0052).
   crearMapas({ config }).registrarRutas(app);
   visitas.registrarRutas(app, { bd, identidad, conteos: levantamientos.conteosPorVisita });
+  // El asistente (ADR-0060): la web atiende sus operaciones; el bucle con el modelo corre en el worker, que tiene la llave.
+  crearAsistente({ bd, disponible: config.ASISTENTE_ACTIVO || config.ASISTENTE_SIMULADO, identidad, cobertura: levantamientos.cobertura }).registrarRutas(app);
   if (bdPortal) crearPortal({ bdPortal, almacenamiento, config }).registrarRutas(app);
 
   const superficies: Superficie[] = [

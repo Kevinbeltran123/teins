@@ -913,6 +913,102 @@ export const SuscripcionAvisos = z
 
 export const ConfiguracionAvisos = z.object({ clavePublica: z.string().nullable() }).meta({ id: "ConfiguracionAvisos" });
 
+// Asistente de datos de oficina (iteración 53). Las cifras, tablas, fuentes y series las arma el servidor con los
+// resultados de sus herramientas; el texto del modelo no las dibuja.
+
+/** Largo máximo de una pregunta al asistente. */
+export const LARGO_MAXIMO_DE_PREGUNTA = 2000;
+
+/** Dólares como decimal canónico en texto, sin pasar por coma flotante. */
+const Dolares = z.string().regex(DECIMAL_CANONICO);
+/** El tope mensual: de 0 a 1000 dólares, con hasta 2 decimales. */
+const TopeEnDolares = z
+  .string()
+  .regex(/^(0|[1-9]\d*)(\.\d{1,2})?$/, "Dólares con hasta 2 decimales")
+  .refine((t) => Number(t) <= 1000, "Entre 0 y 1000");
+
+/** Una consulta que hizo el asistente; la etiqueta y el resultado los escribe el servidor, no el modelo. */
+export const PasoDelAsistente = z
+  .object({ herramienta: z.string(), etiqueta: z.string(), resultado: z.string().nullable(), estado: z.enum(["en_curso", "hecho", "fallo"]) })
+  .meta({ id: "PasoDelAsistente" });
+export type PasoDelAsistente = z.infer<typeof PasoDelAsistente>;
+
+/** `sin_vincular`: la línea no tiene ítem del catálogo. */
+export const CeldaDelAsistente = z
+  .object({ texto: z.string(), detalle: z.string().optional(), marca: z.literal("sin_vincular").optional() })
+  .meta({ id: "CeldaDelAsistente" });
+export type CeldaDelAsistente = z.infer<typeof CeldaDelAsistente>;
+
+export const TablaDelAsistente = z
+  .object({
+    titulo: z.string(),
+    columnas: z.array(z.object({ titulo: z.string(), numerica: z.boolean() })),
+    filas: z.array(z.array(CeldaDelAsistente)),
+    nota: z.string().optional(),
+  })
+  // Una fila corrida desalinea la tabla, pone la alineación numérica en otra columna y rompe «Copiar tabla».
+  .refine((t) => t.filas.every((f) => f.length === t.columnas.length), { message: "Cada fila lleva una celda por columna" })
+  .meta({ id: "TablaDelAsistente" });
+export type TablaDelAsistente = z.infer<typeof TablaDelAsistente>;
+
+/** Una visita de la que salió una cifra; la pantalla arma el enlace al levantamiento con sus ids. */
+export const FuenteDelAsistente = z
+  .object({
+    visitaId: Uuid,
+    levantamientoId: Uuid.nullable(),
+    /** Null en las visitas anteriores al número de orden (ADR-0051): la pantalla muestra un marcador. */
+    orden: z.string().nullable(),
+    /** La fecha programada de la visita, como `programadaPara`. */
+    fecha: z.iso.date(),
+    cliente: z.string(),
+    sitio: z.string(),
+    ciudad: z.string().nullable(),
+    revisado: z.boolean(),
+  })
+  .meta({ id: "FuenteDelAsistente" });
+export type FuenteDelAsistente = z.infer<typeof FuenteDelAsistente>;
+
+export const FuentesDelAsistente = z.object({ titulo: z.string(), visitas: z.array(FuenteDelAsistente) }).meta({ id: "FuentesDelAsistente" });
+export type FuentesDelAsistente = z.infer<typeof FuentesDelAsistente>;
+
+export const SerieDelAsistente = z
+  .object({ titulo: z.string(), puntos: z.array(z.object({ etiqueta: z.string(), valor: z.number() })) })
+  .meta({ id: "SerieDelAsistente" });
+export type SerieDelAsistente = z.infer<typeof SerieDelAsistente>;
+
+/** La cifra grande de la respuesta: una o dos (por ejemplo, metros y su costo). */
+export const DestacadoDelAsistente = z
+  .object({ cifras: z.array(z.object({ valor: z.string(), unidad: z.string().nullable() })).min(1).max(2), descripcion: z.string() })
+  .meta({ id: "DestacadoDelAsistente" });
+export type DestacadoDelAsistente = z.infer<typeof DestacadoDelAsistente>;
+
+export const RespuestaDelAsistente = z
+  .object({
+    /** Texto plano en párrafos y viñetas con `- `: la pantalla nunca lo pinta como HTML ni Markdown. */
+    texto: z.string(),
+    destacado: DestacadoDelAsistente.nullable(),
+    tablas: z.array(TablaDelAsistente),
+    fuentes: FuentesDelAsistente.nullable(),
+    serie: SerieDelAsistente.nullable(),
+  })
+  .meta({ id: "RespuestaDelAsistente" });
+export type RespuestaDelAsistente = z.infer<typeof RespuestaDelAsistente>;
+
+/** Una pregunta y su respuesta. `detenida`: la persona la detuvo antes de terminar. */
+export const IntercambioDelAsistente = z
+  .object({
+    id: Uuid,
+    pregunta: z.string(),
+    creadoEn: Fecha,
+    estado: z.enum(["en_curso", "lista", "error", "detenida"]),
+    duracionSegundos: z.number().min(0).nullable(),
+    pasos: z.array(PasoDelAsistente),
+    respuesta: RespuestaDelAsistente.nullable(),
+    error: z.string().nullable(),
+  })
+  .meta({ id: "IntercambioDelAsistente" });
+export type IntercambioDelAsistente = z.infer<typeof IntercambioDelAsistente>;
+
 export const operaciones = {
   obtenerSesion: {
     metodo: "GET",
@@ -1865,6 +1961,99 @@ export const operaciones = {
     estadoExito: 200,
     respuesta: z.object({}),
     errores: ["no_autenticado", "sin_permiso", "entrada_invalida"],
+  },
+  // Asistente de datos (iteración 53): cada persona ve y toca solo sus conversaciones; una ajena es `no_encontrado`.
+  estadoDelAsistente: {
+    metodo: "GET",
+    ruta: "/api/asistente",
+    resumen: "Si el asistente está disponible, su nombre, qué levantamientos revisados alcanza a consultar y si se agotó el tope del mes",
+    estadoExito: 200,
+    respuesta: z.object({
+      disponible: z.boolean(),
+      nombre: z.string(),
+      cobertura: z.object({ revisados: z.int().min(0), desde: Fecha.nullable(), hasta: Fecha.nullable() }),
+      topeAgotado: z.boolean(),
+    }),
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  listarConversacionesDelAsistente: {
+    metodo: "GET",
+    ruta: "/api/asistente/conversaciones",
+    resumen: "Las conversaciones propias sin eliminar, las más recientes primero (hasta 100)",
+    estadoExito: 200,
+    respuesta: z.object({
+      conversaciones: z.array(z.object({ id: Uuid, titulo: z.string(), preguntas: z.int().min(0), actualizadaEn: Fecha })).max(100),
+    }),
+    errores: ["no_autenticado", "sin_permiso"],
+  },
+  obtenerConversacionDelAsistente: {
+    metodo: "GET",
+    ruta: "/api/asistente/conversaciones/{id}",
+    resumen: "Una conversación propia con sus intercambios; oficina la consulta cada segundo mientras uno está en curso",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: z.object({ id: Uuid, titulo: z.string(), intercambios: z.array(IntercambioDelAsistente) }),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  preguntarAlAsistente: {
+    metodo: "POST",
+    ruta: "/api/asistente/preguntas",
+    resumen:
+      "Encola una pregunta (sin conversación, abre una nueva); idempotente por su llave (regla 4). `estado_invalido`: ya hay una respuesta en curso en esa conversación. `demasiadas_solicitudes`: la persona ya tiene dos en curso",
+    cuerpo: z.object({ llave: Uuid, conversacionId: Uuid.nullable(), texto: z.string().trim().min(1).max(LARGO_MAXIMO_DE_PREGUNTA) }).strict(),
+    estadoExito: 202,
+    respuesta: z.object({ conversacionId: Uuid, intercambioId: Uuid }),
+    errores: ["no_autenticado", "sin_permiso", "entrada_invalida", "no_disponible", "tope_agotado", "estado_invalido", "no_encontrado", "demasiadas_solicitudes"],
+  },
+  detenerRespuestaDelAsistente: {
+    metodo: "POST",
+    ruta: "/api/asistente/intercambios/{id}/detener",
+    resumen: "Pide detener una respuesta en curso; el worker para antes de la siguiente llamada al modelo. Si ya terminó, no hace nada",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: z.object({}),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  eliminarConversacionDelAsistente: {
+    metodo: "POST",
+    ruta: "/api/asistente/conversaciones/{id}/eliminar",
+    resumen: "Elimina una conversación propia; se conserva para «Deshacer»",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: z.object({}),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  restaurarConversacionDelAsistente: {
+    metodo: "POST",
+    ruta: "/api/asistente/conversaciones/{id}/restaurar",
+    resumen: "Deshace la eliminación de una conversación propia",
+    parametros: z.object({ id: Uuid }),
+    estadoExito: 200,
+    respuesta: z.object({}),
+    errores: ["no_autenticado", "sin_permiso", "no_encontrado"],
+  },
+  usoDelAsistente: {
+    metodo: "GET",
+    ruta: "/api/asistente/uso",
+    resumen: "Gasto del mes del asistente frente al tope, y preguntas y gasto por persona",
+    estadoExito: 200,
+    respuesta: z.object({
+      mes: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Mes como AAAA-MM"),
+      gastoUsd: Dolares,
+      topeUsd: TopeEnDolares,
+      preguntas: z.int().min(0),
+      porPersona: z.array(z.object({ usuarioId: z.string(), nombre: z.string(), preguntas: z.int().min(0), gastoUsd: Dolares })),
+    }),
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido"],
+  },
+  cambiarTopeDelAsistente: {
+    metodo: "POST",
+    ruta: "/api/asistente/tope",
+    resumen: "Cambia el tope de gasto mensual del asistente para la organización",
+    cuerpo: z.object({ topeUsd: TopeEnDolares }).strict(),
+    estadoExito: 200,
+    respuesta: z.object({}),
+    errores: ["no_autenticado", "sin_permiso", "segundo_factor_requerido", "entrada_invalida"],
   },
 } as const satisfies Record<string, Operacion>;
 

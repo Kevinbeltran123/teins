@@ -300,7 +300,56 @@ sequenceDiagram
   W-->>P: sesión (30 min desde el último uso)
 ```
 
-## 7. Mapa de componentes
+## 7. Preguntarle al asistente
+
+Oficina pregunta en el panel del asistente y la respuesta se arma en el worker ([ADR-0060](../adr/0060-asistente-de-datos-con-la-api-de-claude.md)). La web solo guarda la pregunta y encola el trabajo `asistente.responder`, con un solo intento: cada intento cuesta. El worker llama al modelo, ejecuta las herramientas que pide (todas de solo lectura, dentro de `enOrganizacion`, a través de la interfaz pública de cada módulo) y guarda cada paso, así la pantalla ve el avance al consultar cada segundo ([ADR-0014](../adr/0014-api-y-notificaciones.md)). Al modelo le llegan resultados minimizados: nunca contactos, firmas, fotos, bocetos ni coordenadas. Las cifras de la respuesta salen de los resultados guardados, no del texto del modelo. La llave de Anthropic vive solo en el worker.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant O as Oficina (panel)
+  participant W as Rol web
+  participant P as PostgreSQL
+  participant K as Worker
+  participant A as API de Anthropic
+
+  O->>W: preguntarAlAsistente con su llave
+  alt sin ASISTENTE_ACTIVO ni modo simulado, o tope agotado
+    W-->>O: no_disponible o tope_agotado
+  else
+    W->>P: intercambio en_curso y trabajo asistente.responder, en una transacción
+    W-->>O: 202 con conversacionId e intercambioId
+  end
+  loop hasta entregar_respuesta, end_turn, 8 vueltas o 3 minutos
+    K->>P: ¿pidieron detener? ¿queda tope este mes?
+    K->>A: historial compacto, herramientas y resultados
+    A-->>K: pide herramientas o entrega la respuesta
+    K->>P: herramientas de solo lectura en enOrganizacion
+    K->>P: guarda pasos, tokens y costo
+  end
+  K->>P: respuesta armada con los resultados citados, intercambio lista, error o detenida
+  O->>W: obtenerConversacionDelAsistente, cada segundo mientras está en curso
+  W-->>O: pasos y, al final, la respuesta
+```
+
+Repetir la llave devuelve el mismo intercambio y no encola otro (regla 4). Una conversación es de quien la empezó: la de otra persona responde `no_encontrado`. «Detener» marca `detener_pedido` y el worker lo ve antes de la vuelta siguiente; si la respuesta todavía espera turno en la cola, queda detenida de una vez. `refusal` y `max_tokens` terminan en error con «Volver a preguntar». Con `ASISTENTE_SIMULADO=true` (fuera de producción o en el entorno de pruebas), un modelo falso con guion reemplaza a la API y las herramientas son las reales.
+
+Las respuestas de una organización corren de a una en su propia cola (`asistente:<organización>`), así ocupa como mucho un cupo del worker por organización y deja libres los demás para los correos, los PDF y los avisos, y cada persona tiene como mucho dos en curso. La conservación la hace el mantenimiento (`purgarConversacionesDelAsistente`): una conversación eliminada se borra a las 24 horas y una sin actividad, a los 12 meses.
+
+| Paso | Dónde en el código | ADR |
+|---|---|---|
+| preguntar, detener, eliminar y restaurar | `paquetes/servidor/src/modulos/asistente/` (operaciones `preguntarAlAsistente`, `detenerRespuestaDelAsistente`, `eliminarConversacionDelAsistente`, `restaurarConversacionDelAsistente`) | 0060 |
+| el bucle | trabajo `asistente.responder` (`paquetes/servidor/src/tareas.ts`) que corre `paquetes/servidor/src/modulos/asistente/bucle.ts`, en una cola por organización | 0012, 0060 |
+| las herramientas | `paquetes/servidor/src/modulos/asistente/`, con las lecturas de `visitas`, `clientes`, `levantamientos`, `catalogo` y `formatos` | 0009, 0060 |
+| tope y uso del mes | `paquetes/servidor/src/modulos/asistente/` (operaciones `usoDelAsistente`, `cambiarTopeDelAsistente`) | 0060 |
+| conservación | `purgarConversacionesDelAsistente` en `paquetes/servidor/src/modulos/mantenimiento/index.ts` | 0060 |
+| el panel | `paquetes/oficina`: `Marco.tsx`, `src/asistente.ts` y `src/pantallas/Asistente.tsx` | 0060 |
+
+**Si cambias esto, actualiza:** `paquetes/protocolo/src/operaciones.ts`, `paquetes/servidor/src/modulos/asistente/`, las lecturas nuevas de los módulos que consulta, [ADR-0060](../adr/0060-asistente-de-datos-con-la-api-de-claude.md) si cambia qué sale hacia Anthropic, y el punto 23 de [`pendientes-de-teins.md`](../entrega/pendientes-de-teins.md) si cambia lo que sale o la retención.
+
+---
+
+## 8. Mapa de componentes
 
 Un monolito modular con dos roles del mismo código: web atiende solicitudes y worker hace el trabajo en segundo plano desde una cola en PostgreSQL ([ADR-0001](../adr/0001-estilo-del-sistema.md), [ADR-0012](../adr/0012-eventos-y-trabajos.md)). Cada superficie se sirve en su propio host con la API en el mismo origen ([ADR-0016](../adr/0016-infraestructura-y-despliegue.md)). Los binarios no pasan por el servidor: van y vienen de S3 con URLs firmadas.
 
@@ -320,6 +369,7 @@ flowchart LR
   resend[Resend, correo]
   meta[WhatsApp Cloud API]
   push[Servicios de Web Push]
+  anthropic[API de Anthropic, asistente]
 
   campo -->|API en el mismo origen| web
   oficina -->|API en el mismo origen| web
@@ -334,6 +384,7 @@ flowchart LR
   worker --> resend
   worker --> meta
   worker --> push
+  worker -->|solo resultados minimizados| anthropic
   resend -->|eventos firmados| web
   meta -->|eventos firmados| web
   push -.->|avisos| campo
@@ -369,6 +420,7 @@ flowchart BT
 | Superficies por host | `paquetes/servidor/src/plataforma/superficies.ts` | 0002, 0016 |
 | Avisos push | `paquetes/servidor/src/modulos/avisos/` | 0023 |
 | Correo y WhatsApp | `paquetes/servidor/src/modulos/envios/proveedores.ts` | 0028 |
+| Asistente de oficina | `paquetes/servidor/src/modulos/asistente/` | 0060 |
 
 **Si cambias esto, actualiza:** `.dependency-cruiser.cjs` si cambia una frontera, `infra/railway/` y `docs/proceso/produccion.md` si cambia una pieza desplegada, la sección "Estructura y dependencias" de `AGENTS.md`.
 

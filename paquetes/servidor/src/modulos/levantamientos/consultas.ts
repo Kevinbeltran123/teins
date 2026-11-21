@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, max, or, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, max, min, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { EstadoRevision } from "@teins/dominio";
 import { Uuid } from "@teins/protocolo";
@@ -270,4 +270,70 @@ export async function cantidadesRevisadas(tx: TxOrganizacion, visitaIds?: readon
     .where(and(eq(levantamientos.estado, "revisado"), isNull(lineasCantidad.quitadaEn), isNotNull(levantamientos.visitaId), visitaIds ? inArray(levantamientos.visitaId, [...visitaIds]) : undefined, recibidosDesde ? gte(levantamientos.recibidoEn, recibidosDesde) : undefined))
     .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id), asc(lineasCantidad.seccion), asc(lineasCantidad.campo), asc(lineasCantidad.orden));
   return filas.map((f) => ({ ...f, visitaId: f.visitaId! }));
+}
+
+/** Tope de ids por consulta en las lecturas del asistente (iteración 53). */
+export const LIMITE_DE_IDS = 1000;
+
+function exigirTope(ids: readonly string[]) {
+  if (ids.length > LIMITE_DE_IDS) throw problema("entrada_invalida", `Hasta ${LIMITE_DE_IDS} ids por consulta`);
+}
+
+/** Un levantamiento sin su contenido: de qué visita, en qué estado y con qué formato. */
+export interface LevantamientoResumido {
+  id: string;
+  visitaId: string;
+  estado: EstadoRevision;
+  formato: string;
+  versionFormato: number;
+  recibidoEn: Date;
+}
+
+/** Levantamientos de estas visitas, por visita y fecha de recibido (asistente, iteración 53). */
+export async function deVisitas(tx: TxOrganizacion, visitaIds: readonly string[]): Promise<LevantamientoResumido[]> {
+  if (visitaIds.length === 0) return [];
+  exigirTope(visitaIds);
+  const filas = await tx
+    .select({ id: levantamientos.id, visitaId: levantamientos.visitaId, estado: levantamientos.estado, formato: levantamientos.formato, versionFormato: levantamientos.versionFormato, recibidoEn: levantamientos.recibidoEn })
+    .from(levantamientos)
+    .where(inArray(levantamientos.visitaId, [...visitaIds]))
+    .orderBy(asc(levantamientos.visitaId), asc(levantamientos.recibidoEn), asc(levantamientos.id));
+  // El orden de las visitas es el pedido: el de la base por uuid no le dice nada a quien consulta.
+  const posicion = new Map(visitaIds.map((id, i) => [id, i]));
+  return filas
+    .map((f) => ({ ...f, visitaId: f.visitaId!, estado: f.estado as EstadoRevision }))
+    .sort((x, y) => posicion.get(x.visitaId)! - posicion.get(y.visitaId)!);
+}
+
+/** Una línea de cantidad vigente: la cantidad en decimal canónico, para sumarla sin coma flotante. */
+export interface LineaDeLevantamiento {
+  levantamientoId: string;
+  descripcion: string;
+  cantidad: string;
+  unidad: string;
+  itemId: string | null;
+}
+
+/** Líneas vigentes de estos levantamientos, en el orden del documento (asistente, iteración 53). */
+export async function lineasVigentes(tx: TxOrganizacion, levantamientoIds: readonly string[]): Promise<LineaDeLevantamiento[]> {
+  if (levantamientoIds.length === 0) return [];
+  exigirTope(levantamientoIds);
+  return tx
+    .select({ levantamientoId: lineasCantidad.levantamientoId, descripcion: lineasCantidad.descripcion, cantidad: lineasCantidad.cantidad, unidad: lineasCantidad.unidad, itemId: lineasCantidad.itemCatalogoId })
+    .from(lineasCantidad)
+    .innerJoin(levantamientos, eq(levantamientos.id, lineasCantidad.levantamientoId))
+    .where(and(inArray(lineasCantidad.levantamientoId, [...levantamientoIds]), isNull(lineasCantidad.quitadaEn)))
+    .orderBy(asc(levantamientos.recibidoEn), asc(levantamientos.id), asc(lineasCantidad.seccion), asc(lineasCantidad.campo), asc(lineasCantidad.orden));
+}
+
+/**
+ * Cuántos levantamientos revisados de una visita hay y entre qué fechas de recibido: qué tanto puede responder el
+ * asistente. Los que no tienen visita (cortes 0 y 1) no cuentan, como en `cantidadesRevisadas`.
+ */
+export async function cobertura(tx: TxOrganizacion): Promise<{ revisados: number; primerRecibido: Date | null; ultimoRecibido: Date | null }> {
+  const [fila] = await tx
+    .select({ revisados: count(), primerRecibido: min(levantamientos.recibidoEn), ultimoRecibido: max(levantamientos.recibidoEn) })
+    .from(levantamientos)
+    .where(and(eq(levantamientos.estado, "revisado"), isNotNull(levantamientos.visitaId)));
+  return { revisados: fila?.revisados ?? 0, primerRecibido: fila?.primerRecibido ?? null, ultimoRecibido: fila?.ultimoRecibido ?? null };
 }

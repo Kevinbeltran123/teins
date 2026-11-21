@@ -183,6 +183,7 @@ Cuatro pasos numerados en una misma pantalla: confirmar la contraseña; escanear
 | Oficina · Visitas | Las próximas visitas, empezando por las de hoy y por hora, con "Programar visita"; las que siguen abiertas, "En curso" |
 | Oficina · Mi cuenta | Una columna de 680 px centrada: cada fila con su icono, nombre, estado y una acción secundaria; ninguna es principal |
 | Oficina · Administración | La tabla de la pestaña elegida; al crear una credencial, el diálogo que la entrega |
+| Oficina · Panel del asistente | La caja de pregunta abajo. Al abrirlo por primera vez, el saludo y las sugerencias; en una conversación, la última respuesta con su cifra destacada |
 | Portal | El informe más reciente y su "Descargar" |
 
 Todo lo demás en la pantalla es visiblemente secundario.
@@ -225,6 +226,38 @@ Cada animación tiene un propósito escrito. Desde la iteración 27 (`prototipos
 **Qué se mueve:** con dirección (`adelante`, `atras`, `seccion`, `fundido`) se mueve lo que se ve en la ventana, menos lo que tiene nombre propio; la foto es del tamaño de la ventana, nunca del documento entero, para que una lista larga o un levantamiento con fotos no congelen la transición (en el iPhone sí lo harían). Se quedan quietos por su nombre: `menu` y `barra-oficina` (oficina), `barra-paso` y `progreso` (campo) y `carril` (la revisión). Van de su lugar al nuevo, por elemento: `visita-<id>`, `lev-<id>`, `estado-<id>`, `nombre-<id>`, `fila-<id>` e `indicador-<id>` (`nombreDeTransicion`). Las filas de una lista larga llevan su nombre solo mientras se ven (`useNombreEnPantalla`). Un nombre se repite en una pantalla solo si es el mismo elemento.
 
 **Duraciones:** 120 ms (pulsación), 200 ms (capas y salidas), 220 ms (pasos de campo), 260 ms (hojas de campo, `--t-duracion-hoja`), 280 ms (pantallas), 1,2 s (resaltado, desde la iteración 29). Más lento se siente como si la app tuviera retraso (Kevin, iteración 32). **Curvas:** `cubic-bezier(0.2, 0, 0, 1)`; las hojas y capas que suben, `cubic-bezier(0.32, 0.72, 0, 1)` (`--t-curva-hoja`). **Con `prefers-reduced-motion`, nada se mueve:** los cambios son instantáneos, las capas se quitan sin salir y lo resaltado queda fijo.
+
+## El asistente (oficina)
+
+Iteración 53, ADR-0060. Prototipo aprobado (versión 5): `prototipos/analisis/prototipo.html` (https://claude.ai/artifact/9kTPd82Xi6Q1xfF68HdS3f). Su nombre visible es el de la organización («Chispa» por omisión); aquí se dice «el asistente».
+
+**Excepción explícita, solo para este elemento.** Kevin pidió el 2026-11-20 que el asistente se vea distinto del resto: un elemento propio, con color y movimiento. Por eso el botón y el panel del asistente salen de tres reglas de este archivo: «nada decorativo» (La regla), «nada de amarillo» (Identidad) y «el único degradado es el del inicio de sesión» (Forma y espacio). La excepción no se extiende a ninguna otra pantalla ni componente.
+
+**Colores.** Tokens `--t-ia-1` y `--t-ia-2` (los azules de la marca), `--t-ia-3` (la chispa amarilla, `#FFC21A`, el mismo `--marca-acento`) y `--t-ia-hondo` (el azul oscuro del fondo del orbe), en claro y en oscuro, en `paquetes/ui/tokens.css`. Componentes `BotonAsistente`, `OrbeAsistente` y `Destello` en `paquetes/ui`; ninguna pantalla pinta el degradado por su cuenta (regla 11).
+
+**El botón**, en el extremo derecho de la barra superior, en todas las pantallas de oficina:
+
+- Un anillo con el degradado de la marca y la chispa amarilla, el destello y el nombre.
+- Se mueve cada 12 s: una vuelta del anillo, un destello y un halo, y después quieto.
+- Al pasar el cursor no se detiene: el anillo gira sin pausa mientras el cursor está encima.
+- Mientras responde con el panel cerrado, gira rápido y el destello late. Al terminar, un punto en el botón y la notificación «{nombre} respondió: {pregunta} · Ver».
+- Con el panel abierto, queda marcado (`aria-pressed`). Su nombre accesible dice el nombre y el estado («respondiendo», «hay una respuesta lista»).
+- **Con movimiento reducido, nada se mueve:** anillo, destello y halo quedan quietos.
+
+**El panel**, de 440 px a la derecha, debajo de la barra superior y **sin velo**: lo de atrás sigue a la vista y se puede usar. Lo cierran Esc (con el foco dentro), la equis o el mismo botón; abierto o cerrado se recuerda por persona. Es un chat:
+
+- Arriba, un brillo suave de la marca.
+- Al empezar: el orbe grande, «Hola, {nombre de la persona}», qué datos tiene para responder, las sugerencias en tarjetas y las conversaciones recientes.
+- La pregunta va en una burbuja a la derecha. La respuesta lleva el orbe como avatar, a la izquierda; mientras se arma, el orbe gira y se ven las consultas una por una.
+- La caja de pregunta va abajo y toma un borde de color al enfocarla. Enter pregunta, Mayús + Enter baja de línea y «Detener» corta la respuesta en curso.
+- Tablas, fuentes y el gráfico siguen el estilo del resto de oficina, dentro de su borde de 12 px.
+
+**Lo que no cambia con la excepción:**
+
+- **Las cifras salen de los datos.** La cifra destacada, las tablas, las fuentes y el gráfico se dibujan con los resultados de las consultas del servidor, nunca con lo que redacta el modelo.
+- **Sin nombre ni hora en cada mensaje.** La burbuja y el avatar ya dicen quién habla.
+- **El texto del modelo es texto plano:** párrafos y viñetas, sin HTML ni Markdown, sin enlaces ni imágenes que vengan del modelo. Los únicos enlaces son los de las fuentes, que arma la pantalla.
+- Una sola familia (Geist), los estados obligatorios (vacío, cargando, error, sin conexión, más tope agotado y detenida) y el movimiento solo en CSS (regla 10).
 
 ## Iconos
 

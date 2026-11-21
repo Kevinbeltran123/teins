@@ -63,7 +63,9 @@ export type TipoEvento =
   | "acceso_portal_activado"
   | "acceso_portal_quitado"
   | "ingreso_portal"
-  | "descarga_portal";
+  | "descarga_portal"
+  /** El tope de gasto mensual del asistente (ADR-0060). */
+  | "tope_del_asistente_cambiado";
 export type TipoAgregado = "levantamiento" | "organizacion" | "visita" | "usuario" | "informe" | "acceso_cliente" | "cliente" | "item_catalogo" | "cotizacion";
 
 export interface EntradaAuditoria {
