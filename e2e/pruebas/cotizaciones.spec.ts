@@ -9,6 +9,8 @@ import { activarSegundoFactor, filaDeLaBandeja, fotoDePrueba, iniciarSesion, irA
  * oficina cotiza desde las cantidades revisadas, agrega mano de obra, elige AIU, publica y envía el PDF.
  */
 test("cotización desde las cantidades revisadas: precio de la lista, mano de obra, AIU, PDF y envío (ADR-0029)", async ({ page, browser }) => {
+  // Espera el PDF hasta 90 s dentro de la prueba: con 90 s en total, un corredor lento de WebKit no alcanza (2026-11-21).
+  test.slow();
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
   const admin = nuevoAdministrador();
   const { cliente } = nuevaVisitaConCliente(tecnico);
