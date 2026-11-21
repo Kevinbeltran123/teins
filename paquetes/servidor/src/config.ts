@@ -3,6 +3,7 @@ import { BYTES_MAXIMOS_ARCHIVO } from "@teins/protocolo";
 import { MODELOS_CON_PRECIO } from "./modulos/asistente/costo";
 
 const booleano = z.enum(["true", "false"]).transform((v) => v === "true");
+const vacioComoAusente = (v: unknown) => (v === "" ? undefined : v);
 const listaDeUrls = z
   .string()
   .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean))
@@ -134,11 +135,15 @@ const Esquema = z.object({
    * sin él (ni modo simulado), el asistente responde `no_disponible` y el botón no aparece. El modelo cambia sin tocar
    * código, pero debe tener precio en `modulos/asistente/costo.ts` para contar el gasto.
    */
-  ANTHROPIC_API_KEY: z.string().regex(/^sk-ant-[\w-]+$/, "Llave de API de Anthropic (sk-ant-…)").optional(),
-  ASISTENTE_MODELO: z
-    .string()
-    .default("claude-haiku-5-5")
-    .refine((m) => MODELOS_CON_PRECIO.includes(m), { message: `Modelo sin precio en el código; use uno de: ${MODELOS_CON_PRECIO.join(", ")}` }),
+  // Vacías cuentan como ausentes: `.env.example` las trae así, y una variable creada sin valor no debe impedir el arranque.
+  ANTHROPIC_API_KEY: z.preprocess(vacioComoAusente, z.string().regex(/^sk-ant-[\w-]+$/, "Llave de API de Anthropic (sk-ant-…)").optional()),
+  ASISTENTE_MODELO: z.preprocess(
+    vacioComoAusente,
+    z
+      .string()
+      .default("claude-haiku-5-5")
+      .refine((m) => MODELOS_CON_PRECIO.includes(m), { message: `Modelo sin precio en el código; use uno de: ${MODELOS_CON_PRECIO.join(", ")}` }),
+  ),
   ASISTENTE_ACTIVO: booleano.default(false),
   /** Modelo falso con guion fijo que usa las herramientas reales: pruebas, extremo a extremo y entorno de pruebas. */
   ASISTENTE_SIMULADO: booleano.default(false),
