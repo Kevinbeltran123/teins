@@ -22,7 +22,7 @@ const RESPUESTA = { timeout: 45_000 };
  * la siguiente vuelta del modelo, «Escribiendo la respuesta». Los hechos van en pasado: «Buscó…», «Sumó…».
  */
 const EN_CURSO = /^(Buscando|Sumando|Calculando|Contando|Revisando|Leyendo) |^Escribiendo la respuesta$/;
-/** Los cinco cableados revisados de `sembrar`. */
+/** Los cinco cableados revisados que siembra `sembrar-asistente`. */
 const CABLEADOS = ["Clínica Santa Lucía del Tolima", "Hotel Mirador del Combeima", "Colegio Bilingüe Los Ocobos", "Distribuidora La Pola", "Centro Médico Los Lagos"];
 
 /** La organización con los datos de ejemplo del asistente, sembrada una vez por archivo y navegador. */

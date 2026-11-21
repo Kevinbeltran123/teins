@@ -127,35 +127,3 @@ describe("el comando sembrar-asistente", () => {
     await expect(pasa).rejects.toMatchObject({ stderr: expect.not.stringContaining("no corre en producción") });
   });
 });
-
-describe("sembrar", () => {
-  const ORGANIZACION_DEL_ASISTENTE = "00000000-0000-4000-8000-000000000053";
-  const ORGANIZACION_DE_DESARROLLO = "00000000-0000-4000-8000-000000000001";
-  const sembrar = () =>
-    promisify(execFile)("node_modules/.bin/tsx", ["src/cli/sembrar.ts"], {
-      env: { ...process.env, NODE_ENV: "test", NIVEL_REGISTRO: "silent", DATABASE_URL: inject("urlApp"), DATABASE_URL_PROPIETARIO: inject("urlPropietario"), S3_REGION: "us-east-1", S3_BUCKET: "x", S3_ACCESS_KEY_ID: "x", S3_SECRET_ACCESS_KEY: "x", S3_CONFIGURAR_CORS: "false", AUTH_SECRETO: "secreto-de-prueba-que-no-es-real-0123456789", ORIGENES_CONFIABLES: "http://localhost:5174" },
-    });
-  const cuantos = async (organizacionId: string) =>
-    (
-      await propietario.pool.query(
-        `select (select count(*) from visitas.visitas where organizacion_id = $1)::int as visitas,
-                (select count(*) from levantamientos.levantamientos where organizacion_id = $1)::int as levantamientos,
-                (select count(*) from catalogo.items where organizacion_id = $1 and codigo = 'CAB-UTP6')::int as utp,
-                (select count(*) from identidad.usuarios where organizacion_id = $1 and usuario like '%.chispa')::int as usuarios,
-                (select count(*) from formatos.versiones where organizacion_id = $1 and formato = 'prueba-ups' and version = 10)::int as formato`,
-        [organizacionId],
-      )
-    ).rows[0];
-
-  it("siembra Chispa en su organización, dos veces sin duplicar, y nada en la de desarrollo", { timeout: 120_000 }, async () => {
-    const primera = await sembrar();
-    expect(primera.stdout).toMatch(/Usuario oficina\.chispa \(oficina\): contraseña \S+/);
-    expect(primera.stdout).toMatch(/Usuario tecnico\.chispa \(tecnico\): contraseña \S+/);
-    expect(await cuantos(ORGANIZACION_DEL_ASISTENTE)).toEqual({ visitas: 47, levantamientos: 6, utp: 1, usuarios: 2, formato: 1 });
-    const segunda = await sembrar();
-    expect(segunda.stdout).not.toMatch(/\): contraseña /);
-    expect(segunda.stdout).toContain("ya existían");
-    expect(await cuantos(ORGANIZACION_DEL_ASISTENTE)).toEqual({ visitas: 47, levantamientos: 6, utp: 1, usuarios: 2, formato: 1 });
-    expect(await cuantos(ORGANIZACION_DE_DESARROLLO)).toMatchObject({ levantamientos: 0, utp: 0, usuarios: 0 });
-  });
-});

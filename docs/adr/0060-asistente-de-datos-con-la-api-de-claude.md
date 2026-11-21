@@ -69,7 +69,14 @@ Lo que Anthropic dice de los datos que llegan por su API:
 - **Modo simulado.** `ASISTENTE_SIMULADO=true`, permitido fuera de producción y en el entorno de pruebas (`ENTORNO_DE_PRUEBAS`), cambia el modelo por uno falso con guion fijo que usa las herramientas reales. Lo usan las pruebas y el extremo a extremo; no gasta ni manda datos. La web no tiene la llave: sabe que el asistente está disponible por `ASISTENTE_ACTIVO=true`, que no es secreto. Sin `ASISTENTE_ACTIVO` ni modo simulado, responde `no_disponible` y el botón no aparece. Con `ASISTENTE_ACTIVO` y el worker sin llave, la pregunta se acepta y termina en error («no está configurado»): las dos variables se encienden juntas.
 - **El modelo en una variable.** `ASISTENTE_MODELO`, por omisión `claude-haiku-5-5` (US$0,10 de entrada y US$0,50 de salida por millón de tokens, en pedidos de hasta 100 000 tokens). Cambiarlo a un modelo de la tabla de precios no toca el código. La tabla está en el código, para calcular el costo de cada vuelta, y el servidor no arranca con un modelo que no tenga precio.
 - **El nombre guardado por organización** (`asistente.ajustes.nombre`, «Chispa» por omisión). En el código el módulo se llama `asistente`, nunca `chispa` (R7).
-- **Para encenderlo en producción:** la autorización escrita de TEINS para enviar a Anthropic los datos que el asistente consulta ([pendiente de TEINS](../entrega/pendientes-de-teins.md)); la cuenta de Anthropic a nombre de TEINS, que como responsable acepta los términos del encargado, como con Geoapify (ADR-0052); la llave en el worker de producción y el límite de gasto en la consola de Anthropic. Hasta entonces, producción no tiene llave y el asistente no aparece.
+- **Para encenderlo en producción:**
+  - la llave en el worker de producción, `ASISTENTE_ACTIVO=true` en oficina y el límite de gasto en la consola de Anthropic.
+  - **Para la entrega** (2026-11-21) se enciende con datos de demostración inventados. Así no sale hacia Anthropic nada de TEINS ni de sus clientes.
+  - **Antes del primer dato real**, hacen falta dos cosas:
+    - la autorización escrita de TEINS para enviar a Anthropic los datos que el asistente consulta ([pendiente de TEINS](../entrega/pendientes-de-teins.md));
+    - la cuenta de Anthropic a nombre de TEINS, que como responsable acepta los términos del encargado, como con Geoapify (ADR-0052).
+
+    Sin esas dos cosas, el asistente se apaga: `ASISTENTE_ACTIVO=false` en oficina y sin llave en el worker.
 
 ## Por qué gana a cada alternativa
 

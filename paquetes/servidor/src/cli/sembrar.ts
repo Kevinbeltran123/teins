@@ -11,7 +11,6 @@ import { crearIdentidad } from "../modulos/identidad";
 import { crearSimbolos } from "../modulos/simbolos";
 import { crearVisitas } from "../modulos/visitas";
 import { organizaciones, usuarios } from "../modulos/identidad/esquema";
-import { sembrarDatosDelAsistente } from "./sembrar-asistente";
 import { fechaEnColombia } from "@teins/dominio";
 
 /**
@@ -19,11 +18,6 @@ import { fechaEnColombia } from "@teins/dominio";
  * lo que ya existe no se toca. Las contraseñas se generan y se muestran una sola vez.
  */
 const ORGANIZACION_DE_DESARROLLO = "00000000-0000-4000-8000-000000000001";
-/**
- * Los datos de ejemplo del asistente (iteración 53) van en una organización propia: la de desarrollo la comparten las
- * pruebas de extremo a extremo y las capturas del manual, y sus cifras no deben cambiar con lo que esas crean.
- */
-const ORGANIZACION_DEL_ASISTENTE = "00000000-0000-4000-8000-000000000053";
 const config = leerConfig();
 if (config.NODE_ENV === "production" && !config.ENTORNO_DE_PRUEBAS) {
   console.error("sembrar no corre en producción (en el entorno de pruebas, ENTORNO_DE_PRUEBAS=true).");
@@ -49,22 +43,19 @@ try {
   console.log(`Símbolos de prueba: ${simbolos.nuevos} nuevos, ${simbolos.cambiados} cambiados`);
 
   const identidad = crearIdentidad(app.bd, config);
-  const crearUsuarios = async (organizacionId: string, lista: readonly (readonly [string, string, "tecnico" | "oficina"])[]) => {
-    for (const [usuario, nombre, rol] of lista) {
-      const [existe] = await app.bd.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.username, usuario));
-      if (existe) {
-        console.log(`Usuario ${usuario}: ya existía (para una contraseña nueva: pnpm restablecer-contrasena --usuario ${usuario})`);
-        continue;
-      }
-      const contrasena = randomBytes(12).toString("base64url");
-      await identidad.crearUsuario({ organizacionId, usuario, nombre, rol, contrasena });
-      console.log(`Usuario ${usuario} (${rol}): contraseña ${contrasena}`);
-    }
-  };
-  await crearUsuarios(ORGANIZACION_DE_DESARROLLO, [
+  for (const [usuario, nombre, rol] of [
     ["tecnico.prueba", "Técnico de prueba", "tecnico"],
     ["oficina.prueba", "Oficina de prueba", "oficina"],
-  ]);
+  ] as const) {
+    const [existe] = await app.bd.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.username, usuario));
+    if (existe) {
+      console.log(`Usuario ${usuario}: ya existía (para una contraseña nueva: pnpm restablecer-contrasena --usuario ${usuario})`);
+      continue;
+    }
+    const contrasena = randomBytes(12).toString("base64url");
+    await identidad.crearUsuario({ organizacionId: ORGANIZACION_DE_DESARROLLO, usuario, nombre, rol, contrasena });
+    console.log(`Usuario ${usuario} (${rol}): contraseña ${contrasena}`);
+  }
 
   // Un cliente ficticio con una visita para el técnico de prueba, solo si la organización no tiene clientes.
   const { rows } = await propietario.pool.query("select 1 from clientes.clientes where organizacion_id = $1 limit 1", [ORGANIZACION_DE_DESARROLLO]);
@@ -90,17 +81,6 @@ try {
     });
     console.log(`Cliente de prueba con una visita para tecnico.prueba el ${hoy}`);
   }
-
-  // Visitas revisadas con materiales y visitas de UPS por mes, para el asistente (iteración 53), en su organización.
-  await propietario.bd.insert(organizaciones).values({ id: ORGANIZACION_DEL_ASISTENTE, nombre: "Organización de ejemplo del asistente" }).onConflictDoNothing();
-  await enOrganizacion(app.bd, ORGANIZACION_DEL_ASISTENTE, (tx) => formatos.publicar(tx, ORGANIZACION_DEL_ASISTENTE, leerFormato("prueba-ups.v10.json")));
-  await crearUsuarios(ORGANIZACION_DEL_ASISTENTE, [
-    ["tecnico.chispa", "Técnico de ejemplo del asistente", "tecnico"],
-    ["oficina.chispa", "Oficina de ejemplo del asistente", "oficina"],
-  ]);
-  const idDe = async (usuario: string) => (await app.bd.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.username, usuario)))[0]!.id;
-  const sembrados = await sembrarDatosDelAsistente(app.bd, ORGANIZACION_DEL_ASISTENTE, { tecnicoId: await idDe("tecnico.chispa"), revisorId: await idDe("oficina.chispa") });
-  console.log(`Datos del asistente (organización ${ORGANIZACION_DEL_ASISTENTE}): ${sembrados ? "sembrados" : "ya existían"}`);
 
   if (config.S3_CONFIGURAR_CORS) {
     await almacenamientoS3(config).permitirOrigenes(config.ORIGENES_CONFIABLES);
