@@ -26,6 +26,7 @@
     "crear-organizacion": "tsx --env-file=.env src/cli/crear-organizacion.ts",
     "preparar-ensayo": "tsx --env-file=.env src/cli/preparar-ensayo.ts",
     "ensayo-de-carga": "tsx ensayo/ensayo-de-carga.ts",
+    "demostracion": "tsx ensayo/demostracion.ts",
     "generar-claves-avisos": "tsx src/cli/generar-claves-avisos.ts",
     "compilar": "node scripts/compilar.mjs"
   },
