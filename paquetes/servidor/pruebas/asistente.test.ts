@@ -2,7 +2,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { definicionDeEntregar, mensajeDeSistema } from "../src/modulos/asistente/bucle";
+import { definicionDeEntregar, mensajeDeSistema, sinRayaLarga } from "../src/modulos/asistente/bucle";
+import { decimalCorto } from "../src/modulos/asistente/costo";
 import { esquemaEstricto, esquemaNormal } from "../src/modulos/asistente/modelo";
 import { purgarConversacionesDelAsistente } from "../src/modulos/mantenimiento";
 import { costoDe, ErrorDelModelo, modeloAnthropic, modeloSimulado, type Herramienta, type MensajeDelModelo, type ModeloAsistente, type VueltaDelModelo } from "../src/modulos/asistente";
@@ -906,6 +907,26 @@ describe("costo", () => {
     expect(costoDe("claude-sonnet-5-5", { entrada: 1_000_000, salida: 1_000_000, cacheLeida: 1_000_000, cacheEscrita: 1_000_000 })).toBe("14.6");
     expect(costoDe("claude-opus-5-5", { entrada: 1, salida: 1, cacheLeida: 0, cacheEscrita: 0 })).toBe("0.000024");
     expect(() => costoDe("otro-modelo", { entrada: 1, salida: 0, cacheLeida: 0, cacheEscrita: 0 })).toThrow();
+  });
+
+  it("los decimales de la base, en su forma corta", () => {
+    expect(decimalCorto("5.00")).toBe("5");
+    expect(decimalCorto("0.000123400")).toBe("0.0001234");
+    expect(decimalCorto("10.50")).toBe("10.5");
+    expect(decimalCorto("100.000")).toBe("100");
+    expect(decimalCorto("100")).toBe("100");
+    expect(decimalCorto("0.0")).toBe("0");
+  });
+});
+
+describe("sin raya larga", () => {
+  it("al inicio de una línea es viñeta; en medio, coma, con los espacios y tabuladores de alrededor", () => {
+    expect(sinRayaLarga("\u2014 Uno\n\t\u2014\tDos")).toBe("- Uno\n\t- Dos");
+    expect(sinRayaLarga("a \t\u2014 \tb\u2014c")).toBe("a, b, c");
+    expect(sinRayaLarga("a \u2014  \u2014 b")).toBe("a, , b");
+    expect(sinRayaLarga("a\n\u2014b")).toBe("a\n- b");
+    expect(sinRayaLarga("a \nb\u2014")).toBe("a \nb,");
+    expect(sinRayaLarga(`x${" ".repeat(50_000)}y`)).toBe(`x${" ".repeat(50_000)}y`);
   });
 });
 

@@ -501,12 +501,10 @@ function Copiar({ texto, etiqueta, hecho, soloIcono }: { texto: string; etiqueta
     const t = setTimeout(() => setEstado("listo"), 2500);
     return () => clearTimeout(t);
   }, [estado]);
-  function copiar() {
+  async function copiar() {
     try {
-      navigator.clipboard.writeText(texto).then(
-        () => setEstado("copiado"),
-        () => setEstado("fallo"),
-      );
+      await navigator.clipboard.writeText(texto);
+      setEstado("copiado");
     } catch {
       setEstado("fallo");
     }
@@ -516,7 +514,7 @@ function Copiar({ texto, etiqueta, hecho, soloIcono }: { texto: string; etiqueta
   if (soloIcono) {
     return (
       <>
-        <BotonIcono icono={icono} etiqueta={rotulo} tamano="pequeno" onClick={copiar} />
+        <BotonIcono icono={icono} etiqueta={rotulo} tamano="pequeno" onClick={() => void copiar()} />
         <span className="sr-only" aria-live="polite">
           {estado === "listo" ? "" : rotulo}
         </span>
@@ -524,7 +522,7 @@ function Copiar({ texto, etiqueta, hecho, soloIcono }: { texto: string; etiqueta
     );
   }
   return (
-    <Boton variante="fantasma" tamano="pequeno" icono={icono} onClick={copiar}>
+    <Boton variante="fantasma" tamano="pequeno" icono={icono} onClick={() => void copiar()}>
       <span aria-live="polite">{rotulo}</span>
     </Boton>
   );
@@ -604,7 +602,7 @@ function Grafico({ serie }: { serie: SerieDelAsistente }) {
             {serie.puntos.map((p, k) => {
               const esMayor = mayor > 0 && p.valor === mayor;
               return (
-                <div key={k} className={`asis-barra${esMayor ? " max" : ""}`} style={{ "--h": alto(p.valor) } as CSSProperties} tabIndex={0} role="img" aria-label={`${p.etiqueta}: ${numero(p.valor)}`}>
+                <div key={k} className={`asis-barra${esMayor ? " max" : ""}`} style={{ "--h": alto(p.valor) } as CSSProperties} role="img" aria-label={`${p.etiqueta}: ${numero(p.valor)}`}>
                   {esMayor && (
                     <span className="asis-valor" aria-hidden>
                       {numero(p.valor)}

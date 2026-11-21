@@ -41,9 +41,9 @@ export function costoDe(modelo: string, uso: UsoDelModelo): string {
 
 function nanoADolares(nano: bigint): string {
   const entero = nano / 1_000_000_000n;
-  const fraccion = (nano % 1_000_000_000n).toString().padStart(9, "0").replace(/0+$/, "");
+  const fraccion = (nano % 1_000_000_000n).toString().padStart(9, "0").replace(/(?<!0)0+$/, "");
   return fraccion ? `${entero}.${fraccion}` : `${entero}`;
 }
 
 /** Un decimal de la base («5.00», «0.000123400») en su forma corta («5», «0.0001234»). */
-export const decimalCorto = (valor: string): string => (valor.includes(".") ? valor.replace(/0+$/, "").replace(/\.$/, "") : valor);
+export const decimalCorto = (valor: string): string => (valor.includes(".") ? valor.replace(/(?<!0)0+$/, "").replace(/\.$/, "") : valor);

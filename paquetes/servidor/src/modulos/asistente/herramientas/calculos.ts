@@ -39,7 +39,11 @@ export const redondearArriba = (valor: number) => Math.ceil(Number(valor.toFixed
 export function decimalColombiano(decimal: string): string {
   const negativo = decimal.startsWith("-");
   const [entero = "0", fraccion] = (negativo ? decimal.slice(1) : decimal).split(".");
-  const agrupado = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  let agrupado = entero;
+  if (/^\d+$/.test(entero)) {
+    agrupado = "";
+    for (let i = 0; i < entero.length; i++) agrupado += `${i > 0 && (entero.length - i) % 3 === 0 ? "." : ""}${entero[i]}`;
+  }
   return `${negativo ? "-" : ""}${agrupado}${fraccion ? `,${fraccion}` : ""}`;
 }
 
@@ -74,7 +78,26 @@ export function esFechaReal(texto: string): boolean {
   return !Number.isNaN(fecha.getTime()) && fecha.toISOString().slice(0, 10) === texto;
 }
 
-const CORREO = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu;
+/**
+ * Un correo: el usuario y, pegados, la @ y un dominio con al menos un punto. Se busca en dos pasos para que un texto
+ * largo sin @ no se recorra una vez por cada letra.
+ */
+const USUARIO_DE_CORREO = /[\p{L}\p{N}._%+-]+/gu;
+const DOMINIO_DE_CORREO = /@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/uy;
+
+function sinCorreos(texto: string): string {
+  let salida = "";
+  let desde = 0;
+  USUARIO_DE_CORREO.lastIndex = 0;
+  for (let usuario = USUARIO_DE_CORREO.exec(texto); usuario; usuario = USUARIO_DE_CORREO.exec(texto)) {
+    DOMINIO_DE_CORREO.lastIndex = USUARIO_DE_CORREO.lastIndex;
+    if (!DOMINIO_DE_CORREO.test(texto)) continue;
+    salida += `${texto.slice(desde, usuario.index)}[correo]`;
+    desde = USUARIO_DE_CORREO.lastIndex = DOMINIO_DE_CORREO.lastIndex;
+  }
+  return salida + texto.slice(desde);
+}
+
 /**
  * Celulares (3xx) y fijos con indicativo (60x) de Colombia, de 10 dígitos, con o sin +57, espacios, puntos, guiones o
  * paréntesis. Los bordes impiden partir un número más largo; cantidades y fechas no empiezan así ni tienen esa forma.
@@ -82,7 +105,7 @@ const CORREO = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu;
 const CELULAR = /(?<![\p{L}\p{N}])(?:\+?57[\s.-]?)?(?:\(\s*(?:3\d{2}|60\d)\s*\)|3\d{2}|60\d)[\s.-]?\d{3}[\s.-]?\d{4}(?![\p{N}])/gu;
 
 /** Correos y teléfonos escritos dentro de un texto libre, cambiados por `[correo]` y `[celular]`. */
-export const redactar = (texto: string) => texto.replace(CORREO, "[correo]").replace(CELULAR, "[celular]");
+export const redactar = (texto: string) => sinCorreos(texto).replace(CELULAR, "[celular]");
 
 /**
  * ¿La etiqueta de un campo de texto pregunta por una persona o por cómo ubicarla? Entonces su valor es un dato personal

@@ -87,7 +87,12 @@ function historialCompacto(anteriores: { pregunta: string; respuesta: RespuestaD
 export const sinRayaLarga = (texto: string) =>
   texto
     .replace(/^([ \t]*)\u2014[ \t]*/gm, "$1- ")
-    .replace(/[ \t]*\u2014[ \t]*/g, ", ")
+    .split("\u2014")
+    .map((parte, i, partes) => {
+      const sinAntes = i > 0 ? parte.replace(/^[ \t]+/, "") : parte;
+      return i < partes.length - 1 ? sinAntes.replace(/(?<![ \t])[ \t]+$/, "") : sinAntes;
+    })
+    .join(", ")
     .trim();
 
 /** Lo que recibe el modelo cuando su entrada no cumple el esquema: la ruta y el problema, sin más. */

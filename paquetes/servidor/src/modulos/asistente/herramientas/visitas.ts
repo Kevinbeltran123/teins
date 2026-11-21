@@ -175,7 +175,7 @@ export function contarVisitas(deps: DependenciasDeHerramientas): Herramienta<Ent
       if (agruparPor === "mes") {
         const porMes = new Map<string, number>();
         for (const c of conteos) if (c.mes) porMes.set(c.mes, (porMes.get(c.mes) ?? 0) + c.visitas);
-        const meses = [...porMes.keys()].sort();
+        const meses = [...porMes.keys()].sort((a, b) => a.localeCompare(b));
         // Los meses sin visitas también van: en el gráfico, un hueco es un dato.
         grupos = meses.length === 0 ? [] : mesesEntre(meses[0]!, meses.at(-1)!).map((mes) => ({ grupo: mes, visitas: porMes.get(mes) ?? 0 }));
       } else if (agruparPor === "servicio") {

@@ -1157,12 +1157,12 @@ dialog.capa-lateral .lienzo.panel-revision .lienzo-cab { margin-top: -4px; }
 .asis-area { position: relative; border-bottom: 1px solid var(--t-borde-suave); }
 .asis-guia { position: absolute; left: 0; right: 0; border-top: 1px solid var(--borde); }
 .asis-barras { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; align-items: end; padding: 0 2px; }
-.asis-barra { position: relative; height: var(--h); width: min(100%, 20px); justify-self: center; background: var(--t-texto-terciario); border-radius: 4px 4px 0 0; outline-offset: 2px; }
+.asis-barra { position: relative; height: var(--h); width: min(100%, 20px); justify-self: center; background: var(--t-texto-terciario); border-radius: 4px 4px 0 0; }
 .asis-barra.max { background: var(--texto); }
 .asis-valor { position: absolute; bottom: calc(100% + 3px); left: 50%; transform: translateX(-50%); font-size: 11.5px; font-weight: 600; color: var(--texto); }
 .asis-tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--texto); color: var(--fondo); font-size: 12px; font-weight: 500; padding: 4px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 2; }
-.asis-barra:hover .asis-tip, .asis-barra:focus-visible .asis-tip { opacity: 1; }
-.asis-barra:hover .asis-valor, .asis-barra:focus-visible .asis-valor { opacity: 0; }
+.asis-barra:hover .asis-tip { opacity: 1; }
+.asis-barra:hover .asis-valor { opacity: 0; }
 .asis-eje-x { display: grid; grid-template-columns: 28px minmax(0, 1fr); }
 .asis-eje-x div { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; padding: 0 2px; }
 .asis-eje-x span { text-align: center; font-size: 11px; color: var(--sec); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -84,7 +84,7 @@ export function partirTexto(texto: string): Bloque[] {
   return bloques;
 }
 
-const enUnaLinea = (texto: string) => texto.replace(/\s*[\t\r\n]+\s*/g, " ");
+const enUnaLinea = (texto: string) => texto.replace(/\s+/g, (espacios) => (/[\t\r\n]/.test(espacios) ? " " : espacios));
 
 /** Para pegar en Excel o en una cotización: los encabezados y una fila por línea, separadas por tabuladores. */
 export function tablaComoTsv(tabla: TablaDelAsistente): string {

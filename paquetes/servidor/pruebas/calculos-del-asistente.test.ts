@@ -55,6 +55,17 @@ describe("redacción de correos y celulares", () => {
     const texto = "Se usaron 1020 m y 4.485 m el 2026-11-20; orden 0041, 36 puntos, NIT 900123456-7, serial 30012345678901";
     expect(redactar(texto)).toBe(texto);
   });
+
+  it("los bordes del correo: con tildes, pegados, sin dominio completo y textos largos sin @", () => {
+    expect(redactar("Correo: José.Peña_2+obra@clínica-ñandú.com.co.")).toBe("Correo: [correo].");
+    expect(redactar("a@b.co_x@d.com y c@d.e")).toBe("[correo][correo] y [correo]");
+    expect(redactar("a@b.co.x@d.com")).toBe("[correo]@d.com");
+    expect(redactar("ana@ejemplo, @x.co, a@@b.co, a@.co, a@b.")).toBe("ana@ejemplo, @x.co, a@@b.co, a@.co, a@b.");
+    expect(redactar("(ana@x.co)<b@y.org>")).toBe("([correo])<[correo]>");
+    const largo = "a".repeat(50_000);
+    expect(redactar(largo)).toBe(largo);
+    expect(redactar(`${largo}@x`)).toBe(`${largo}@x`);
+  });
 });
 
 describe("ciudades", () => {
@@ -70,6 +81,14 @@ describe("formato de los números", () => {
     expect(decimalColombiano("4485")).toBe("4.485");
     expect(decimalColombiano("1234567.25")).toBe("1.234.567,25");
     expect(decimalColombiano("45")).toBe("45");
+    expect(decimalColombiano("100")).toBe("100");
+    expect(decimalColombiano("1000")).toBe("1.000");
+    expect(decimalColombiano("123456")).toBe("123.456");
+    expect(decimalColombiano("-1234.5")).toBe("-1.234,5");
+    expect(decimalColombiano("0.25")).toBe("0,25");
+    expect(numeroColombiano(1e21)).toBe("1e+21");
+    expect(numeroColombiano(Number.NaN)).toBe("NaN");
+    expect(numeroColombiano(-Infinity)).toBe("-Infinity");
     expect(numeroColombiano(28.9583, 1)).toBe("29,0");
     expect(numeroColombiano(30.3556, 1)).toBe("30,4");
     expect(cantidadConUnidad("4485", "m")).toBe("4.485 m");

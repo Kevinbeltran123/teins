@@ -56,6 +56,15 @@ describe("copiar una tabla", () => {
   it("sale en TSV con los encabezados, para pegar en Excel", () => {
     expect(tablaComoTsv(tabla)).toBe(["Material\tCantidad\tVisitas", "UTP categoría 6 (CAB-UTP6)\t4.485 m\t5", "«cable utp cat6 azul» (sin vincular)\t45 m\t1"].join("\n"));
   });
+
+  it("cada celda en una línea: los espacios alrededor de un salto o un tabulador se vuelven uno; los demás quedan", () => {
+    const celdas: TablaDelAsistente = {
+      titulo: "t",
+      columnas: [{ titulo: " Uno \r\n  dos\t", numerica: false }],
+      filas: [[{ texto: "a  b\u00a0\n\u00a0c\t\t\td", detalle: "\nx " }], [{ texto: "sin  saltos " }]],
+    };
+    expect(tablaComoTsv(celdas)).toBe([" Uno dos ", "a  b c d ( x )", "sin  saltos "].join("\n"));
+  });
 });
 
 describe("el texto del modelo", () => {
