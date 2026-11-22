@@ -118,9 +118,10 @@ export default defineRailway((ctx) => {
       AVISOS_CONTACTO: https("oficina"),
       // Envíos al cliente (ADR-0028): en pruebas, el correo sale de verdad por Resend con el dominio verificado de
       // Kevin y WhatsApp sigue simulado hasta tener el número de prueba de Meta. Producción nunca simula (la
-      // configuración lo impide) y, sin sus claves, los envíos quedan "No llegó" con el motivo.
+      // configuración lo impide): su llave y su remitente los pone Kevin en Railway, con su dominio desde la entrega del
+      // 2026-11-21 y con el de TEINS antes del primer dato real. Sin ellos, los envíos quedan "No llegó" con el motivo.
       ...(produccion
-        ? {}
+        ? { RESEND_CLAVE_API: preserve(), CORREO_REMITENTE: preserve() }
         : { ENVIOS_SIMULADOS: "whatsapp", RESEND_CLAVE_API: preserve(), CORREO_REMITENTE: "TEINS pruebas <teins-pruebas@deportur.tech>" }),
       // La llave de Anthropic del asistente (ADR-0060) vive solo aquí: el worker es quien llama al modelo. La pone Kevin en
       // Railway, de la cuenta a nombre de TEINS; nunca este archivo ni el repositorio.

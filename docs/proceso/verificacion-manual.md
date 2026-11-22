@@ -839,7 +839,7 @@ En el iPhone, con una visita de hoy y la batería por encima del 50 %.
 
 ## Fase 53 · Chispa, el asistente de datos (iteración 53, ADR-0060)
 
-**Para la entrega (2026-11-21) se hace en producción**, con los datos de demostración que carga `pnpm demostracion` y una llave real de Anthropic ([producción](produccion.md), «Entrega con datos de demostración y Chispa»). Son datos inventados: no sale nada de TEINS ni de sus clientes. **Antes del primer dato real** hacen falta la autorización escrita de TEINS (pendiente 23 de [`docs/entrega/pendientes-de-teins.md`](../entrega/pendientes-de-teins.md)) y una cuenta de Anthropic a su nombre; sin ellas, el asistente se apaga.
+**Para la entrega (2026-11-21) se hace en producción**, con los datos de demostración que carga `pnpm demostracion` y una llave real de Anthropic ([producción](produccion.md), «Entrega con datos de demostración y Chispa»). Son datos inventados: no sale nada de TEINS ni de sus clientes. **Antes del primer dato real** hacen falta la autorización escrita de TEINS (pendiente 23 de [`docs/entrega/pendientes-de-teins.md`](../entrega/pendientes-de-teins.md)) y una cuenta de Anthropic a su nombre: pasos en [producción](produccion.md), «Antes del primer dato real».
 
 En el computador, con una persona de oficina y otra con la marca de administrador y el segundo factor. Antes de empezar:
 
