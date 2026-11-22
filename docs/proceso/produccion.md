@@ -44,7 +44,7 @@ Direcciones de producción (dominios gratuitos de Railway, con HTTPS):
 
 Primera persona administradora: usuario `administracion`, contraseña en `privado/teins-produccion.txt` (computador de Kevin; git lo ignora). Al abrir "Administración" pide activar el segundo factor.
 
-Producción tiene los formatos de TEINS (versiones 1 y 2, publicados con `publicar-formato`) y los 37 símbolos. Los de prueba (`prueba-ups`) no se publican allí. Para probarla sin datos reales, la organización tiene `tecnico.prueba` y `oficina.prueba` (2026-11-07), con sus contraseñas en `privado/teins-produccion.txt`.
+Producción tiene los formatos de TEINS (versiones 1 y 2, publicados con `publicar-formato`) y los 37 símbolos. Los de prueba (`prueba-ups`) no se publican allí. Para probarla sin datos reales, la organización tiene `tecnico.prueba` y `oficina.prueba` (2026-11-07), con sus contraseñas en `privado/teins-produccion.txt`. Desde el 2026-11-21 tiene además los datos de demostración de la entrega (sección «Entrega con datos de demostración y Chispa»), y `administracion` ya activó su segundo factor, con los códigos de respaldo en ese mismo archivo.
 
 Proyectos en Railway:
 
@@ -240,17 +240,48 @@ Para mostrarle a TEINS todo funcionando en producción, con datos inventados y c
      - 8 informes con su PDF y 2 cotizaciones.
    - **Nada se envía a nadie**, y se puede repetir sin duplicar.
    - **La fecha de recibido es la de hoy:** la pone el servidor al recibir.
-6. **Probar.** Oficina, botón «Chispa»: las cuatro sugerencias, la pestaña de uso en Administración y la fase 53 de la [verificación manual](verificacion-manual.md).
-7. **Antes del primer dato real** hacen falta la autorización escrita de TEINS para el asistente (pendiente 23) y la cuenta de Anthropic a su nombre. Sin ellas, se apaga:
+6. **Correo y mapa.** Para mostrar el portal y el mapa de la foto de llegada, el 2026-11-21 se copiaron de pruebas, sin mostrarlas, `GEOAPIFY_LLAVE` (en `campo`) y `RESEND_CLAVE_API` (en `worker`), con `CORREO_REMITENTE=TEINS <teins@deportur.tech>`: el dominio de Kevin, solo mientras dura la demostración. `.railway/railway.ts` declara esas dos variables del `worker` en producción; antes no las declaraba, y `railway config apply` las borraba.
+7. **Probar.** Oficina, botón «Chispa»: las cuatro sugerencias, la pestaña de uso en Administración y la fase 53 de la [verificación manual](verificacion-manual.md).
+8. **Antes del primer dato real:** la sección que sigue.
 
-   ```sh
-   railway variable set ASISTENTE_ACTIVO=false -s oficina
-   railway variable delete ANTHROPIC_API_KEY -s worker
-   ```
+## Antes del primer dato real
 
-   Los datos de demostración entran en las listas y en las cifras de Chispa. La auditoría está encadenada, así que no se borran uno por uno. Para empezar con datos reales limpios, conviene empezar con una base nueva (hoy producción no tiene nada real): migrar, publicar los formatos y crear los usuarios, como en «Encender producción para el piloto».
+Hoy producción tiene la demostración del 2026-11-21 y todo está a nombre de Kevin. Antes de que TEINS registre su primer cliente real, en este orden:
+
+1. **Las firmas de TEINS** ([pendientes 5 y 23](../entrega/pendientes-de-teins.md)):
+   - la autorización escrita para cargar la información real de sus clientes, o pasar antes el sistema a su cuenta (ADR-0021);
+   - la autorización para enviar a Anthropic lo que consulta Chispa, con una cuenta de Anthropic a nombre de TEINS (ADR-0060). Chispa se queda encendido (Kevin, 2026-11-21): esta firma es la que lo permite con datos reales. Si no llega a tiempo, ADR-0060 pide apagarlo hasta que llegue:
+
+     ```sh
+     railway variable set ASISTENTE_ACTIVO=false -s oficina
+     railway variable delete ANTHROPIC_API_KEY -s worker
+     ```
+
+2. **Las cuentas de TEINS.** Cada llave entra con `pbpaste | railway variable set <VARIABLE> --stdin -s <servicio>`, que no la deja en pantalla:
+
+   | Cuenta | Variable y servicio | Hoy |
+   |---|---|---|
+   | Railway | El espacio de trabajo de TEINS (paso 3) | Cuenta de Kevin |
+   | Anthropic | `ANTHROPIC_API_KEY` en `worker` | Llave de Kevin |
+   | Resend, con el dominio de TEINS verificado | `RESEND_CLAVE_API`, `CORREO_REMITENTE` y `CORREO_RESPONDER_A` (el correo de oficina de TEINS) en `worker` | Dominio de Kevin |
+   | Geoapify, con sus términos de tratamiento aceptados (ADR-0052) | `GEOAPIFY_LLAVE` en `campo` | Cuenta de Kevin |
+
+   Con el dominio de TEINS, registre también en Resend la dirección de eventos (`/api/envios/eventos/correo`, en oficina) y declare `RESEND_SECRETO_EVENTOS` para producción en `.railway/railway.ts`. Hoy solo la tiene pruebas: sin ella, oficina no se entera de si un correo se entregó o rebotó.
+3. **Una base nueva, en la cuenta de TEINS.** La demostración no se puede quitar de esta base: entra en las listas y en las cifras de Chispa, los primeros números de orden ya son suyos (TEINS pidió empezar en la `0001`), lo publicado no se borra (regla 7) y la auditoría está encadenada. Por eso, en vez de transferir este proyecto con la demostración dentro, producción real se monta desde cero en el espacio de trabajo de TEINS:
+   1. `infra/railway/montar.sh teins-produccion`, con la CLI en el espacio de trabajo de TEINS (sección «Montar un entorno desde cero»; antes de correrlo, confirmar que la CLI crea los proyectos allí). Deja base, almacenamiento, secretos y respaldos nuevos, y la persona administradora, que activa su segundo factor.
+   2. Las llaves del paso 2 y `ASISTENTE_ACTIVO=true` en `oficina`, antes de desplegar.
+   3. «Desplegar» con la última versión, los formatos, los 37 símbolos y el simulacro (sección «Encender producción para el piloto», pasos 3 a 6).
+   4. Un ADR nuevo que cierre la condición de ADR-0021, y el plan de entrega al día.
+   5. Después de mostrar la demostración por última vez, borrar este proyecto y su almacenamiento en `teins-respaldos`.
+
+   Las direcciones cambian, así que es el momento de ponerle el dominio de TEINS. La app se instala en los celulares después, con la dirección definitiva.
+4. **Usuarios reales.** La persona administradora de TEINS crea en «Administración» los usuarios del piloto, con contraseña temporal. Los de prueba (`tecnico.prueba`, `oficina.prueba` y el `administracion` de la demostración) no pasan a la base nueva: sus contraseñas quedaron escritas en una conversación.
+5. **El iPhone.** La fase 51 de la [verificación manual](verificacion-manual.md) en un iPhone real (envío sin señal y batería), antes de instalar la app a los técnicos.
+6. **El piloto.** «Antes de empezar» de [`../entrega/piloto.md`](../entrega/piloto.md): quiénes participan y con qué visitas (P40), cuánto tardan hoy (P41), los criterios de aceptación (P42), la lista de precios y la cotización (pendientes 6 y 7). La capacitación, por grupos de 5 por minuto si comparten red (sección «Transferir a TEINS», paso 5).
 
 ## Transferir a TEINS
+
+Con la demostración del 2026-11-21 dentro, el camino recomendado ya no es transferir este proyecto sino montar uno nuevo en la cuenta de TEINS («Antes del primer dato real», paso 3). Lo que sigue vale si se decide transferirlo de todas formas.
 
 Cuando TEINS tenga su espacio de trabajo en Railway (plan Hobby o Pro):
 
