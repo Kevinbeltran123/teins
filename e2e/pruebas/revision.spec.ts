@@ -24,6 +24,8 @@ async function abrirLevantamientoDe(pagina: Page, tecnico: Usuario, pestana: str
 }
 
 test("oficina revisa sin pisarse y el técnico ve el resultado y los comentarios (QA-8, QA-25)", async ({ page, browser }) => {
+  // Tres sesiones y dos revisiones en un mismo recorrido: con 90 s en total, un corredor lento de WebKit no alcanza (2026-11-21).
+  test.slow();
   const tecnico = nuevoUsuario("tecnico", "tecnico.e2e");
   const [ana, luis] = [nuevoUsuario("oficina", "oficina"), nuevoUsuario("oficina", "oficina")];
   const cliente = nuevaVisita(tecnico);
